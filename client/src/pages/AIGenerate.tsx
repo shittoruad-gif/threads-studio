@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { ArrowLeft, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, FileEdit } from 'lucide-react';
+import { ArrowLeft, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, FileEdit, Smartphone } from 'lucide-react';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import { POST_TYPES, POST_PURPOSES, POST_PURPOSES_LIST } from '@shared/threadsPr
 import type { PostPurpose } from '@shared/threadsPrompts';
 import { SchedulePostDialog } from '@/components/SchedulePostDialog';
 import ThreadsPostPreview from '@/components/ThreadsPostPreview';
+import ThreadsPhonePreview from '@/components/ThreadsPhonePreview';
 import { useThreadsAccount } from '@/components/ThreadsAccountSwitcher';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -57,7 +58,7 @@ export default function AIGenerate() {
   const [editedPost, setEditedPost] = useState<GeneratedPost | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
+  const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'phone'>('edit');
   const { selectedAccount } = useThreadsAccount();
   const [saveTemplateDialogOpen, setSaveTemplateDialogOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
@@ -358,6 +359,16 @@ export default function AIGenerate() {
   const handleCopy = async (text: string, index: number) => {
     await navigator.clipboard.writeText(text);
     setCopiedIndex(index);
+    toast.success('コピーしました');
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const handleCopyAll = async () => {
+    if (!editedPost) return;
+    const allPosts = [editedPost.mainPost, ...editedPost.treePosts].join('\n\n---\n\n');
+    await navigator.clipboard.writeText(allPosts);
+    setCopiedIndex(-1);
+    toast.success('コピーしました');
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
@@ -844,13 +855,59 @@ export default function AIGenerate() {
                       <Eye className="w-4 h-4" />
                       プレビュー
                     </button>
+                    <button
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                        viewMode === 'phone'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                      onClick={() => setViewMode('phone')}
+                    >
+                      <Smartphone className="w-4 h-4" />
+                      スマホプレビュー
+                    </button>
                   </div>
                   {viewMode === 'preview' && (
                     <span className="text-xs text-muted-foreground">Threads上での見え方</span>
                   )}
+                  {viewMode === 'phone' && (
+                    <span className="text-xs text-muted-foreground">スマートフォンでの見え方</span>
+                  )}
                 </div>
 
-                {viewMode === 'preview' ? (
+                {viewMode === 'phone' ? (
+                  /* スマホプレビュー表示 */
+                  <div className="space-y-4">
+                    <ThreadsPhonePreview
+                      mainPost={editedPost.mainPost}
+                      treePosts={editedPost.treePosts}
+                      username={selectedAccount?.threadsUsername || 'あなたのアカウント'}
+                      profileImage={selectedAccount?.profilePictureUrl || undefined}
+                    />
+
+                    {/* 文字数カウント */}
+                    <Card>
+                      <CardContent className="py-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">メイン投稿：</span>
+                            <span className={`font-medium ${editedPost.mainPost.length > 500 ? 'text-red-500' : 'text-foreground'}`}>
+                              {editedPost.mainPost.length} / 500文字
+                            </span>
+                          </div>
+                          {editedPost.treePosts.map((post, i) => (
+                            <div key={i}>
+                              <span className="text-muted-foreground">ツリー{i + 1}：</span>
+                              <span className={`font-medium ${post.length > 500 ? 'text-red-500' : 'text-foreground'}`}>
+                                {post.length} / 500文字
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                ) : viewMode === 'preview' ? (
                   /* Threadsプレビュー表示 */
                   <div className="space-y-4">
                     <ThreadsPostPreview
@@ -1065,14 +1122,11 @@ export default function AIGenerate() {
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      const fullPost = `${editedPost.mainPost}\n\n${editedPost.treePosts.join('\n\n')}\n\n${editedPost.cta}\n\n${editedPost.hashtags.map(t => `#${t}`).join(' ')}`;
-                      handleCopy(fullPost, -1);
-                    }}
+                    onClick={handleCopyAll}
                     size="lg"
                   >
                     <Copy className="h-4 w-4 mr-2" />
-                    全体をコピー
+                    全てコピー
                   </Button>
                   <Button
                     variant="outline"

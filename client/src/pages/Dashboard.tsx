@@ -40,6 +40,7 @@ import { DemoModeBanner } from '@/components/DemoModeBanner';
 import { SetupProgress } from '@/components/SetupProgress';
 import { AIChatWidget } from '@/components/AIChatWidget';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
+import WeeklyCalendarView from '@/components/WeeklyCalendarView';
 
 export default function Dashboard() {
   const { user, isAuthenticated, loading, logout } = useAuth();
@@ -127,6 +128,12 @@ export default function Dashboard() {
   );
 
   const { data: creditsData } = trpc.referral.getMyCredits.useQuery(
+    undefined,
+    { enabled: isAuthenticated }
+  );
+
+  // Scheduled posts for calendar
+  const { data: scheduledPosts } = trpc.scheduledPost.list.useQuery(
     undefined,
     { enabled: isAuthenticated }
   );
@@ -397,6 +404,20 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* Weekly Calendar View */}
+        <div className="mb-8">
+          <WeeklyCalendarView
+            scheduledPosts={(scheduledPosts || []).map((p: any) => ({
+              id: p.id,
+              scheduledAt: typeof p.scheduledAt === 'string' ? p.scheduledAt : new Date(p.scheduledAt).toISOString(),
+              postContent: p.postContent || '',
+              status: p.status || 'pending',
+            }))}
+            autoPostEnabled={autoPostSettings?.enabled ?? false}
+            autoPostFrequency={autoPostSettings?.frequency ?? 'daily'}
+          />
+        </div>
 
         {/* Monthly Posts Chart */}
         {stats?.monthlyPosts && stats.monthlyPosts.length > 0 && (

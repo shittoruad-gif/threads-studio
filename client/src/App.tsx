@@ -33,6 +33,7 @@ import Referral from "./pages/Referral";
 import AdminPresets from "./pages/AdminPresets";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
+import TryGenerate from "./pages/TryGenerate";
 import { ThreadsAccountProvider } from "./components/ThreadsAccountSwitcher";
 import { PWAInstallBanner } from "./components/PWAInstallBanner";
 
@@ -79,6 +80,7 @@ function Router() {
       <Route path="/verify-email" component={VerifyEmail} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/guide" component={Guide} />
+      <Route path="/try" component={TryGenerate} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/dashboard">

@@ -1,7 +1,7 @@
 import { eq, and, desc, sql, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { 
-  InsertUser, users, 
+import {
+  InsertUser, users,
   plans, InsertPlan, Plan,
   subscriptions, InsertSubscription, Subscription,
   threadsAccounts, InsertThreadsAccount, ThreadsAccount,
@@ -9,6 +9,7 @@ import {
   scheduledPosts, InsertScheduledPost, ScheduledPost,
   templates, Template,
   userFavorites, InsertUserFavorite,
+  userHistoryFavorites, UserHistoryFavorite, InsertUserHistoryFavorite,
   aiGenerationUsage, AiGenerationUsage, InsertAiGenerationUsage,
   aiGenerationHistory, AiGenerationHistory, InsertAiGenerationHistory,
   coupons, Coupon, InsertCoupon,
@@ -1940,4 +1941,102 @@ export async function getAutoPostHistory(userId: number, limit: number = 20) {
     .where(eq(scheduledPosts.userId, userId))
     .orderBy(desc(scheduledPosts.createdAt))
     .limit(limit);
+}
+
+// ==================== AI History Favorites ====================
+
+export async function toggleHistoryFavorite(userId: number, historyId: number): Promise<boolean> {
+  const database = await getDb();
+  if (!database) return false;
+
+  // Check if already favorited
+  const existing = await database.select()
+    .from(userHistoryFavorites)
+    .where(and(
+      eq(userHistoryFavorites.userId, userId),
+      eq(userHistoryFavorites.historyId, historyId)
+    ))
+    .limit(1);
+
+  if (existing.length > 0) {
+    // Remove favorite
+    await database.delete(userHistoryFavorites)
+      .where(and(
+        eq(userHistoryFavorites.userId, userId),
+        eq(userHistoryFavorites.historyId, historyId)
+      ));
+    return false; // not favorited anymore
+  } else {
+    // Add favorite
+    await database.insert(userHistoryFavorites).values({
+      userId,
+      historyId,
+    });
+    return true; // now favorited
+  }
+}
+
+export async function getHistoryFavorites(userId: number): Promise<UserHistoryFavorite[]> {
+  const database = await getDb();
+  if (!database) return [];
+
+  return database.select()
+    .from(userHistoryFavorites)
+    .where(eq(userHistoryFavorites.userId, userId))
+    .orderBy(desc(userHistoryFavorites.createdAt));
+}
+
+// ==================== Weekly Report ====================
+
+export async function getUserPostsLastWeek(userId: number) {
+  const database = await getDb();
+  if (!database) return [];
+
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+  return database.select()
+    .from(aiGenerationHistory)
+    .where(and(
+      eq(aiGenerationHistory.userId, userId),
+      sql`${aiGenerationHistory.createdAt} >= ${oneWeekAgo}`
+    ))
+    .orderBy(desc(aiGenerationHistory.createdAt));
+}
+
+export async function getScheduledPostsLastWeek(userId: number) {
+  const database = await getDb();
+  if (!database) return [];
+
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+  return database.select()
+    .from(scheduledPosts)
+    .where(and(
+      eq(scheduledPosts.userId, userId),
+      sql`${scheduledPosts.createdAt} >= ${oneWeekAgo}`
+    ))
+    .orderBy(desc(scheduledPosts.createdAt));
+}
+
+export async function getProPlusUsers() {
+  const database = await getDb();
+  if (!database) return [];
+
+  return database
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      planId: subscriptions.planId,
+    })
+    .from(users)
+    .innerJoin(subscriptions, eq(users.id, subscriptions.userId))
+    .where(
+      and(
+        sql`${subscriptions.planId} NOT IN ('free', 'light')`,
+        sql`${subscriptions.status} IN ('active', 'trialing')`
+      )
+    );
 }

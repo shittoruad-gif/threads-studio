@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Trash2, Copy, Calendar, RefreshCw } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Loader2, Trash2, Copy, Calendar, RefreshCw, Search, Heart } from 'lucide-react';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
 import { toast } from 'sonner';
 import {
@@ -43,8 +44,24 @@ export default function AIHistory() {
   const [, setLocation] = useLocation();
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [selectedHistory, setSelectedHistory] = useState<any | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
   const { data, isLoading, refetch } = trpc.project.getAiHistory.useQuery({ limit: 50, offset: 0 });
+  const { data: favoritesData, refetch: refetchFavorites } = trpc.favorite.list.useQuery();
+  const toggleFavoriteMutation = trpc.favorite.toggle.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.favorited ? 'お気に入りに追加しました' : 'お気に入りを解除しました');
+      refetchFavorites();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const favoriteHistoryIds = useMemo(() => {
+    return new Set((favoritesData || []).map((f: any) => f.historyId));
+  }, [favoritesData]);
   const deleteMutation = trpc.project.deleteAiHistory.useMutation({
     onSuccess: () => {
       toast.success('履歴を削除しました');
@@ -93,6 +110,40 @@ export default function AIHistory() {
   const history = data?.history || [];
   const total = data?.total || 0;
 
+  const filteredHistory = useMemo(() => {
+    let filtered = history;
+
+    // Filter by favorites
+    if (showFavoritesOnly) {
+      filtered = filtered.filter((item: any) => favoriteHistoryIds.has(item.id));
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((item: any) => {
+        try {
+          const content = JSON.parse(item.content);
+          const metadata = item.metadata ? JSON.parse(item.metadata) : {};
+          const searchableText = [
+            content.title,
+            content.mainPost,
+            ...(content.treePosts || []),
+            content.cta,
+            metadata.businessType,
+            metadata.area,
+            item.postType,
+          ].filter(Boolean).join(' ').toLowerCase();
+          return searchableText.includes(query);
+        } catch {
+          return false;
+        }
+      });
+    }
+
+    return filtered;
+  }, [history, searchQuery, showFavoritesOnly, favoriteHistoryIds]);
+
   return (
     <div className="container max-w-6xl py-8">
       <PageBreadcrumb items={breadcrumbItems} />
@@ -106,18 +157,53 @@ export default function AIHistory() {
         <ThreadsAccountSwitcher />
       </div>
 
+      {/* Search and Filter Bar */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="履歴を検索..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Button
+          variant={showFavoritesOnly ? "default" : "outline"}
+          onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+          size="default"
+        >
+          <Heart className={`h-4 w-4 mr-2 ${showFavoritesOnly ? 'fill-current' : ''}`} />
+          お気に入りのみ
+        </Button>
+      </div>
+
+      {/* Search Results Count */}
+      {(searchQuery.trim() || showFavoritesOnly) && (
+        <p className="text-sm text-muted-foreground mb-4">
+          検索結果: {filteredHistory.length}件
+        </p>
+      )}
+
       {history.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-center text-muted-foreground">
             まだ履歴がありません。AI投稿生成を使用すると、ここに履歴が表示されます。
           </CardContent>
         </Card>
+      ) : filteredHistory.length === 0 ? (
+        <Card>
+          <CardContent className="pt-6 text-center text-muted-foreground">
+            該当する履歴がありません
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-4">
-          {history.map((item: any) => {
+          {filteredHistory.map((item: any) => {
             const content = JSON.parse(item.content);
             const metadata = item.metadata ? JSON.parse(item.metadata) : {};
-            
+            const isFavorited = favoriteHistoryIds.has(item.id);
+
             return (
               <Card key={item.id}>
                 <CardHeader>
@@ -150,6 +236,14 @@ export default function AIHistory() {
                       )}
                     </div>
                     <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => toggleFavoriteMutation.mutate({ historyId: item.id })}
+                        title={isFavorited ? 'お気に入り解除' : 'お気に入りに追加'}
+                      >
+                        <Heart className={`w-4 h-4 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
+                      </Button>
                       <Button
                         size="sm"
                         variant="default"

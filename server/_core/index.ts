@@ -287,6 +287,10 @@ async function startServer() {
   // Start auto-post scheduler (daily AI generation + scheduling)
   const { startAutoPostScheduler } = await import("../autoPostScheduler");
   startAutoPostScheduler();
+
+  // Start weekly report scheduler (Monday 9:00 AM JST, pro+ users only)
+  const { startWeeklyReportScheduler } = await import("../weeklyReport");
+  startWeeklyReportScheduler();
   
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {

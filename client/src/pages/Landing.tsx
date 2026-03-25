@@ -369,7 +369,7 @@ export default function Landing() {
     if (isAuthenticated) {
       window.location.href = "/dashboard";
     } else {
-      window.location.href = "/register";
+      window.location.href = "/try";
     }
   };
 
@@ -495,7 +495,7 @@ export default function Landing() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-10 mt-8">
             <Button size="lg" className="bg-white text-primary hover:bg-white/90 text-lg px-8 py-6 shadow-lg" onClick={handleSignupClick} disabled={loading}>
               <Sparkles className="w-5 h-5 mr-2" />
-              {loading ? "読み込み中..." : isAuthenticated ? "ダッシュボードへ" : "無料アカウント作成"}
+              {loading ? "読み込み中..." : isAuthenticated ? "ダッシュボードへ" : "無料でAI生成を試す"}
             </Button>
             <Link href="/pricing">
               <Button size="lg" variant="outline" className="text-lg px-8 py-6 border-white/40 text-white hover:bg-white/10 bg-transparent">
@@ -714,7 +714,7 @@ export default function Landing() {
           </p>
           <Button size="lg" className="bg-white text-primary hover:bg-white/90 text-lg px-10 py-6 shadow-lg" onClick={handleSignupClick} disabled={loading}>
             <Sparkles className="w-5 h-5 mr-2" />
-            {loading ? "読み込み中..." : isAuthenticated ? "ダッシュボードへ" : "無料アカウント作成"}
+            {loading ? "読み込み中..." : isAuthenticated ? "ダッシュボードへ" : "無料でAI生成を試す"}
           </Button>
         </div>
       </section>

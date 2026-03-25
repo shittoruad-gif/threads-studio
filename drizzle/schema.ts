@@ -264,6 +264,21 @@ export type AiGenerationHistory = typeof aiGenerationHistory.$inferSelect;
 export type InsertAiGenerationHistory = typeof aiGenerationHistory.$inferInsert;
 
 /**
+ * User favorite AI generation history items
+ */
+export const userHistoryFavorites = mysqlTable("userHistoryFavorites", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  historyId: int("historyId").notNull().references(() => aiGenerationHistory.id, { onDelete: "cascade" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userHistoryIdx: uniqueIndex("user_history_favorite_idx").on(table.userId, table.historyId),
+}));
+
+export type UserHistoryFavorite = typeof userHistoryFavorites.$inferSelect;
+export type InsertUserHistoryFavorite = typeof userHistoryFavorites.$inferInsert;
+
+/**
  * AI Generation Templates - stores reusable generation patterns
  */
 export const aiGenerationTemplates = mysqlTable("aiGenerationTemplates", {

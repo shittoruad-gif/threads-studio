@@ -10,6 +10,11 @@ import * as couponService from "./coupon";
 import { PLANS, TRIAL_DAYS, getPlan } from "../shared/plans";
 import { TRPCError } from "@trpc/server";
 
+// Global rate limit store for tryGenerate
+declare global {
+  var __tryGenerateRateLimit: Map<string, number[]> | undefined;
+}
+
 export const appRouter = router({
   system: systemRouter,
   
@@ -705,6 +710,111 @@ export const appRouter = router({
           projectId: history.projectId,
           postType: history.postType,
           metadata,
+        };
+      }),
+
+    // Public "try before register" generation (rate limited by IP)
+    tryGenerate: publicProcedure
+      .input(z.object({
+        businessType: z.string().min(1),
+        area: z.string().min(1),
+        target: z.string().min(1),
+        mainProblem: z.string().min(1),
+        strength: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Rate limit by IP: max 3 per hour
+        const ip = ctx.req.ip || ctx.req.headers['x-forwarded-for'] || 'unknown';
+        const ipStr = Array.isArray(ip) ? ip[0] : ip;
+        const now = Date.now();
+        const windowMs = 60 * 60 * 1000; // 1 hour
+
+        // Simple in-memory rate limiter
+        if (!globalThis.__tryGenerateRateLimit) {
+          globalThis.__tryGenerateRateLimit = new Map<string, number[]>();
+        }
+        const rateMap = globalThis.__tryGenerateRateLimit as Map<string, number[]>;
+        const timestamps = rateMap.get(ipStr) || [];
+        const recentTimestamps = timestamps.filter(t => now - t < windowMs);
+
+        if (recentTimestamps.length >= 3) {
+          throw new TRPCError({
+            code: 'TOO_MANY_REQUESTS',
+            message: 'お試し生成は1時間に3回までです。続けてご利用いただくには無料登録してください。',
+          });
+        }
+
+        recentTimestamps.push(now);
+        rateMap.set(ipStr, recentTimestamps);
+
+        // Generate prompt (mainPost only, no tree posts)
+        const { generateThreadsPrompt } = await import('../shared/threadsPrompts');
+        const prompt = generateThreadsPrompt({
+          businessType: input.businessType,
+          area: input.area,
+          target: input.target,
+          mainProblem: input.mainProblem,
+          strength: input.strength,
+          treeCount: 0, // main post only
+        });
+
+        // Call LLM
+        const { invokeLLM } = await import('./_core/llm');
+        const response = await invokeLLM({
+          messages: [
+            { role: 'user', content: prompt },
+          ],
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'threads_post',
+              strict: true,
+              schema: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string', description: '投稿タイトル' },
+                  mainPost: { type: 'string', description: 'メイン投稿' },
+                  treePosts: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'ツリー投稿配列'
+                  },
+                  cta: { type: 'string', description: 'CTA' },
+                  hashtags: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'ハッシュタグ配列'
+                  },
+                  goal: { type: 'string', description: '投稿の狙い' },
+                  improvement: { type: 'string', description: '次回改善案' },
+                  expectedEffect: { type: 'string', description: '投稿の期待効果' },
+                  timingCandidate: { type: 'string', description: '投稿設置タイミング候補' },
+                  weeklyImprovementPoint: { type: 'string', description: '週次改善ポイント' },
+                  hookType: { type: 'string', description: '使用した1行目の型（①〜⑤のどれか）' },
+                  cvGoal: { type: 'string', description: 'CVゴール（LINE登録 or 予約 のどちらか1つ）' },
+                },
+                required: ['title', 'mainPost', 'treePosts', 'cta', 'hashtags', 'goal', 'improvement', 'expectedEffect', 'timingCandidate', 'weeklyImprovementPoint', 'hookType', 'cvGoal'],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const content = response.choices[0].message.content;
+        if (!content || typeof content !== 'string') {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI応答が空です。' });
+        }
+
+        const result = JSON.parse(content);
+
+        // Return only the main post and metadata (no saving to DB)
+        return {
+          title: result.title,
+          mainPost: result.mainPost,
+          cta: result.cta,
+          hashtags: result.hashtags,
+          goal: result.goal,
+          expectedEffect: result.expectedEffect,
         };
       }),
   }),
@@ -1981,6 +2091,21 @@ export const appRouter = router({
       const result = await processAutoPostGeneration();
       return result;
     }),
+  }),
+
+  // ============ Favorites ============
+  favorite: router({
+    toggle: protectedProcedure
+      .input(z.object({ historyId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const favorited = await db.toggleHistoryFavorite(ctx.user.id, input.historyId);
+        return { favorited };
+      }),
+
+    list: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.getHistoryFavorites(ctx.user.id);
+      }),
   }),
 
 });
