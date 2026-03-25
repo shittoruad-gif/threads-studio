@@ -1,0 +1,280 @@
+{
+  "query": "SELECT DISTINCT code, type, description, isActive, maxUses, usedCount, expiresAt FROM coupons WHERE isActive = 1 ORDER BY code LIMIT 30;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user nuvedpFX47CirCN.95d815bc18d3 --database 3BqX5xmxFb6gYs2Wffw2Ss --execute SELECT DISTINCT code, type, description, isActive, maxUses, usedCount, expiresAt FROM coupons WHERE isActive = 1 ORDER BY code LIMIT 30;",
+  "rows": [
+    {
+      "code": "FOREVER_FREE",
+      "type": "forever_free",
+      "description": "永久無料プラン（プロプラン相当）",
+      "isActive": "1",
+      "maxUses": "NULL",
+      "usedCount": "0",
+      "expiresAt": "NULL"
+    },
+    {
+      "code": "FREE2239PU",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22A8CL",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22AUTR",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22DRME",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22F7QW",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22G2QA",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22KBB4",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22LBUE",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22LML5",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22MBJX",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22MLGC",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22PFLH",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22PY4L",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22T59N",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22TUQF",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22UTQY",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE22UV8Y",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE233WQJ",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE234LCJ",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE236ZXW",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE238FPY",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE238UFK",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE23AATD",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE23AQUX",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE23FR3D",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE23FYQK",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE23J8UW",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE23KPSE",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    },
+    {
+      "code": "FREE23MAKD",
+      "type": "free",
+      "description": "2026年2月の無料クーポン",
+      "isActive": "1",
+      "maxUses": "100",
+      "usedCount": "0",
+      "expiresAt": "2026-03-01 04:59:59"
+    }
+  ],
+  "messages": [],
+  "stdout": "code\ttype\tdescription\tisActive\tmaxUses\tusedCount\texpiresAt\nFOREVER_FREE\tforever_free\t永久無料プラン（プロプラン相当）\t1\tNULL\t0\tNULL\nFREE2239PU\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22A8CL\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22AUTR\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22DRME\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22F7QW\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22G2QA\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22KBB4\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22LBUE\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22LML5\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22MBJX\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22MLGC\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22PFLH\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22PY4L\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22T59N\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22TUQF\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22UTQY\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE22UV8Y\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE233WQJ\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE234LCJ\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE236ZXW\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE238FPY\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE238UFK\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE23AATD\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE23AQUX\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE23FR3D\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE23FYQK\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE23J8UW\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE23KPSE\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\nFREE23MAKD\tfree\t2026年2月の無料クーポン\t1\t100\t0\t2026-03-01 04:59:59\n",
+  "stderr": "",
+  "execution_time_ms": 1501
+}

@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `aiGenerationUsage` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `userId` int NOT NULL,\n  `month` varchar(7) NOT NULL,\n  `count` int NOT NULL DEFAULT 0,\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `aiGenerationUsage_id` PRIMARY KEY(`id`),\n  CONSTRAINT `user_month_idx` UNIQUE(`userId`, `month`),\n  CONSTRAINT `aiGenerationUsage_userId_users_id_fk` FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user nuvedpFX47CirCN.95d815bc18d3 --database 3BqX5xmxFb6gYs2Wffw2Ss --execute CREATE TABLE IF NOT EXISTS `aiGenerationUsage` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `userId` int NOT NULL,\n  `month` varchar(7) NOT NULL,\n  `count` int NOT NULL DEFAULT 0,\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `aiGenerationUsage_id` PRIMARY KEY(`id`),\n  CONSTRAINT `user_month_idx` UNIQUE(`userId`, `month`),\n  CONSTRAINT `aiGenerationUsage_userId_users_id_fk` FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1723
+}

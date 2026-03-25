@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE plans ADD COLUMN maxAiGenerations INT NOT NULL DEFAULT 0 COMMENT '-1 for unlimited, 0 for none';\nUPDATE plans SET maxAiGenerations = CASE \n  WHEN hasAiGeneration = 1 THEN -1 \n  ELSE 0 \nEND;\nALTER TABLE plans DROP COLUMN hasAiGeneration;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user nuvedpFX47CirCN.95d815bc18d3 --database 3BqX5xmxFb6gYs2Wffw2Ss --execute ALTER TABLE plans ADD COLUMN maxAiGenerations INT NOT NULL DEFAULT 0 COMMENT '-1 for unlimited, 0 for none';\nUPDATE plans SET maxAiGenerations = CASE \n  WHEN hasAiGeneration = 1 THEN -1 \n  ELSE 0 \nEND;\nALTER TABLE plans DROP COLUMN hasAiGeneration;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2791
+}

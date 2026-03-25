@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE projects \nADD COLUMN businessType varchar(100),\nADD COLUMN area varchar(100),\nADD COLUMN target text,\nADD COLUMN mainProblem text,\nADD COLUMN strength text,\nADD COLUMN proof text,\nADD COLUMN ctaLink text;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user nuvedpFX47CirCN.95d815bc18d3 --database 3BqX5xmxFb6gYs2Wffw2Ss --execute ALTER TABLE projects \nADD COLUMN businessType varchar(100),\nADD COLUMN area varchar(100),\nADD COLUMN target text,\nADD COLUMN mainProblem text,\nADD COLUMN strength text,\nADD COLUMN proof text,\nADD COLUMN ctaLink text;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 4158
+}

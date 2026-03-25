@@ -1,0 +1,8 @@
+{
+  "query": "ALTER TABLE users ADD COLUMN credits INT NOT NULL DEFAULT 0;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user nuvedpFX47CirCN.95d815bc18d3 --database 3BqX5xmxFb6gYs2Wffw2Ss --execute ALTER TABLE users ADD COLUMN credits INT NOT NULL DEFAULT 0;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1060 (42S21) at line 1: Duplicate column name 'credits'"
+  ]
+}

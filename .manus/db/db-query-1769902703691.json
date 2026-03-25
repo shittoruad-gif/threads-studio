@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `aiGenerationTemplates` (\n  `id` int AUTO_INCREMENT PRIMARY KEY,\n  `userId` int NOT NULL,\n  `name` varchar(100) NOT NULL,\n  `description` text,\n  `postType` varchar(50) NOT NULL,\n  `generationParams` text NOT NULL,\n  `isPublic` boolean NOT NULL DEFAULT false,\n  `usageCount` int NOT NULL DEFAULT 0,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE CASCADE,\n  INDEX `template_user_id_idx` (`userId`),\n  INDEX `template_usage_count_idx` (`usageCount`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user nuvedpFX47CirCN.95d815bc18d3 --database 3BqX5xmxFb6gYs2Wffw2Ss --execute CREATE TABLE IF NOT EXISTS `aiGenerationTemplates` (\n  `id` int AUTO_INCREMENT PRIMARY KEY,\n  `userId` int NOT NULL,\n  `name` varchar(100) NOT NULL,\n  `description` text,\n  `postType` varchar(50) NOT NULL,\n  `generationParams` text NOT NULL,\n  `isPublic` boolean NOT NULL DEFAULT false,\n  `usageCount` int NOT NULL DEFAULT 0,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE CASCADE,\n  INDEX `template_user_id_idx` (`userId`),\n  INDEX `template_usage_count_idx` (`usageCount`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2583
+}

@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `setupStep` int DEFAULT 0 NOT NULL;

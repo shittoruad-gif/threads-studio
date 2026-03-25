@@ -1,0 +1,1 @@
+ALTER TABLE `subscriptions` ADD `univapaySubscriptionId` varchar(255);

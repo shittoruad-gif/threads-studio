@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `aiGenerationPresets` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`category` varchar(50) NOT NULL,\n\t`name` varchar(100) NOT NULL,\n\t`description` text,\n\t`icon` varchar(50),\n\t`postType` varchar(50) NOT NULL,\n\t`defaultParams` text NOT NULL,\n\t`isSystem` boolean NOT NULL DEFAULT true,\n\t`displayOrder` int NOT NULL DEFAULT 0,\n\t`usageCount` int NOT NULL DEFAULT 0,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `aiGenerationPresets_id` PRIMARY KEY(`id`)\n);\n\nCREATE INDEX `preset_category_idx` ON `aiGenerationPresets` (`category`);\nCREATE INDEX `preset_display_order_idx` ON `aiGenerationPresets` (`displayOrder`);\nCREATE INDEX `preset_usage_count_idx` ON `aiGenerationPresets` (`usageCount`);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user nuvedpFX47CirCN.95d815bc18d3 --database 3BqX5xmxFb6gYs2Wffw2Ss --execute CREATE TABLE `aiGenerationPresets` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`category` varchar(50) NOT NULL,\n\t`name` varchar(100) NOT NULL,\n\t`description` text,\n\t`icon` varchar(50),\n\t`postType` varchar(50) NOT NULL,\n\t`defaultParams` text NOT NULL,\n\t`isSystem` boolean NOT NULL DEFAULT true,\n\t`displayOrder` int NOT NULL DEFAULT 0,\n\t`usageCount` int NOT NULL DEFAULT 0,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `aiGenerationPresets_id` PRIMARY KEY(`id`)\n);\n\nCREATE INDEX `preset_category_idx` ON `aiGenerationPresets` (`category`);\nCREATE INDEX `preset_display_order_idx` ON `aiGenerationPresets` (`displayOrder`);\nCREATE INDEX `preset_usage_count_idx` ON `aiGenerationPresets` (`usageCount`);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 3776
+}

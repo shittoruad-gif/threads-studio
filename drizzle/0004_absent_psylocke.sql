@@ -1,0 +1,1 @@
+ALTER TABLE `aiGenerationHistory` MODIFY COLUMN `projectId` varchar(50);

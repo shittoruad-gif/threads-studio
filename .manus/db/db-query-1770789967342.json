@@ -1,0 +1,14 @@
+{
+  "query": "SELECT COUNT(*) as total, COUNT(DISTINCT code) as unique_codes FROM coupons;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user nuvedpFX47CirCN.95d815bc18d3 --database 3BqX5xmxFb6gYs2Wffw2Ss --execute SELECT COUNT(*) as total, COUNT(DISTINCT code) as unique_codes FROM coupons;",
+  "rows": [
+    {
+      "total": "14304",
+      "unique_codes": "14304"
+    }
+  ],
+  "messages": [],
+  "stdout": "total\tunique_codes\n14304\t14304\n",
+  "stderr": "",
+  "execution_time_ms": 1508
+}

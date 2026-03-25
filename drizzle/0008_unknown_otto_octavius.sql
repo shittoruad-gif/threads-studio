@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `isDemoMode` boolean DEFAULT true NOT NULL;

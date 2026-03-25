@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `users` ADD COLUMN `setupStep` int NOT NULL DEFAULT 0 AFTER `onboardingCompleted`;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user nuvedpFX47CirCN.95d815bc18d3 --database 3BqX5xmxFb6gYs2Wffw2Ss --execute ALTER TABLE `users` ADD COLUMN `setupStep` int NOT NULL DEFAULT 0 AFTER `onboardingCompleted`;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1872
+}

@@ -1,0 +1,17 @@
+-- Insert default AI generation presets
+
+INSERT INTO `aiGenerationPresets` (`category`, `name`, `description`, `icon`, `postType`, `defaultParams`, `isSystem`, `displayOrder`, `usageCount`) VALUES
+('industry', '整体院・接骨院', '腰痛・肩こりなどの症状改善を訴求する投稿テンプレート', 'Activity', 'hook_tree', '{"businessType":"整体院","targetAudience":"腰痛・肩こりに悩む30-50代","tone":"親しみやすく、専門性を感じさせる","keywords":["腰痛","肩こり","姿勢改善","根本改善"]}', true, 1, 0),
+('industry', '美容サロン・エステ', '美容効果や施術の特徴を魅力的に伝える投稿テンプレート', 'Sparkles', 'hook_tree', '{"businessType":"美容サロン","targetAudience":"美容に関心の高い20-40代女性","tone":"華やかで、高級感のある","keywords":["美肌","小顔","リフトアップ","エイジングケア"]}', true, 2, 0),
+('industry', '飲食店・カフェ', 'メニューの魅力や店舗の雰囲気を伝える投稿テンプレート', 'Coffee', 'hook_tree', '{"businessType":"飲食店","targetAudience":"地域住民・グルメ好きな20-40代","tone":"親しみやすく、食欲をそそる","keywords":["新メニュー","季節限定","こだわり食材","手作り"]}', true, 3, 0),
+('industry', '小売店・雑貨店', '商品の特徴や使い方を紹介する投稿テンプレート', 'ShoppingBag', 'hook_tree', '{"businessType":"小売店","targetAudience":"ライフスタイルにこだわる20-40代","tone":"おしゃれで、ライフスタイル提案型","keywords":["新商品","限定品","おすすめ","ギフト"]}', true, 4, 0),
+('industry', '士業・コンサルタント', '専門知識や実績をアピールする投稿テンプレート', 'Briefcase', 'hook_tree', '{"businessType":"士業","targetAudience":"経営者・個人事業主","tone":"信頼感があり、専門的","keywords":["解決事例","専門知識","サポート","実績"]}', true, 5, 0),
+('industry', 'フィットネス・ヨガ', '健康効果やプログラムの魅力を伝える投稿テンプレート', 'Dumbbell', 'hook_tree', '{"businessType":"フィットネスジム","targetAudience":"健康・ダイエットに関心の高い20-50代","tone":"モチベーションを高める、前向き","keywords":["ダイエット","健康","ボディメイク","体験レッスン"]}', true, 6, 0),
+('purpose', '新規顧客獲得', '初めてのお客様に向けた魅力的な投稿テンプレート', 'UserPlus', 'hook_tree', '{"targetAudience":"新規顧客","tone":"親しみやすく、わかりやすい","keywords":["初回限定","体験","お試し","特典"]}', true, 7, 0),
+('purpose', 'リピーター促進', '既存顧客の再来店を促す投稿テンプレート', 'RefreshCw', 'hook_tree', '{"targetAudience":"既存顧客","tone":"感謝の気持ちを込めた、親密","keywords":["リピーター特典","ポイント","会員限定","感謝"]}', true, 8, 0),
+('purpose', 'イベント告知', 'イベントやキャンペーンを告知する投稿テンプレート', 'Calendar', 'hook_tree', '{"targetAudience":"地域住民・フォロワー","tone":"ワクワク感のある、期待を高める","keywords":["イベント","キャンペーン","期間限定","先着"]}', true, 9, 0),
+('purpose', '商品・サービス紹介', '新商品や新サービスを紹介する投稿テンプレート', 'Package', 'hook_tree', '{"targetAudience":"潜在顧客","tone":"魅力的で、ベネフィットを強調","keywords":["新登場","おすすめ","特徴","こだわり"]}', true, 10, 0),
+('purpose', 'お客様の声・実績紹介', 'お客様の声や実績を紹介して信頼を築く投稿テンプレート', 'MessageCircle', 'hook_tree', '{"targetAudience":"潜在顧客","tone":"信頼感があり、共感を呼ぶ","keywords":["お客様の声","実績","ビフォーアフター","喜びの声"]}', true, 11, 0),
+('post_type', 'フック型ツリー投稿', '注目を集めるフックから始まる連続投稿テンプレート', 'TrendingUp', 'hook_tree', '{"tone":"インパクトのある、続きが気になる","keywords":["驚き","意外","知らなかった","実は"]}', true, 12, 0),
+('post_type', 'ストーリー型投稿', 'ストーリーで共感を呼ぶ投稿テンプレート', 'BookOpen', 'story', '{"tone":"共感を呼ぶ、ストーリー性のある","keywords":["体験談","エピソード","変化","成長"]}', true, 13, 0),
+('post_type', 'リスト型投稿', '箇条書きでわかりやすく伝える投稿テンプレート', 'List', 'list', '{"tone":"わかりやすく、実用的","keywords":["〇選","まとめ","ポイント","コツ"]}', true, 14, 0);

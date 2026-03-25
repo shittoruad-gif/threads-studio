@@ -1,0 +1,1 @@
+ALTER TABLE `aiGenerationPresets` ADD `isPinned` boolean DEFAULT false NOT NULL;
