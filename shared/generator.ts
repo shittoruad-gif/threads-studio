@@ -3,12 +3,26 @@ import { GenerateOptions, Post, ProjectInputs, Template, Tone } from "./types";
 
 // 安全フィルタ: 広告規制・誇大表現を回避
 const UNSAFE_PATTERNS = [
-  { pattern: /治る|治す|治療/g, replacement: "整える" },
-  { pattern: /必ず|絶対|100%/g, replacement: "" },
-  { pattern: /根本改善/g, replacement: "根本からサポート" },
+  // 医療系表現（あはき法・柔道整復師法・医師法対応）
+  { pattern: /治る|治す|治療する/g, replacement: "整える" },
+  { pattern: /治療(?!院)/g, replacement: "施術" },
+  { pattern: /診断/g, replacement: "カウンセリング" },
   { pattern: /完治/g, replacement: "サポート" },
-  { pattern: /最高|最強|No\.1/g, replacement: "おすすめ" },
-  { pattern: /劇的|驚異的/g, replacement: "心地よい" },
+  { pattern: /根本改善/g, replacement: "根本からサポート" },
+  { pattern: /に効く|に効果がある/g, replacement: "にアプローチする" },
+  { pattern: /改善します/g, replacement: "を目指します" },
+  { pattern: /改善する/g, replacement: "を目指す" },
+  // 誇大表現（景品表示法対応）
+  { pattern: /必ず|絶対|100%/g, replacement: "" },
+  { pattern: /最高|最強|No\.1|ナンバーワン|日本一/g, replacement: "おすすめ" },
+  { pattern: /劇的|驚異的|奇跡/g, replacement: "心地よい" },
+  { pattern: /唯一無二/g, replacement: "こだわりの" },
+  // 美容系（薬機法対応）
+  { pattern: /アンチエイジング/g, replacement: "エイジングケア" },
+  { pattern: /若返り|若返る/g, replacement: "ハリツヤ" },
+  { pattern: /シミが消える|シワが消える/g, replacement: "肌を整える" },
+  // フィットネス系
+  { pattern: /必ず痩せる|絶対痩せる/g, replacement: "理想の体型を目指せる" },
 ];
 
 function applySafetyFilter(text: string): string {
