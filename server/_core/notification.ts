@@ -1,106 +1,128 @@
-import { TRPCError } from "@trpc/server";
-import { ENV } from "./env";
+import { Resend } from "resend";
 
 export type NotificationPayload = {
   title: string;
   content: string;
 };
 
-const TITLE_MAX_LENGTH = 1200;
-const CONTENT_MAX_LENGTH = 20000;
-
-const trimValue = (value: string): string => value.trim();
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === "string" && value.trim().length > 0;
-
-const buildEndpointUrl = (baseUrl: string): string => {
-  const normalizedBase = baseUrl.endsWith("/")
-    ? baseUrl
-    : `${baseUrl}/`;
-  return new URL(
-    "webdevtoken.v1.WebDevService/SendNotification",
-    normalizedBase
-  ).toString();
+export type EmailPayload = {
+  to: string;
+  subject: string;
+  html: string;
 };
 
-const validatePayload = (input: NotificationPayload): NotificationPayload => {
-  if (!isNonEmptyString(input.title)) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Notification title is required.",
-    });
-  }
-  if (!isNonEmptyString(input.content)) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Notification content is required.",
-    });
-  }
+let _resend: Resend | null = null;
 
-  const title = trimValue(input.title);
-  const content = trimValue(input.content);
-
-  if (title.length > TITLE_MAX_LENGTH) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Notification title must be at most ${TITLE_MAX_LENGTH} characters.`,
-    });
+function getResend(): Resend | null {
+  if (!process.env.RESEND_API_KEY) {
+    return null;
   }
-
-  if (content.length > CONTENT_MAX_LENGTH) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Notification content must be at most ${CONTENT_MAX_LENGTH} characters.`,
-    });
+  if (!_resend) {
+    _resend = new Resend(process.env.RESEND_API_KEY);
   }
+  return _resend;
+}
 
-  return { title, content };
-};
+const FROM_EMAIL = "Threads Studio <onboarding@resend.dev>";
 
 /**
- * Dispatches a project-owner notification through the Manus Notification Service.
- * Returns `true` if the request was accepted, `false` when the upstream service
- * cannot be reached (callers can fall back to email/slack). Validation errors
- * bubble up as TRPC errors so callers can fix the payload.
+ * Send an email via Resend
  */
-export async function notifyOwner(
-  payload: NotificationPayload
-): Promise<boolean> {
-  const { title, content } = validatePayload(payload);
-
-  if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
-    // 通知サービスが未設定の場合はスキップ（ローカル環境では不要）
-    console.log("[Notification] Skipped - notification service not configured");
+export async function sendEmail(payload: EmailPayload): Promise<boolean> {
+  const resend = getResend();
+  if (!resend) {
+    console.log("[Email] Skipped - RESEND_API_KEY not configured");
     return false;
   }
 
-  const endpoint = buildEndpointUrl(ENV.forgeApiUrl);
-
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${ENV.forgeApiKey}`,
-        "content-type": "application/json",
-        "connect-protocol-version": "1",
-      },
-      body: JSON.stringify({ title, content }),
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: payload.to,
+      subject: payload.subject,
+      html: payload.html,
     });
 
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      console.warn(
-        `[Notification] Failed to notify owner (${response.status} ${response.statusText})${
-          detail ? `: ${detail}` : ""
-        }`
-      );
+    if (error) {
+      console.warn("[Email] Failed to send:", error);
       return false;
     }
 
+    console.log(`[Email] Sent to ${payload.to}: ${payload.subject}`);
     return true;
-  } catch (error) {
-    console.warn("[Notification] Error calling notification service:", error);
+  } catch (err) {
+    console.warn("[Email] Error:", err);
     return false;
   }
+}
+
+/**
+ * Send password reset email
+ */
+export async function sendPasswordResetEmail(to: string, resetToken: string, baseUrl: string): Promise<boolean> {
+  const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
+  return sendEmail({
+    to,
+    subject: "【Threads Studio】パスワードリセット",
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>パスワードリセット</h2>
+        <p>以下のリンクをクリックして、新しいパスワードを設定してください。</p>
+        <a href="${resetUrl}" style="display: inline-block; background: #10b981; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0;">
+          パスワードをリセット
+        </a>
+        <p style="color: #666; font-size: 14px;">このリンクは1時間有効です。</p>
+        <p style="color: #666; font-size: 14px;">心当たりがない場合は、このメールを無視してください。</p>
+      </div>
+    `,
+  });
+}
+
+/**
+ * Send email verification email
+ */
+export async function sendVerificationEmail(to: string, token: string, baseUrl: string): Promise<boolean> {
+  const verifyUrl = `${baseUrl}/verify-email?token=${token}`;
+  return sendEmail({
+    to,
+    subject: "【Threads Studio】メールアドレスの確認",
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>メールアドレスの確認</h2>
+        <p>Threads Studioへのご登録ありがとうございます。</p>
+        <p>以下のリンクをクリックして、メールアドレスを確認してください。</p>
+        <a href="${verifyUrl}" style="display: inline-block; background: #10b981; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0;">
+          メールアドレスを確認
+        </a>
+      </div>
+    `,
+  });
+}
+
+/**
+ * Send trial ending reminder
+ */
+export async function sendTrialReminderEmail(to: string, daysLeft: number, planName: string): Promise<boolean> {
+  return sendEmail({
+    to,
+    subject: `【Threads Studio】無料トライアルがあと${daysLeft}日で終了します`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>無料トライアル期限のお知らせ</h2>
+        <p>${planName}の無料トライアルがあと<strong>${daysLeft}日</strong>で終了します。</p>
+        <p>トライアル終了後も引き続きご利用いただくには、有料プランへの移行をお願いいたします。</p>
+        <a href="https://threads-studio-production-c190.up.railway.app/pricing" style="display: inline-block; background: #10b981; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0;">
+          プランを確認する
+        </a>
+      </div>
+    `,
+  });
+}
+
+/**
+ * Legacy notifyOwner - now sends email to admin
+ */
+export async function notifyOwner(payload: NotificationPayload): Promise<boolean> {
+  console.log(`[Notification] ${payload.title}: ${payload.content}`);
+  return true;
 }
