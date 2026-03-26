@@ -25,13 +25,13 @@ export default function Privacy() {
           <h1 className="text-3xl font-bold text-foreground">プライバシーポリシー</h1>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-8">最終更新日：2025年2月15日</p>
+        <p className="text-sm text-muted-foreground mb-8">最終更新日：2025年6月1日</p>
 
         <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-3">1. はじめに</h2>
             <p className="text-muted-foreground leading-relaxed">
-              Threads Studio（以下「本サービス」）は、ユーザーのプライバシーを尊重し、個人情報の保護に努めます。
+              株式会社しっとる（以下「当社」）が運営するThreads Studio（以下「本サービス」）は、ユーザーのプライバシーを尊重し、個人情報の保護に努めます。
               本プライバシーポリシーは、本サービスがどのような情報を収集し、どのように利用・保護するかについて説明します。
             </p>
           </section>
@@ -62,7 +62,21 @@ export default function Privacy() {
                 </p>
               </div>
               <div className="pl-4 border-l-2 border-primary/30">
-                <h3 className="font-medium text-foreground mb-1">2.4 利用データ</h3>
+                <h3 className="font-medium text-foreground mb-1">2.4 AI生成に関するデータ</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  AI投稿生成機能を利用する際にユーザーが入力するプロジェクト情報、テーマ、キーワード等のデータ。
+                  これらはAIによるコンテンツ生成の品質向上のために利用されます。
+                </p>
+              </div>
+              <div className="pl-4 border-l-2 border-primary/30">
+                <h3 className="font-medium text-foreground mb-1">2.5 決済情報</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  有料プランの決済に必要な情報はStripe社を通じて安全に処理されます。
+                  当社はクレジットカード番号等の機密情報を直接保存しません。
+                </p>
+              </div>
+              <div className="pl-4 border-l-2 border-primary/30">
+                <h3 className="font-medium text-foreground mb-1">2.6 利用データ</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
                   サービスの利用状況、投稿履歴、機能の使用頻度など、サービス改善のために収集する匿名化されたデータ。
                 </p>
@@ -86,7 +100,15 @@ export default function Privacy() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
+                <span>AIによる投稿コンテンツの自動生成・最適化</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary mt-1">•</span>
                 <span>ユーザーアカウントの認証・管理</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary mt-1">•</span>
+                <span>決済処理およびサブスクリプション管理</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
@@ -129,7 +151,37 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">5. 情報の共有</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">5. AI生成機能におけるデータの取り扱い</h2>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              本サービスのAI投稿生成機能では、外部のAIサービスを利用しています。
+            </p>
+            <ul className="space-y-2 text-muted-foreground text-sm">
+              <li className="flex items-start gap-2">
+                <span className="text-primary mt-1">•</span>
+                <span>AIへの入力データは投稿生成の目的でのみ外部APIに送信されます</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary mt-1">•</span>
+                <span>生成されたコンテンツはユーザーが確認・編集した上で投稿されます</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary mt-1">•</span>
+                <span>AI生成データを第三者のモデル学習に提供することはありません</span>
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold text-foreground mb-3">6. 決済処理</h2>
+            <p className="text-muted-foreground leading-relaxed">
+              有料プランの決済はStripe社の安全な決済インフラを通じて処理されます。
+              クレジットカード情報は当社サーバーを経由せず、Stripe社が直接処理・保管します。
+              Stripe社のプライバシーポリシーについてはStripe社のウェブサイトをご参照ください。
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold text-foreground mb-3">7. 情報の共有</h2>
             <p className="text-muted-foreground leading-relaxed">
               本サービスは、以下の場合を除き、ユーザーの個人情報を第三者に提供しません。
             </p>
@@ -144,13 +196,13 @@ export default function Privacy() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
-                <span>サービス提供に必要な業務委託先（決済処理のStripe等）に対して、必要最小限の情報を提供する場合</span>
+                <span>サービス提供に必要な業務委託先（決済処理のStripe社、AI生成サービス等）に対して、必要最小限の情報を提供する場合</span>
               </li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">6. データの保存と保護</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">8. データの保存と保護</h2>
             <p className="text-muted-foreground leading-relaxed">
               ユーザーの情報は、適切なセキュリティ対策を講じたサーバーに保存します。
               SSL/TLS暗号化通信、パスワードのハッシュ化、アクセストークンの暗号化など、
@@ -159,7 +211,7 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">7. ユーザーの権利</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">9. ユーザーの権利</h2>
             <p className="text-muted-foreground leading-relaxed mb-3">
               ユーザーは以下の権利を有します。
             </p>
@@ -184,7 +236,7 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">8. データ削除</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">10. データ削除</h2>
             <p className="text-muted-foreground leading-relaxed">
               ユーザーがアカウントの削除を希望する場合、またはThreads連携を解除する場合、
               関連する個人情報およびThreads APIデータは速やかに削除されます。
@@ -193,7 +245,7 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">9. Cookieの使用</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">11. Cookieの使用</h2>
             <p className="text-muted-foreground leading-relaxed">
               本サービスでは、ユーザー認証のためにセッションCookieを使用しています。
               これらのCookieは、ログイン状態の維持に必要なものであり、
@@ -202,7 +254,7 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">10. 本ポリシーの変更</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">12. 本ポリシーの変更</h2>
             <p className="text-muted-foreground leading-relaxed">
               本プライバシーポリシーは、法令の改正やサービスの変更に伴い、
               予告なく変更される場合があります。重要な変更がある場合は、
@@ -211,10 +263,13 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">11. お問い合わせ</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">13. お問い合わせ</h2>
             <p className="text-muted-foreground leading-relaxed">
               プライバシーに関するご質問やご要望がございましたら、
               アプリ内のお問い合わせ機能またはサポートまでご連絡ください。
+            </p>
+            <p className="text-muted-foreground leading-relaxed mt-2">
+              運営：株式会社しっとる
             </p>
           </section>
         </div>
@@ -226,6 +281,7 @@ export default function Privacy() {
           <p>&copy; 2025 Threads Studio. All rights reserved.</p>
           <div className="flex gap-4">
             <Link href="/terms"><span className="hover:text-foreground transition-colors cursor-pointer">利用規約</span></Link>
+            <Link href="/faq"><span className="hover:text-foreground transition-colors cursor-pointer">よくある質問</span></Link>
             <Link href="/"><span className="hover:text-foreground transition-colors cursor-pointer">トップ</span></Link>
           </div>
         </div>

@@ -25,24 +25,26 @@ import {
   CreditCard,
   MessageCircle,
 } from "lucide-react";
-import { CSSProperties, useEffect, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import ThreadsAccountSwitcher from "./ThreadsAccountSwitcher";
+import { trpc } from "@/lib/trpc";
 
 interface MenuItem {
   icon: React.ElementType;
   label: string;
   path: string;
   badge?: string;
+  badgeKey?: string;
   adminOnly?: boolean;
 }
 
 const mainMenuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
   { icon: Sparkles, label: "AI投稿生成", path: "/ai-project-create", badge: "NEW" },
-  { icon: History, label: "AI生成履歴", path: "/ai-history" },
+  { icon: History, label: "AI生成履歴", path: "/ai-history", badgeKey: "ai-history" },
   { icon: Sparkles, label: "AI生成テンプレート", path: "/ai-templates" },
 ];
 
@@ -54,9 +56,11 @@ const contentMenuItems: MenuItem[] = [
 const accountMenuItems: MenuItem[] = [
   { icon: Link2, label: "Threads連携", path: "/threads-connect" },
   { icon: Calendar, label: "投稿履歴・予約", path: "/post-history" },
-  { icon: MessageCircle, label: "コメント管理", path: "/comment-manager", badge: "NEW" },
-  { icon: BarChart3, label: "投稿分析", path: "/post-analytics" },
+  { icon: MessageCircle, label: "コメント管理", path: "/comment-manager", badgeKey: "comments" },
+  { icon: BarChart3, label: "投稿分析", path: "/post-analytics", badgeKey: "analytics" },
   { icon: Gift, label: "紹介プログラム", path: "/referral" },
+  { icon: Settings, label: "設定", path: "/settings" },
+  { icon: HelpCircle, label: "よくある質問", path: "/faq" },
 ];
 
 const adminMenuItems: MenuItem[] = [
@@ -75,6 +79,73 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const isMobile = useIsMobile();
+
+  // ---- Notification badge data ----
+  const { data: threadsAccounts } = trpc.threads.list.useQuery(
+    undefined,
+    { enabled: !!user }
+  );
+  const firstAccountId = threadsAccounts?.[0]?.id;
+
+  // Fetch comments for badge (only if account exists)
+  const { data: commentsData } = trpc.threads.getComments.useQuery(
+    { accountId: firstAccountId!, limit: 50 },
+    { enabled: !!firstAccountId, refetchInterval: 5 * 60 * 1000 }
+  );
+
+  // Fetch AI history for unfavorited count
+  const { data: aiHistoryData } = trpc.project.getAiHistory.useQuery(
+    { limit: 20, offset: 0 },
+    { enabled: !!user }
+  );
+  const { data: favoritesData } = trpc.favorite.list.useQuery(
+    undefined,
+    { enabled: !!user }
+  );
+
+  // Compute badge values
+  const dynamicBadges = useMemo(() => {
+    const badges: Record<string, string | null> = {};
+
+    // Comments badge: count of comments (as a simple unreplied proxy)
+    if (commentsData && Array.isArray(commentsData) && commentsData.length > 0) {
+      badges["comments"] = commentsData.length.toString();
+    } else {
+      badges["comments"] = null;
+    }
+
+    // Analytics badge: show NEW if user has analytics data they haven't viewed recently
+    const analyticsViewed = localStorage.getItem("analytics-last-viewed");
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    if (!analyticsViewed || parseInt(analyticsViewed) < oneDayAgo) {
+      badges["analytics"] = "NEW";
+    } else {
+      badges["analytics"] = null;
+    }
+
+    // AI history badge: count of recent unfavorited posts
+    const historyItems = (aiHistoryData as any)?.history;
+    if (historyItems && Array.isArray(historyItems) && historyItems.length > 0) {
+      const favoriteIds = new Set(
+        (favoritesData || []).map((f: any) => f.historyId ?? f.id)
+      );
+      const unfavorited = historyItems.filter(
+        (h: any) => !favoriteIds.has(h.id)
+      ).length;
+      badges["ai-history"] = unfavorited > 0 ? unfavorited.toString() : null;
+    } else {
+      badges["ai-history"] = null;
+    }
+
+    return badges;
+  }, [commentsData, aiHistoryData, favoritesData]);
+
+  // Mark analytics as viewed when navigating to analytics page
+  useEffect(() => {
+    if (location === "/post-analytics") {
+      localStorage.setItem("analytics-last-viewed", Date.now().toString());
+    }
+  }, [location]);
 
   // Auto-collapse on mobile
   useEffect(() => {
@@ -165,20 +236,40 @@ export default function DashboardLayout({
                 )}
                 title={collapsed ? item.label : undefined}
               >
-                <item.icon
-                  className={cn(
-                    "w-[18px] h-[18px] flex-shrink-0",
-                    isActive ? "text-emerald-600" : "text-gray-400"
+                <span className="relative flex-shrink-0">
+                  <item.icon
+                    className={cn(
+                      "w-[18px] h-[18px]",
+                      isActive ? "text-emerald-600" : "text-gray-400"
+                    )}
+                  />
+                  {collapsed && (item.badgeKey ? dynamicBadges[item.badgeKey] : item.badge) && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white" />
                   )}
-                />
+                </span>
                 {!collapsed && (
                   <>
                     <span className="truncate">{item.label}</span>
-                    {item.badge && (
-                      <span className="ml-auto text-[10px] font-bold bg-emerald-500 text-white px-1.5 py-0.5 rounded-full">
-                        {item.badge}
-                      </span>
-                    )}
+                    {(() => {
+                      const dynamicBadge = item.badgeKey ? dynamicBadges[item.badgeKey] : null;
+                      const badgeText = dynamicBadge || item.badge;
+                      if (!badgeText) return null;
+                      const isNumeric = /^\d+$/.test(badgeText);
+                      return (
+                        <span
+                          className={cn(
+                            "ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full",
+                            dynamicBadge
+                              ? isNumeric
+                                ? "bg-orange-500 text-white min-w-[20px] text-center"
+                                : "bg-amber-100 text-amber-700 border border-amber-300"
+                              : "bg-emerald-500 text-white"
+                          )}
+                        >
+                          {badgeText}
+                        </span>
+                      );
+                    })()}
                   </>
                 )}
               </button>

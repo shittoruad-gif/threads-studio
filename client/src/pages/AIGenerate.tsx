@@ -19,6 +19,9 @@ import { useThreadsAccount } from '@/components/ThreadsAccountSwitcher';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import HelpTooltip from '@/components/HelpTooltip';
+import { triggerCelebration } from '@/components/Celebration';
+import ErrorGuide from '@/components/ErrorGuide';
 
 type PostType = 'hook_tree' | 'expertise' | 'local' | 'proof' | 'empathy' | 'story' | 'list' | 'offer' | 'enemy' | 'qa' | 'trend' | 'aruaru';
 
@@ -69,6 +72,7 @@ export default function AIGenerate() {
   const [editingProject, setEditingProject] = useState(false);
   const [savePresetDialogOpen, setSavePresetDialogOpen] = useState(false);
   const [editPresetDialogOpen, setEditPresetDialogOpen] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [editingPreset, setEditingPreset] = useState<any>(null);
   const [presetName, setPresetName] = useState('');
   const [presetDescription, setPresetDescription] = useState('');
@@ -309,9 +313,11 @@ export default function AIGenerate() {
       setEditedPost(data as GeneratedPost);
       // Invalidate AI usage query to update the counter
       utils.subscription.getAiUsage.invalidate();
+      // Celebration for first generation
+      triggerCelebration('first-generation');
     },
     onError: (error) => {
-      alert(`エラー: ${error.message}`);
+      setGenerationError(error.message);
     },
   });
 
@@ -448,7 +454,10 @@ export default function AIGenerate() {
 
                 {/* 投稿の目的を選ぶ */}
                 <div className="space-y-2">
-                  <Label>投稿の目的を選ぶ</Label>
+                  <div className="flex items-center gap-1.5">
+                    <Label>投稿の目的を選ぶ</Label>
+                    <HelpTooltip content="投稿の目的によって、AIが生成する投稿のスタイルが変わります" />
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     {POST_PURPOSES_LIST.map((p) => (
                       <button
@@ -482,7 +491,10 @@ export default function AIGenerate() {
                 {/* 投稿のスタイルを選ぶ */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label>投稿のスタイルを選ぶ</Label>
+                    <div className="flex items-center gap-1.5">
+                      <Label>投稿のスタイルを選ぶ</Label>
+                      <HelpTooltip content="投稿の型（テンプレート）を選びます。業種や目的に合ったスタイルを選ぶと効果的です" />
+                    </div>
                     {purpose && (
                       <button
                         type="button"
@@ -560,7 +572,10 @@ export default function AIGenerate() {
                 )}
 
                 <div className="space-y-2">
-                  <Label>追加の返信投稿（任意）</Label>
+                  <div className="flex items-center gap-1.5">
+                    <Label>追加の返信投稿（任意）</Label>
+                    <HelpTooltip content="メイン投稿に続くツリー（返信）の数です。3〜5本がおすすめです" />
+                  </div>
                   <Select value={treeCount.toString()} onValueChange={(value) => setTreeCount(parseInt(value))}>
                     <SelectTrigger>
                       <SelectValue />
@@ -628,6 +643,21 @@ export default function AIGenerate() {
                     </>
                   )}
                 </Button>
+
+                {/* AI Generation Error Guide */}
+                {generationError && (
+                  <div className="mt-4">
+                    <ErrorGuide
+                      type="ai-generation-failed"
+                      message={generationError}
+                      onRetry={() => {
+                        setGenerationError(null);
+                        handleGenerate();
+                      }}
+                      compact
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
 

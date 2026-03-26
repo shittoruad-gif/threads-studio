@@ -734,6 +734,7 @@ export default function Landing() {
               <Link href="/pricing"><span className="hover:text-white/80 transition-colors cursor-pointer">料金プラン</span></Link>
               <Link href="/privacy"><span className="hover:text-white/80 transition-colors cursor-pointer">プライバシーポリシー</span></Link>
               <Link href="/terms"><span className="hover:text-white/80 transition-colors cursor-pointer">利用規約</span></Link>
+              <Link href="/faq"><span className="hover:text-white/80 transition-colors cursor-pointer">よくある質問</span></Link>
             </div>
             <p className="text-white/40 text-sm">&copy; 2025 Threads Studio. All rights reserved.</p>
           </div>

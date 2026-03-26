@@ -34,6 +34,7 @@ import TrialBanner from '@/components/TrialBanner';
 import OnboardingTour from '@/components/OnboardingTour';
 import ProjectExplanation from '@/components/ProjectExplanation';
 import HelpTooltip from '@/components/HelpTooltip';
+import { checkPostCountMilestone } from '@/components/Celebration';
 import { UsageProgress } from '@/components/UsageProgress';
 import SetupWizard from '@/components/SetupWizard';
 import { DemoModeBanner } from '@/components/DemoModeBanner';
@@ -41,6 +42,7 @@ import { SetupProgress } from '@/components/SetupProgress';
 import { AIChatWidget } from '@/components/AIChatWidget';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
 import WeeklyCalendarView from '@/components/WeeklyCalendarView';
+import ErrorGuide from '@/components/ErrorGuide';
 
 export default function Dashboard() {
   const { user, isAuthenticated, loading, logout } = useAuth();
@@ -78,8 +80,10 @@ export default function Dashboard() {
   }, [setupData]);
 
   // Show onboarding tour for new users (after setup wizard)
+  // Check both server flag and localStorage for first-visit detection
   useEffect(() => {
-    if (user && !user.onboardingCompleted && setupData && setupData.setupStep === 5) {
+    const onboardingDone = localStorage.getItem('onboarding-completed') === 'true';
+    if (user && !user.onboardingCompleted && !onboardingDone && setupData && setupData.setupStep === 5) {
       const timer = setTimeout(() => {
         setOnboardingOpen(true);
       }, 1000);
@@ -137,6 +141,13 @@ export default function Dashboard() {
     undefined,
     { enabled: isAuthenticated }
   );
+
+  // Check post count milestones
+  useEffect(() => {
+    if (stats?.totalPosts) {
+      checkPostCountMilestone(stats.totalPosts);
+    }
+  }, [stats?.totalPosts]);
 
   // Auto-post settings
   const { data: autoPostSettings } = trpc.autoPost.getSettings.useQuery(
@@ -258,30 +269,36 @@ export default function Dashboard() {
         {/* Hero: Auto Post + Stats Row */}
         <div className="grid lg:grid-cols-3 gap-4 mb-6">
           {/* Auto Post Status - Takes 2 columns */}
-          <div className="lg:col-span-2 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-6">
+          <div className="lg:col-span-2 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-6" data-tour="auto-post">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="bg-emerald-100 p-3 rounded-xl">
                   <Sparkles className="w-6 h-6 text-emerald-600" />
                 </div>
                 <div>
-                  <h2 className="font-bold text-lg text-gray-900">自動投稿</h2>
+                  <div className="flex items-center gap-1.5">
+                    <h2 className="font-bold text-lg text-gray-900">自動投稿</h2>
+                    <HelpTooltip content="ONにすると、AIが毎日自動で投稿を生成してThreadsに投稿します" />
+                  </div>
                   <p className="text-sm text-gray-500">
                     {autoPostSettings?.autoPostEnabled ? 'AIが毎日自動で投稿を生成・公開中' : '自動投稿はOFFです'}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <select
-                  value={autoPostSettings?.autoPostFrequency || 'daily'}
-                  onChange={(e) => updateAutoPost.mutate({ autoPostFrequency: e.target.value as any })}
-                  className="text-sm border border-emerald-300 rounded-lg px-3 py-1.5 bg-white"
-                  disabled={!autoPostSettings?.autoPostEnabled}
-                >
-                  <option value="daily">1日1回</option>
-                  <option value="twice_daily">1日2回</option>
-                  <option value="three_daily">1日3回</option>
-                </select>
+                <div className="flex items-center gap-1">
+                  <HelpTooltip content="1日に投稿する回数です。多いほど認知が広がりますが、3回/日が推奨です" side="left" />
+                  <select
+                    value={autoPostSettings?.autoPostFrequency || 'daily'}
+                    onChange={(e) => updateAutoPost.mutate({ autoPostFrequency: e.target.value as any })}
+                    className="text-sm border border-emerald-300 rounded-lg px-3 py-1.5 bg-white"
+                    disabled={!autoPostSettings?.autoPostEnabled}
+                  >
+                    <option value="daily">1日1回</option>
+                    <option value="twice_daily">1日2回</option>
+                    <option value="three_daily">1日3回</option>
+                  </select>
+                </div>
                 <button
                   onClick={() => updateAutoPost.mutate({ autoPostEnabled: !autoPostSettings?.autoPostEnabled })}
                   className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
@@ -330,6 +347,17 @@ export default function Dashboard() {
                     </Badge>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Error guide for failed posts */}
+            {autoPostHistory && autoPostHistory.some((post: any) => post.status === 'failed') && (
+              <div className="mt-3">
+                <ErrorGuide
+                  type="post-failed"
+                  onRetry={() => setLocation('/post-history')}
+                  compact
+                />
               </div>
             )}
 
@@ -861,6 +889,7 @@ export default function Dashboard() {
           <button
             onClick={() => setLocation('/ai-project-create')}
             className="bg-white p-6 rounded-xl text-left hover:shadow-md transition-all border border-gray-200 group relative overflow-hidden"
+            data-tour="ai-generate"
           >
             <div className="absolute top-3 right-3">
               <Badge className="bg-emerald-500 text-white border-0 text-xs">
@@ -896,6 +925,7 @@ export default function Dashboard() {
           <button
             onClick={() => setLocation('/threads-connect')}
             className="bg-white p-6 rounded-xl text-left hover:shadow-md transition-all border border-gray-200 group"
+            data-tour="threads-connect"
           >
             <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center mb-3">
               <Link2 className="w-5 h-5 text-blue-600" />
@@ -908,6 +938,7 @@ export default function Dashboard() {
           <button
             onClick={() => setLocation('/post-history')}
             className="bg-white p-6 rounded-xl text-left hover:shadow-md transition-all border border-gray-200 group"
+            data-tour="analytics"
           >
             <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center mb-3">
               <Calendar className="w-5 h-5 text-green-600" />

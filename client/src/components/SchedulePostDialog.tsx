@@ -14,6 +14,7 @@ import { Clock } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useThreadsAccount } from '@/components/ThreadsAccountSwitcher';
+import { triggerCelebration } from '@/components/Celebration';
 
 interface SchedulePostDialogProps {
   open: boolean;
@@ -39,6 +40,7 @@ export function SchedulePostDialog({ open, onOpenChange, projectId, postContent 
   const createScheduledPost = trpc.scheduledPost.create.useMutation({
     onSuccess: () => {
       toast.success('予約投稿を設定しました');
+      triggerCelebration('first-post');
       onOpenChange(false);
       setSelectedAccountId('');
       setScheduledDate('');

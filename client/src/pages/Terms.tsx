@@ -25,13 +25,13 @@ export default function Terms() {
           <h1 className="text-3xl font-bold text-foreground">利用規約</h1>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-8">最終更新日：2025年2月15日</p>
+        <p className="text-sm text-muted-foreground mb-8">最終更新日：2025年6月1日</p>
 
         <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-3">第1条（適用）</h2>
             <p className="text-muted-foreground leading-relaxed">
-              本利用規約（以下「本規約」）は、Threads Studio（以下「本サービス」）の利用に関する条件を定めるものです。
+              本利用規約（以下「本規約」）は、株式会社しっとる（以下「当社」）が運営するThreads Studio（以下「本サービス」）の利用に関する条件を定めるものです。
               ユーザーは、本サービスを利用することにより、本規約に同意したものとみなされます。
             </p>
           </section>
@@ -48,7 +48,7 @@ export default function Terms() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
-                <span>AI（人工知能）を活用した投稿コンテンツの生成</span>
+                <span>AI（人工知能）を活用した投稿コンテンツの自動生成</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
@@ -56,11 +56,15 @@ export default function Terms() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
-                <span>投稿履歴の管理</span>
+                <span>投稿履歴の管理・分析</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
                 <span>複数Threadsアカウントの管理</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary mt-1">•</span>
+                <span>自動投稿スケジューリング</span>
               </li>
             </ul>
           </section>
@@ -105,7 +109,27 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">第5条（料金と支払い）</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">第5条（AI生成機能）</h2>
+            <div className="space-y-3 text-muted-foreground leading-relaxed">
+              <p>
+                1. 本サービスはAI（人工知能）を活用して投稿コンテンツを自動生成する機能を提供します。
+              </p>
+              <p>
+                2. AI生成コンテンツの正確性・適切性・法令適合性について、当社は保証しません。
+                投稿前のコンテンツの確認・編集はユーザーの責任で行ってください。
+              </p>
+              <p>
+                3. 本サービスには安全フィルタ機能が搭載されていますが、
+                すべての不適切な表現を完全に排除することを保証するものではありません。
+              </p>
+              <p>
+                4. AI生成コンテンツの著作権はユーザーに帰属します。
+              </p>
+            </div>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold text-foreground mb-3">第6条（料金と支払い）</h2>
             <div className="space-y-3 text-muted-foreground leading-relaxed">
               <p>
                 1. 本サービスには無料プランと有料プランがあります。
@@ -115,15 +139,19 @@ export default function Terms() {
               </p>
               <p>
                 3. 支払いはStripe社の決済システムを通じて処理されます。
+                クレジットカード情報は当社サーバーを経由せず、Stripe社が安全に処理・保管します。
               </p>
               <p>
                 4. サブスクリプションは自動更新されます。解約はいつでも可能です。
+              </p>
+              <p>
+                5. 解約後も、支払い済み期間の終了まではサービスをご利用いただけます。
               </p>
             </div>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">第6条（禁止事項）</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">第7条（禁止事項）</h2>
             <p className="text-muted-foreground leading-relaxed mb-3">
               ユーザーは、本サービスの利用にあたり、以下の行為を行ってはなりません。
             </p>
@@ -152,11 +180,15 @@ export default function Terms() {
                 <span className="text-primary mt-1">•</span>
                 <span>本サービスのリバースエンジニアリング、改ざん、不正利用</span>
               </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary mt-1">•</span>
+                <span>虚偽情報の投稿、薬機法・景表法等に抵触する広告表現の投稿</span>
+              </li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">第7条（免責事項）</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">第8条（免責事項）</h2>
             <div className="space-y-3 text-muted-foreground leading-relaxed">
               <p>
                 1. 本サービスは「現状のまま」提供されます。本サービスの完全性、正確性、
@@ -167,7 +199,7 @@ export default function Terms() {
                 本サービスの一部または全部が利用できなくなる場合があります。
               </p>
               <p>
-                3. AI生成コンテンツの正確性・適切性について、本サービスは保証しません。
+                3. AI生成コンテンツの正確性・適切性について、当社は保証しません。
                 投稿内容の最終的な確認・判断はユーザーの責任で行ってください。
               </p>
               <p>
@@ -178,27 +210,27 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">第8条（サービスの変更・停止）</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">第9条（サービスの変更・停止）</h2>
             <p className="text-muted-foreground leading-relaxed">
-              本サービスは、事前の通知なく、サービスの内容を変更、追加、または停止する場合があります。
+              当社は、事前の通知なく、サービスの内容を変更、追加、または停止する場合があります。
               重要な変更がある場合は、可能な限り事前にユーザーに通知するよう努めます。
             </p>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">第9条（知的財産権）</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">第10条（知的財産権）</h2>
             <div className="space-y-3 text-muted-foreground leading-relaxed">
               <p>
-                1. 本サービスに関する知的財産権は、本サービスの運営者に帰属します。
+                1. 本サービスに関する知的財産権は、当社に帰属します。
               </p>
               <p>
-                2. ユーザーが本サービスを通じて作成したコンテンツの著作権は、ユーザーに帰属します。
+                2. ユーザーが本サービスを通じて作成したコンテンツ（AI生成コンテンツを含む）の著作権は、ユーザーに帰属します。
               </p>
             </div>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">第10条（規約の変更）</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">第11条（規約の変更）</h2>
             <p className="text-muted-foreground leading-relaxed">
               本規約は、必要に応じて変更される場合があります。
               変更後の規約は、本サービス上に掲載した時点で効力を生じるものとします。
@@ -206,10 +238,16 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">第11条（準拠法・管轄）</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">第12条（準拠法・管轄）</h2>
             <p className="text-muted-foreground leading-relaxed">
               本規約の解釈および適用は日本法に準拠するものとし、
               本サービスに関する紛争については、日本国内の裁判所を第一審の専属的合意管轄裁判所とします。
+            </p>
+          </section>
+
+          <section>
+            <p className="text-muted-foreground leading-relaxed">
+              運営：株式会社しっとる
             </p>
           </section>
         </div>
@@ -221,6 +259,7 @@ export default function Terms() {
           <p>&copy; 2025 Threads Studio. All rights reserved.</p>
           <div className="flex gap-4">
             <Link href="/privacy"><span className="hover:text-foreground transition-colors cursor-pointer">プライバシーポリシー</span></Link>
+            <Link href="/faq"><span className="hover:text-foreground transition-colors cursor-pointer">よくある質問</span></Link>
             <Link href="/"><span className="hover:text-foreground transition-colors cursor-pointer">トップ</span></Link>
           </div>
         </div>
