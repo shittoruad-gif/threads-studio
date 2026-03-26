@@ -23,6 +23,7 @@ import {
   Users,
   X,
   CreditCard,
+  MessageCircle,
 } from "lucide-react";
 import { CSSProperties, useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -53,6 +54,8 @@ const contentMenuItems: MenuItem[] = [
 const accountMenuItems: MenuItem[] = [
   { icon: Link2, label: "Threads連携", path: "/threads-connect" },
   { icon: Calendar, label: "投稿履歴・予約", path: "/post-history" },
+  { icon: MessageCircle, label: "コメント管理", path: "/comment-manager", badge: "NEW" },
+  { icon: BarChart3, label: "投稿分析", path: "/post-analytics" },
   { icon: Gift, label: "紹介プログラム", path: "/referral" },
 ];
 

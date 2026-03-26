@@ -412,3 +412,29 @@ export const passwordResetTokens = mysqlTable("passwordResetTokens", {
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+
+/**
+ * Post Analytics - stores fetched Threads post insight metrics
+ */
+export const postAnalytics = mysqlTable("postAnalytics", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  threadsPostId: varchar("threadsPostId", { length: 255 }).notNull(),
+  postContent: text("postContent"), // Snapshot of the post text
+  postPermalink: text("postPermalink"),
+  postedAt: timestamp("postedAt"), // When the post was originally published
+  impressions: int("impressions").default(0).notNull(),
+  likes: int("likes").default(0).notNull(),
+  replies: int("replies").default(0).notNull(),
+  reposts: int("reposts").default(0).notNull(),
+  fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("post_analytics_user_id_idx").on(table.userId),
+  threadsPostIdIdx: index("post_analytics_threads_post_id_idx").on(table.threadsPostId),
+  userPostIdx: uniqueIndex("post_analytics_user_post_idx").on(table.userId, table.threadsPostId),
+}));
+
+export type PostAnalytics = typeof postAnalytics.$inferSelect;
+export type InsertPostAnalytics = typeof postAnalytics.$inferInsert;

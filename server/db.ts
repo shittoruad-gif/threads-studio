@@ -20,7 +20,8 @@ import {
   aiChatMessages, AiChatMessage, InsertAiChatMessage,
   referrals, Referral, InsertReferral,
   creditTransactions, CreditTransaction, InsertCreditTransaction,
-  passwordResetTokens, PasswordResetToken, InsertPasswordResetToken
+  passwordResetTokens, PasswordResetToken, InsertPasswordResetToken,
+  postAnalytics, PostAnalytics, InsertPostAnalytics
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { PLANS } from '../shared/plans';
@@ -2039,4 +2040,62 @@ export async function getProPlusUsers() {
         sql`${subscriptions.status} IN ('active', 'trialing')`
       )
     );
+}
+
+// ============ Post Analytics ============
+
+export async function upsertPostAnalytics(data: InsertPostAnalytics): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.insert(postAnalytics)
+    .values(data)
+    .onDuplicateKeyUpdate({
+      set: {
+        impressions: data.impressions,
+        likes: data.likes,
+        replies: data.replies,
+        reposts: data.reposts,
+        postContent: data.postContent,
+        postPermalink: data.postPermalink,
+        postedAt: data.postedAt,
+        fetchedAt: new Date(),
+      },
+    });
+}
+
+export async function getPostAnalyticsByUserId(userId: number): Promise<PostAnalytics[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select()
+    .from(postAnalytics)
+    .where(eq(postAnalytics.userId, userId))
+    .orderBy(desc(postAnalytics.fetchedAt));
+}
+
+export async function getPostAnalyticsWithEngagement(userId: number) {
+  const db = await getDb();
+  if (!db) return { posts: [], avgEngagement: 0 };
+
+  const posts = await db.select()
+    .from(postAnalytics)
+    .where(eq(postAnalytics.userId, userId))
+    .orderBy(desc(postAnalytics.postedAt));
+
+  // Calculate engagement for each post: likes + replies + reposts
+  const postsWithEngagement = posts.map(p => ({
+    ...p,
+    engagement: p.likes + p.replies + p.reposts,
+    engagementRate: p.impressions > 0
+      ? ((p.likes + p.replies + p.reposts) / p.impressions) * 100
+      : 0,
+  }));
+
+  const totalEngagement = postsWithEngagement.reduce((sum, p) => sum + p.engagement, 0);
+  const avgEngagement = postsWithEngagement.length > 0
+    ? totalEngagement / postsWithEngagement.length
+    : 0;
+
+  return { posts: postsWithEngagement, avgEngagement };
 }

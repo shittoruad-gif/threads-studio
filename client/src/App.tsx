@@ -30,6 +30,8 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
 import Referral from "./pages/Referral";
+import CommentManager from "./pages/CommentManager";
+import PostAnalytics from "./pages/PostAnalytics";
 import AdminPresets from "./pages/AdminPresets";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
@@ -56,6 +58,8 @@ function DashboardRoutes() {
         </Route>
         <Route path="/threads-connect" component={ThreadsConnect} />
         <Route path="/post-history" component={PostHistory} />
+        <Route path="/comment-manager" component={CommentManager} />
+        <Route path="/post-analytics" component={PostAnalytics} />
         <Route path="/ai-project-create" component={AIProjectCreate} />
         <Route path="/ai-generate" component={AIGenerate} />
         <Route path="/ai-history" component={AIHistory} />
@@ -108,6 +112,12 @@ function Router() {
         {() => <DashboardRoutes />}
       </Route>
       <Route path="/post-history">
+        {() => <DashboardRoutes />}
+      </Route>
+      <Route path="/comment-manager">
+        {() => <DashboardRoutes />}
+      </Route>
+      <Route path="/post-analytics">
         {() => <DashboardRoutes />}
       </Route>
       <Route path="/ai-project-create">

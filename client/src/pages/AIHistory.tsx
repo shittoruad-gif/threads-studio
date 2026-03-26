@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Loader2, Trash2, Copy, Calendar, RefreshCw, Search, Heart } from 'lucide-react';
+import { Loader2, Trash2, Copy, Calendar, RefreshCw, Search, Heart, Sparkles } from 'lucide-react';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
 import { toast } from 'sonner';
 import {
@@ -19,6 +19,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Slider } from '@/components/ui/slider';
 
 const POST_TYPE_LABELS: Record<string, string> = {
   hook_tree: '🎣 「常識を覆す」型',
@@ -47,6 +56,12 @@ export default function AIHistory() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
+  // Clone dialog state
+  const [cloneHistoryId, setCloneHistoryId] = useState<number | null>(null);
+  const [cloneCount, setCloneCount] = useState(5);
+  const [cloneResults, setCloneResults] = useState<any[] | null>(null);
+  const [cloneOriginalTitle, setCloneOriginalTitle] = useState('');
+
   const { data, isLoading, refetch } = trpc.project.getAiHistory.useQuery({ limit: 50, offset: 0 });
   const { data: favoritesData, refetch: refetchFavorites } = trpc.favorite.list.useQuery();
   const toggleFavoriteMutation = trpc.favorite.toggle.useMutation({
@@ -73,8 +88,18 @@ export default function AIHistory() {
     },
   });
 
+  const cloneMutation = trpc.project.cloneHitPost.useMutation({
+    onSuccess: (data) => {
+      setCloneResults(data.variations);
+      setCloneOriginalTitle(data.originalTitle);
+      toast.success(`${data.variations.length}件のバリエーションを生成しました`);
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
   const handleRegenerate = (historyId: number) => {
-    // Navigate to AI generation page with history ID
     setLocation(`/ai-generate?historyId=${historyId}`);
   };
 
@@ -82,6 +107,16 @@ export default function AIHistory() {
     try {
       const parsed = JSON.parse(content);
       const text = `${parsed.title}\n\n${parsed.mainPost}\n\n${parsed.treePosts.join('\n\n')}\n\n${parsed.cta}\n\n${parsed.hashtags.join(' ')}`;
+      navigator.clipboard.writeText(text);
+      toast.success('コピーしました');
+    } catch (error) {
+      toast.error('コピーに失敗しました');
+    }
+  };
+
+  const handleCopyVariation = (variation: any) => {
+    try {
+      const text = `${variation.title}\n\n${variation.mainPost}\n\n${variation.treePosts.join('\n\n')}\n\n${variation.cta}\n\n${variation.hashtags.join(' ')}`;
       navigator.clipboard.writeText(text);
       toast.success('コピーしました');
     } catch (error) {
@@ -99,6 +134,25 @@ export default function AIHistory() {
     }
   };
 
+  const handleCloneOpen = (historyId: number) => {
+    setCloneHistoryId(historyId);
+    setCloneCount(5);
+    setCloneResults(null);
+    setCloneOriginalTitle('');
+  };
+
+  const handleCloneGenerate = () => {
+    if (cloneHistoryId) {
+      cloneMutation.mutate({ historyId: cloneHistoryId, count: cloneCount });
+    }
+  };
+
+  const handleCloneClose = () => {
+    setCloneHistoryId(null);
+    setCloneResults(null);
+    setCloneOriginalTitle('');
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -113,12 +167,10 @@ export default function AIHistory() {
   const filteredHistory = useMemo(() => {
     let filtered = history;
 
-    // Filter by favorites
     if (showFavoritesOnly) {
       filtered = filtered.filter((item: any) => favoriteHistoryIds.has(item.id));
     }
 
-    // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((item: any) => {
@@ -235,7 +287,7 @@ export default function AIHistory() {
                         </CardDescription>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap justify-end">
                       <Button
                         size="sm"
                         variant="ghost"
@@ -243,6 +295,15 @@ export default function AIHistory() {
                         title={isFavorited ? 'お気に入り解除' : 'お気に入りに追加'}
                       >
                         <Heart className={`w-4 h-4 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="bg-orange-500 hover:bg-orange-600 text-white"
+                        onClick={() => handleCloneOpen(item.id)}
+                        title="当たり投稿を量産"
+                      >
+                        <Sparkles className="w-4 h-4 mr-1" />
+                        量産する
                       </Button>
                       <Button
                         size="sm"
@@ -317,6 +378,140 @@ export default function AIHistory() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Clone Hit Post Dialog */}
+      <Dialog open={cloneHistoryId !== null} onOpenChange={(open) => { if (!open) handleCloneClose(); }}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <Sparkles className="w-5 h-5" />
+              当たり投稿を量産
+            </DialogTitle>
+            <DialogDescription>
+              高エンゲージメントの投稿をベースに、構成・トーンを維持したバリエーションを自動生成します。
+            </DialogDescription>
+          </DialogHeader>
+
+          {!cloneResults ? (
+            <div className="space-y-6 py-4">
+              <div>
+                <label className="text-sm font-medium mb-3 block">
+                  生成する本数: <span className="text-orange-600 font-bold text-lg">{cloneCount}本</span>
+                </label>
+                <Slider
+                  value={[cloneCount]}
+                  onValueChange={(val) => setCloneCount(val[0])}
+                  min={1}
+                  max={10}
+                  step={1}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>1本</span>
+                  <span>10本</span>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={handleCloneClose}>
+                  キャンセル
+                </Button>
+                <Button
+                  onClick={handleCloneGenerate}
+                  disabled={cloneMutation.isPending}
+                  className="bg-orange-500 hover:bg-orange-600 text-white"
+                >
+                  {cloneMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      生成中...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      {cloneCount}本を生成する
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4 py-4">
+              <p className="text-sm text-muted-foreground">
+                「{cloneOriginalTitle}」のバリエーション（{cloneResults.length}件）
+              </p>
+              <div className="grid gap-4">
+                {cloneResults.map((variation: any, index: number) => (
+                  <Card key={index} className="border-orange-200 bg-orange-50/30">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between">
+                        <CardTitle className="text-base">
+                          #{index + 1} {variation.title}
+                        </CardTitle>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleCopyVariation(variation)}
+                          className="shrink-0"
+                        >
+                          <Copy className="w-4 h-4 mr-1" />
+                          コピー
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-1">メイン投稿</p>
+                          <p className="text-sm whitespace-pre-wrap bg-white p-2 rounded border">
+                            {variation.mainPost}
+                          </p>
+                        </div>
+                        {variation.treePosts.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-1">
+                              ツリー投稿（{variation.treePosts.length}件）
+                            </p>
+                            <div className="space-y-1">
+                              {variation.treePosts.map((post: string, i: number) => (
+                                <p key={i} className="text-sm whitespace-pre-wrap bg-white p-2 rounded border">
+                                  {i + 1}. {post}
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex gap-2 flex-wrap">
+                          <p className="text-xs bg-white px-2 py-1 rounded border">
+                            CTA: {variation.cta}
+                          </p>
+                          <p className="text-xs bg-white px-2 py-1 rounded border">
+                            {variation.hashtags.join(' ')}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={handleCloneClose}>
+                  閉じる
+                </Button>
+                <Button
+                  onClick={() => {
+                    setCloneResults(null);
+                    setCloneCount(5);
+                  }}
+                  className="bg-orange-500 hover:bg-orange-600 text-white"
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  追加で生成する
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Detail Dialog */}
       {selectedHistory && (
         <AlertDialog open={true} onOpenChange={() => setSelectedHistory(null)}>
@@ -386,6 +581,13 @@ export default function AIHistory() {
             </div>
             <AlertDialogFooter>
               <AlertDialogCancel>閉じる</AlertDialogCancel>
+              <Button
+                onClick={() => handleCloneOpen(selectedHistory.id)}
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                量産する
+              </Button>
               <AlertDialogAction onClick={() => handleCopy(selectedHistory.content)}>
                 全体をコピー
               </AlertDialogAction>

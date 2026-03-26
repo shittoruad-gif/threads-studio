@@ -687,6 +687,127 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // Clone hit post - generate variations of a high-performing post
+    cloneHitPost: protectedProcedure
+      .input(z.object({
+        historyId: z.number(),
+        count: z.number().min(1).max(10).default(5),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Check AI generation feature (same as generatePost)
+        const subscription = await db.getSubscriptionByUserId(ctx.user.id);
+        const planId = subscription?.planId || 'free';
+        const plan = getPlan(planId);
+
+        if (!ctx.user.isDemoMode && (!plan || plan.features.maxAiGenerations === 0)) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'AI文章生成機能は有料プランでのみ利用可能です。'
+          });
+        }
+
+        // Check AI generation limit
+        const canGenerate = ctx.user.isDemoMode || await db.checkAiGenerationLimit(ctx.user.id);
+        if (!canGenerate) {
+          const { count, limit } = await db.getAiGenerationUsage(ctx.user.id);
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: `今月のAI生成回数の上限（${limit}回）に達しました。プロプラン以上にアップグレードすると無制限でご利用いただけます。`
+          });
+        }
+
+        // Get original history entry
+        const history = await db.getAiGenerationHistoryById(input.historyId, ctx.user.id);
+        if (!history) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '履歴が見つかりません。' });
+        }
+
+        const originalContent = JSON.parse(history.content);
+        let metadata: any = {};
+        if (history.metadata) {
+          try { metadata = JSON.parse(history.metadata); } catch (e) {}
+        }
+
+        // Build clone prompt
+        const clonePrompt = `以下の投稿が高いエンゲージメントを獲得しました。同じ構成・トーン・長さで、内容を変えた${input.count}本のバリエーションを生成してください。
+
+【元の投稿】
+タイトル: ${originalContent.title}
+メイン投稿: ${originalContent.mainPost}
+ツリー投稿: ${originalContent.treePosts?.join('\n') || ''}
+CTA: ${originalContent.cta}
+ハッシュタグ: ${originalContent.hashtags?.join(' ') || ''}
+
+【投稿タイプ】${history.postType}
+
+【店舗情報】
+業種: ${metadata.businessType || '不明'}
+地域: ${metadata.area || '不明'}
+ターゲット: ${metadata.target || '不明'}
+主な悩み: ${metadata.mainProblem || '不明'}
+強み: ${metadata.strength || '不明'}
+
+元の投稿の構成（段落構成、トーン、長さ、絵文字の使い方）を維持しつつ、具体的な内容・エピソード・表現を変えて${input.count}本のバリエーションを生成してください。各バリエーションは独立した投稿として使えるようにしてください。`;
+
+        // Call LLM
+        const { invokeLLM } = await import('./_core/llm');
+        const response = await invokeLLM({
+          messages: [
+            { role: 'user', content: clonePrompt },
+          ],
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'cloned_posts',
+              strict: true,
+              schema: {
+                type: 'object',
+                properties: {
+                  variations: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        title: { type: 'string', description: '投稿タイトル' },
+                        mainPost: { type: 'string', description: 'メイン投稿' },
+                        treePosts: {
+                          type: 'array',
+                          items: { type: 'string' },
+                          description: 'ツリー投稿配列'
+                        },
+                        cta: { type: 'string', description: 'CTA' },
+                        hashtags: {
+                          type: 'array',
+                          items: { type: 'string' },
+                          description: 'ハッシュタグ配列'
+                        },
+                      },
+                      required: ['title', 'mainPost', 'treePosts', 'cta', 'hashtags'],
+                      additionalProperties: false,
+                    },
+                    description: '生成されたバリエーション配列'
+                  },
+                },
+                required: ['variations'],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const content = response.choices[0].message.content;
+        if (!content || typeof content !== 'string') {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI応答が空です。' });
+        }
+
+        const result = JSON.parse(content);
+
+        // Increment AI generation usage count
+        await db.incrementAiGenerationUsage(ctx.user.id);
+
+        return { variations: result.variations, originalTitle: originalContent.title };
+      }),
+
     // Regenerate from history
     regenerateFromHistory: protectedProcedure
       .input(z.object({ historyId: z.number() }))
@@ -1131,6 +1252,154 @@ export const appRouter = router({
           results
         };
       }),
+
+    // Get comments on user's posts via Threads API
+    getComments: protectedProcedure
+      .input(z.object({
+        accountId: z.number(),
+        limit: z.number().optional().default(25),
+      }))
+      .query(async ({ ctx, input }) => {
+        const account = await db.getThreadsAccountById(input.accountId);
+        if (!account || account.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'アカウントが見つかりません。' });
+        }
+
+        if (account.tokenExpiresAt && new Date(account.tokenExpiresAt) < new Date()) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'アクセストークンの有効期限が切れています。再度連携してください。'
+          });
+        }
+
+        try {
+          const { getThreadsComments } = await import("./threadsApi");
+          const comments = await getThreadsComments(account.accessToken, account.threadsUserId, input.limit);
+          return comments;
+        } catch (error) {
+          console.error('[Get Comments Error]', error);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `コメントの取得に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`
+          });
+        }
+      }),
+
+    // Generate AI reply to a comment
+    generateReply: protectedProcedure
+      .input(z.object({
+        commentText: z.string(),
+        originalPostText: z.string().optional(),
+        commenterName: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Check AI generation feature
+        const subscription = await db.getSubscriptionByUserId(ctx.user.id);
+        const planId = subscription?.planId || 'free';
+        const plan = getPlan(planId);
+
+        if (!ctx.user.isDemoMode && (!plan || plan.features.maxAiGenerations === 0)) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'AI文章生成機能は有料プランでのみ利用可能です。'
+          });
+        }
+
+        const canGenerate = ctx.user.isDemoMode || await db.checkAiGenerationLimit(ctx.user.id);
+        if (!canGenerate) {
+          const { count, limit } = await db.getAiGenerationUsage(ctx.user.id);
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: `今月のAI生成回数の上限（${limit}回）に達しました。`
+          });
+        }
+
+        const replyPrompt = `以下のThreads投稿へのコメントに、店舗オーナーとして自然で温かみのある返信を生成してください。AIっぽくならないように、人間味のある言葉遣いにしてください。
+
+${input.originalPostText ? `【元の投稿】\n${input.originalPostText}\n\n` : ''}【コメント】${input.commenterName ? `（${input.commenterName}さんより）` : ''}
+${input.commentText}
+
+返信のルール:
+- 100文字以内で簡潔に
+- 絵文字は1-2個まで
+- 丁寧だけど堅くならない、親しみやすいトーンで
+- コメントの内容に具体的に触れる
+- 3パターン生成してください`;
+
+        const { invokeLLM } = await import('./_core/llm');
+        const response = await invokeLLM({
+          messages: [
+            { role: 'user', content: replyPrompt },
+          ],
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'reply_variations',
+              strict: true,
+              schema: {
+                type: 'object',
+                properties: {
+                  replies: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: '返信候補の配列（3パターン）'
+                  },
+                },
+                required: ['replies'],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const content = response.choices[0].message.content;
+        if (!content || typeof content !== 'string') {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI応答が空です。' });
+        }
+
+        const result = JSON.parse(content);
+        await db.incrementAiGenerationUsage(ctx.user.id);
+
+        return { replies: result.replies };
+      }),
+
+    // Post a reply to a comment via Threads API
+    postReply: protectedProcedure
+      .input(z.object({
+        accountId: z.number(),
+        commentId: z.string(),
+        text: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const account = await db.getThreadsAccountById(input.accountId);
+        if (!account || account.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'アカウントが見つかりません。' });
+        }
+
+        if (account.tokenExpiresAt && new Date(account.tokenExpiresAt) < new Date()) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'アクセストークンの有効期限が切れています。再度連携してください。'
+          });
+        }
+
+        try {
+          const { postThreadsReply } = await import("./threadsApi");
+          const result = await postThreadsReply(
+            account.accessToken,
+            account.threadsUserId,
+            input.commentId,
+            input.text
+          );
+          return { success: true, replyId: result.id };
+        } catch (error) {
+          console.error('[Post Reply Error]', error);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `返信の投稿に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`
+          });
+        }
+      }),
   }),
 
   // ============ Scheduled Posts ============
@@ -1456,6 +1725,57 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return await db.getPopularTemplates(input.limit);
       }),
+
+    // Get post analytics for the current user
+    postAnalytics: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getPostAnalyticsWithEngagement(ctx.user.id);
+    }),
+
+    // Identify hit posts (above average engagement)
+    hitPosts: protectedProcedure.query(async ({ ctx }) => {
+      const { posts, avgEngagement } = await db.getPostAnalyticsWithEngagement(ctx.user.id);
+      const hitPosts = posts.filter(p => p.engagement > avgEngagement);
+      return { hitPosts, avgEngagement };
+    }),
+
+    // Fetch and store analytics from Threads API for a user's posts
+    fetchAndStoreAnalytics: protectedProcedure.mutation(async ({ ctx }) => {
+      const { getThreadsUserPosts, getThreadsPostInsights } = await import("./threadsApi");
+
+      // Get user's connected Threads accounts
+      const accounts = await db.getThreadsAccountsByUserId(ctx.user.id);
+      if (accounts.length === 0) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Threadsアカウントが連携されていません。' });
+      }
+
+      let totalFetched = 0;
+
+      for (const account of accounts) {
+        // Fetch recent posts
+        const posts = await getThreadsUserPosts(account.accessToken, account.threadsUserId, 25);
+
+        // Fetch insights for each post
+        for (const post of posts) {
+          const insights = await getThreadsPostInsights(account.accessToken, post.id);
+
+          await db.upsertPostAnalytics({
+            userId: ctx.user.id,
+            threadsPostId: post.id,
+            postContent: post.text || null,
+            postPermalink: post.permalink || null,
+            postedAt: post.timestamp ? new Date(post.timestamp) : null,
+            impressions: insights.views,
+            likes: insights.likes,
+            replies: insights.replies,
+            reposts: insights.reposts,
+            fetchedAt: new Date(),
+          });
+          totalFetched++;
+        }
+      }
+
+      return { success: true, fetchedCount: totalFetched };
+    }),
   }),
 
   // ============ Admin Management ============
