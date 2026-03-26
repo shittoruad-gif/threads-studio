@@ -168,7 +168,7 @@ export type InsertScheduledPost = typeof scheduledPosts.$inferInsert;
 export const coupons = mysqlTable("coupons", {
   id: int("id").autoincrement().primaryKey(),
   code: varchar("code", { length: 50 }).notNull().unique(),
-  type: mysqlEnum("type", ["forever_free", "trial_30", "trial_14"]).notNull(),
+  type: mysqlEnum("type", ["forever_free", "trial_30", "trial_14", "discount_50", "discount_30", "special_price"]).notNull(),
   description: text("description"),
   maxUses: int("maxUses"), // null = unlimited
   usedCount: int("usedCount").notNull().default(0),

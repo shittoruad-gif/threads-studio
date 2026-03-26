@@ -128,7 +128,7 @@ export default function CouponModal({ open, onClose, onSuccess }: CouponModalPro
             <Label htmlFor="coupon-code">クーポンコード</Label>
             <Input
               id="coupon-code"
-              placeholder="例: FOREVER_FREE"
+              placeholder="クーポンコードを入力"
               value={couponCode}
               onChange={(e) => {
                 setCouponCode(e.target.value.toUpperCase());
@@ -159,12 +159,22 @@ export default function CouponModal({ open, onClose, onSuccess }: CouponModalPro
                 {validationResult.valid && validationResult.type && (
                   <div className="mt-2 text-sm">
                     {validationResult.type === "forever_free" && (
-                      <p className="font-medium">✨ 永久無料プランが適用されます</p>
+                      <p className="font-medium">✨ 永久無料プランが適用されます（全機能無制限）</p>
                     )}
-                    {validationResult.type === "trial_extension" && validationResult.duration && (
-                      <p className="font-medium">
-                        🎁 トライアル期間が{validationResult.duration}日間延長されます
-                      </p>
+                    {validationResult.type === "special_price" && (
+                      <p className="font-medium">🎁 特別価格！180日間プロプランが無料になります</p>
+                    )}
+                    {validationResult.type === "discount_50" && (
+                      <p className="font-medium">🎉 50%OFF！90日間プロプランが無料になります</p>
+                    )}
+                    {validationResult.type === "discount_30" && (
+                      <p className="font-medium">💫 30%OFF！60日間プロプランが無料になります</p>
+                    )}
+                    {validationResult.type === "trial_30" && (
+                      <p className="font-medium">🎁 30日間無料トライアルが開始されます</p>
+                    )}
+                    {validationResult.type === "trial_14" && (
+                      <p className="font-medium">🎁 14日間無料トライアルが開始されます</p>
                     )}
                   </div>
                 )}
@@ -241,14 +251,9 @@ export default function CouponModal({ open, onClose, onSuccess }: CouponModalPro
             )}
           </div>
 
-          <div className="text-sm text-muted-foreground space-y-1">
-            <p className="font-medium">利用可能なクーポンコード：</p>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li><code className="font-mono bg-secondary px-2 py-0.5 rounded">FOREVER_FREE</code> - 永久無料プラン</li>
-              <li><code className="font-mono bg-secondary px-2 py-0.5 rounded">TRIAL_30</code> - 30日間無料トライアル</li>
-              <li><code className="font-mono bg-secondary px-2 py-0.5 rounded">TRIAL_14</code> - 14日間無料トライアル</li>
-            </ul>
-          </div>
+          <p className="text-xs text-muted-foreground text-center">
+            クーポンコードをお持ちの方は上記に入力してください
+          </p>
         </div>
       </DialogContent>
     </Dialog>

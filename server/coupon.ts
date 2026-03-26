@@ -91,9 +91,9 @@ export async function applyCoupon(
 
   switch (coupon.type) {
     case "forever_free":
-      // Forever free = no trial end date
+      // Forever free = no trial end date, permanent pro access
       trialEndsAt = null;
-      planId = "pro"; // Give pro plan features
+      planId = "pro";
       break;
     case "trial_30":
       trialEndsAt = new Date();
@@ -102,6 +102,24 @@ export async function applyCoupon(
     case "trial_14":
       trialEndsAt = new Date();
       trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+      break;
+    case "discount_50":
+      // 50% off - give pro plan with 90-day trial
+      trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + 90);
+      planId = "pro";
+      break;
+    case "discount_30":
+      // 30% off - give pro plan with 60-day trial
+      trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + 60);
+      planId = "pro";
+      break;
+    case "special_price":
+      // Special price - give pro plan with 180-day trial
+      trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + 180);
+      planId = "pro";
       break;
   }
 
@@ -152,12 +170,25 @@ export async function applyCoupon(
     .where(eq(coupons.id, coupon.id));
 
   let message = "";
-  if (coupon.type === "forever_free") {
-    message = "永久無料プランが適用されました！";
-  } else if (coupon.type === "trial_30") {
-    message = "30日間無料トライアルが開始されました！";
-  } else {
-    message = "14日間無料トライアルが開始されました！";
+  switch (coupon.type) {
+    case "forever_free":
+      message = "永久無料プランが適用されました！全機能を無制限でご利用いただけます。";
+      break;
+    case "trial_30":
+      message = "30日間無料トライアルが開始されました！";
+      break;
+    case "trial_14":
+      message = "14日間無料トライアルが開始されました！";
+      break;
+    case "discount_50":
+      message = "50%OFFクーポンが適用されました！90日間プロプランをご利用いただけます。";
+      break;
+    case "discount_30":
+      message = "30%OFFクーポンが適用されました！60日間プロプランをご利用いただけます。";
+      break;
+    case "special_price":
+      message = "特別価格クーポンが適用されました！180日間プロプランをご利用いただけます。";
+      break;
   }
 
   return { success: true, message, trialEndsAt: trialEndsAt || undefined };
@@ -174,22 +205,70 @@ export async function seedCoupons() {
   }
 
   const couponData: InsertCoupon[] = [
+    // 永久無料（管理者・特別パートナー用）
     {
-      code: "FOREVER_FREE",
+      code: "PROST2026",
       type: "forever_free",
-      description: "永久無料プラン（プロプラン相当）",
-      maxUses: null, // Unlimited
+      description: "永久無料プラン - 全機能無制限",
+      maxUses: 10,
       isActive: true,
     },
     {
-      code: "TRIAL_30",
+      code: "VIP-MEMBER",
+      type: "forever_free",
+      description: "VIPメンバー永久無料プラン",
+      maxUses: 5,
+      isActive: true,
+    },
+    // 特別価格（180日間プロプラン）
+    {
+      code: "LAUNCH2026",
+      type: "special_price",
+      description: "ローンチ記念特別価格 - 180日間プロプラン無料",
+      maxUses: 50,
+      isActive: true,
+    },
+    // 50%OFF（90日間プロプラン）
+    {
+      code: "HALF-OFF",
+      type: "discount_50",
+      description: "50%OFFクーポン - 90日間プロプラン無料",
+      maxUses: 100,
+      isActive: true,
+    },
+    {
+      code: "SEMINAR50",
+      type: "discount_50",
+      description: "セミナー参加者限定50%OFF",
+      maxUses: null,
+      isActive: true,
+    },
+    // 30%OFF（60日間プロプラン）
+    {
+      code: "FRIEND30",
+      type: "discount_30",
+      description: "お友達紹介30%OFF - 60日間プロプラン無料",
+      maxUses: null,
+      isActive: true,
+    },
+    // 30日無料トライアル
+    {
+      code: "WELCOME",
       type: "trial_30",
-      description: "30日間無料トライアル",
+      description: "ウェルカム30日間無料トライアル",
       maxUses: null,
       isActive: true,
     },
     {
-      code: "TRIAL_14",
+      code: "START30",
+      type: "trial_30",
+      description: "スタート応援30日間無料トライアル",
+      maxUses: null,
+      isActive: true,
+    },
+    // 14日無料トライアル
+    {
+      code: "TRIAL",
       type: "trial_14",
       description: "14日間無料トライアル",
       maxUses: null,
