@@ -85,7 +85,10 @@ export const subscriptions = mysqlTable("subscriptions", {
   cancelAtPeriodEnd: boolean("cancelAtPeriodEnd").notNull().default(false),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => [
+  index("idx_sub_userId").on(table.userId),
+  index("idx_sub_status").on(table.status),
+]);
 
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = typeof subscriptions.$inferInsert;
@@ -157,7 +160,10 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   postContent: text("postContent"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => [
+  index("idx_sp_status_scheduledAt").on(table.status, table.scheduledAt),
+  index("idx_sp_userId").on(table.userId),
+]);
 
 export type ScheduledPost = typeof scheduledPosts.$inferSelect;
 export type InsertScheduledPost = typeof scheduledPosts.$inferInsert;

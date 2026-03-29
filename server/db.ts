@@ -1,5 +1,6 @@
-import { eq, and, desc, sql, lte } from "drizzle-orm";
+import { eq, and, desc, sql, lte, gte, gt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import { encrypt, decrypt } from "./encryption";
 import {
   InsertUser, users,
   plans, InsertPlan, Plan,
@@ -311,6 +312,12 @@ export async function createThreadsAccount(data: InsertThreadsAccount): Promise<
   const db = await getDb();
   if (!db) return;
 
+  // Encrypt access token before storage
+  const encryptedData = {
+    ...data,
+    accessToken: data.accessToken ? encrypt(data.accessToken) : data.accessToken,
+  };
+
   // Check if this Threads user is already connected (even if inactive)
   const existing = await db.select()
     .from(threadsAccounts)
@@ -324,30 +331,36 @@ export async function createThreadsAccount(data: InsertThreadsAccount): Promise<
     // Update existing account (reactivate if inactive, refresh token)
     await db.update(threadsAccounts)
       .set({
-        threadsUsername: data.threadsUsername,
-        profilePictureUrl: data.profilePictureUrl,
-        biography: data.biography,
-        accessToken: data.accessToken,
-        tokenExpiresAt: data.tokenExpiresAt,
+        threadsUsername: encryptedData.threadsUsername,
+        profilePictureUrl: encryptedData.profilePictureUrl,
+        biography: encryptedData.biography,
+        accessToken: encryptedData.accessToken,
+        tokenExpiresAt: encryptedData.tokenExpiresAt,
         isActive: true,
       })
       .where(eq(threadsAccounts.id, existing[0].id));
     return;
   }
 
-  await db.insert(threadsAccounts).values(data);
+  await db.insert(threadsAccounts).values(encryptedData);
+}
+
+/** Decrypt access token in a ThreadsAccount object */
+function decryptAccountToken<T extends { accessToken: string }>(account: T): T {
+  return { ...account, accessToken: decrypt(account.accessToken) };
 }
 
 export async function getThreadsAccountsByUserId(userId: number): Promise<ThreadsAccount[]> {
   const db = await getDb();
   if (!db) return [];
 
-  return await db.select()
+  const results = await db.select()
     .from(threadsAccounts)
     .where(and(
       eq(threadsAccounts.userId, userId),
       eq(threadsAccounts.isActive, true)
     ));
+  return results.map(decryptAccountToken);
 }
 
 // Get all accounts including inactive ones (for re-activation check)
@@ -355,9 +368,10 @@ export async function getAllThreadsAccountsByUserId(userId: number): Promise<Thr
   const db = await getDb();
   if (!db) return [];
 
-  return await db.select()
+  const results = await db.select()
     .from(threadsAccounts)
     .where(eq(threadsAccounts.userId, userId));
+  return results.map(decryptAccountToken);
 }
 
 export async function getThreadsAccountById(accountId: number): Promise<ThreadsAccount | undefined> {
@@ -369,7 +383,7 @@ export async function getThreadsAccountById(accountId: number): Promise<ThreadsA
     .where(eq(threadsAccounts.id, accountId))
     .limit(1);
 
-  return result.length > 0 ? result[0] : undefined;
+  return result.length > 0 ? decryptAccountToken(result[0]) : undefined;
 }
 
 /**
@@ -382,12 +396,13 @@ export async function getAccountsWithExpiringTokens(daysUntilExpiry: number): Pr
   const expiryThreshold = new Date();
   expiryThreshold.setDate(expiryThreshold.getDate() + daysUntilExpiry);
 
-  return await db.select()
+  const results = await db.select()
     .from(threadsAccounts)
     .where(and(
       eq(threadsAccounts.isActive, true),
       lte(threadsAccounts.tokenExpiresAt, expiryThreshold)
     ));
+  return results.map(decryptAccountToken);
 }
 
 /**
@@ -406,7 +421,7 @@ export async function updateThreadsAccountToken(
 
   await db.update(threadsAccounts)
     .set({
-      accessToken,
+      accessToken: encrypt(accessToken),
       tokenExpiresAt,
       updatedAt: new Date(),
     })
@@ -1919,7 +1934,7 @@ export async function getAutoPostSettings(userId: number) {
 /**
  * Update user's auto-post settings
  */
-export async function updateAutoPostSettings(userId: number, settings: { autoPostEnabled?: boolean; autoPostFrequency?: string }) {
+export async function updateAutoPostSettings(userId: number, settings: { autoPostEnabled?: boolean; autoPostFrequency?: "daily" | "twice_daily" | "three_daily" }) {
   const database = await getDb();
   if (!database) return;
 
@@ -2099,3 +2114,22 @@ export async function getPostAnalyticsWithEngagement(userId: number) {
 
   return { posts: postsWithEngagement, avgEngagement };
 }
+
+// ==================== Processing Timeout ====================
+
+/**
+ * Get scheduled posts stuck in 'processing' state for longer than timeout
+ */
+export async function getStuckProcessingPosts(timeoutMs: number): Promise<ScheduledPost[]> {
+  const database = await getDb();
+  if (!database) return [];
+
+  const cutoff = new Date(Date.now() - timeoutMs);
+  return await database.select()
+    .from(scheduledPosts)
+    .where(and(
+      eq(scheduledPosts.status, 'processing'),
+      lte(scheduledPosts.updatedAt, cutoff)
+    ));
+}
+

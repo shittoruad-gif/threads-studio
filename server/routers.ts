@@ -5,6 +5,7 @@ import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_
 import { z } from "zod";
 import * as db from "./db";
 import { ENV } from "./_core/env";
+import bcrypt from "bcryptjs";
 import * as stripeService from "./stripe";
 import * as couponService from "./coupon";
 import { PLANS, TRIAL_DAYS, getPlan } from "../shared/plans";
@@ -2425,6 +2426,65 @@ ${input.commentText}
     list: protectedProcedure
       .query(async ({ ctx }) => {
         return await db.getHistoryFavorites(ctx.user.id);
+      }),
+  }),
+
+  // ==================== Account Management ====================
+  account: router({
+    // パスワード変更
+    changePassword: protectedProcedure
+      .input(z.object({
+        currentPassword: z.string().min(1),
+        newPassword: z.string().min(8).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, "パスワードは大文字・小文字・数字を含む8文字以上にしてください"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const user = await db.getUserById(ctx.user.id);
+        if (!user || !user.passwordHash) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "パスワードの変更ができません" });
+        }
+
+        const isValid = await bcrypt.compare(input.currentPassword, user.passwordHash);
+        if (!isValid) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "現在のパスワードが正しくありません" });
+        }
+
+        const hashedPassword = await bcrypt.hash(input.newPassword, 10);
+        await db.updateUserPassword(ctx.user.id, hashedPassword);
+
+        return { success: true };
+      }),
+
+    // アカウント削除
+    deleteAccount: protectedProcedure
+      .input(z.object({
+        password: z.string().min(1),
+        confirmation: z.literal("DELETE"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const user = await db.getUserById(ctx.user.id);
+        if (!user || !user.passwordHash) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "アカウントの削除ができません" });
+        }
+
+        const isValid = await bcrypt.compare(input.password, user.passwordHash);
+        if (!isValid) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "パスワードが正しくありません" });
+        }
+
+        // Cancel Stripe subscription if active
+        const subscription = await db.getSubscriptionByUserId(ctx.user.id);
+        if (subscription?.stripeSubscriptionId) {
+          try {
+            await stripeService.cancelSubscription(subscription.stripeSubscriptionId);
+          } catch (error) {
+            console.error("[Account Delete] Failed to cancel Stripe subscription:", error);
+          }
+        }
+
+        // Delete user (cascades to all related data)
+        await db.deleteUser(ctx.user.id);
+
+        return { success: true };
       }),
   }),
 

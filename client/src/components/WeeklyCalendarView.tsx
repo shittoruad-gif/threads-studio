@@ -86,12 +86,10 @@ function shouldShowAutoPostSlot(
   switch (frequency) {
     case 'daily':
       return true;
-    case 'weekdays':
-      return dayOfWeek >= 1 && dayOfWeek <= 5;
-    case 'weekly':
-      return dayOfWeek === 1; // Monday
-    case 'biweekly':
-      return dayOfWeek === 1; // Simplified: show Monday
+    case 'twice_daily':
+      return true;
+    case 'three_daily':
+      return true;
     default:
       return false;
   }

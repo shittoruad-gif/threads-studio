@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import rateLimit from "express-rate-limit";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
@@ -10,7 +11,6 @@ import { serveStatic, setupVite } from "./vite";
 import { stripe } from "../stripe";
 import * as db from "../db";
 import Stripe from "stripe";
-import { startScheduler } from "../scheduler";
 import { initTrialReminderScheduler } from "../trialReminder";
 import { startTokenRefreshJob } from "../tokenRefreshJob";
 
@@ -34,6 +34,14 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Validate environment variables
+  const { validateEnv } = await import("./env");
+  validateEnv();
+
+  // Initialize Sentry error tracking
+  const { initSentry } = await import("../sentry");
+  initSentry();
+
   const app = express();
   const server = createServer(app);
 
@@ -163,10 +171,50 @@ async function startServer() {
     }
   );
 
+  // Rate limiting for API endpoints
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // max 100 requests per window per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'リクエストが多すぎます。しばらく待ってから再試行してください。' },
+  });
+  app.use('/api/', apiLimiter);
+
+  // CSRF protection: verify Origin header on mutation requests
+  app.use('/api/trpc', (req, res, next) => {
+    // Only check POST/mutation requests
+    if (req.method !== 'POST') return next();
+
+    const origin = req.headers.origin;
+    const host = req.headers.host;
+
+    // Skip CSRF check for webhook endpoints (they use signature verification)
+    if (req.path.includes('webhook')) return next();
+
+    // In production, verify Origin matches Host
+    if (process.env.NODE_ENV === 'production') {
+      if (!origin) {
+        return res.status(403).json({ error: 'Missing Origin header' });
+      }
+      try {
+        const originHost = new URL(origin).host;
+        if (originHost !== host) {
+          console.warn(`[CSRF] Origin mismatch: ${origin} vs ${host}`);
+          return res.status(403).json({ error: 'CSRF validation failed' });
+        }
+      } catch {
+        return res.status(403).json({ error: 'Invalid Origin header' });
+      }
+    }
+
+    next();
+  });
+
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  
+
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   
@@ -258,6 +306,20 @@ async function startServer() {
     }
   });
 
+  // Health check endpoint
+  app.get('/api/health', async (_req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const database = await getDb();
+      if (!database) {
+        return res.status(503).json({ status: 'unhealthy', error: 'Database unavailable' });
+      }
+      res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+    } catch (error) {
+      res.status(503).json({ status: 'unhealthy', error: 'Health check failed' });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",
@@ -266,7 +328,7 @@ async function startServer() {
       createContext,
     })
   );
-  
+
   // Initialize plans in database
   await db.initializePlans();
   
@@ -274,15 +336,12 @@ async function startServer() {
   const { seedCoupons } = await import("../coupon");
   await seedCoupons();
   
-  // Start scheduled post scheduler
-  startScheduler();
-  
   // Start trial reminder scheduler
   initTrialReminderScheduler();
   
   // Start scheduled post executor
   const { startScheduledPostExecutor } = await import("../scheduledPostExecutor");
-  startScheduledPostExecutor();
+  const stopPostExecutor = startScheduledPostExecutor();
 
   // Start auto-post scheduler (daily AI generation + scheduling)
   const { startAutoPostScheduler } = await import("../autoPostScheduler");
@@ -291,7 +350,7 @@ async function startServer() {
   // Start weekly report scheduler (Monday 9:00 AM JST, pro+ users only)
   const { startWeeklyReportScheduler } = await import("../weeklyReport");
   startWeeklyReportScheduler();
-  
+
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
@@ -311,6 +370,31 @@ async function startServer() {
     // Start background token refresh job
     startTokenRefreshJob();
   });
+
+  // Graceful shutdown handler
+  const shutdown = async (signal: string) => {
+    console.log(`[Server] ${signal} received, shutting down gracefully...`);
+
+    // Stop schedulers
+    stopPostExecutor();
+    const cron = await import("node-cron");
+    cron.getTasks().forEach((task) => task.stop());
+
+    // Close HTTP server (stop accepting new connections)
+    server.close(() => {
+      console.log('[Server] HTTP server closed');
+      process.exit(0);
+    });
+
+    // Force exit after 10 seconds
+    setTimeout(() => {
+      console.error('[Server] Forced shutdown after timeout');
+      process.exit(1);
+    }, 10000);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 startServer().catch(console.error);

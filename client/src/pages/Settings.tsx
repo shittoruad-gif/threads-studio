@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Settings as SettingsIcon, Sparkles, Bell, User, CreditCard } from "lucide-react";
+import { Settings as SettingsIcon, Sparkles, Bell, User, CreditCard, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,6 +49,36 @@ export default function Settings() {
   const [weeklyReport, setWeeklyReport] = useState(true);
   const [commentNotification, setCommentNotification] = useState(true);
 
+  // Account deletion state
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [showDeleteSection, setShowDeleteSection] = useState(false);
+
+  // Password change mutation
+  const changePassword = trpc.account.changePassword.useMutation({
+    onSuccess: () => {
+      toast.success("パスワードを変更しました");
+      setCurrentPassword("");
+      setNewPassword("");
+    },
+    onError: (error) => {
+      toast.error(error.message || "パスワードの変更に失敗しました");
+    },
+  });
+
+  // Account delete mutation
+  const deleteAccount = trpc.account.deleteAccount.useMutation({
+    onSuccess: () => {
+      toast.success("アカウントを削除しました");
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 1500);
+    },
+    onError: (error) => {
+      toast.error(error.message || "アカウントの削除に失敗しました");
+    },
+  });
+
   const toggleTimeSlot = (slot: string) => {
     setPostTimeSlots((prev) =>
       prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]
@@ -67,10 +97,10 @@ export default function Settings() {
     });
   };
 
-  const planLabel = subscription?.plan
-    ? subscription.plan === "pro"
+  const planLabel = subscription?.planId
+    ? subscription.planId === "pro"
       ? "プロプラン"
-      : subscription.plan === "starter"
+      : subscription.planId === "starter"
         ? "スタータープラン"
         : "無料プラン"
     : "無料プラン";
@@ -255,9 +285,16 @@ export default function Settings() {
 
             <Button
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              onClick={() => toast.info("アカウント情報の更新機能は準備中です")}
+              disabled={!currentPassword || !newPassword || changePassword.isPending}
+              onClick={() => {
+                if (newPassword.length < 8) {
+                  toast.error("新しいパスワードは8文字以上にしてください");
+                  return;
+                }
+                changePassword.mutate({ currentPassword, newPassword });
+              }}
             >
-              変更を保存
+              {changePassword.isPending ? "変更中..." : "パスワードを変更"}
             </Button>
           </div>
         </Card>
@@ -318,6 +355,90 @@ export default function Settings() {
               プラン変更
             </Button>
           </div>
+        </Card>
+
+        {/* ── アカウント削除 ── */}
+        <Card className="p-6 border-red-200">
+          <div className="flex items-center gap-2 mb-4">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+            <h2 className="text-lg font-semibold text-red-700">アカウント削除</h2>
+          </div>
+
+          {!showDeleteSection ? (
+            <div>
+              <p className="text-sm text-gray-600 mb-3">
+                アカウントを削除すると、すべてのデータ（投稿履歴・プロジェクト・Threadsアカウント連携など）が完全に削除されます。この操作は取り消せません。
+              </p>
+              <Button
+                variant="outline"
+                className="border-red-300 text-red-600 hover:bg-red-50"
+                onClick={() => setShowDeleteSection(true)}
+              >
+                アカウント削除に進む
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-sm text-red-800 font-medium mb-2">以下の内容がすべて削除されます：</p>
+                <ul className="text-sm text-red-700 list-disc pl-5 space-y-1">
+                  <li>アカウント情報・メールアドレス</li>
+                  <li>すべてのプロジェクト・投稿コンテンツ</li>
+                  <li>予約投稿・投稿履歴</li>
+                  <li>Threadsアカウント連携情報</li>
+                  <li>サブスクリプション（自動キャンセルされます）</li>
+                </ul>
+              </div>
+
+              <div>
+                <Label className="text-sm text-gray-700">パスワードを入力</Label>
+                <Input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="現在のパスワード"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label className="text-sm text-gray-700">
+                  確認のため <span className="font-mono font-bold">DELETE</span> と入力してください
+                </Label>
+                <Input
+                  value={deleteConfirmation}
+                  onChange={(e) => setDeleteConfirmation(e.target.value)}
+                  placeholder="DELETE"
+                  className="mt-1"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowDeleteSection(false);
+                    setDeletePassword("");
+                    setDeleteConfirmation("");
+                  }}
+                >
+                  キャンセル
+                </Button>
+                <Button
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  disabled={deleteConfirmation !== "DELETE" || !deletePassword || deleteAccount.isPending}
+                  onClick={() => {
+                    deleteAccount.mutate({
+                      password: deletePassword,
+                      confirmation: "DELETE" as const,
+                    });
+                  }}
+                >
+                  {deleteAccount.isPending ? "削除中..." : "アカウントを完全に削除"}
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       </div>
     </div>

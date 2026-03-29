@@ -23,7 +23,13 @@ function getResend(): Resend | null {
   return _resend;
 }
 
-const FROM_EMAIL = "Threads Studio <onboarding@resend.dev>";
+function getFromEmail(): string {
+  const domain = process.env.RESEND_FROM_DOMAIN;
+  if (domain && domain !== "resend.dev") {
+    return `Threads Studio <noreply@${domain}>`;
+  }
+  return "Threads Studio <onboarding@resend.dev>";
+}
 
 /**
  * Send an email via Resend
@@ -37,7 +43,7 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
 
   try {
     const { error } = await resend.emails.send({
-      from: FROM_EMAIL,
+      from: getFromEmail(),
       to: payload.to,
       subject: payload.subject,
       html: payload.html,

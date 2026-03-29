@@ -442,8 +442,8 @@ export default function Dashboard() {
               postContent: p.postContent || '',
               status: p.status || 'pending',
             }))}
-            autoPostEnabled={autoPostSettings?.enabled ?? false}
-            autoPostFrequency={autoPostSettings?.frequency ?? 'daily'}
+            autoPostEnabled={autoPostSettings?.autoPostEnabled ?? false}
+            autoPostFrequency={autoPostSettings?.autoPostFrequency ?? 'daily'}
           />
         </div>
 

@@ -36,11 +36,13 @@ import AdminPresets from "./pages/AdminPresets";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import FAQ from "./pages/FAQ";
+import CommercialTransaction from "./pages/CommercialTransaction";
 import Settings from "./pages/Settings";
 import TryGenerate from "./pages/TryGenerate";
 import { ThreadsAccountProvider } from "./components/ThreadsAccountSwitcher";
 import { PWAInstallBanner } from "./components/PWAInstallBanner";
 import { CelebrationProvider } from "./components/Celebration";
+import { CookieConsent } from "./components/CookieConsent";
 
 function DashboardRoutes() {
   return (
@@ -92,6 +94,7 @@ function Router() {
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/faq" component={FAQ} />
+      <Route path="/commercial-transaction" component={CommercialTransaction} />
       <Route path="/dashboard">
         {() => <DashboardRoutes />}
       </Route>
@@ -169,6 +172,7 @@ function App() {
               <CelebrationProvider />
               <Router />
               <PWAInstallBanner />
+              <CookieConsent />
             </TooltipProvider>
           </ThreadsAccountProvider>
         </SubscriptionProvider>

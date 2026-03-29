@@ -148,7 +148,32 @@ export function verifyWebhookSignature(
   signature: string,
   secret: string
 ): boolean {
-  // Implement webhook signature verification
-  // For now, just return true (should implement proper verification)
-  return true;
+  if (!secret) {
+    console.warn("[UniVaPay] UNIVAPAY_WEBHOOK_SECRET not configured, skipping verification");
+    return false;
+  }
+
+  if (!signature) {
+    console.warn("[UniVaPay] No signature provided in webhook request");
+    return false;
+  }
+
+  try {
+    const crypto = require("crypto");
+    const expectedSignature = crypto
+      .createHmac("sha256", secret)
+      .update(payload, "utf8")
+      .digest("hex");
+
+    // Timing-safe comparison to prevent timing attacks
+    const sigBuffer = Buffer.from(signature, "hex");
+    const expectedBuffer = Buffer.from(expectedSignature, "hex");
+
+    if (sigBuffer.length !== expectedBuffer.length) return false;
+
+    return crypto.timingSafeEqual(sigBuffer, expectedBuffer);
+  } catch (error) {
+    console.error("[UniVaPay] Webhook signature verification error:", error);
+    return false;
+  }
 }

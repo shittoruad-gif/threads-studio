@@ -38,22 +38,23 @@ async function checkTrialReminders() {
       if (!sub.trialEndsAt) continue;
 
       const trialEndDate = new Date(sub.trialEndsAt);
-      const daysRemaining = Math.ceil((trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      const hoursRemaining = (trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+      const daysRemaining = Math.ceil(hoursRemaining / 24);
 
-      // 3日前の通知
+      // 3日前の通知（48〜72時間）
       if (daysRemaining === 3) {
         await sendTrialReminder(sub.userId, sub.planId, trialEndDate, 3);
         console.log(`[TrialReminder] Sent 3-day reminder to user ${sub.userId}`);
       }
-      
-      // 1日前の通知
+
+      // 1日前の通知（0〜24時間）
       else if (daysRemaining === 1) {
         await sendTrialReminder(sub.userId, sub.planId, trialEndDate, 1);
         console.log(`[TrialReminder] Sent 1-day reminder to user ${sub.userId}`);
       }
-      
-      // 当日の通知（トライアル終了）
-      else if (daysRemaining === 0) {
+
+      // 当日の通知（トライアル終了 = 0時間以下）
+      else if (hoursRemaining <= 0) {
         await sendTrialEndingToday(sub.userId, sub.planId, trialEndDate);
         console.log(`[TrialReminder] Sent trial ending today notification to user ${sub.userId}`);
       }
