@@ -24,6 +24,20 @@ export interface PlanConfig {
 }
 
 export const PLANS: Record<string, PlanConfig> = {
+  free: {
+    id: 'free',
+    name: 'フリープラン',
+    description: '無料でお試し',
+    priceMonthly: 0,
+    features: {
+      maxProjects: 1,
+      maxThreadsAccounts: 1,
+      maxScheduledPosts: 3,
+      maxAiGenerations: 3,
+      hasPrioritySupport: false,
+      hasApiAccess: false,
+    },
+  },
   light: {
     id: 'light',
     name: 'ライトプラン',
