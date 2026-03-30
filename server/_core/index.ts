@@ -321,6 +321,28 @@ async function startServer() {
     }
   });
 
+  // Temporary DB debug endpoint
+  app.get('/api/debug/schema', async (_req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const database = await getDb();
+      if (!database) return res.status(503).json({ error: 'no db' });
+      const { sql } = await import("drizzle-orm");
+      const [subCols] = await database.execute(sql.raw("SHOW COLUMNS FROM subscriptions")) as any;
+      const [planCols] = await database.execute(sql.raw("SHOW COLUMNS FROM plans")) as any;
+      const [userCols] = await database.execute(sql.raw("SHOW COLUMNS FROM users")) as any;
+      const [tables] = await database.execute(sql.raw("SHOW TABLES")) as any;
+      res.json({
+        subscriptions: subCols?.map((c: any) => c.Field),
+        plans: planCols?.map((c: any) => c.Field),
+        users: userCols?.map((c: any) => c.Field),
+        allTables: tables?.map((t: any) => Object.values(t)[0]),
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",
