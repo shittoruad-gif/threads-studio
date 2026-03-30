@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { nanoid } from 'nanoid';
-import { ArrowLeft, Sparkles, Store, ChevronRight, Edit3, MessageCircle, ClipboardList } from 'lucide-react';
+import { ArrowLeft, Sparkles, Store, ChevronRight, Edit3, MessageCircle, ClipboardList, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,16 +23,27 @@ export default function AIProjectCreate() {
   const [showDetails, setShowDetails] = useState(false);
   const [mode, setMode] = useState<Mode>('chat');
 
-  const [form, setForm] = useState({
-    title: '',
-    businessType: '',
-    area: '',
-    target: '',
-    mainProblem: '',
-    strength: '',
-    proof: '',
-    ctaLink: '',
+  const [form, setForm] = useState(() => {
+    const saved = sessionStorage.getItem('aiProjectCreateForm');
+    if (saved) {
+      try { return JSON.parse(saved); } catch { /* ignore */ }
+    }
+    return {
+      title: '',
+      businessType: '',
+      area: '',
+      target: '',
+      mainProblem: '',
+      strength: '',
+      proof: '',
+      ctaLink: '',
+    };
   });
+
+  // Persist form state to sessionStorage
+  useEffect(() => {
+    sessionStorage.setItem('aiProjectCreateForm', JSON.stringify(form));
+  }, [form]);
 
   // Sync data from chat mode back to form state
   const handleChatDataChange = useCallback((data: typeof form) => {
@@ -41,6 +52,7 @@ export default function AIProjectCreate() {
 
   const createProjectMutation = trpc.project.create.useMutation({
     onSuccess: () => {
+      sessionStorage.removeItem('aiProjectCreateForm');
       toast.success('プロジェクトを作成しました');
       setLocation(`/ai-generate?project=${projectId}`);
     },
@@ -67,8 +79,19 @@ export default function AIProjectCreate() {
   };
 
   const handleSubmit = async () => {
-    if (!form.businessType || !form.area || !form.target || !form.mainProblem || !form.strength) {
-      toast.error('必須項目を入力してください');
+    const missingFields: string[] = [];
+    if (!form.businessType) missingFields.push('業種');
+    if (!form.area) missingFields.push('地域');
+    if (!form.target) missingFields.push('ターゲット');
+    if (!form.mainProblem) missingFields.push('主な悩み');
+    if (!form.strength) missingFields.push('強み');
+
+    if (missingFields.length > 0) {
+      toast.error(`以下の必須項目を入力してください：${missingFields.join('、')}`);
+      return;
+    }
+    if (form.ctaLink && !form.ctaLink.startsWith('http://') && !form.ctaLink.startsWith('https://')) {
+      toast.error('CTA URLはhttp://またはhttps://で始めてください');
       return;
     }
     await createProjectMutation.mutateAsync({
@@ -101,14 +124,14 @@ export default function AIProjectCreate() {
 
         {/* Mode toggle */}
         <div className="flex items-center justify-center mb-6">
-          <div className="inline-flex items-center bg-gray-100 rounded-full p-1 gap-1">
+          <div className="inline-flex items-center bg-muted rounded-full p-1 gap-1">
             <button
               onClick={() => setMode('chat')}
               className={cn(
                 'flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all',
                 mode === 'chat'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground/80'
               )}
             >
               <MessageCircle className="w-4 h-4" />
@@ -119,8 +142,8 @@ export default function AIProjectCreate() {
               className={cn(
                 'flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all',
                 mode === 'form'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground/80'
               )}
             >
               <ClipboardList className="w-4 h-4" />
@@ -164,7 +187,7 @@ export default function AIProjectCreate() {
                       className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                         activeCategory === cat.id
                           ? 'bg-primary text-primary-foreground'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
                       }`}
                     >
                       {cat.label}
@@ -182,7 +205,7 @@ export default function AIProjectCreate() {
                         className={`text-left p-3 rounded-lg border-2 transition-all text-sm ${
                           selectedTemplate === template.id
                             ? 'border-primary bg-primary/5 text-primary font-medium'
-                            : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                            : 'border-border hover:border-border/80 text-foreground/80'
                         }`}
                       >
                         {template.name}
@@ -193,9 +216,9 @@ export default function AIProjectCreate() {
 
               {/* Auto-filled preview */}
               {selectedTemplate && (
-                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                <div className="bg-muted/50 rounded-lg p-4 space-y-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-gray-700">自動入力された情報</p>
+                    <p className="text-sm font-medium text-foreground/80">自動入力された情報</p>
                     <button
                       onClick={() => setShowDetails(!showDetails)}
                       className="text-xs text-primary hover:underline flex items-center gap-1"
@@ -205,7 +228,7 @@ export default function AIProjectCreate() {
                     </button>
                   </div>
                   {!showDetails && (
-                    <div className="space-y-1 text-sm text-gray-500">
+                    <div className="space-y-1 text-sm text-muted-foreground">
                       <p>業種: {form.businessType} / 地域: {form.area}</p>
                       <p>ターゲット: {form.target.substring(0, 40)}...</p>
                     </div>
@@ -276,10 +299,14 @@ export default function AIProjectCreate() {
                   <div className="space-y-2">
                     <Label>CTA URL（任意）</Label>
                     <Input
+                      type="url"
                       value={form.ctaLink}
                       onChange={(e) => setForm({...form, ctaLink: e.target.value})}
                       placeholder="例：https://lin.ee/xxxxx"
                     />
+                    {form.ctaLink && !form.ctaLink.startsWith('http') && (
+                      <p className="text-xs text-destructive">URLはhttp://またはhttps://で始めてください</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -292,7 +319,7 @@ export default function AIProjectCreate() {
                 size="lg"
               >
                 {createProjectMutation.isPending ? (
-                  <span className="animate-spin mr-2">...</span>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
                   <Sparkles className="w-4 h-4 mr-2" />
                 )}

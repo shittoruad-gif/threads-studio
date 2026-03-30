@@ -158,7 +158,7 @@ export default function ErrorGuide({
           <p className={`text-sm font-medium ${config.accentColor}`}>
             {config.title}
           </p>
-          <p className="text-xs text-gray-600 mt-0.5">{config.description}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{config.description}</p>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {config.actions.map((action, i) => (
               <Button
@@ -178,7 +178,7 @@ export default function ErrorGuide({
                 href={link.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 underline underline-offset-2"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
               >
                 {link.label}
                 <ExternalLink className="w-3 h-3" />
@@ -203,7 +203,7 @@ export default function ErrorGuide({
             <h4 className={`font-bold text-sm ${config.accentColor}`}>
               {config.title}
             </h4>
-            <p className="text-sm text-gray-600 mt-1 leading-relaxed">
+            <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
               {config.description}
             </p>
           </div>
@@ -230,7 +230,7 @@ export default function ErrorGuide({
               href={link.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 underline underline-offset-2"
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground underline underline-offset-2"
             >
               <HelpCircle className="w-3.5 h-3.5" />
               {link.label}

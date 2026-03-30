@@ -313,14 +313,14 @@ export default function AdminPresets() {
               variant="ghost"
               size="sm"
               onClick={() => setLocation('/dashboard')}
-              className="text-gray-500 hover:text-gray-700"
+              className="text-muted-foreground hover:text-foreground/80"
             >
               <ArrowLeft className="w-4 h-4 mr-1" />
               戻る
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">プリセット管理</h1>
-              <p className="text-gray-500">
+              <h1 className="text-2xl font-bold text-foreground">プリセット管理</h1>
+              <p className="text-muted-foreground">
                 AI生成プリセットの作成・編集・削除（全{presets?.length || 0}件）
               </p>
             </div>
@@ -337,7 +337,7 @@ export default function AdminPresets() {
             variant={filterCategory === 'all' ? 'default' : 'outline'}
             size="sm"
             onClick={() => setFilterCategory('all')}
-            className={filterCategory !== 'all' ? 'text-gray-500 border-gray-200 hover:text-gray-700' : ''}
+            className={filterCategory !== 'all' ? 'text-muted-foreground border-border hover:text-foreground/80' : ''}
           >
             すべて ({presets?.length || 0})
           </Button>
@@ -349,7 +349,7 @@ export default function AdminPresets() {
                 variant={filterCategory === key ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setFilterCategory(key)}
-                className={filterCategory !== key ? 'text-gray-500 border-gray-200 hover:text-gray-700' : ''}
+                className={filterCategory !== key ? 'text-muted-foreground border-border hover:text-foreground/80' : ''}
               >
                 {label} ({count})
               </Button>
@@ -359,8 +359,8 @@ export default function AdminPresets() {
 
         {/* Preset List */}
         {filteredPresets.length === 0 ? (
-          <Card className="bg-white border-gray-200">
-            <CardContent className="pt-6 text-center text-gray-500">
+          <Card className="bg-background border-border">
+            <CardContent className="pt-6 text-center text-muted-foreground">
               プリセットがありません。新規作成ボタンから作成してください。
             </CardContent>
           </Card>
@@ -369,7 +369,7 @@ export default function AdminPresets() {
             {filteredPresets.map((preset: any) => (
               <div
                 key={preset.id}
-                className="bg-white border border-gray-200 p-5 rounded-xl flex items-start justify-between gap-4"
+                className="bg-background border border-border p-5 rounded-xl flex items-start justify-between gap-4"
               >
                 <div className="flex items-start gap-4 flex-1">
                   <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600 flex-shrink-0">
@@ -377,11 +377,11 @@ export default function AdminPresets() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <h3 className="font-semibold text-gray-900 text-lg">{preset.name}</h3>
-                      <Badge variant="outline" className="text-gray-600 border-gray-200">
+                      <h3 className="font-semibold text-foreground text-lg">{preset.name}</h3>
+                      <Badge variant="outline" className="text-muted-foreground border-border">
                         {CATEGORY_LABELS[preset.category] || preset.category}
                       </Badge>
-                      <Badge variant="outline" className="text-gray-600 border-gray-200">
+                      <Badge variant="outline" className="text-muted-foreground border-border">
                         {POST_TYPE_LABELS[preset.postType] || preset.postType}
                       </Badge>
                       {preset.isSystem && (
@@ -391,9 +391,9 @@ export default function AdminPresets() {
                       )}
                     </div>
                     {preset.description && (
-                      <p className="text-gray-500 text-sm mb-2">{preset.description}</p>
+                      <p className="text-muted-foreground text-sm mb-2">{preset.description}</p>
                     )}
-                    <div className="flex items-center gap-4 text-xs text-gray-400">
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground/60">
                       <span>表示順: {preset.displayOrder}</span>
                       <span>使用回数: {preset.usageCount || 0}</span>
                       <span>作成日: {new Date(preset.createdAt).toLocaleDateString('ja-JP')}</span>
@@ -405,7 +405,7 @@ export default function AdminPresets() {
                     size="sm"
                     variant="outline"
                     onClick={() => handleEdit(preset)}
-                    className="text-gray-500 border-gray-200 hover:text-gray-700"
+                    className="text-muted-foreground border-border hover:text-foreground/80"
                   >
                     <Edit className="w-4 h-4" />
                   </Button>

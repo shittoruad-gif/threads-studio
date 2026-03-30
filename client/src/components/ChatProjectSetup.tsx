@@ -356,8 +356,8 @@ export default function ChatProjectSetup({
           <Sparkles className="h-4 w-4 text-orange-600" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-gray-800">Threads Studio</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-sm font-semibold text-foreground">Threads Studio</p>
+          <p className="text-xs text-muted-foreground">
             {showSummary
               ? '入力完了'
               : `質問 ${Math.min(currentStep + 1, STEPS.length)} / ${STEPS.length}`}
@@ -366,7 +366,7 @@ export default function ChatProjectSetup({
         {showSummary && (
           <button
             onClick={handleReset}
-            className="ml-auto text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors"
+            className="ml-auto text-xs text-muted-foreground/60 hover:text-foreground flex items-center gap-1 transition-colors"
           >
             <RotateCcw className="h-3 w-3" />
             やり直す
@@ -375,7 +375,7 @@ export default function ChatProjectSetup({
       </div>
 
       {/* Progress bar */}
-      <div className="h-1 bg-gray-100">
+      <div className="h-1 bg-muted">
         <div
           className="h-full bg-gradient-to-r from-orange-400 to-orange-500 transition-all duration-500 ease-out"
           style={{
@@ -407,7 +407,7 @@ export default function ChatProjectSetup({
                 'max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-line',
                 msg.role === 'user'
                   ? 'bg-primary text-primary-foreground rounded-br-md'
-                  : 'bg-white text-gray-800 shadow-sm border border-gray-100 rounded-bl-md'
+                  : 'bg-white text-foreground shadow-sm border border-border/50 rounded-bl-md'
               )}
             >
               {msg.text}
@@ -440,11 +440,11 @@ export default function ChatProjectSetup({
             <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
               <Sparkles className="w-3.5 h-3.5 text-orange-600" />
             </div>
-            <div className="bg-white shadow-sm border border-gray-100 rounded-2xl rounded-bl-md px-4 py-3">
+            <div className="bg-white shadow-sm border border-border/50 rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
@@ -453,7 +453,7 @@ export default function ChatProjectSetup({
         {/* Summary card */}
         {showSummary && (
           <div className="pl-9 animate-in fade-in-0 slide-in-from-bottom-3 duration-500">
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-xl border border-border/50 shadow-sm overflow-hidden">
               <div className="p-4 space-y-3">
                 <SummaryRow label="業種" value={form.businessType} />
                 <SummaryRow label="地域" value={form.area} />
@@ -503,7 +503,7 @@ export default function ChatProjectSetup({
                 }
               }}
               placeholder="入力してください..."
-              className="flex-1 bg-gray-50 border border-gray-200 rounded-full px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 transition-all placeholder:text-gray-400"
+              className="flex-1 bg-muted/50 border border-border rounded-full px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 transition-all placeholder:text-muted-foreground/60"
               disabled={isTyping}
             />
             <button
@@ -529,8 +529,8 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
         <Check className="w-3.5 h-3.5 text-green-500" />
       </div>
       <div className="min-w-0">
-        <p className="text-xs text-gray-500">{label}</p>
-        <p className="text-sm text-gray-800 break-words">{value}</p>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-sm text-foreground break-words">{value}</p>
       </div>
     </div>
   );

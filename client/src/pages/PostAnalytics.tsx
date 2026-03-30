@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import {
   ArrowLeft,
   BarChart3,
+  Download,
   Eye,
   Heart,
   Loader2,
@@ -119,6 +120,30 @@ export default function PostAnalytics() {
     return text.length > maxLen ? text.slice(0, maxLen) + "..." : text;
   };
 
+  const handleExportCSV = () => {
+    if (posts.length === 0) {
+      toast.error("エクスポートするデータがありません");
+      return;
+    }
+    const header = "投稿日時,投稿内容,閲覧数,いいね,返信,リポスト,エンゲージメント,エンゲージメント率(%)\n";
+    const rows = sortedPosts.map((p) => {
+      const date = p.postedAt ? new Date(p.postedAt).toLocaleString("ja-JP") : "";
+      const content = `"${(p.postContent || "").replace(/"/g, '""')}"`;
+      return `${date},${content},${p.impressions},${p.likes},${p.replies},${p.reposts},${p.engagement},${p.engagementRate.toFixed(2)}`;
+    }).join("\n");
+    const csv = "\uFEFF" + header + rows; // BOM for Excel
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `threads_analytics_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("分析データをCSVでダウンロードしました");
+  };
+
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Animated background orbs */}
@@ -156,18 +181,29 @@ export default function PostAnalytics() {
               </p>
             </div>
           </div>
-          <Button
-            onClick={() => fetchAnalytics.mutate()}
-            disabled={fetchAnalytics.isPending}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            {fetchAnalytics.isPending ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4 mr-2" />
+          <div className="flex items-center gap-2">
+            {posts.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={handleExportCSV}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                CSV出力
+              </Button>
             )}
-            最新データを取得
-          </Button>
+            <Button
+              onClick={() => fetchAnalytics.mutate()}
+              disabled={fetchAnalytics.isPending}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              {fetchAnalytics.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              最新データを取得
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -264,7 +300,7 @@ export default function PostAnalytics() {
                   }`}
                 >
                   <tab.icon className="w-4 h-4" />
-                  <span className="hidden sm:inline">{tab.label}</span>
+                  <span className="text-xs sm:text-sm">{tab.label}</span>
                 </button>
               ))}
             </div>

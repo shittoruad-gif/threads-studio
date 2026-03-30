@@ -75,8 +75,8 @@ export function SetupProgress() {
       <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 px-5 pt-5 pb-4">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="text-base font-bold text-gray-900">セットアップ状況</h3>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <h3 className="text-base font-bold text-foreground">セットアップ状況</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
               {completedCount === totalCount
                 ? "すべて完了しました！"
                 : `あと${totalCount - completedCount}項目で準備完了です`}
@@ -105,7 +105,7 @@ export function SetupProgress() {
       </div>
 
       {/* Status items */}
-      <div className="px-5 py-3 divide-y divide-gray-50">
+      <div className="px-5 py-3 divide-y divide-border/30">
         {statusItems.map((item) => (
           <div
             key={item.id}
@@ -130,8 +130,8 @@ export function SetupProgress() {
             <span
               className={`flex-1 text-sm ${
                 item.completed
-                  ? "text-gray-500"
-                  : "text-gray-800 font-medium"
+                  ? "text-muted-foreground"
+                  : "text-foreground font-medium"
               }`}
             >
               {item.label}

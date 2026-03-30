@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Loader2, Trash2, Copy, Calendar, RefreshCw, Search, Heart, Sparkles } from 'lucide-react';
+import { Loader2, Trash2, Copy, Calendar, RefreshCw, Search, Heart, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
 import { toast } from 'sonner';
 import {
@@ -55,6 +55,8 @@ export default function AIHistory() {
   const [selectedHistory, setSelectedHistory] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const HISTORY_PER_PAGE = 20;
 
   // Clone dialog state
   const [cloneHistoryId, setCloneHistoryId] = useState<number | null>(null);
@@ -103,24 +105,24 @@ export default function AIHistory() {
     setLocation(`/ai-generate?historyId=${historyId}`);
   };
 
-  const handleCopy = (content: string) => {
+  const handleCopy = async (content: string) => {
     try {
       const parsed = JSON.parse(content);
       const text = `${parsed.title}\n\n${parsed.mainPost}\n\n${parsed.treePosts.join('\n\n')}\n\n${parsed.cta}\n\n${parsed.hashtags.join(' ')}`;
-      navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(text);
       toast.success('コピーしました');
     } catch (error) {
-      toast.error('コピーに失敗しました');
+      toast.error('コピーに失敗しました。ブラウザの権限設定を確認してください。');
     }
   };
 
-  const handleCopyVariation = (variation: any) => {
+  const handleCopyVariation = async (variation: any) => {
     try {
       const text = `${variation.title}\n\n${variation.mainPost}\n\n${variation.treePosts.join('\n\n')}\n\n${variation.cta}\n\n${variation.hashtags.join(' ')}`;
-      navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(text);
       toast.success('コピーしました');
     } catch (error) {
-      toast.error('コピーに失敗しました');
+      toast.error('コピーに失敗しました。ブラウザの権限設定を確認してください。');
     }
   };
 
@@ -196,6 +198,14 @@ export default function AIHistory() {
     return filtered;
   }, [history, searchQuery, showFavoritesOnly, favoriteHistoryIds]);
 
+  // Pagination
+  const totalHistoryPages = Math.ceil(filteredHistory.length / HISTORY_PER_PAGE);
+  const safeHistoryPage = Math.min(historyPage, Math.max(1, totalHistoryPages));
+  const paginatedHistory = filteredHistory.slice(
+    (safeHistoryPage - 1) * HISTORY_PER_PAGE,
+    safeHistoryPage * HISTORY_PER_PAGE
+  );
+
   return (
     <div className="container max-w-6xl py-8">
       <PageBreadcrumb items={breadcrumbItems} />
@@ -238,11 +248,15 @@ export default function AIHistory() {
       )}
 
       {history.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6 text-center text-muted-foreground">
-            まだ履歴がありません。AI投稿生成を使用すると、ここに履歴が表示されます。
-          </CardContent>
-        </Card>
+        <div className="text-center py-12">
+          <Sparkles className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+          <p className="text-muted-foreground mb-2">AIの生成履歴はまだありません</p>
+          <p className="text-sm text-muted-foreground mb-4">AI投稿生成を使用すると、ここに履歴が表示されます。</p>
+          <Button variant="outline" onClick={() => setLocation('/ai-generate')}>
+            <Sparkles className="w-4 h-4 mr-2" />
+            AI投稿を生成する
+          </Button>
+        </div>
       ) : filteredHistory.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-center text-muted-foreground">
@@ -250,8 +264,9 @@ export default function AIHistory() {
           </CardContent>
         </Card>
       ) : (
+        <>
         <div className="grid gap-4">
-          {filteredHistory.map((item: any) => {
+          {paginatedHistory.map((item: any) => {
             const content = JSON.parse(item.content);
             const metadata = item.metadata ? JSON.parse(item.metadata) : {};
             const isFavorited = favoriteHistoryIds.has(item.id);
@@ -293,6 +308,7 @@ export default function AIHistory() {
                         variant="ghost"
                         onClick={() => toggleFavoriteMutation.mutate({ historyId: item.id })}
                         title={isFavorited ? 'お気に入り解除' : 'お気に入りに追加'}
+                        aria-label={isFavorited ? 'お気に入り解除' : 'お気に入りに追加'}
                       >
                         <Heart className={`w-4 h-4 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
                       </Button>
@@ -331,6 +347,7 @@ export default function AIHistory() {
                       <Button
                         size="sm"
                         variant="destructive"
+                        aria-label="削除"
                         onClick={() => handleDelete(item.id)}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -358,6 +375,39 @@ export default function AIHistory() {
             );
           })}
         </div>
+
+        {/* Pagination */}
+        {totalHistoryPages > 1 && (
+          <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
+            <p className="text-sm text-muted-foreground">
+              {filteredHistory.length}件中 {(safeHistoryPage - 1) * HISTORY_PER_PAGE + 1}〜{Math.min(safeHistoryPage * HISTORY_PER_PAGE, filteredHistory.length)}件を表示
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="前のページ"
+                onClick={() => setHistoryPage(Math.max(1, safeHistoryPage - 1))}
+                disabled={safeHistoryPage === 1}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-sm text-muted-foreground px-2">
+                {safeHistoryPage} / {totalHistoryPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="次のページ"
+                onClick={() => setHistoryPage(Math.min(totalHistoryPages, safeHistoryPage + 1))}
+                disabled={safeHistoryPage === totalHistoryPages}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </>
       )}
 
       {/* Delete Confirmation Dialog */}

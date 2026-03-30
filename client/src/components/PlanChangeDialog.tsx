@@ -68,10 +68,10 @@ export function PlanChangeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg bg-white border border-gray-200">
+      <DialogContent className="sm:max-w-lg bg-background border border-border">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold text-gray-900">プラン変更の確認</DialogTitle>
-          <DialogDescription className="text-gray-500">
+          <DialogTitle className="text-2xl font-bold text-foreground">プラン変更の確認</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
             {isUpgrade ? 'アップグレード' : 'ダウングレード'}の詳細を確認してください
           </DialogDescription>
         </DialogHeader>
@@ -79,43 +79,43 @@ export function PlanChangeDialog({
         <div className="space-y-4 py-4">
           {/* Plan comparison */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
               <div>
-                <p className="text-sm text-gray-500">現在のプラン</p>
-                <p className="font-semibold text-gray-900">{currentPlan.name}</p>
+                <p className="text-sm text-muted-foreground">現在のプラン</p>
+                <p className="font-semibold text-foreground">{currentPlan.name}</p>
               </div>
-              <p className="text-lg font-bold text-gray-900">￥{currentPlan.priceMonthly.toLocaleString()}/月</p>
+              <p className="text-lg font-bold text-foreground">￥{currentPlan.priceMonthly.toLocaleString()}/月</p>
             </div>
 
             <div className="flex items-center justify-center">
-              <div className="text-gray-400">↓</div>
+              <div className="text-muted-foreground/60">↓</div>
             </div>
 
             <div className="flex items-center justify-between p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
               <div>
-                <p className="text-sm text-gray-500">新しいプラン</p>
-                <p className="font-semibold text-gray-900">{newPlan.name}</p>
+                <p className="text-sm text-muted-foreground">新しいプラン</p>
+                <p className="font-semibold text-foreground">{newPlan.name}</p>
               </div>
               <p className="text-lg font-bold text-emerald-600">￥{newPlan.priceMonthly.toLocaleString()}/月</p>
             </div>
           </div>
 
           {/* Feature comparison table */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="text-sm font-semibold mb-3 text-gray-900">機能比較</h3>
+          <div className="bg-muted/50 rounded-lg p-4">
+            <h3 className="text-sm font-semibold mb-3 text-foreground">機能比較</h3>
             <div className="space-y-2">
               {/* Projects */}
-              <div className="flex items-center justify-between py-2 border-b border-gray-200">
-                <span className="text-sm text-gray-600">プロジェクト数</span>
+              <div className="flex items-center justify-between py-2 border-b border-border">
+                <span className="text-sm text-muted-foreground">プロジェクト数</span>
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-400">{getFeatureLimitText(currentPlan.features.maxProjects)}</span>
+                  <span className="text-sm text-muted-foreground/60">{getFeatureLimitText(currentPlan.features.maxProjects)}</span>
                   {currentPlan.features.maxProjects !== newPlan.features.maxProjects && (
                     isUpgrade ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-red-500" />
                   )}
                   <span className={`text-sm font-semibold ${
                     currentPlan.features.maxProjects < newPlan.features.maxProjects ? 'text-emerald-600' :
                     currentPlan.features.maxProjects > newPlan.features.maxProjects ? 'text-red-600' :
-                    'text-gray-900'
+                    'text-foreground'
                   }`}>
                     {getFeatureLimitText(newPlan.features.maxProjects)}
                   </span>
@@ -123,17 +123,17 @@ export function PlanChangeDialog({
               </div>
 
               {/* Threads Accounts */}
-              <div className="flex items-center justify-between py-2 border-b border-gray-200">
-                <span className="text-sm text-gray-600">Threadsアカウント数</span>
+              <div className="flex items-center justify-between py-2 border-b border-border">
+                <span className="text-sm text-muted-foreground">Threadsアカウント数</span>
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-400">{getFeatureLimitText(currentPlan.features.maxThreadsAccounts)}</span>
+                  <span className="text-sm text-muted-foreground/60">{getFeatureLimitText(currentPlan.features.maxThreadsAccounts)}</span>
                   {currentPlan.features.maxThreadsAccounts !== newPlan.features.maxThreadsAccounts && (
                     isUpgrade ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-red-500" />
                   )}
                   <span className={`text-sm font-semibold ${
                     currentPlan.features.maxThreadsAccounts < newPlan.features.maxThreadsAccounts ? 'text-emerald-600' :
                     currentPlan.features.maxThreadsAccounts > newPlan.features.maxThreadsAccounts ? 'text-red-600' :
-                    'text-gray-900'
+                    'text-foreground'
                   }`}>
                     {getFeatureLimitText(newPlan.features.maxThreadsAccounts)}
                   </span>
@@ -141,17 +141,17 @@ export function PlanChangeDialog({
               </div>
 
               {/* Scheduled Posts */}
-              <div className="flex items-center justify-between py-2 border-b border-gray-200">
-                <span className="text-sm text-gray-600">予約投稿数/月</span>
+              <div className="flex items-center justify-between py-2 border-b border-border">
+                <span className="text-sm text-muted-foreground">予約投稿数/月</span>
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-400">{getFeatureLimitText(currentPlan.features.maxScheduledPosts)}</span>
+                  <span className="text-sm text-muted-foreground/60">{getFeatureLimitText(currentPlan.features.maxScheduledPosts)}</span>
                   {currentPlan.features.maxScheduledPosts !== newPlan.features.maxScheduledPosts && (
                     isUpgrade ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-red-500" />
                   )}
                   <span className={`text-sm font-semibold ${
                     currentPlan.features.maxScheduledPosts < newPlan.features.maxScheduledPosts ? 'text-emerald-600' :
                     currentPlan.features.maxScheduledPosts > newPlan.features.maxScheduledPosts ? 'text-red-600' :
-                    'text-gray-900'
+                    'text-foreground'
                   }`}>
                     {getFeatureLimitText(newPlan.features.maxScheduledPosts)}
                   </span>
@@ -159,13 +159,13 @@ export function PlanChangeDialog({
               </div>
 
               {/* AI Generation */}
-              <div className="flex items-center justify-between py-2 border-b border-gray-200">
-                <span className="text-sm text-gray-600">AI文章生成</span>
+              <div className="flex items-center justify-between py-2 border-b border-border">
+                <span className="text-sm text-muted-foreground">AI文章生成</span>
                 <div className="flex items-center gap-3">
                   {currentPlan.features.maxAiGenerations > 0 ? (
-                    <Check className="w-4 h-4 text-gray-400" />
+                    <Check className="w-4 h-4 text-muted-foreground/60" />
                   ) : (
-                    <X className="w-4 h-4 text-gray-300" />
+                    <X className="w-4 h-4 text-muted-foreground/40" />
                   )}
                   {(currentPlan.features.maxAiGenerations > 0) !== (newPlan.features.maxAiGenerations > 0) && (
                     isUpgrade ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-red-500" />
@@ -179,13 +179,13 @@ export function PlanChangeDialog({
               </div>
 
               {/* Priority Support */}
-              <div className="flex items-center justify-between py-2 border-b border-gray-200">
-                <span className="text-sm text-gray-600">優先サポート</span>
+              <div className="flex items-center justify-between py-2 border-b border-border">
+                <span className="text-sm text-muted-foreground">優先サポート</span>
                 <div className="flex items-center gap-3">
                   {currentPlan.features.hasPrioritySupport ? (
-                    <Check className="w-4 h-4 text-gray-400" />
+                    <Check className="w-4 h-4 text-muted-foreground/60" />
                   ) : (
-                    <X className="w-4 h-4 text-gray-300" />
+                    <X className="w-4 h-4 text-muted-foreground/40" />
                   )}
                   {currentPlan.features.hasPrioritySupport !== newPlan.features.hasPrioritySupport && (
                     isUpgrade ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-red-500" />
@@ -201,12 +201,12 @@ export function PlanChangeDialog({
               {/* API Access */}
               {(currentPlan.features.hasApiAccess || newPlan.features.hasApiAccess) && (
                 <div className="flex items-center justify-between py-2">
-                  <span className="text-sm text-gray-600">APIアクセス</span>
+                  <span className="text-sm text-muted-foreground">APIアクセス</span>
                   <div className="flex items-center gap-3">
                     {currentPlan.features.hasApiAccess ? (
-                      <Check className="w-4 h-4 text-gray-400" />
+                      <Check className="w-4 h-4 text-muted-foreground/60" />
                     ) : (
-                      <X className="w-4 h-4 text-gray-300" />
+                      <X className="w-4 h-4 text-muted-foreground/40" />
                     )}
                     {currentPlan.features.hasApiAccess !== newPlan.features.hasApiAccess && (
                       isUpgrade ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-red-500" />
@@ -224,15 +224,15 @@ export function PlanChangeDialog({
 
           {/* Price difference */}
           {preview && (
-            <div className="p-3 bg-gray-50 rounded-lg">
+            <div className="p-3 bg-muted/50 rounded-lg">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-500">月額料金の差額</p>
+                <p className="text-sm text-muted-foreground">月額料金の差額</p>
                 <p className={`text-lg font-bold ${isUpgrade ? 'text-emerald-600' : 'text-red-600'}`}>
                   {isUpgrade ? '+' : ''}¥{Math.abs(priceDiff).toLocaleString()}/月
                 </p>
               </div>
               {preview.daysRemaining > 0 && (
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-muted-foreground/60 mt-1">
                   残り{preview.daysRemaining}日間の日割り計算: ¥{Math.abs(preview.proratedAmount).toLocaleString()}
                 </p>
               )}
@@ -241,17 +241,17 @@ export function PlanChangeDialog({
 
           {/* Change timing selection */}
           <div className="space-y-3">
-            <Label className="text-sm font-semibold text-gray-900">変更タイミングを選択</Label>
+            <Label className="text-sm font-semibold text-foreground">変更タイミングを選択</Label>
             <RadioGroup value={changeTiming} onValueChange={(value) => setChangeTiming(value as 'immediate' | 'next_period')}>
-              <div className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg border-2 border-transparent hover:border-emerald-300 transition-colors cursor-pointer"
+              <div className="flex items-start space-x-3 p-3 bg-muted/50 rounded-lg border-2 border-transparent hover:border-emerald-300 transition-colors cursor-pointer"
                    onClick={() => setChangeTiming('immediate')}>
                 <RadioGroupItem value="immediate" id="immediate" className="mt-1" />
                 <div className="flex-1">
-                  <Label htmlFor="immediate" className="flex items-center gap-2 font-semibold cursor-pointer text-gray-900">
+                  <Label htmlFor="immediate" className="flex items-center gap-2 font-semibold cursor-pointer text-foreground">
                     <Zap className="w-4 h-4 text-yellow-500" />
                     即座に変更
                   </Label>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     現在のサブスクリプションをキャンセルし、新しいプランの決済ページに移動します。
                     {isUpgrade && preview && preview.proratedAmount > 0 && (
                       <span className="block mt-1 text-yellow-600">
@@ -262,15 +262,15 @@ export function PlanChangeDialog({
                 </div>
               </div>
 
-              <div className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg border-2 border-transparent hover:border-emerald-300 transition-colors cursor-pointer"
+              <div className="flex items-start space-x-3 p-3 bg-muted/50 rounded-lg border-2 border-transparent hover:border-emerald-300 transition-colors cursor-pointer"
                    onClick={() => setChangeTiming('next_period')}>
                 <RadioGroupItem value="next_period" id="next_period" className="mt-1" />
                 <div className="flex-1">
-                  <Label htmlFor="next_period" className="flex items-center gap-2 font-semibold cursor-pointer text-gray-900">
+                  <Label htmlFor="next_period" className="flex items-center gap-2 font-semibold cursor-pointer text-foreground">
                     <Clock className="w-4 h-4 text-blue-500" />
                     次回請求時に変更
                   </Label>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     現在の請求期間が終了するまで現在のプランを継続し、次回請求時に新しいプランに変更します。
                     {preview && preview.daysRemaining > 0 && (
                       <span className="block mt-1 text-blue-600">

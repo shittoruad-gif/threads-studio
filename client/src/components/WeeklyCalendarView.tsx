@@ -42,7 +42,7 @@ function getStatusColor(status: string): string {
     case 'failed':
       return 'bg-red-100 text-red-700 border-red-200';
     default:
-      return 'bg-gray-100 text-gray-700 border-gray-200';
+      return 'bg-muted text-muted-foreground border-border';
   }
 }
 
@@ -68,7 +68,7 @@ function getStatusDotColor(status: string): string {
     case 'failed':
       return 'bg-red-500';
     default:
-      return 'bg-gray-400';
+      return 'bg-muted-foreground/60';
   }
 }
 
@@ -137,7 +137,7 @@ export default function WeeklyCalendarView({
             </Button>
             <button
               onClick={goToToday}
-              className="text-sm font-medium text-gray-700 hover:text-emerald-600 transition-colors px-2"
+              className="text-sm font-medium text-foreground/80 hover:text-emerald-600 transition-colors px-2"
             >
               {weekLabel}
             </button>
@@ -162,7 +162,7 @@ export default function WeeklyCalendarView({
                 className={`rounded-lg border p-2 min-h-[100px] transition-colors ${
                   today
                     ? 'border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-200'
-                    : 'border-gray-200 bg-white hover:bg-gray-50'
+                    : 'border-border bg-white hover:bg-muted/50'
                 }`}
               >
                 {/* Day header */}
@@ -173,7 +173,7 @@ export default function WeeklyCalendarView({
                         ? 'text-blue-500'
                         : index === 6
                           ? 'text-red-500'
-                          : 'text-gray-500'
+                          : 'text-muted-foreground'
                     }`}
                   >
                     {DAY_LABELS[index]}
@@ -182,7 +182,7 @@ export default function WeeklyCalendarView({
                     className={`text-sm font-semibold ${
                       today
                         ? 'text-white bg-emerald-500 rounded-full w-7 h-7 flex items-center justify-center mx-auto'
-                        : 'text-gray-900'
+                        : 'text-foreground'
                     }`}
                   >
                     {format(day, 'd')}
@@ -212,7 +212,7 @@ export default function WeeklyCalendarView({
 
                   {/* Auto-post placeholder */}
                   {showAutoSlot && (
-                    <div className="rounded px-1.5 py-1 border border-dashed border-gray-300 bg-gray-50 text-[10px] text-gray-400">
+                    <div className="rounded px-1.5 py-1 border border-dashed border-border bg-muted/50 text-[10px] text-muted-foreground/60">
                       <div className="flex items-center gap-1">
                         <Sparkles className="w-2.5 h-2.5" />
                         <span>自動生成予定</span>
@@ -226,7 +226,7 @@ export default function WeeklyCalendarView({
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
+        <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-1">
             <div className="w-2 h-2 rounded-full bg-blue-500" />
             <span>予約済み</span>
@@ -241,7 +241,7 @@ export default function WeeklyCalendarView({
           </div>
           {autoPostEnabled && (
             <div className="flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-gray-400" />
+              <Sparkles className="w-3 h-3 text-muted-foreground/60" />
               <span>自動生成</span>
             </div>
           )}

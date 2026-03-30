@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import { Sparkles, Lock, Eye, EyeOff, CheckCircle } from "lucide-react";
 
 export default function ResetPassword() {
@@ -34,7 +35,7 @@ export default function ResetPassword() {
       }, 3000);
     },
     onError: (error) => {
-      alert(`エラー: ${error.message}`);
+      toast.error(`エラー: ${error.message}`);
     },
   });
 
@@ -42,22 +43,22 @@ export default function ResetPassword() {
     e.preventDefault();
 
     if (!token) {
-      alert("無効なリセットトークンです");
+      toast.error("無効なリセットトークンです。リンクをもう一度確認してください。");
       return;
     }
 
     if (!password || !confirmPassword) {
-      alert("すべてのフィールドを入力してください");
+      toast.error("すべてのフィールドを入力してください");
       return;
     }
 
     if (password !== confirmPassword) {
-      alert("パスワードが一致しません");
+      toast.error("パスワードが一致しません");
       return;
     }
 
     if (password.length < 8) {
-      alert("パスワードは8文字以上で入力してください");
+      toast.error("パスワードは8文字以上で入力してください");
       return;
     }
 

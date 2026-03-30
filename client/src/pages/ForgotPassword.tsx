@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import { Sparkles, Mail, ArrowLeft, KeyRound, Copy, CheckCircle, AlertTriangle } from "lucide-react";
 
 export default function ForgotPassword() {
@@ -30,7 +31,7 @@ export default function ForgotPassword() {
       }
     },
     onError: (error) => {
-      alert(`エラー: ${error.message}`);
+      toast.error(`エラー: ${error.message}`);
     },
   });
 
@@ -41,7 +42,7 @@ export default function ForgotPassword() {
     setCopied(false);
 
     if (!email) {
-      alert("メールアドレスを入力してください");
+      toast.error("メールアドレスを入力してください");
       return;
     }
 
@@ -50,9 +51,13 @@ export default function ForgotPassword() {
 
   const handleCopy = async () => {
     if (resetLink) {
-      await navigator.clipboard.writeText(resetLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      try {
+        await navigator.clipboard.writeText(resetLink);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        toast.error('コピーに失敗しました');
+      }
     }
   };
 

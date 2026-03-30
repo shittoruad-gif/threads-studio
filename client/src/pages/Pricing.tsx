@@ -20,7 +20,7 @@ const PLAN_ICONS: Record<string, React.ReactNode> = {
 };
 
 const PLAN_COLORS: Record<string, { bg: string; text: string; icon: string; border: string }> = {
-  free: { bg: 'bg-gray-50', text: 'text-gray-700', icon: 'text-gray-500', border: 'border-gray-200' },
+  free: { bg: 'bg-muted/50', text: 'text-foreground/80', icon: 'text-muted-foreground', border: 'border-border' },
   light: { bg: 'bg-blue-50', text: 'text-blue-700', icon: 'text-blue-500', border: 'border-blue-200' },
   pro: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: 'text-emerald-500', border: 'border-emerald-300' },
   business: { bg: 'bg-purple-50', text: 'text-purple-700', icon: 'text-purple-500', border: 'border-purple-200' },
@@ -161,18 +161,18 @@ export default function Pricing() {
       return value ? (
         <Check className="w-5 h-5 text-emerald-600 mx-auto" />
       ) : (
-        <X className="w-5 h-5 text-gray-300 mx-auto" />
+        <X className="w-5 h-5 text-muted-foreground/40 mx-auto" />
       );
     }
-    return <span className="text-gray-700 font-medium">{value}</span>;
+    return <span className="text-foreground/80 font-medium">{value}</span>;
   };
 
   const plans = Object.values(PLANS);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-muted/50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+      <header className="bg-background border-b border-border sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
@@ -180,14 +180,14 @@ export default function Pricing() {
                 <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
                   <Sparkles className="w-4 h-4 text-white" />
                 </div>
-                <span className="text-lg font-bold text-gray-900">Threads Studio</span>
+                <span className="text-lg font-bold text-foreground">Threads Studio</span>
               </button>
             </div>
             <div className="flex items-center gap-3">
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-gray-500 hover:text-gray-700"
+                className="text-muted-foreground hover:text-foreground/80"
                 onClick={() => setLocation('/')}
               >
                 <ArrowLeft className="w-4 h-4 mr-1" />
@@ -212,10 +212,10 @@ export default function Pricing() {
         {/* Title */}
         <div className="text-center mb-12">
           <p className="text-emerald-600 font-semibold tracking-wider text-sm mb-3">PLAN</p>
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
             シンプルな料金プラン
           </h1>
-          <p className="text-gray-500 max-w-2xl mx-auto">
+          <p className="text-muted-foreground max-w-2xl mx-auto">
             7日間の無料トライアルで、プロプランの全機能をお試しいただけます。
             <br />
             いつでもキャンセル可能です。
@@ -230,20 +230,27 @@ export default function Pricing() {
         )}
 
         {/* Plan Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 max-w-7xl mx-auto mb-20">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 max-w-7xl mx-auto mb-20">
           {plans.map((plan) => {
             const colors = PLAN_COLORS[plan.id] || PLAN_COLORS.free;
             return (
               <div
                 key={plan.id}
-                className={`bg-white rounded-xl p-6 text-center transition-all border-2 hover:shadow-lg ${
-                  plan.popular ? 'border-emerald-400 shadow-md relative' : 'border-gray-200'
+                className={`bg-background rounded-xl p-6 text-center transition-all border-2 hover:shadow-lg ${
+                  plan.popular ? 'border-emerald-400 shadow-md relative' : 'border-border'
                 }`}
               >
-                {plan.popular && (
+                {plan.popular && !isCurrentPlan(plan.id) && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                     <Badge className="bg-emerald-500 text-white border-0 px-4">
                       人気
+                    </Badge>
+                  </div>
+                )}
+                {isCurrentPlan(plan.id) && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <Badge className="bg-blue-500 text-white border-0 px-4">
+                      現在のプラン
                     </Badge>
                   </div>
                 )}
@@ -252,14 +259,14 @@ export default function Pricing() {
                     {PLAN_ICONS[plan.id]}
                   </div>
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">{plan.name}</h3>
+                <h3 className="text-lg font-bold text-foreground mb-2">{plan.name}</h3>
                 <div className="mb-4">
-                  <div className="text-3xl font-bold text-gray-900">
+                  <div className="text-3xl font-bold text-foreground">
                     ¥{plan.priceMonthly.toLocaleString()}
                   </div>
-                  <div className="text-gray-400 text-sm">/月</div>
+                  <div className="text-muted-foreground/60 text-sm">/月</div>
                 </div>
-                <p className="text-gray-500 text-xs mb-4 min-h-[2.5rem]">
+                <p className="text-muted-foreground text-xs mb-4 min-h-[2.5rem]">
                   {plan.description}
                 </p>
                 <Button
@@ -267,8 +274,8 @@ export default function Pricing() {
                     plan.popular
                       ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                       : isCurrentPlan(plan.id)
-                      ? 'bg-gray-100 text-gray-500 cursor-default'
-                      : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                      ? 'bg-muted text-muted-foreground cursor-default'
+                      : 'bg-background border border-border text-foreground/80 hover:bg-muted/50'
                   }`}
                   onClick={() => handleSelectPlan(plan.id)}
                   disabled={isCurrentPlan(plan.id) || createCheckout.isPending}
@@ -295,23 +302,23 @@ export default function Pricing() {
         <div className="max-w-7xl mx-auto mb-20">
           <div className="text-center mb-8">
             <p className="text-emerald-600 font-semibold tracking-wider text-sm mb-3">COMPARE</p>
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground">
               詳細な機能比較
             </h2>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-background rounded-xl border border-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-gray-50">
-                    <th className="text-left p-4 text-gray-700 font-semibold border-b border-gray-200">
+                  <tr className="bg-muted/50">
+                    <th className="text-left p-4 text-foreground/80 font-semibold border-b border-border">
                       機能
                     </th>
                     {plans.map((plan) => (
                       <th
                         key={plan.id}
-                        className={`text-center p-4 text-gray-700 font-semibold border-b border-gray-200 ${
+                        className={`text-center p-4 text-foreground/80 font-semibold border-b border-border ${
                           plan.popular ? 'bg-emerald-50' : ''
                         }`}
                       >
@@ -326,10 +333,10 @@ export default function Pricing() {
                 <tbody>
                   {COMPARISON_FEATURES.map((category, catIndex) => (
                     <>
-                      <tr key={`cat-${catIndex}`} className="bg-gray-50">
+                      <tr key={`cat-${catIndex}`} className="bg-muted/50">
                         <td
                           colSpan={6}
-                          className="p-3 text-gray-900 font-semibold text-sm border-b border-gray-200"
+                          className="p-3 text-foreground font-semibold text-sm border-b border-border"
                         >
                           {category.category}
                         </td>
@@ -337,9 +344,9 @@ export default function Pricing() {
                       {category.features.map((feature, featIndex) => (
                         <tr
                           key={`feat-${catIndex}-${featIndex}`}
-                          className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                          className="border-b border-border/50 hover:bg-muted/50 transition-colors"
                         >
-                          <td className="p-4 text-gray-600 text-sm">
+                          <td className="p-4 text-muted-foreground text-sm">
                             {feature.name}
                           </td>
                           <td className="p-4 text-center text-sm">
@@ -371,7 +378,7 @@ export default function Pricing() {
         <div className="max-w-3xl mx-auto mb-20">
           <div className="text-center mb-8">
             <p className="text-emerald-600 font-semibold tracking-wider text-sm mb-3">FAQ</p>
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground">
               よくある質問
             </h2>
           </div>
@@ -380,21 +387,21 @@ export default function Pricing() {
             {FAQ_ITEMS.map((faq, index) => (
               <div
                 key={index}
-                className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+                className="bg-background rounded-xl border border-border overflow-hidden"
               >
                 <button
-                  className="w-full p-5 text-left flex items-center justify-between hover:bg-gray-50 transition-colors"
+                  className="w-full p-5 text-left flex items-center justify-between hover:bg-muted/50 transition-colors"
                   onClick={() => setOpenFaq(openFaq === index ? null : index)}
                 >
-                  <span className="font-medium text-gray-900 flex items-center gap-3">
+                  <span className="font-medium text-foreground flex items-center gap-3">
                     <span className="text-emerald-600 font-bold text-sm bg-emerald-50 px-2 py-1 rounded">Q</span>
                     {faq.question}
                   </span>
-                  <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${openFaq === index ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`w-5 h-5 text-muted-foreground/60 transition-transform ${openFaq === index ? 'rotate-180' : ''}`} />
                 </button>
                 {openFaq === index && (
                   <div className="px-5 pb-5 pt-0">
-                    <p className="text-gray-600 text-sm pl-10">{faq.answer}</p>
+                    <p className="text-muted-foreground text-sm pl-10">{faq.answer}</p>
                   </div>
                 )}
               </div>
@@ -412,7 +419,7 @@ export default function Pricing() {
           </p>
           <Button
             size="lg"
-            className="bg-white text-emerald-700 hover:bg-gray-100 font-semibold px-8"
+            className="bg-background text-emerald-700 hover:bg-muted font-semibold px-8"
             onClick={() => {
               if (!isAuthenticated) {
                 window.location.href = getLoginUrl();

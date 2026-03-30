@@ -21,7 +21,7 @@ export default function NotFound() {
   ];
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen w-full flex items-center justify-center bg-muted/50">
       <div className="w-full max-w-2xl mx-4 text-center">
         {/* 404 Number */}
         <div className="mb-6">
@@ -31,11 +31,11 @@ export default function NotFound() {
         </div>
 
         {/* Error Message */}
-        <h2 className="text-3xl font-bold text-gray-900 mb-4">
+        <h2 className="text-3xl font-bold text-foreground mb-4">
           ページが見つかりません
         </h2>
 
-        <p className="text-gray-500 mb-8 text-lg leading-relaxed max-w-md mx-auto">
+        <p className="text-muted-foreground mb-8 text-lg leading-relaxed max-w-md mx-auto">
           お探しのページは存在しないか、移動または削除された可能性があります。
           URLをご確認いただくか、以下のリンクから目的のページへ移動してください。
         </p>
@@ -54,7 +54,7 @@ export default function NotFound() {
             <Button
               onClick={() => setLocation("/dashboard")}
               variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100 px-8 py-6 text-lg"
+              className="border-border text-foreground/80 hover:bg-muted px-8 py-6 text-lg"
             >
               <LayoutDashboard className="w-5 h-5 mr-2" />
               ダッシュボードへ
@@ -64,7 +64,7 @@ export default function NotFound() {
           <Button
             onClick={() => window.history.back()}
             variant="ghost"
-            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 px-8 py-6 text-lg"
+            className="text-muted-foreground hover:text-foreground/80 hover:bg-muted px-8 py-6 text-lg"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
             前のページに戻る
@@ -72,15 +72,15 @@ export default function NotFound() {
         </div>
 
         {/* Helpful Links */}
-        <div className="mt-12 pt-8 border-t border-gray-200">
-          <p className="text-gray-400 text-sm mb-4">よく使われるページ</p>
+        <div className="mt-12 pt-8 border-t border-border">
+          <p className="text-muted-foreground/60 text-sm mb-4">よく使われるページ</p>
           <div className="flex flex-wrap gap-2 justify-center">
             {commonPages.map((page) => (
               <Button
                 key={page.path}
                 variant="ghost"
                 onClick={() => setLocation(page.path)}
-                className="text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 text-sm gap-1.5"
+                className="text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 text-sm gap-1.5"
               >
                 <page.icon className="w-3.5 h-3.5" />
                 {page.label}
@@ -91,7 +91,7 @@ export default function NotFound() {
                 key={page.path}
                 variant="ghost"
                 onClick={() => setLocation(page.path)}
-                className="text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 text-sm gap-1.5"
+                className="text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 text-sm gap-1.5"
               >
                 <page.icon className="w-3.5 h-3.5" />
                 {page.label}

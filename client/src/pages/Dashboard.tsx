@@ -226,7 +226,7 @@ export default function Dashboard() {
       canceled: { label: 'キャンセル済み', className: 'bg-red-50 text-red-700 border border-red-200' },
       past_due: { label: '支払い遅延', className: 'bg-yellow-50 text-yellow-700 border border-yellow-200' },
     };
-    const badge = statusMap[status] || { label: status, className: 'bg-gray-50 text-gray-700 border border-gray-200' };
+    const badge = statusMap[status] || { label: status, className: 'bg-muted/50 text-foreground/80 border border-border' };
     return (
       <span className={`px-3 py-1 rounded-full text-xs font-medium ${badge.className}`}>
         {badge.label}
@@ -254,8 +254,8 @@ export default function Dashboard() {
         {/* Welcome + Plan Badge */}
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">ようこそ、{user?.name || 'ユーザー'}さん</h1>
-            <p className="text-gray-500 text-sm mt-1">
+            <h1 className="text-2xl font-bold text-foreground">ようこそ、{user?.name || 'ユーザー'}さん</h1>
+            <p className="text-muted-foreground text-sm mt-1">
               {autoPostSettings?.autoPostEnabled
                 ? 'AIが自動で投稿を生成・公開しています'
                 : '自動投稿は停止中です'}
@@ -265,6 +265,66 @@ export default function Dashboard() {
             {subscription?.plan?.name || '無料プラン'}
           </Badge>
         </div>
+
+        {/* New User Getting Started Guide */}
+        {(!threadsAccounts || threadsAccounts.length === 0) && (!projectCount || projectCount === 0) && (
+          <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-6">
+            <h2 className="text-lg font-bold text-foreground mb-2">🚀 はじめましょう！</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Threads Studioを使って、AIが自動でThreads投稿を生成・公開します。以下の3ステップで始められます。
+            </p>
+            <div className="grid sm:grid-cols-3 gap-4">
+              <div className="bg-white rounded-lg p-4 border border-blue-100">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">1</div>
+                  <span className="font-medium text-foreground text-sm">プランを選択</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">利用目的に合ったプランを選んで始めましょう</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full border-blue-300 text-blue-700 hover:bg-blue-50"
+                  onClick={() => setLocation('/pricing')}
+                >
+                  <CreditCard className="w-3 h-3 mr-1" />
+                  プランを見る
+                </Button>
+              </div>
+              <div className="bg-white rounded-lg p-4 border border-blue-100">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">2</div>
+                  <span className="font-medium text-foreground text-sm">Threads連携</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">Threadsアカウントを接続して投稿を自動化</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full border-blue-300 text-blue-700 hover:bg-blue-50"
+                  onClick={() => setLocation('/threads-connect')}
+                >
+                  <Link2 className="w-3 h-3 mr-1" />
+                  連携する
+                </Button>
+              </div>
+              <div className="bg-white rounded-lg p-4 border border-blue-100">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">3</div>
+                  <span className="font-medium text-foreground text-sm">店舗情報を登録</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">業種・地域・強みを入力すればAIが投稿を生成</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full border-blue-300 text-blue-700 hover:bg-blue-50"
+                  onClick={() => setLocation('/ai-project-create')}
+                >
+                  <FileText className="w-3 h-3 mr-1" />
+                  登録する
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Hero: Auto Post + Stats Row */}
         <div className="grid lg:grid-cols-3 gap-4 mb-6">
@@ -277,10 +337,10 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <h2 className="font-bold text-lg text-gray-900">自動投稿</h2>
+                    <h2 className="font-bold text-lg text-foreground">自動投稿</h2>
                     <HelpTooltip content="ONにすると、AIが毎日自動で投稿を生成してThreadsに投稿します" />
                   </div>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     {autoPostSettings?.autoPostEnabled ? 'AIが毎日自動で投稿を生成・公開中' : '自動投稿はOFFです'}
                   </p>
                 </div>
@@ -301,8 +361,9 @@ export default function Dashboard() {
                 </div>
                 <button
                   onClick={() => updateAutoPost.mutate({ autoPostEnabled: !autoPostSettings?.autoPostEnabled })}
+                  aria-label={autoPostSettings?.autoPostEnabled ? '自動投稿をオフにする' : '自動投稿をオンにする'}
                   className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
-                    autoPostSettings?.autoPostEnabled ? 'bg-emerald-500' : 'bg-gray-300'
+                    autoPostSettings?.autoPostEnabled ? 'bg-emerald-500' : 'bg-muted-foreground/40'
                   }`}
                 >
                   <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
@@ -336,12 +397,43 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* Token expiry warning */}
+            {threadsAccounts && threadsAccounts.length > 0 && (() => {
+              const soonestExpiry = threadsAccounts
+                .filter((a: any) => a.tokenExpiresAt)
+                .map((a: any) => new Date(a.tokenExpiresAt).getTime())
+                .sort((a: number, b: number) => a - b)[0];
+              if (!soonestExpiry) return null;
+              const daysLeft = Math.ceil((soonestExpiry - Date.now()) / (1000 * 60 * 60 * 24));
+              if (daysLeft > 7) return null;
+              return (
+                <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${
+                  daysLeft <= 3 ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                }`}>
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>
+                    {daysLeft <= 0
+                      ? 'Threadsトークンが期限切れです。再連携してください。'
+                      : `Threadsトークンが${daysLeft}日後に期限切れになります。`}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto h-6 px-2 text-xs"
+                    onClick={() => setLocation('/threads-connect')}
+                  >
+                    再連携
+                  </Button>
+                </div>
+              );
+            })()}
+
             {/* Recent auto-posts */}
             {autoPostHistory && autoPostHistory.length > 0 && (
               <div className="mt-4 space-y-1.5">
                 {autoPostHistory.slice(0, 2).map((post: any) => (
                   <div key={post.id} className="flex items-center justify-between text-sm bg-white/70 rounded-lg px-3 py-2">
-                    <span className="truncate flex-1 mr-2 text-gray-600">{post.postContent?.substring(0, 40)}...</span>
+                    <span className="truncate flex-1 mr-2 text-muted-foreground">{post.postContent?.substring(0, 40)}...</span>
                     <Badge variant={post.status === 'posted' ? 'default' : post.status === 'pending' ? 'secondary' : 'destructive'} className="text-xs">
                       {post.status === 'posted' ? '投稿済' : post.status === 'pending' ? '予約中' : '失敗'}
                     </Badge>
@@ -375,22 +467,22 @@ export default function Dashboard() {
 
           {/* Stats Column */}
           <div className="space-y-4">
-            <div className="bg-white rounded-xl p-4 border border-gray-200">
-              <p className="text-gray-500 text-xs mb-1">総投稿数</p>
-              <p className="text-2xl font-bold text-gray-900">{stats?.totalPosts || 0}</p>
+            <div className="bg-background rounded-xl p-4 border border-border">
+              <p className="text-muted-foreground text-xs mb-1">総投稿数</p>
+              <p className="text-2xl font-bold text-foreground">{stats?.totalPosts || 0}</p>
             </div>
-            <div className="bg-white rounded-xl p-4 border border-gray-200">
-              <p className="text-gray-500 text-xs mb-1">予約中</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div className="bg-background rounded-xl p-4 border border-border">
+              <p className="text-muted-foreground text-xs mb-1">予約中</p>
+              <p className="text-2xl font-bold text-foreground">
                 {stats?.postsByStatus?.find((s: any) => s.status === 'pending')?.count || 0}
               </p>
             </div>
-            <div className="bg-white rounded-xl p-4 border border-gray-200">
-              <p className="text-gray-500 text-xs mb-1">今月のAI生成</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div className="bg-background rounded-xl p-4 border border-border">
+              <p className="text-muted-foreground text-xs mb-1">今月のAI生成</p>
+              <p className="text-2xl font-bold text-foreground">
                 {aiUsage?.count || 0}
                 {aiUsage?.limit && aiUsage.limit > 0 && (
-                  <span className="text-gray-400 text-sm font-normal">/{aiUsage.limit}</span>
+                  <span className="text-muted-foreground/60 text-sm font-normal">/{aiUsage.limit}</span>
                 )}
               </p>
             </div>
@@ -399,8 +491,8 @@ export default function Dashboard() {
 
         {/* Usage Progress Section */}
         {subscription?.plan && (
-          <div className="bg-white rounded-xl p-6 border border-gray-200 mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <div className="bg-background rounded-xl p-6 border border-border mb-8">
+            <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-emerald-600" />
               使用状況
             </h2>
@@ -449,14 +541,14 @@ export default function Dashboard() {
 
         {/* Monthly Posts Chart */}
         {stats?.monthlyPosts && stats.monthlyPosts.length > 0 && (
-          <div className="bg-white rounded-xl p-6 border border-gray-200 mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">月間投稿数</h2>
+          <div className="bg-background rounded-xl p-6 border border-border mb-8">
+            <h2 className="text-lg font-semibold text-foreground mb-4">月間投稿数</h2>
             <div className="space-y-3">
               {stats.monthlyPosts.map((item: any) => (
                 <div key={item.month} className="flex items-center gap-4">
-                  <div className="w-20 text-gray-500 text-sm">{item.month}</div>
+                  <div className="w-20 text-muted-foreground text-sm">{item.month}</div>
                   <div className="flex-1">
-                    <div className="h-8 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-8 bg-muted rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full flex items-center justify-end px-3"
                         style={{ width: `${Math.min((item.count / Math.max(...stats.monthlyPosts.map((m: any) => m.count))) * 100, 100)}%` }}
@@ -473,17 +565,17 @@ export default function Dashboard() {
 
         {/* Popular Templates */}
         {popularTemplates && popularTemplates.length > 0 && (
-          <div className="bg-white rounded-xl p-6 border border-gray-200 mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">人気テンプレート</h2>
+          <div className="bg-background rounded-xl p-6 border border-border mb-8">
+            <h2 className="text-lg font-semibold text-foreground mb-4">人気テンプレート</h2>
             <div className="space-y-3">
               {popularTemplates.map((template: any, index: number) => (
-                <div key={template.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div key={template.id} className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
                   <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm">
                     {index + 1}
                   </div>
                   <div className="flex-1">
-                    <p className="text-gray-900 font-medium">{template.title}</p>
-                    <p className="text-gray-500 text-sm">{template.usageCount}回使用</p>
+                    <p className="text-foreground font-medium">{template.title}</p>
+                    <p className="text-muted-foreground text-sm">{template.usageCount}回使用</p>
                   </div>
                   <Badge variant="outline" className="text-emerald-700 border-emerald-200 bg-emerald-50">{template.category}</Badge>
                 </div>
@@ -494,9 +586,9 @@ export default function Dashboard() {
 
         <div className="grid lg:grid-cols-3 gap-6 mb-8">
           {/* Subscription Status */}
-          <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-gray-200">
+          <div className="lg:col-span-2 bg-background rounded-xl p-6 border border-border">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <Crown className="w-5 h-5 text-emerald-600" />
                 サブスクリプション
               </h2>
@@ -505,17 +597,17 @@ export default function Dashboard() {
 
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <p className="text-gray-500 text-sm mb-1">現在のプラン</p>
-                <p className="text-2xl font-bold text-gray-900">{subscription?.plan?.name || '無料プラン'}</p>
+                <p className="text-muted-foreground text-sm mb-1">現在のプラン</p>
+                <p className="text-2xl font-bold text-foreground">{subscription?.plan?.name || '無料プラン'}</p>
                 {subscription?.plan?.priceMonthly ? (
-                  <p className="text-gray-500">¥{subscription.plan.priceMonthly.toLocaleString()}/月</p>
+                  <p className="text-muted-foreground">¥{subscription.plan.priceMonthly.toLocaleString()}/月</p>
                 ) : null}
               </div>
 
               {subscription?.isTrialing && subscription?.trialEndsAt && (
                 <div>
-                  <p className="text-gray-500 text-sm mb-1">トライアル終了日</p>
-                  <p className="text-lg font-semibold text-gray-900">
+                  <p className="text-muted-foreground text-sm mb-1">トライアル終了日</p>
+                  <p className="text-lg font-semibold text-foreground">
                     {formatDate(subscription.trialEndsAt)}
                   </p>
                 </div>
@@ -523,8 +615,8 @@ export default function Dashboard() {
 
               {subscription?.currentPeriodEnd && !subscription?.isTrialing && (
                 <div>
-                  <p className="text-gray-500 text-sm mb-1">次回請求日</p>
-                  <p className="text-lg font-semibold text-gray-900">
+                  <p className="text-muted-foreground text-sm mb-1">次回請求日</p>
+                  <p className="text-lg font-semibold text-foreground">
                     {formatDate(subscription.currentPeriodEnd)}
                   </p>
                 </div>
@@ -564,7 +656,7 @@ export default function Dashboard() {
                 <>
                   <Button
                     variant="outline"
-                    className="text-gray-700"
+                    className="text-foreground/80"
                     onClick={() => createPortalSession.mutate()}
                     disabled={createPortalSession.isPending}
                   >
@@ -599,17 +691,17 @@ export default function Dashboard() {
 
           {/* Quick Stats */}
           <div className="space-y-4">
-            <div className="bg-white rounded-xl p-4 border border-gray-200">
+            <div className="bg-background rounded-xl p-4 border border-border">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-emerald-50">
                   <FileText className="w-5 h-5 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-gray-500 text-sm">プロジェクト数</p>
-                  <p className="text-xl font-bold text-gray-900">
+                  <p className="text-muted-foreground text-sm">プロジェクト数</p>
+                  <p className="text-xl font-bold text-foreground">
                     {projectCount ?? 0}
                     {subscription?.plan?.features?.maxProjects !== -1 && (
-                      <span className="text-gray-400 text-sm font-normal">
+                      <span className="text-muted-foreground/60 text-sm font-normal">
                         /{subscription?.plan?.features?.maxProjects || 3}
                       </span>
                     )}
@@ -618,17 +710,17 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl p-4 border border-gray-200">
+            <div className="bg-background rounded-xl p-4 border border-border">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-blue-50">
                   <Link2 className="w-5 h-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-gray-500 text-sm">Threads連携</p>
-                  <p className="text-xl font-bold text-gray-900">
+                  <p className="text-muted-foreground text-sm">Threads連携</p>
+                  <p className="text-xl font-bold text-foreground">
                     {threadsAccounts?.length ?? 0}
                     {subscription?.plan?.features?.maxThreadsAccounts !== -1 && (
-                      <span className="text-gray-400 text-sm font-normal">
+                      <span className="text-muted-foreground/60 text-sm font-normal">
                         /{subscription?.plan?.features?.maxThreadsAccounts || 0}
                       </span>
                     )}
@@ -637,16 +729,16 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl p-4 border border-gray-200">
+            <div className="bg-background rounded-xl p-4 border border-border">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-orange-50">
                   <Calendar className="w-5 h-5 text-orange-600" />
                 </div>
                 <div>
-                  <p className="text-gray-500 text-sm">予約投稿</p>
-                  <p className="text-xl font-bold text-gray-900">
+                  <p className="text-muted-foreground text-sm">予約投稿</p>
+                  <p className="text-xl font-bold text-foreground">
                     {subscription?.plan?.features?.maxScheduledPosts === 0 ? (
-                      <span className="text-gray-400 text-sm">利用不可</span>
+                      <span className="text-muted-foreground/60 text-sm">利用不可</span>
                     ) : subscription?.plan?.features?.maxScheduledPosts === -1 ? (
                       '無制限'
                     ) : (
@@ -661,15 +753,15 @@ export default function Dashboard() {
 
         {/* Invoices */}
         {invoices && invoices.length > 0 && (
-          <div className="bg-white rounded-xl p-6 border border-gray-200 mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <div className="bg-background rounded-xl p-6 border border-border mb-8">
+            <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5 text-emerald-600" />
               請求履歴
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="text-left text-gray-500 text-sm border-b border-gray-200">
+                  <tr className="text-left text-muted-foreground text-sm border-b border-border">
                     <th className="pb-3 font-medium">日付</th>
                     <th className="pb-3 font-medium">金額</th>
                     <th className="pb-3 font-medium">ステータス</th>
@@ -678,11 +770,11 @@ export default function Dashboard() {
                 </thead>
                 <tbody>
                   {invoices.map((invoice) => (
-                    <tr key={invoice.id} className="border-b border-gray-100">
-                      <td className="py-3 text-gray-900">
+                    <tr key={invoice.id} className="border-b border-border/50">
+                      <td className="py-3 text-foreground">
                         {new Date(invoice.created * 1000).toLocaleDateString('ja-JP')}
                       </td>
-                      <td className="py-3 text-gray-900 font-medium">
+                      <td className="py-3 text-foreground font-medium">
                         ¥{(invoice.amount / 1).toLocaleString()}
                       </td>
                       <td className="py-3">
@@ -720,31 +812,31 @@ export default function Dashboard() {
           <div className="mt-8 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-6 border-2 border-emerald-200">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-8 h-8 text-emerald-600" />
-              <h3 className="font-semibold text-gray-900 text-lg">最初の投稿を生成しましょう！</h3>
+              <h3 className="font-semibold text-foreground text-lg">最初の投稿を生成しましょう！</h3>
             </div>
-            <p className="text-gray-600 text-sm mb-4">
+            <p className="text-muted-foreground text-sm mb-4">
               3ステップで簡単に始められます
             </p>
             <div className="grid md:grid-cols-3 gap-4 mb-4">
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">1</div>
                 <div>
-                  <p className="text-gray-900 text-sm font-medium">プロジェクト作成</p>
-                  <p className="text-gray-500 text-xs">業種を選ぶだけで自動入力</p>
+                  <p className="text-foreground text-sm font-medium">プロジェクト作成</p>
+                  <p className="text-muted-foreground text-xs">業種を選ぶだけで自動入力</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">2</div>
                 <div>
-                  <p className="text-gray-900 text-sm font-medium">Threads連携</p>
-                  <p className="text-gray-500 text-xs">ガイドに沿って簡単連携</p>
+                  <p className="text-foreground text-sm font-medium">Threads連携</p>
+                  <p className="text-muted-foreground text-xs">ガイドに沿って簡単連携</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">3</div>
                 <div>
-                  <p className="text-gray-900 text-sm font-medium">AI生成</p>
-                  <p className="text-gray-500 text-xs">プリセットから選んで生成</p>
+                  <p className="text-foreground text-sm font-medium">AI生成</p>
+                  <p className="text-muted-foreground text-xs">プリセットから選んで生成</p>
                 </div>
               </div>
             </div>
@@ -888,7 +980,7 @@ export default function Dashboard() {
         <div className="mt-8 grid md:grid-cols-2 lg:grid-cols-4 gap-4">
           <button
             onClick={() => setLocation('/ai-project-create')}
-            className="bg-white p-6 rounded-xl text-left hover:shadow-md transition-all border border-gray-200 group relative overflow-hidden"
+            className="bg-background p-6 rounded-xl text-left hover:shadow-md transition-all border border-border group relative overflow-hidden"
             data-tour="ai-generate"
           >
             <div className="absolute top-3 right-3">
@@ -900,52 +992,52 @@ export default function Dashboard() {
               <Sparkles className="w-5 h-5 text-yellow-600" />
             </div>
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-gray-900">AI投稿生成</h3>
+              <h3 className="font-semibold text-foreground">AI投稿生成</h3>
               <HelpTooltip content="業種・地域・ターゲットを設定するだけで、プロフィール遷移→LINE登録→予約に繋がる高品質なThreads投稿をAIが自動生成します。" />
             </div>
-            <p className="text-gray-500 text-sm">集客に特化した投稿を自動生成</p>
-            <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-emerald-600 mt-2 transition-colors" />
+            <p className="text-muted-foreground text-sm">集客に特化した投稿を自動生成</p>
+            <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-emerald-600 mt-2 transition-colors" />
           </button>
 
           <button
             onClick={() => setLocation('/ai-history')}
-            className="bg-white p-6 rounded-xl text-left hover:shadow-md transition-all border border-gray-200 group"
+            className="bg-background p-6 rounded-xl text-left hover:shadow-md transition-all border border-border group"
           >
             <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center mb-3">
               <History className="w-5 h-5 text-blue-600" />
             </div>
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-gray-900">AI生成履歴</h3>
+              <h3 className="font-semibold text-foreground">AI生成履歴</h3>
               <HelpTooltip content="過去にAIで生成した投稿を確認・再利用できます。履歴からコピーして、簡単に再度使用することができます。" />
             </div>
-            <p className="text-gray-500 text-sm">過去の生成内容を再利用</p>
-            <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-emerald-600 mt-2 transition-colors" />
+            <p className="text-muted-foreground text-sm">過去の生成内容を再利用</p>
+            <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-emerald-600 mt-2 transition-colors" />
           </button>
 
           <button
             onClick={() => setLocation('/threads-connect')}
-            className="bg-white p-6 rounded-xl text-left hover:shadow-md transition-all border border-gray-200 group"
+            className="bg-background p-6 rounded-xl text-left hover:shadow-md transition-all border border-border group"
             data-tour="threads-connect"
           >
             <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center mb-3">
               <Link2 className="w-5 h-5 text-blue-600" />
             </div>
-            <h3 className="font-semibold text-gray-900 mb-1">Threads連携</h3>
-            <p className="text-gray-500 text-sm">アカウントを連携して直接投稿</p>
-            <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-emerald-600 mt-2 transition-colors" />
+            <h3 className="font-semibold text-foreground mb-1">Threads連携</h3>
+            <p className="text-muted-foreground text-sm">アカウントを連携して直接投稿</p>
+            <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-emerald-600 mt-2 transition-colors" />
           </button>
 
           <button
             onClick={() => setLocation('/post-history')}
-            className="bg-white p-6 rounded-xl text-left hover:shadow-md transition-all border border-gray-200 group"
+            className="bg-background p-6 rounded-xl text-left hover:shadow-md transition-all border border-border group"
             data-tour="analytics"
           >
             <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center mb-3">
               <Calendar className="w-5 h-5 text-green-600" />
             </div>
-            <h3 className="font-semibold text-gray-900 mb-1">投稿履歴・予約</h3>
-            <p className="text-gray-500 text-sm">予約投稿の管理と履歴確認</p>
-            <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-emerald-600 mt-2 transition-colors" />
+            <h3 className="font-semibold text-foreground mb-1">投稿履歴・予約</h3>
+            <p className="text-muted-foreground text-sm">予約投稿の管理と履歴確認</p>
+            <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-emerald-600 mt-2 transition-colors" />
           </button>
         </div>
       </div>

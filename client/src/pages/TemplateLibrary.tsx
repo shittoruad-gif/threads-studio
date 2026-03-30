@@ -4,11 +4,11 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
-import { 
-  Search, 
-  Heart, 
-  TrendingUp, 
-  Eye, 
+import {
+  Search,
+  Heart,
+  TrendingUp,
+  Eye,
   X,
   Crown,
   Sparkles,
@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useLocation } from "wouter";
 
 const CATEGORIES = [
   { id: "all", name: "すべて", icon: <Sparkles className="w-4 h-4" /> },
@@ -33,6 +34,7 @@ const CATEGORIES = [
 
 export default function TemplateLibrary() {
   const { isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [previewTemplate, setPreviewTemplate] = useState<any>(null);
@@ -89,9 +91,15 @@ export default function TemplateLibrary() {
   };
 
   const handleUseTemplate = (template: any) => {
-    // TODO: Navigate to editor with template
-    toast.success("テンプレートを選択しました");
+    if (!isAuthenticated) {
+      toast.error("テンプレートを使用するにはログインが必要です");
+      return;
+    }
+    // Navigate to AI generate with template
+    incrementUsageMutation.mutate({ templateId: template.id });
     setPreviewTemplate(null);
+    setLocation(`/ai-generate?templateId=${template.id}`);
+    toast.success("テンプレートを選択しました");
   };
 
   if (isLoading) {

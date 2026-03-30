@@ -38,13 +38,13 @@ export function CouponInput({ onSuccess }: CouponInputProps) {
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-6">
+    <div className="bg-white border border-border rounded-xl p-6">
       <div className="flex items-center gap-2 mb-4">
         <Tag className="w-5 h-5 text-emerald-600" />
-        <h3 className="text-lg font-semibold text-gray-900">キャンペーンコード</h3>
+        <h3 className="text-lg font-semibold text-foreground">キャンペーンコード</h3>
       </div>
       
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-sm text-muted-foreground mb-4">
         キャンペーンコードをお持ちの方は、こちらに入力してください。
       </p>
 

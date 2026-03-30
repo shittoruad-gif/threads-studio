@@ -59,7 +59,7 @@ export default function TrialBanner({ trialEndsAt, planName }: TrialBannerProps)
     <div className={`${bgColor} ${borderColor} border rounded-xl p-4 mb-6 relative`}>
       <button
         onClick={() => setDismissed(true)}
-        className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition-colors"
+        className="absolute top-3 right-3 text-muted-foreground/60 hover:text-foreground transition-colors"
         aria-label="閉じる"
       >
         <X className="w-4 h-4" />
@@ -77,12 +77,12 @@ export default function TrialBanner({ trialEndsAt, planName }: TrialBannerProps)
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <h3 className={`font-semibold ${textColor}`}>{message}</h3>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
               {planName}
             </span>
           </div>
 
-          <p className="text-sm text-gray-500 mb-3">
+          <p className="text-sm text-muted-foreground mb-3">
             トライアル終了日: {endDate.toLocaleDateString('ja-JP', {
               year: 'numeric',
               month: 'long',
@@ -95,7 +95,7 @@ export default function TrialBanner({ trialEndsAt, planName }: TrialBannerProps)
           <div className="mb-3">
             <Progress 
               value={progressPercentage} 
-              className="h-2 bg-gray-100"
+              className="h-2 bg-muted"
             />
           </div>
 
@@ -111,7 +111,7 @@ export default function TrialBanner({ trialEndsAt, planName }: TrialBannerProps)
             <Button
               size="sm"
               variant="ghost"
-              className="text-gray-500 hover:text-gray-700"
+              className="text-muted-foreground hover:text-foreground"
               onClick={() => setDismissed(true)}
             >
               後で

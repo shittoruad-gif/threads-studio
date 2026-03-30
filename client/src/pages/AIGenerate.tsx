@@ -318,6 +318,7 @@ export default function AIGenerate() {
     },
     onError: (error) => {
       setGenerationError(error.message);
+      toast.error('AI生成に失敗しました。下のエラーガイドをご確認ください。');
     },
   });
 
@@ -619,16 +620,25 @@ export default function AIGenerate() {
                       </div>
                     )}
                     {aiUsage.limit !== null && aiUsage.limit !== -1 && aiUsage.count >= aiUsage.limit && (
-                      <p className="text-xs text-yellow-500 mt-2">
-                        今月の上限に達しました。プロプラン以上で無制限にご利用いただけます。
-                      </p>
+                      <div className="flex items-center justify-between mt-2 bg-yellow-50 border border-yellow-200 rounded-lg p-2">
+                        <p className="text-xs text-yellow-700">
+                          今月の上限に達しました
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setLocation('/pricing')}
+                          className="text-xs text-yellow-700 font-medium underline hover:text-yellow-900"
+                        >
+                          プランをアップグレード →
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
 
                 <Button
                   onClick={handleGenerate}
-                  disabled={generateMutation.isPending}
+                  disabled={generateMutation.isPending || (aiUsage?.limit !== null && aiUsage?.limit !== undefined && aiUsage?.limit !== -1 && (aiUsage?.count ?? 0) >= aiUsage.limit)}
                   className="w-full"
                 >
                   {generateMutation.isPending ? (
@@ -670,6 +680,7 @@ export default function AIGenerate() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      aria-label="プロジェクト情報を編集"
                       onClick={() => {
                         setEditForm({
                           businessType: project.businessType || '',
@@ -691,6 +702,7 @@ export default function AIGenerate() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        aria-label="変更を保存"
                         onClick={() => {
                           updateProjectMutation.mutate({
                             id: projectId!,
@@ -705,7 +717,24 @@ export default function AIGenerate() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setEditingProject(false)}
+                        aria-label="編集をキャンセル"
+                        onClick={() => {
+                          // Check if form has changes
+                          const hasChanges =
+                            editForm.businessType !== (project?.businessType || '') ||
+                            editForm.area !== (project?.area || '') ||
+                            editForm.target !== (project?.target || '') ||
+                            editForm.mainProblem !== (project?.mainProblem || '') ||
+                            editForm.strength !== (project?.strength || '') ||
+                            editForm.proof !== (project?.proof || '');
+                          if (hasChanges) {
+                            if (confirm('変更を破棄しますか？')) {
+                              setEditingProject(false);
+                            }
+                          } else {
+                            setEditingProject(false);
+                          }
+                        }}
                       >
                         <X className="h-4 w-4 text-red-500" />
                       </Button>
@@ -1006,6 +1035,7 @@ export default function AIGenerate() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        aria-label="メイン投稿をコピー"
                         onClick={() => handleCopy(editedPost.mainPost, 0)}
                       >
                         {copiedIndex === 0 ? (
@@ -1037,6 +1067,7 @@ export default function AIGenerate() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          aria-label={`ツリー投稿${index + 1}をコピー`}
                           onClick={() => handleCopy(post, index + 1)}
                         >
                           {copiedIndex === index + 1 ? (
@@ -1284,6 +1315,7 @@ export default function AIGenerate() {
                         variant="ghost"
                         size="sm"
                         className={`h-7 w-7 p-0 ${preset.isPinned ? 'opacity-100 text-primary' : ''}`}
+                        aria-label={preset.isPinned ? 'ピン留めを解除' : 'ピン留め'}
                         onClick={(e) => {
                           e.stopPropagation();
                           togglePinMutation.mutate({ id: preset.id });
@@ -1296,6 +1328,7 @@ export default function AIGenerate() {
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0"
+                        aria-label="プリセットを編集"
                         onClick={(e) => {
                           e.stopPropagation();
                           try {
@@ -1324,6 +1357,7 @@ export default function AIGenerate() {
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0"
+                        aria-label="プリセットを削除"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (confirm('このカスタムプリセットを削除しますか？')) {

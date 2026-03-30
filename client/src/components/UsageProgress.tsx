@@ -44,8 +44,8 @@ export function UsageProgress({
     <div className={cn('space-y-2', className)}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {icon && <div className="text-gray-500">{icon}</div>}
-          <span className="text-sm font-medium text-gray-700">{label}</span>
+          {icon && <div className="text-muted-foreground">{icon}</div>}
+          <span className="text-sm font-medium text-foreground/80">{label}</span>
         </div>
         <div className="flex items-center gap-2">
           {getStatusIcon()}
@@ -57,13 +57,13 @@ export function UsageProgress({
       
       {!isUnlimited && (
         <div className="space-y-1">
-          <div className="relative h-2 w-full overflow-hidden rounded-full bg-gray-100">
+          <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
             <div 
               className={cn('h-full transition-all rounded-full', getProgressColor())}
               style={{ width: `${percentage}%` }}
             />
           </div>
-          <div className="flex justify-between text-xs text-gray-500">
+          <div className="flex justify-between text-xs text-muted-foreground">
             <span>{percentage.toFixed(0)}% 使用中</span>
             {percentage >= 80 && percentage < 100 && (
               <span className="text-yellow-600">上限に近づいています</span>

@@ -44,15 +44,15 @@ export function PWAInstallBanner() {
 
   return (
     <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md animate-in slide-in-from-bottom-4 duration-500">
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-4 flex items-start gap-3">
+      <div className="bg-white rounded-2xl shadow-xl border border-border/50 p-4 flex items-start gap-3">
         <div className="flex-shrink-0 w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center">
           <Smartphone className="w-6 h-6 text-emerald-600" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 text-sm">
+          <p className="font-semibold text-foreground text-sm">
             アプリをインストール
           </p>
-          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
             ホーム画面に追加して、より快適にご利用いただけます
           </p>
           <div className="flex items-center gap-2 mt-2.5">
@@ -67,7 +67,7 @@ export function PWAInstallBanner() {
             <Button
               variant="ghost"
               size="sm"
-              className="text-gray-400 hover:text-gray-600 h-8 px-3 text-xs"
+              className="text-muted-foreground/60 hover:text-foreground h-8 px-3 text-xs"
               onClick={handleDismiss}
             >
               後で
@@ -76,7 +76,7 @@ export function PWAInstallBanner() {
         </div>
         <button
           onClick={handleDismiss}
-          className="flex-shrink-0 text-gray-300 hover:text-gray-500 transition-colors p-0.5"
+          className="flex-shrink-0 text-muted-foreground/40 hover:text-muted-foreground transition-colors p-0.5"
           aria-label="閉じる"
         >
           <X className="w-4 h-4" />

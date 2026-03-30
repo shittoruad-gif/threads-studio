@@ -8,7 +8,7 @@ import { DragDropContext, Draggable, Droppable, DropResult } from "@hello-pangea
 import { Post, Project } from "@shared/types";
 import { ArrowLeft, GripVertical, Plus, Save, Trash2, Clock, Send } from "lucide-react";
 import { nanoid } from "nanoid";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { SchedulePostDialog } from "@/components/SchedulePostDialog";
@@ -22,6 +22,47 @@ export default function Editor() {
   const [title, setTitle] = useState("");
   const [posts, setPosts] = useState<Post[]>([]);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+  const initialLoadDone = useRef(false);
+
+  // Auto-save to localStorage every 10 seconds when there are changes
+  const autoSave = useCallback(() => {
+    if (!project || !hasUnsavedChanges) return;
+    const updatedProject: Project = {
+      ...project,
+      title,
+      posts,
+      updatedAt: Date.now(),
+    };
+    saveProject(updatedProject);
+    setHasUnsavedChanges(false);
+  }, [project, title, posts, hasUnsavedChanges]);
+
+  useEffect(() => {
+    if (!initialLoadDone.current) return;
+    setHasUnsavedChanges(true);
+
+    // Debounced auto-save
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(autoSave, 10000);
+
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    };
+  }, [title, posts]);
+
+  // Warn before leaving with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   useEffect(() => {
     // sessionStorageからプロジェクトを取得
@@ -32,6 +73,9 @@ export default function Editor() {
       setTitle(proj.title);
       setPosts(proj.posts);
       sessionStorage.removeItem('currentProject');
+      // Also persist to localStorage immediately
+      saveProject(proj);
+      initialLoadDone.current = true;
     } else {
       // LocalStorageから既存プロジェクトを読み込み
       if (projectId) {
@@ -40,6 +84,7 @@ export default function Editor() {
           setProject(existingProject);
           setTitle(existingProject.title);
           setPosts(existingProject.posts);
+          initialLoadDone.current = true;
         } else {
           toast.error("プロジェクトが見つかりません");
           setLocation("/");
@@ -74,6 +119,10 @@ export default function Editor() {
   };
 
   const handleDeletePost = (id: string) => {
+    const post = posts.find((p) => p.id === id);
+    if (post && post.content.trim()) {
+      if (!confirm('このポストを削除しますか？内容は失われます。')) return;
+    }
     setPosts((prev) => prev.filter((post) => post.id !== id));
   };
 
@@ -97,6 +146,7 @@ export default function Editor() {
     };
 
     saveProject(updatedProject);
+    setHasUnsavedChanges(false);
     toast.success("プロジェクトを保存しました");
   };
 
@@ -122,7 +172,12 @@ export default function Editor() {
       
       <div className="container py-8 relative z-10">
         <div className="flex items-center justify-between mb-6 scale-in">
-          <Button variant="ghost" className="glass hover-lift" onClick={() => setLocation("/")}>
+          <Button variant="ghost" className="glass hover-lift" onClick={() => {
+            if (hasUnsavedChanges) {
+              if (!confirm('未保存の変更があります。保存せずに戻りますか？')) return;
+            }
+            setLocation("/");
+          }}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             テンプレート選択に戻る
           </Button>
@@ -215,6 +270,7 @@ export default function Editor() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
+                                      aria-label="ポストを削除"
                                       onClick={() => handleDeletePost(post.id)}
                                     >
                                       <Trash2 className="w-4 h-4" />

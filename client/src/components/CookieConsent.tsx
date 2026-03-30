@@ -26,10 +26,10 @@ export function CookieConsent() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 p-4 animate-in slide-in-from-bottom-5 duration-300">
-      <div className="max-w-3xl mx-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+      <div className="max-w-3xl mx-auto bg-background border border-border rounded-xl shadow-lg p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <div className="flex items-start gap-3 flex-1">
           <Cookie className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
-          <p className="text-sm text-gray-600 dark:text-gray-300">
+          <p className="text-sm text-muted-foreground">
             当サイトでは、サービスの提供およびユーザー体験の向上のためにCookieを使用しています。
             サイトの利用を続けることで、
             <Link href="/privacy">

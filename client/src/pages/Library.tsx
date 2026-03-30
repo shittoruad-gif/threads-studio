@@ -2,12 +2,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { deleteProject, getAllProjects, searchProjects, sortProjects } from "@/lib/storage";
 import { Project } from "@shared/types";
-import { ArrowLeft, FileText, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, FileText, Search, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+
+const ITEMS_PER_PAGE = 20;
 
 export default function Library() {
   const [, setLocation] = useLocation();
@@ -15,6 +27,8 @@ export default function Library() {
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt" | "title">("updatedAt");
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     loadProjects();
@@ -24,6 +38,7 @@ export default function Library() {
     let result = searchQuery ? searchProjects(searchQuery) : projects;
     result = sortProjects(result, sortBy);
     setFilteredProjects(result);
+    setPage(1);
   }, [projects, searchQuery, sortBy]);
 
   const loadProjects = () => {
@@ -32,12 +47,24 @@ export default function Library() {
   };
 
   const handleDelete = (id: string) => {
-    if (confirm("このプロジェクトを削除しますか？")) {
-      deleteProject(id);
+    setDeleteTarget(id);
+  };
+
+  const confirmDelete = () => {
+    if (deleteTarget) {
+      deleteProject(deleteTarget);
       loadProjects();
       toast.success("プロジェクトを削除しました");
+      setDeleteTarget(null);
     }
   };
+
+  // Pagination
+  const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
+  const paginatedProjects = filteredProjects.slice(
+    (page - 1) * ITEMS_PER_PAGE,
+    page * ITEMS_PER_PAGE
+  );
 
   const handleOpenProject = (project: Project) => {
     sessionStorage.setItem('currentProject', JSON.stringify(project));
@@ -117,64 +144,115 @@ export default function Library() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredProjects.map((project, index) => (
-                <Card
-                  key={project.id}
-                  className="glass-card group hover-lift cursor-pointer scale-in"
-                  style={{animationDelay: `${index * 0.05}s`}}
-                  onClick={() => handleOpenProject(project)}
-                >
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <CardTitle className="text-xl mb-1">{project.title}</CardTitle>
-                        <CardDescription>
-                          {project.posts.length} ポスト
-                        </CardDescription>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(project.id);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {project.posts.length > 0 && (
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {project.posts[0].content}
-                        </p>
-                      )}
-                      <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
-                        <span>作成: {formatDate(project.createdAt)}</span>
-                        <span>更新: {formatDate(project.updatedAt)}</span>
-                      </div>
-                      {project.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-2">
-                          {project.tags.map((tag, idx) => (
-                            <span
-                              key={idx}
-                              className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs"
-                            >
-                              {tag}
-                            </span>
-                          ))}
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {paginatedProjects.map((project, index) => (
+                  <Card
+                    key={project.id}
+                    className="glass-card group hover-lift cursor-pointer scale-in"
+                    style={{animationDelay: `${index * 0.05}s`}}
+                    onClick={() => handleOpenProject(project)}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <CardTitle className="text-xl mb-1">{project.title}</CardTitle>
+                          <CardDescription>
+                            {project.posts.length} ポスト
+                          </CardDescription>
                         </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(project.id);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          aria-label={`${project.title}を削除`}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {project.posts.length > 0 && (
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {project.posts[0].content}
+                          </p>
+                        )}
+                        <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
+                          <span>作成: {formatDate(project.createdAt)}</span>
+                          <span>更新: {formatDate(project.updatedAt)}</span>
+                        </div>
+                        {project.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-2">
+                            {project.tags.map((tag, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
+                  <p className="text-sm text-muted-foreground">
+                    {filteredProjects.length}件中 {(page - 1) * ITEMS_PER_PAGE + 1}〜{Math.min(page * ITEMS_PER_PAGE, filteredProjects.length)}件を表示
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(Math.max(1, page - 1))}
+                      disabled={page === 1}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="text-sm text-muted-foreground px-2">
+                      {page} / {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(Math.min(totalPages, page + 1))}
+                      disabled={page === totalPages}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
+
+          {/* Delete Confirmation Dialog */}
+          <AlertDialog open={deleteTarget !== null} onOpenChange={() => setDeleteTarget(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>プロジェクトを削除しますか？</AlertDialogTitle>
+                <AlertDialogDescription>
+                  この操作は取り消せません。プロジェクト内のすべての投稿データが失われます。
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  削除する
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
     </div>

@@ -100,9 +100,13 @@ export default function CommentManager() {
     });
   };
 
-  const handleCopyReply = () => {
-    navigator.clipboard.writeText(editedReply);
-    toast.success('コピーしました');
+  const handleCopyReply = async () => {
+    try {
+      await navigator.clipboard.writeText(editedReply);
+      toast.success('コピーしました');
+    } catch (err) {
+      toast.error('コピーに失敗しました。ブラウザの権限設定を確認してください。');
+    }
   };
 
   if (!selectedAccountId) {
@@ -225,6 +229,7 @@ export default function CommentManager() {
                         className="bg-orange-500 hover:bg-orange-600 text-white"
                         onClick={() => handleOpenReplyDialog(comment)}
                         disabled={isPosted}
+                        aria-label={`@${comment.username || '不明'}のコメントにAI返信を生成`}
                       >
                         <Sparkles className="w-4 h-4 mr-1" />
                         AI返信を生成
@@ -240,13 +245,13 @@ export default function CommentManager() {
 
       {/* Reply Generation Dialog */}
       <Dialog open={replyDialogOpen} onOpenChange={(open) => { if (!open) { setReplyDialogOpen(false); setSelectedComment(null); setGeneratedReplies([]); setEditedReply(''); } }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" aria-describedby="reply-dialog-desc">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-orange-600">
               <MessageCircle className="w-5 h-5" />
               AI返信を生成
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription id="reply-dialog-desc">
               コメントに対する自然で温かい返信を生成します。
             </DialogDescription>
           </DialogHeader>
@@ -294,7 +299,7 @@ export default function CommentManager() {
                         className={`text-left p-3 rounded-lg border-2 transition-all text-sm ${
                           selectedReplyIndex === index
                             ? 'border-orange-400 bg-orange-50'
-                            : 'border-gray-200 hover:border-orange-200 hover:bg-orange-50/50'
+                            : 'border-border hover:border-orange-200 hover:bg-orange-50/50'
                         }`}
                       >
                         <span className="text-xs font-medium text-orange-600 mb-1 block">

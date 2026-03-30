@@ -57,12 +57,12 @@ function SinglePost({
   isLast?: boolean;
   darkMode?: boolean;
 }) {
-  const bg = darkMode ? 'bg-black' : 'bg-white';
-  const textColor = darkMode ? 'text-white' : 'text-gray-900';
-  const mutedColor = darkMode ? 'text-gray-500' : 'text-gray-500';
-  const iconColor = darkMode ? 'text-gray-400' : 'text-gray-600';
-  const borderColor = darkMode ? 'border-gray-800' : 'border-gray-200';
-  const threadLineColor = darkMode ? 'bg-gray-700' : 'bg-gray-300';
+  const bg = darkMode ? 'bg-black' : 'bg-background';
+  const textColor = darkMode ? 'text-white' : 'text-foreground';
+  const mutedColor = darkMode ? 'text-gray-500' : 'text-muted-foreground';
+  const iconColor = darkMode ? 'text-gray-400' : 'text-muted-foreground';
+  const borderColor = darkMode ? 'border-gray-800' : 'border-border';
+  const threadLineColor = darkMode ? 'bg-gray-700' : 'bg-muted-foreground/40';
 
   return (
     <div className={`${bg} px-4 py-3 ${!isLast ? `border-b ${borderColor}` : ''}`}>
@@ -72,12 +72,12 @@ function SinglePost({
           {profileImageUrl ? (
             <img
               src={profileImageUrl}
-              alt={username}
+              alt={`${username}のプロフィール画像`}
               className="w-9 h-9 rounded-full object-cover"
             />
           ) : (
-            <div className={`w-9 h-9 rounded-full flex items-center justify-center ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
-              <span className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center ${darkMode ? 'bg-gray-700' : 'bg-muted'}`}>
+              <span className={`text-sm font-semibold ${darkMode ? 'text-gray-300' : 'text-muted-foreground'}`}>
                 {username.charAt(0).toUpperCase()}
               </span>
             </div>
@@ -99,7 +99,7 @@ function SinglePost({
                 {formatTimeAgo()}
               </span>
             </div>
-            <button className={`p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 ${iconColor}`}>
+            <button className={`p-1 rounded-full hover:bg-muted dark:hover:bg-muted ${iconColor}`}>
               <MoreHorizontal className="w-4 h-4" />
             </button>
           </div>
@@ -165,10 +165,10 @@ export default function ThreadsPostPreview({
     }
   }
 
-  const bg = darkMode ? 'bg-black' : 'bg-white';
-  const borderColor = darkMode ? 'border-gray-800' : 'border-gray-200';
-  const headerBg = darkMode ? 'bg-black' : 'bg-white';
-  const headerText = darkMode ? 'text-white' : 'text-gray-900';
+  const bg = darkMode ? 'bg-black' : 'bg-background';
+  const borderColor = darkMode ? 'border-gray-800' : 'border-border';
+  const headerBg = darkMode ? 'bg-black' : 'bg-background';
+  const headerText = darkMode ? 'text-white' : 'text-foreground';
 
   return (
     <div className={`rounded-xl overflow-hidden border ${borderColor} max-w-[480px] mx-auto`}>
@@ -195,7 +195,7 @@ export default function ThreadsPostPreview({
 
       {/* Footer */}
       <div className={`${headerBg} px-4 py-2 border-t ${borderColor}`}>
-        <p className={`text-xs text-center ${darkMode ? 'text-gray-600' : 'text-gray-400'}`}>
+        <p className={`text-xs text-center ${darkMode ? 'text-muted-foreground' : 'text-muted-foreground/60'}`}>
           プレビュー — 実際の表示と異なる場合があります
         </p>
       </div>

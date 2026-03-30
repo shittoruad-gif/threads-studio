@@ -1,6 +1,17 @@
+import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Sparkles, ArrowRight, Info } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -26,13 +37,19 @@ export function DemoModeBanner() {
     return null;
   }
 
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
   const handleExitDemo = () => {
-    if (confirm("本番モードに切り替えますか？Threadsアカウントの連携が必要になります。")) {
-      exitDemoModeMutation.mutate();
-    }
+    setShowExitConfirm(true);
+  };
+
+  const confirmExitDemo = () => {
+    setShowExitConfirm(false);
+    exitDemoModeMutation.mutate();
   };
 
   return (
+    <>
     <Alert className="border-primary/50 bg-primary/5 mb-6">
       <div className="flex items-start gap-3">
         <Sparkles className="w-5 h-5 text-primary mt-0.5" />
@@ -68,5 +85,23 @@ export function DemoModeBanner() {
         </div>
       </div>
     </Alert>
+
+      <AlertDialog open={showExitConfirm} onOpenChange={setShowExitConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>本番モードに切り替えますか？</AlertDialogTitle>
+            <AlertDialogDescription>
+              Threadsアカウントの連携が必要になります。連携ページに移動します。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmExitDemo}>
+              本番モードに切り替える
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

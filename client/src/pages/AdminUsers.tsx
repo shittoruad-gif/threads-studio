@@ -96,7 +96,7 @@ export default function AdminUsers() {
                         管理者
                       </span>
                     ) : (
-                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-muted text-foreground">
                         ユーザー
                       </span>
                     )}

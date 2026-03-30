@@ -12,7 +12,8 @@ import {
   ArrowRight,
   ArrowLeft,
   X,
-  Zap
+  Zap,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -26,6 +27,7 @@ const TOTAL_STEPS = 3;
 export default function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
   const [, setLocation] = useLocation();
   const [currentStep, setCurrentStep] = useState(1);
+  const [isProcessing, setIsProcessing] = useState(false);
   const utils = trpc.useUtils();
 
   const { data: setupData } = trpc.setup.getStep.useQuery(undefined, {
@@ -36,6 +38,10 @@ export default function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
     onSuccess: () => {
       utils.setup.getStep.invalidate();
     },
+    onError: (error) => {
+      toast.error(error.message || 'ステップの更新に失敗しました');
+      setIsProcessing(false);
+    },
   });
 
   const completeSetupMutation = trpc.setup.complete.useMutation({
@@ -44,11 +50,19 @@ export default function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
       toast.success('セットアップ完了！自動投稿が有効になりました');
       onOpenChange(false);
     },
+    onError: (error) => {
+      toast.error(error.message || 'セットアップの完了に失敗しました');
+      setIsProcessing(false);
+    },
   });
 
   const initializeDemoMutation = trpc.setup.initializeDemoData.useMutation({
     onSuccess: () => {
       utils.project.list.invalidate();
+    },
+    onError: (error) => {
+      toast.error(error.message || 'デモデータの初期化に失敗しました');
+      setIsProcessing(false);
     },
   });
 
@@ -61,15 +75,22 @@ export default function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
   }, [setupData]);
 
   const handleNext = async () => {
-    const nextStep = currentStep + 1;
+    setIsProcessing(true);
+    try {
+      const nextStep = currentStep + 1;
 
-    if (currentStep === 1) {
-      await initializeDemoMutation.mutateAsync();
-    }
+      if (currentStep === 1) {
+        await initializeDemoMutation.mutateAsync();
+      }
 
-    if (nextStep <= TOTAL_STEPS) {
-      setCurrentStep(nextStep);
-      await updateStepMutation.mutateAsync({ setupStep: nextStep });
+      if (nextStep <= TOTAL_STEPS) {
+        setCurrentStep(nextStep);
+        await updateStepMutation.mutateAsync({ setupStep: nextStep });
+      }
+    } catch (e) {
+      // Error already handled in mutation onError
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -80,16 +101,30 @@ export default function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
   };
 
   const handleSkip = async () => {
-    await completeSetupMutation.mutateAsync();
+    setIsProcessing(true);
+    try {
+      await completeSetupMutation.mutateAsync();
+    } catch (e) {
+      // Error already handled in mutation onError
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const handleComplete = async () => {
-    await completeSetupMutation.mutateAsync();
-  };
-
-  const handleNavigate = (path: string) => {
-    onOpenChange(false);
-    setLocation(path);
+  const handleNavigate = async (path: string) => {
+    setIsProcessing(true);
+    try {
+      // Save step progress before navigating
+      await updateStepMutation.mutateAsync({ setupStep: currentStep });
+      onOpenChange(false);
+      setLocation(path);
+    } catch (e) {
+      // Navigate anyway if save fails
+      onOpenChange(false);
+      setLocation(path);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const progress = (currentStep / TOTAL_STEPS) * 100;
@@ -128,9 +163,18 @@ export default function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
         </div>
       ),
       action: (
-        <Button onClick={handleNext} className="w-full" size="lg">
-          始める
-          <ArrowRight className="w-4 h-4 ml-2" />
+        <Button onClick={handleNext} className="w-full" size="lg" disabled={isProcessing}>
+          {isProcessing ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              準備中...
+            </>
+          ) : (
+            <>
+              始める
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </>
+          )}
         </Button>
       ),
     },
@@ -164,13 +208,19 @@ export default function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
       ),
       action: (
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleBack} className="flex-1">
+          <Button variant="outline" onClick={handleBack} className="flex-1" disabled={isProcessing}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             戻る
           </Button>
-          <Button onClick={() => handleNavigate('/threads-connect')} className="flex-1">
-            アカウント連携へ
-            <ArrowRight className="w-4 h-4 ml-2" />
+          <Button onClick={() => handleNavigate('/threads-connect')} className="flex-1" disabled={isProcessing}>
+            {isProcessing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                アカウント連携へ
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </>
+            )}
           </Button>
         </div>
       ),
@@ -213,13 +263,19 @@ export default function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
       ),
       action: (
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleBack} className="flex-1">
+          <Button variant="outline" onClick={handleBack} className="flex-1" disabled={isProcessing}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             戻る
           </Button>
-          <Button onClick={() => handleNavigate('/ai-project-create')} className="flex-1">
-            店舗情報を入力
-            <ArrowRight className="w-4 h-4 ml-2" />
+          <Button onClick={() => handleNavigate('/ai-project-create')} className="flex-1" disabled={isProcessing}>
+            {isProcessing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                店舗情報を入力
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </>
+            )}
           </Button>
         </div>
       ),
@@ -236,9 +292,16 @@ export default function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
           size="sm"
           className="absolute right-4 top-4"
           onClick={handleSkip}
+          disabled={isProcessing}
         >
-          <X className="w-4 h-4 mr-1" />
-          スキップ
+          {isProcessing ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <>
+              <X className="w-4 h-4 mr-1" />
+              スキップ
+            </>
+          )}
         </Button>
 
         <DialogHeader className="text-center">

@@ -37,7 +37,7 @@ export default function Referral() {
     return (
       <div className="flex items-center justify-center py-32">
         <div className="text-center">
-          <p className="text-gray-500 mb-4">ログインが必要です</p>
+          <p className="text-muted-foreground mb-4">ログインが必要です</p>
           <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setLocation("/login")}>ログイン</Button>
         </div>
       </div>
@@ -52,28 +52,28 @@ export default function Referral() {
           <Gift className="w-4 h-4" />
           REFERRAL
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">紹介プログラム</h1>
-        <p className="text-gray-500">友達を紹介してクレジットを獲得しましょう</p>
+        <h1 className="text-2xl font-bold text-foreground mb-2">紹介プログラム</h1>
+        <p className="text-muted-foreground">友達を紹介してクレジットを獲得しましょう</p>
       </div>
 
       {/* Referral Code Card */}
-      <div className="bg-white border-2 border-emerald-200 rounded-xl p-6 mb-6">
+      <div className="bg-background border-2 border-emerald-200 rounded-xl p-6 mb-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 rounded-lg bg-emerald-50">
             <Gift className="w-5 h-5 text-emerald-600" />
           </div>
-          <h2 className="text-lg font-semibold text-gray-900">あなたの紹介コード</h2>
+          <h2 className="text-lg font-semibold text-foreground">あなたの紹介コード</h2>
         </div>
         
         {referralLoading ? (
           <div className="animate-pulse">
-            <div className="h-12 bg-gray-100 rounded mb-4"></div>
+            <div className="h-12 bg-muted rounded mb-4"></div>
           </div>
         ) : referralData?.referralCode ? (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <p className="text-2xl font-mono font-bold text-gray-900 text-center">
+              <div className="flex-1 bg-muted/50 border border-border rounded-lg p-4">
+                <p className="text-2xl font-mono font-bold text-foreground text-center">
                   {referralData.referralCode}
                 </p>
               </div>
@@ -91,50 +91,50 @@ export default function Referral() {
             >
               紹介リンクをコピー
             </Button>
-            <p className="text-sm text-gray-500 text-center">
+            <p className="text-sm text-muted-foreground text-center">
               友達がこのコードで登録すると、あなたと友達の両方にクレジットが付与されます
             </p>
           </div>
         ) : (
-          <p className="text-gray-500">紹介コードを生成中...</p>
+          <p className="text-muted-foreground">紹介コードを生成中...</p>
         )}
       </div>
 
       {/* Credits Card */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
+      <div className="bg-background border border-border rounded-xl p-6 mb-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 rounded-lg bg-amber-50">
             <Coins className="w-5 h-5 text-amber-600" />
           </div>
-          <h2 className="text-lg font-semibold text-gray-900">クレジット残高</h2>
+          <h2 className="text-lg font-semibold text-foreground">クレジット残高</h2>
         </div>
         {creditsLoading ? (
           <div className="animate-pulse">
-            <div className="h-16 bg-gray-100 rounded"></div>
+            <div className="h-16 bg-muted rounded"></div>
           </div>
         ) : (
           <div className="text-center py-4">
             <p className="text-4xl font-bold text-amber-600 mb-2">
               {creditsData?.credits || 0}
             </p>
-            <p className="text-gray-500 text-sm">利用可能なクレジット</p>
+            <p className="text-muted-foreground text-sm">利用可能なクレジット</p>
           </div>
         )}
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Referral History */}
-        <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <div className="bg-background border border-border rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-lg bg-blue-50">
               <Users className="w-5 h-5 text-blue-600" />
             </div>
-            <h2 className="text-lg font-semibold text-gray-900">紹介履歴</h2>
+            <h2 className="text-lg font-semibold text-foreground">紹介履歴</h2>
           </div>
           {historyLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="animate-pulse h-16 bg-gray-100 rounded"></div>
+                <div key={i} className="animate-pulse h-16 bg-muted rounded"></div>
               ))}
             </div>
           ) : referralHistory && referralHistory.length > 0 ? (
@@ -142,12 +142,12 @@ export default function Referral() {
               {referralHistory.map((referral) => (
                 <div
                   key={referral.id}
-                  className="bg-gray-50 border border-gray-100 rounded-lg p-4"
+                  className="bg-muted/50 border border-border/50 rounded-lg p-4"
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <p className="text-gray-900 font-medium">紹介成功</p>
-                      <p className="text-gray-500 text-sm">
+                      <p className="text-foreground font-medium">紹介成功</p>
+                      <p className="text-muted-foreground text-sm">
                         {new Date(referral.createdAt).toLocaleDateString('ja-JP')}
                       </p>
                     </div>
@@ -160,9 +160,9 @@ export default function Referral() {
             </div>
           ) : (
             <div className="text-center py-8">
-              <Users className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-              <p className="text-gray-500">まだ紹介履歴がありません</p>
-              <p className="text-gray-400 text-sm mt-2">
+              <Users className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
+              <p className="text-muted-foreground">まだ紹介履歴がありません</p>
+              <p className="text-muted-foreground/60 text-sm mt-2">
                 友達を紹介してクレジットを獲得しましょう
               </p>
             </div>
@@ -170,17 +170,17 @@ export default function Referral() {
         </div>
 
         {/* Credit Transaction History */}
-        <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <div className="bg-background border border-border rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-lg bg-amber-50">
               <Coins className="w-5 h-5 text-amber-600" />
             </div>
-            <h2 className="text-lg font-semibold text-gray-900">クレジット履歴</h2>
+            <h2 className="text-lg font-semibold text-foreground">クレジット履歴</h2>
           </div>
           {creditHistoryLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="animate-pulse h-16 bg-gray-100 rounded"></div>
+                <div key={i} className="animate-pulse h-16 bg-muted rounded"></div>
               ))}
             </div>
           ) : creditHistory && creditHistory.length > 0 ? (
@@ -188,18 +188,18 @@ export default function Referral() {
               {creditHistory.map((transaction) => (
                 <div
                   key={transaction.id}
-                  className="bg-gray-50 border border-gray-100 rounded-lg p-4"
+                  className="bg-muted/50 border border-border/50 rounded-lg p-4"
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <p className="text-gray-900 font-medium">
+                      <p className="text-foreground font-medium">
                         {transaction.type === 'referral_bonus' && '紹介ボーナス'}
                         {transaction.type === 'referred_bonus' && '被紹介ボーナス'}
                         {transaction.type === 'referral_reward' && '紹介報酬'}
                         {transaction.type === 'purchase' && '購入'}
                         {transaction.type === 'usage' && '使用'}
                       </p>
-                      <p className="text-gray-500 text-sm">
+                      <p className="text-muted-foreground text-sm">
                         {new Date(transaction.createdAt).toLocaleDateString('ja-JP')}
                       </p>
                     </div>
@@ -214,30 +214,30 @@ export default function Referral() {
                     </Badge>
                   </div>
                   {transaction.description && (
-                    <p className="text-gray-400 text-sm">{transaction.description}</p>
+                    <p className="text-muted-foreground/60 text-sm">{transaction.description}</p>
                   )}
                 </div>
               ))}
             </div>
           ) : (
             <div className="text-center py-8">
-              <Coins className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-              <p className="text-gray-500">まだクレジット履歴がありません</p>
+              <Coins className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
+              <p className="text-muted-foreground">まだクレジット履歴がありません</p>
             </div>
           )}
         </div>
       </div>
 
       {/* How it works */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 mt-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-6">紹介プログラムの仕組み</h2>
+      <div className="bg-background border border-border rounded-xl p-6 mt-6">
+        <h2 className="text-lg font-semibold text-foreground mb-6">紹介プログラムの仕組み</h2>
         <div className="grid md:grid-cols-3 gap-6">
           <div className="text-center p-4">
             <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-3">
               <span className="text-xl font-bold text-emerald-600">1</span>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-2">コードを共有</h3>
-            <p className="text-gray-500 text-sm">
+            <h3 className="font-semibold text-foreground mb-2">コードを共有</h3>
+            <p className="text-muted-foreground text-sm">
               あなたの紹介コードを友達に共有します
             </p>
           </div>
@@ -245,8 +245,8 @@ export default function Referral() {
             <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-3">
               <span className="text-xl font-bold text-blue-600">2</span>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-2">友達が登録</h3>
-            <p className="text-gray-500 text-sm">
+            <h3 className="font-semibold text-foreground mb-2">友達が登録</h3>
+            <p className="text-muted-foreground text-sm">
               友達があなたのコードで登録します
             </p>
           </div>
@@ -254,8 +254,8 @@ export default function Referral() {
             <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-3">
               <span className="text-xl font-bold text-amber-600">3</span>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-2">クレジット獲得</h3>
-            <p className="text-gray-500 text-sm">
+            <h3 className="font-semibold text-foreground mb-2">クレジット獲得</h3>
+            <p className="text-muted-foreground text-sm">
               あなたと友達の両方にクレジットが付与されます
             </p>
           </div>

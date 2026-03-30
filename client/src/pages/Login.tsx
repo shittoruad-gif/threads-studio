@@ -6,24 +6,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Loader2, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function Login() {
   const [, setLocation] = useLocation();
   const searchParams = useSearch();
   const registered = searchParams.includes('registered=true');
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showRegisteredMessage, setShowRegisteredMessage] = useState(registered);
 
-  useEffect(() => {
-    if (registered) {
-      const timer = setTimeout(() => setShowRegisteredMessage(false), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [registered]);
+  // Don't auto-hide the registered message - user should see it until they interact
+  // (removed the 5 second timer)
 
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: () => {
@@ -31,18 +27,39 @@ export default function Login() {
       window.location.href = '/dashboard';
     },
     onError: (err) => {
-      setError(err.message);
+      const msg = err.message;
+      // Provide more helpful error messages
+      if (msg.includes('メールアドレスまたはパスワードが正しくありません') || msg.includes('Invalid') || msg.includes('incorrect')) {
+        setError('メールアドレスまたはパスワードが正しくありません。パスワードを忘れた場合は下のリンクからリセットできます。');
+      } else if (msg.includes('rate') || msg.includes('too many')) {
+        setError('ログイン試行回数が多すぎます。しばらく待ってから再度お試しください。');
+      } else if (msg.includes('verified') || msg.includes('確認')) {
+        setError('メールアドレスの確認が完了していません。確認メールをご確認ください。');
+      } else {
+        setError(msg || 'ログインに失敗しました。もう一度お試しください。');
+      }
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setShowRegisteredMessage(false);
+
+    if (!email.trim()) {
+      setError('メールアドレスを入力してください');
+      return;
+    }
+    if (!password) {
+      setError('パスワードを入力してください');
+      return;
+    }
+
     loginMutation.mutate({ email, password });
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-muted/50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <div className="flex items-center gap-2 mb-2">
@@ -57,14 +74,15 @@ export default function Login() {
           {showRegisteredMessage && (
             <Alert className="border-green-500 bg-green-500/10">
               <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <AlertDescription className="text-green-500">
-                アカウントが作成されました。ログインしてください。
+              <AlertDescription className="text-green-600">
+                アカウントが作成されました！メールアドレスとパスワードでログインしてください。
               </AlertDescription>
             </Alert>
           )}
 
           {error && (
             <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
@@ -80,6 +98,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={loginMutation.isPending}
+                autoComplete="email"
               />
             </div>
 
@@ -98,6 +117,7 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={loginMutation.isPending}
+                autoComplete="current-password"
               />
             </div>
 
@@ -110,7 +130,6 @@ export default function Login() {
               ログイン
             </Button>
           </form>
-
 
         </CardContent>
         <CardFooter className="flex flex-col space-y-2">

@@ -205,7 +205,7 @@ export default function OnboardingTour({ open, onClose }: OnboardingTourProps) {
               }
         }
       >
-        <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-[360px] max-w-[calc(100vw-32px)] overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-2xl border border-border/50 w-[360px] max-w-[calc(100vw-32px)] overflow-hidden">
           {/* Warm gradient header */}
           <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 px-6 pt-5 pb-4 flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-white/80 shadow-sm flex items-center justify-center flex-shrink-0">
@@ -215,13 +215,13 @@ export default function OnboardingTour({ open, onClose }: OnboardingTourProps) {
               <p className="text-xs font-semibold text-amber-600 mb-0.5">
                 ステップ {currentStep + 1}/{totalSteps}
               </p>
-              <h3 className="text-base font-bold text-gray-900 leading-tight">
+              <h3 className="text-base font-bold text-foreground leading-tight">
                 {step.title}
               </h3>
             </div>
             <button
               onClick={handleSkip}
-              className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 -mt-2 -mr-1"
+              className="text-muted-foreground/60 hover:text-muted-foreground transition-colors flex-shrink-0 -mt-2 -mr-1"
               aria-label="閉じる"
             >
               <X className="w-5 h-5" />
@@ -230,7 +230,7 @@ export default function OnboardingTour({ open, onClose }: OnboardingTourProps) {
 
           {/* Body */}
           <div className="px-6 py-4">
-            <p className="text-sm text-gray-600 leading-relaxed">
+            <p className="text-sm text-muted-foreground leading-relaxed">
               {step.description}
             </p>
           </div>
@@ -246,7 +246,7 @@ export default function OnboardingTour({ open, onClose }: OnboardingTourProps) {
                       ? "w-6 bg-amber-500"
                       : i < currentStep
                       ? "w-1.5 bg-amber-300"
-                      : "w-1.5 bg-gray-200"
+                      : "w-1.5 bg-muted"
                   }`}
                 />
               ))}
@@ -258,7 +258,7 @@ export default function OnboardingTour({ open, onClose }: OnboardingTourProps) {
                   variant="ghost"
                   size="sm"
                   onClick={handlePrev}
-                  className="text-gray-500 hover:text-gray-700 h-8 px-2"
+                  className="text-muted-foreground hover:text-foreground h-8 px-2"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   前へ
@@ -267,7 +267,7 @@ export default function OnboardingTour({ open, onClose }: OnboardingTourProps) {
               {!isLastStep && (
                 <button
                   onClick={handleSkip}
-                  className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 mr-1"
+                  className="text-xs text-muted-foreground/60 hover:text-muted-foreground underline underline-offset-2 mr-1"
                 >
                   スキップ
                 </button>

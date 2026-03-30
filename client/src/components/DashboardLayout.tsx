@@ -4,6 +4,7 @@ import { useIsMobile } from "@/hooks/useMobile";
 import { cn } from "@/lib/utils";
 import {
   BarChart3,
+  BookOpen,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -45,7 +46,7 @@ const mainMenuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
   { icon: Sparkles, label: "AI投稿生成", path: "/ai-project-create", badge: "NEW" },
   { icon: History, label: "AI生成履歴", path: "/ai-history", badgeKey: "ai-history" },
-  { icon: Sparkles, label: "AI生成テンプレート", path: "/ai-templates" },
+  { icon: FileText, label: "AI生成テンプレート", path: "/ai-templates" },
 ];
 
 const contentMenuItems: MenuItem[] = [
@@ -60,6 +61,7 @@ const accountMenuItems: MenuItem[] = [
   { icon: BarChart3, label: "投稿分析", path: "/post-analytics", badgeKey: "analytics" },
   { icon: Gift, label: "紹介プログラム", path: "/referral" },
   { icon: Settings, label: "設定", path: "/settings" },
+  { icon: BookOpen, label: "使い方ガイド", path: "/guide" },
   { icon: HelpCircle, label: "よくある質問", path: "/faq" },
 ];
 
@@ -167,16 +169,16 @@ export default function DashboardLayout({
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-6">
             <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center">
               <Sparkles className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-center text-gray-900">
+            <h1 className="text-2xl font-semibold tracking-tight text-center text-foreground">
               ログインしてください
             </h1>
-            <p className="text-sm text-gray-500 text-center max-w-sm">
+            <p className="text-sm text-muted-foreground text-center max-w-sm">
               ダッシュボードにアクセスするにはログインが必要です。
             </p>
           </div>
@@ -212,7 +214,7 @@ export default function DashboardLayout({
     return (
       <div className="mb-2">
         {!collapsed && (
-          <p className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+          <p className="px-4 py-2 text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider">
             {title}
           </p>
         )}
@@ -231,8 +233,8 @@ export default function DashboardLayout({
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
                   isActive
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
                 title={collapsed ? item.label : undefined}
               >
@@ -240,11 +242,11 @@ export default function DashboardLayout({
                   <item.icon
                     className={cn(
                       "w-[18px] h-[18px]",
-                      isActive ? "text-emerald-600" : "text-gray-400"
+                      isActive ? "text-primary" : "text-muted-foreground/60"
                     )}
                   />
                   {collapsed && (item.badgeKey ? dynamicBadges[item.badgeKey] : item.badge) && (
-                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white" />
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-background" />
                   )}
                 </span>
                 {!collapsed && (
@@ -283,13 +285,13 @@ export default function DashboardLayout({
   const sidebarContent = (collapsed: boolean) => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="h-16 flex items-center px-4 border-b border-gray-100">
+      <div className="h-16 flex items-center px-4 border-b border-border/50">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center flex-shrink-0">
             <Sparkles className="w-4 h-4 text-white" />
           </div>
           {!collapsed && (
-            <span className="text-base font-bold text-gray-900 truncate">
+            <span className="text-base font-bold text-foreground truncate">
               Threads Studio
             </span>
           )}
@@ -306,7 +308,7 @@ export default function DashboardLayout({
       </div>
 
       {/* User Profile */}
-      <div className="border-t border-gray-100 p-3">
+      <div className="border-t border-border/50 p-3">
         {!collapsed ? (
           <div className="flex items-center gap-3 px-2 py-2">
             <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
@@ -315,17 +317,18 @@ export default function DashboardLayout({
               </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
+              <p className="text-sm font-medium text-foreground truncate">
                 {user?.name || "-"}
               </p>
-              <p className="text-xs text-gray-400 truncate">
+              <p className="text-xs text-muted-foreground/60 truncate">
                 {user?.email || "-"}
               </p>
             </div>
             <button
               onClick={handleLogout}
-              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground/60 hover:text-muted-foreground transition-colors"
               title="ログアウト"
+              aria-label="ログアウト"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -333,8 +336,9 @@ export default function DashboardLayout({
         ) : (
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+            className="w-full flex items-center justify-center p-2 rounded-lg hover:bg-muted text-muted-foreground/60 hover:text-muted-foreground transition-colors"
             title="ログアウト"
+            aria-label="ログアウト"
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -344,12 +348,12 @@ export default function DashboardLayout({
   );
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-muted/50">
       {/* Desktop Sidebar */}
       {!isMobile && (
         <aside
           className={cn(
-            "fixed top-0 left-0 h-full bg-white border-r border-gray-200 z-30 transition-all duration-200",
+            "fixed top-0 left-0 h-full bg-background border-r border-border z-30 transition-all duration-200",
             sidebarOpen ? "w-[260px]" : "w-[68px]"
           )}
         >
@@ -357,12 +361,13 @@ export default function DashboardLayout({
           {/* Collapse toggle */}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="absolute -right-3 top-20 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm hover:shadow-md transition-all z-50"
+            aria-label={sidebarOpen ? "サイドバーを閉じる" : "サイドバーを開く"}
+            className="absolute -right-3 top-20 w-6 h-6 bg-background border border-border rounded-full flex items-center justify-center shadow-sm hover:shadow-md transition-all z-50"
           >
             {sidebarOpen ? (
-              <ChevronLeft className="w-3 h-3 text-gray-500" />
+              <ChevronLeft className="w-3 h-3 text-muted-foreground" />
             ) : (
-              <ChevronRight className="w-3 h-3 text-gray-500" />
+              <ChevronRight className="w-3 h-3 text-muted-foreground" />
             )}
           </button>
         </aside>
@@ -375,12 +380,13 @@ export default function DashboardLayout({
             className="fixed inset-0 bg-black/30 z-40"
             onClick={() => setMobileSidebarOpen(false)}
           />
-          <aside className="fixed top-0 left-0 h-full w-[280px] bg-white z-50 shadow-xl">
+          <aside className="fixed top-0 left-0 h-full w-[280px] bg-background z-50 shadow-xl">
             <button
               onClick={() => setMobileSidebarOpen(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-gray-100"
+              aria-label="メニューを閉じる"
+              className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-muted"
             >
-              <X className="w-5 h-5 text-gray-500" />
+              <X className="w-5 h-5 text-muted-foreground" />
             </button>
             {sidebarContent(false)}
           </aside>
@@ -395,15 +401,16 @@ export default function DashboardLayout({
         )}
       >
         {/* Top Header */}
-        <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-gray-200">
+        <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border">
           <div className="flex items-center justify-between h-14 px-4 sm:px-6">
             <div className="flex items-center gap-3">
               {isMobile && (
                 <button
                   onClick={() => setMobileSidebarOpen(true)}
-                  className="p-2 rounded-lg hover:bg-gray-100"
+                  aria-label="メニューを開く"
+                  className="p-2 rounded-lg hover:bg-muted"
                 >
-                  <Menu className="w-5 h-5 text-gray-600" />
+                  <Menu className="w-5 h-5 text-muted-foreground" />
                 </button>
               )}
             </div>
@@ -411,8 +418,9 @@ export default function DashboardLayout({
               <ThreadsAccountSwitcher />
               <button
                 onClick={() => setLocation("/")}
-                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+                className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground/80 transition-colors"
                 title="ホームに戻る"
+                aria-label="ホームに戻る"
               >
                 <Home className="w-4 h-4" />
               </button>

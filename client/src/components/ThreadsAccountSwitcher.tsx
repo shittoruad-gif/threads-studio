@@ -104,7 +104,7 @@ export default function ThreadsAccountSwitcher({ compact = false, className = ''
 
   if (isLoading) {
     return (
-      <div className={`animate-pulse h-10 bg-gray-100 rounded-lg ${compact ? 'w-32' : 'w-48'} ${className}`} />
+      <div className={`animate-pulse h-10 bg-muted rounded-lg ${compact ? 'w-32' : 'w-48'} ${className}`} />
     );
   }
 
@@ -112,7 +112,7 @@ export default function ThreadsAccountSwitcher({ compact = false, className = ''
     return (
       <button
         onClick={() => setLocation('/threads-connect')}
-        className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-colors text-gray-500 text-sm ${className}`}
+        className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border border-border hover:bg-muted transition-colors text-muted-foreground text-sm ${className}`}
       >
         <Link2 className="w-4 h-4" />
         <span>アカウント未連携</span>
@@ -125,14 +125,14 @@ export default function ThreadsAccountSwitcher({ compact = false, className = ''
       {/* Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-colors ${
+        className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border border-border hover:bg-muted transition-colors ${
           compact ? 'min-w-0' : 'min-w-[180px]'
         }`}
       >
         {selectedAccount?.profilePictureUrl ? (
           <img
             src={selectedAccount.profilePictureUrl}
-            alt={selectedAccount.threadsUsername}
+            alt={`${selectedAccount.threadsUsername}のプロフィール画像`}
             className="w-6 h-6 rounded-full object-cover flex-shrink-0"
           />
         ) : (
@@ -140,7 +140,7 @@ export default function ThreadsAccountSwitcher({ compact = false, className = ''
             <User className="w-3 h-3 text-emerald-600" />
           </div>
         )}
-        <span className="text-gray-700 text-sm truncate">
+        <span className="text-foreground/80 text-sm truncate">
           {selectedAccount ? `@${selectedAccount.threadsUsername}` : 'アカウントを選択'}
         </span>
         {(() => {
@@ -150,14 +150,14 @@ export default function ThreadsAccountSwitcher({ compact = false, className = ''
           if (status === 'expiring') return <AlertCircle className="w-3.5 h-3.5 text-yellow-500 flex-shrink-0" />;
           return null;
         })()}
-        <ChevronDown className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 text-muted-foreground/60 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-border rounded-xl shadow-lg z-50 overflow-hidden">
           <div className="p-2">
-            <p className="text-gray-400 text-xs px-2 py-1 uppercase tracking-wider">アカウント切替</p>
+            <p className="text-muted-foreground/60 text-xs px-2 py-1 uppercase tracking-wider">アカウント切替</p>
             {accounts.map((account) => {
               const tokenStatus = getTokenStatus(account);
               const isSelected = account.id === selectedAccountId;
@@ -171,13 +171,13 @@ export default function ThreadsAccountSwitcher({ compact = false, className = ''
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
                     isSelected
                       ? 'bg-emerald-50 border border-emerald-200'
-                      : 'hover:bg-gray-50 border border-transparent'
+                      : 'hover:bg-muted/50 border border-transparent'
                   }`}
                 >
                   {account.profilePictureUrl ? (
                     <img
                       src={account.profilePictureUrl}
-                      alt={account.threadsUsername}
+                      alt={`${account.threadsUsername}のプロフィール画像`}
                       className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                     />
                   ) : (
@@ -186,7 +186,7 @@ export default function ThreadsAccountSwitcher({ compact = false, className = ''
                     </div>
                   )}
                   <div className="flex-1 text-left min-w-0">
-                    <p className={`text-sm truncate ${isSelected ? 'text-gray-900 font-medium' : 'text-gray-700'}`}>
+                    <p className={`text-sm truncate ${isSelected ? 'text-foreground font-medium' : 'text-foreground/80'}`}>
                       @{account.threadsUsername}
                     </p>
                     {tokenStatus === 'expired' && (
@@ -203,13 +203,13 @@ export default function ThreadsAccountSwitcher({ compact = false, className = ''
               );
             })}
           </div>
-          <div className="border-t border-gray-100 p-2">
+          <div className="border-t border-border/50 p-2">
             <button
               onClick={() => {
                 setIsOpen(false);
                 setLocation('/threads-connect');
               }}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors text-gray-500 text-sm"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors text-muted-foreground text-sm"
             >
               <Link2 className="w-4 h-4" />
               <span>アカウント管理</span>

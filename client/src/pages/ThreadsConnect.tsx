@@ -1,5 +1,15 @@
 import { useAuth } from '@/_core/hooks/useAuth';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { trpc } from '@/lib/trpc';
 import { Link2, Unlink, AlertCircle, Plus, User, RefreshCw, Users, ShieldCheck } from 'lucide-react';
 import { useLocation } from 'wouter';
@@ -13,6 +23,7 @@ export default function ThreadsConnect() {
   const [oauthCode, setOauthCode] = useState<string | null>(null);
   const callbackProcessed = useRef(false);
   const [isProcessingCallback, setIsProcessingCallback] = useState(false);
+  const [disconnectTargetId, setDisconnectTargetId] = useState<number | null>(null);
 
   // Step 1: Extract OAuth code from URL on mount (before any redirects)
   useEffect(() => {
@@ -34,7 +45,6 @@ export default function ThreadsConnect() {
     if (code) {
       // Remove Threads' #_ suffix if present
       code = code.replace(/#_$/, '');
-      console.log('[Threads OAuth] Code extracted from URL:', code.substring(0, 10) + '...');
       setOauthCode(code);
       setIsProcessingCallback(true);
       // Clean URL but keep the code in state
@@ -53,7 +63,6 @@ export default function ThreadsConnect() {
   useEffect(() => {
     if (oauthCode && isAuthenticated && !callbackProcessed.current) {
       callbackProcessed.current = true;
-      console.log('[Threads OAuth] Processing callback with code:', oauthCode.substring(0, 10) + '...');
       handleCallback.mutate({ code: oauthCode });
       setOauthCode(null);
     }
@@ -132,10 +141,19 @@ export default function ThreadsConnect() {
     },
   });
 
+  const [showConnectConfirm, setShowConnectConfirm] = useState(false);
+
   const handleConnect = () => {
     if (!authUrlData?.authUrl) {
       toast.error('認証URLを取得できませんでした');
       return;
+    }
+    // Save any form state to localStorage before OAuth redirect
+    try {
+      const currentUrl = window.location.href;
+      localStorage.setItem('ts-pre-oauth-url', currentUrl);
+    } catch (e) {
+      // Ignore localStorage errors
     }
     window.location.href = authUrlData.authUrl;
   };
@@ -150,11 +168,11 @@ export default function ThreadsConnect() {
           <div className="animate-spin rounded-full h-10 w-10 border-2 border-emerald-500 border-t-transparent mx-auto mb-4"></div>
           {isProcessingCallback ? (
             <>
-              <p className="text-gray-700 text-lg font-medium">認証情報を確認中...</p>
-              <p className="text-gray-500 text-sm mt-2">しばらくお待ちください</p>
+              <p className="text-foreground/80 text-lg font-medium">認証情報を確認中...</p>
+              <p className="text-muted-foreground text-sm mt-2">しばらくお待ちください</p>
             </>
           ) : (
-            <p className="text-gray-500 text-sm">読み込み中...</p>
+            <p className="text-muted-foreground text-sm">読み込み中...</p>
           )}
         </div>
       </div>
@@ -166,8 +184,8 @@ export default function ThreadsConnect() {
       <div className="flex items-center justify-center py-32">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-2 border-emerald-500 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-gray-700 text-lg font-medium">アカウントを連携中...</p>
-          <p className="text-gray-500 text-sm mt-2">Threadsとの接続を確立しています</p>
+          <p className="text-foreground/80 text-lg font-medium">アカウントを連携中...</p>
+          <p className="text-muted-foreground text-sm mt-2">Threadsとの接続を確立しています</p>
         </div>
       </div>
     );
@@ -181,8 +199,8 @@ export default function ThreadsConnect() {
           <Link2 className="w-4 h-4" />
           ACCOUNT
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Threads連携</h1>
-        <p className="text-gray-500">
+        <h1 className="text-2xl font-bold text-foreground mb-2">Threads連携</h1>
+        <p className="text-muted-foreground">
           Threadsアカウントを連携して、直接投稿できるようになります
         </p>
       </div>
@@ -191,7 +209,7 @@ export default function ThreadsConnect() {
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-8 flex items-start gap-3">
         <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
         <div>
-          <p className="text-gray-700 text-sm">
+          <p className="text-foreground/80 text-sm">
             <strong>Threads連携について：</strong> 「Threadsと連携」ボタンをクリックすると、
             ThreadsのOAuth認証画面に移動します。アカウントを認証すると、
             自動的にアカウント情報が取得され、投稿機能が利用可能になります。
@@ -200,15 +218,15 @@ export default function ThreadsConnect() {
       </div>
 
       {/* Account Limit */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
+      <div className="bg-background border border-border rounded-xl p-4 mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-emerald-50">
               <Link2 className="w-5 h-5 text-emerald-600" />
             </div>
             <div>
-              <p className="text-gray-900 font-medium">連携アカウント数</p>
-              <p className="text-gray-500 text-sm">
+              <p className="text-foreground font-medium">連携アカウント数</p>
+              <p className="text-muted-foreground text-sm">
                 {accounts?.length || 0} / {maxAccounts === -1 ? '無制限' : maxAccounts}
               </p>
             </div>
@@ -227,15 +245,15 @@ export default function ThreadsConnect() {
       {/* Connected Accounts */}
       <div className="space-y-4 mb-8">
         {accounts?.map((account) => (
-          <div key={account.id} className="bg-white border border-gray-200 rounded-xl p-6">
+          <div key={account.id} className="bg-background border border-border rounded-xl p-6">
             {/* Account Header */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-4">
                 {account.profilePictureUrl ? (
                   <img
                     src={account.profilePictureUrl}
-                    alt={account.threadsUsername || ''}
-                    className="w-14 h-14 rounded-full object-cover border-2 border-gray-100"
+                    alt={`${account.threadsUsername || 'ユーザー'}のプロフィール画像`}
+                    className="w-14 h-14 rounded-full object-cover border-2 border-border/50"
                   />
                 ) : (
                   <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -243,8 +261,8 @@ export default function ThreadsConnect() {
                   </div>
                 )}
                 <div>
-                  <p className="text-gray-900 font-semibold text-lg">@{account.threadsUsername}</p>
-                  <p className="text-gray-400 text-sm">ID: {account.threadsUserId}</p>
+                  <p className="text-foreground font-semibold text-lg">@{account.threadsUsername}</p>
+                  <p className="text-muted-foreground/60 text-sm">ID: {account.threadsUserId}</p>
                 </div>
               </div>
               <div className="flex gap-2 flex-wrap">
@@ -273,7 +291,7 @@ export default function ThreadsConnect() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-gray-600 border-gray-200 hover:bg-gray-50"
+                  className="text-muted-foreground border-border hover:bg-muted/50"
                   onClick={() => syncProfile.mutate({ accountId: account.id })}
                   disabled={syncProfile.isPending}
                 >
@@ -284,11 +302,7 @@ export default function ThreadsConnect() {
                   variant="outline"
                   size="sm"
                   className="text-red-500 border-red-200 hover:bg-red-50"
-                  onClick={() => {
-                    if (confirm('このアカウントの連携を解除しますか？')) {
-                      disconnectAccount.mutate({ accountId: account.id });
-                    }
-                  }}
+                  onClick={() => setDisconnectTargetId(account.id)}
                   disabled={disconnectAccount.isPending}
                 >
                   <Unlink className="w-4 h-4 mr-1.5" />
@@ -299,8 +313,8 @@ export default function ThreadsConnect() {
 
             {/* Biography */}
             {account.biography && (
-              <div className="mb-4 p-3 rounded-lg bg-gray-50">
-                <p className="text-gray-700 text-sm">{account.biography}</p>
+              <div className="mb-4 p-3 rounded-lg bg-muted/50">
+                <p className="text-foreground/80 text-sm">{account.biography}</p>
               </div>
             )}
 
@@ -315,9 +329,9 @@ export default function ThreadsConnect() {
                 <div className={`mb-4 p-3 rounded-lg flex items-center gap-2 ${isExpired ? 'bg-red-50 border border-red-200' : 'bg-yellow-50 border border-yellow-200'}`}>
                   <AlertCircle className={`w-4 h-4 flex-shrink-0 ${isExpired ? 'text-red-500' : 'text-yellow-600'}`} />
                   <p className={`text-sm flex-1 ${isExpired ? 'text-red-700' : 'text-yellow-700'}`}>
-                    {isExpired 
-                      ? 'トークンの有効期限が切れています。「トークン更新」または「再連携」で更新してください。'
-                      : `トークンの有効期限が残り${daysLeft}日です。`
+                    {isExpired
+                      ? 'トークンの有効期限が切れています。自動投稿が停止しています。「トークン更新」をクリックして復旧してください。'
+                      : `トークンの有効期限が残り${daysLeft}日です。期限切れになると自動投稿が停止します。早めに更新してください。`
                     }
                   </p>
                   <Button
@@ -338,25 +352,25 @@ export default function ThreadsConnect() {
             <div className="flex items-center gap-6 flex-wrap text-sm">
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-emerald-500" />
-                <span className="text-gray-500">
-                  フォロワー: <span className="text-gray-900 font-medium">{account.followersCount?.toLocaleString() || 0}</span>
+                <span className="text-muted-foreground">
+                  フォロワー: <span className="text-foreground font-medium">{account.followersCount?.toLocaleString() || 0}</span>
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-teal-500" />
-                <span className="text-gray-500">
-                  フォロー中: <span className="text-gray-900 font-medium">{account.followingCount?.toLocaleString() || 0}</span>
+                <span className="text-muted-foreground">
+                  フォロー中: <span className="text-foreground font-medium">{account.followingCount?.toLocaleString() || 0}</span>
                 </span>
               </div>
               {account.tokenExpiresAt && (
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-400 text-xs">
+                  <span className="text-muted-foreground/60 text-xs">
                     トークン期限: {new Date(account.tokenExpiresAt).toLocaleDateString('ja-JP')}
                   </span>
                 </div>
               )}
               {account.lastSyncedAt && (
-                <div className="ml-auto text-gray-400 text-xs">
+                <div className="ml-auto text-muted-foreground/60 text-xs">
                   最終同期: {new Date(account.lastSyncedAt).toLocaleString('ja-JP')}
                 </div>
               )}
@@ -365,10 +379,10 @@ export default function ThreadsConnect() {
         ))}
 
         {accounts?.length === 0 && (
-          <div className="bg-white border border-gray-200 border-dashed rounded-xl p-10 text-center">
-            <Link2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 mb-2">まだアカウントが連携されていません</p>
-            <p className="text-gray-400 text-sm">下のボタンからThreadsアカウントを連携してください</p>
+          <div className="bg-background border border-border border-dashed rounded-xl p-10 text-center">
+            <Link2 className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
+            <p className="text-muted-foreground mb-2">まだアカウントが連携されていません</p>
+            <p className="text-muted-foreground/60 text-sm">下のボタンからThreadsアカウントを連携してください</p>
           </div>
         )}
       </div>
@@ -400,12 +414,37 @@ export default function ThreadsConnect() {
             {(accounts?.length || 0) > 0 ? '別のThreadsアカウントを連携' : 'Threadsと連携'}
           </Button>
           {!canAddMore && (
-            <p className="text-center text-gray-400 text-sm">
+            <p className="text-center text-muted-foreground/60 text-sm">
               ※ 新しいアカウントの追加は上限に達していますが、既存アカウントの再連携（トークン更新）は可能です
             </p>
           )}
         </div>
       )}
+      {/* Disconnect Confirmation Dialog */}
+      <AlertDialog open={disconnectTargetId !== null} onOpenChange={() => setDisconnectTargetId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>アカウント連携を解除しますか？</AlertDialogTitle>
+            <AlertDialogDescription>
+              このアカウントの連携を解除すると、予約投稿や自動投稿が停止します。再度連携することで復旧できます。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (disconnectTargetId) {
+                  disconnectAccount.mutate({ accountId: disconnectTargetId });
+                  setDisconnectTargetId(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              連携を解除する
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

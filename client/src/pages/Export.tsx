@@ -46,7 +46,7 @@ export default function Export() {
     return header + rows;
   };
 
-  const handleCopy = (format: "text" | "json" | "csv") => {
+  const handleCopy = async (format: "text" | "json" | "csv") => {
     let content = "";
     switch (format) {
       case "text":
@@ -60,10 +60,14 @@ export default function Export() {
         break;
     }
 
-    navigator.clipboard.writeText(content);
-    setCopiedFormat(format);
-    toast.success("クリップボードにコピーしました");
-    setTimeout(() => setCopiedFormat(null), 2000);
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedFormat(format);
+      toast.success("クリップボードにコピーしました");
+      setTimeout(() => setCopiedFormat(null), 2000);
+    } catch (err) {
+      toast.error("コピーに失敗しました。ブラウザの権限設定を確認してください。");
+    }
   };
 
   const handleDownload = (format: "txt" | "json" | "csv") => {

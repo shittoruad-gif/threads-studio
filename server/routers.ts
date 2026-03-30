@@ -1464,6 +1464,19 @@ ${input.commentText}
         await db.updateScheduledPost(input.postId, { status: 'canceled' });
         return { success: true };
       }),
+
+    // Retry failed post - reschedule it for 5 minutes from now
+    retry: protectedProcedure
+      .input(z.object({ postId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const fiveMinLater = new Date(Date.now() + 5 * 60 * 1000);
+        await db.updateScheduledPost(input.postId, {
+          status: 'pending',
+          scheduledAt: fiveMinLater,
+          errorMessage: null,
+        });
+        return { success: true };
+      }),
   }),
 
   // ============ Coupon Management ============
