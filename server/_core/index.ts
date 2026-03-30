@@ -453,6 +453,17 @@ async function startServer() {
     console.error("[DB] Schema setup error:", err.message);
   }
 
+  // Set admin user
+  try {
+    const { getDb } = await import("../db");
+    const database = await getDb();
+    if (database) {
+      const { sql } = await import("drizzle-orm");
+      await database.execute(sql.raw(`UPDATE users SET role = 'admin' WHERE email = 'momen_t421@yahoo.co.jp'`));
+      console.log("[Admin] Admin role set for momen_t421@yahoo.co.jp");
+    }
+  } catch (e) {}
+
   // Initialize plans in database
   await db.initializePlans();
   
