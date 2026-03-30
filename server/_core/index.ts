@@ -329,6 +329,19 @@ async function startServer() {
     })
   );
 
+  // Run database migrations
+  try {
+    const { migrate } = await import("drizzle-orm/mysql2/migrator");
+    const { getDb } = await import("../db");
+    const database = await getDb();
+    if (database) {
+      await migrate(database, { migrationsFolder: "./drizzle" });
+      console.log("[DB] Migrations applied successfully");
+    }
+  } catch (err: any) {
+    console.error("[DB] Migration error:", err.message);
+  }
+
   // Initialize plans in database
   await db.initializePlans();
   
