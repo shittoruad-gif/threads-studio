@@ -329,16 +329,68 @@ async function startServer() {
     })
   );
 
-  // Run database schema sync (drizzle-kit push)
+  // Run database migrations
   try {
-    const { execSync } = await import("child_process");
-    execSync("npx drizzle-kit push --force", {
-      stdio: "inherit",
-      env: { ...process.env }
-    });
-    console.log("[DB] Schema push completed successfully");
+    const { getDb } = await import("../db");
+    const database = await getDb();
+    if (database) {
+      // Create tables if they don't exist using raw SQL
+      const { sql } = await import("drizzle-orm");
+      const fs = await import("fs");
+      const path = await import("path");
+
+      // Read and execute all migration SQL files in order
+      const drizzleDir = path.resolve(process.cwd(), "drizzle");
+      const sqlFiles = fs.readdirSync(drizzleDir)
+        .filter((f: string) => f.endsWith(".sql"))
+        .sort();
+
+      // Create __drizzle_migrations table if not exists
+      await database.execute(sql.raw(`
+        CREATE TABLE IF NOT EXISTS \`__drizzle_migrations\` (
+          \`id\` int AUTO_INCREMENT PRIMARY KEY,
+          \`hash\` varchar(255) NOT NULL,
+          \`created_at\` bigint NOT NULL
+        )
+      `));
+
+      // Get already applied migrations
+      const applied = await database.execute(sql.raw(`SELECT hash FROM \`__drizzle_migrations\``));
+      const appliedHashes = new Set((applied as any)[0]?.map((r: any) => r.hash) || []);
+
+      for (const file of sqlFiles) {
+        const hash = file.replace(".sql", "");
+        if (appliedHashes.has(hash)) continue;
+
+        const filePath = path.join(drizzleDir, file);
+        const content = fs.readFileSync(filePath, "utf-8");
+
+        // Split by statement breakpoints and execute each
+        const statements = content.split("--> statement-breakpoint").filter((s: string) => s.trim());
+        for (const stmt of statements) {
+          const trimmed = stmt.trim();
+          if (!trimmed) continue;
+          try {
+            await database.execute(sql.raw(trimmed));
+          } catch (e: any) {
+            // Skip "already exists" errors
+            if (e.errno === 1050 || e.errno === 1060 || e.errno === 1061) {
+              continue;
+            }
+            console.warn(`[DB Migration] Warning in ${file}:`, e.message);
+          }
+        }
+
+        // Record migration
+        await database.execute(sql.raw(
+          `INSERT INTO \`__drizzle_migrations\` (\`hash\`, \`created_at\`) VALUES ('${hash}', ${Date.now()})`
+        ));
+        console.log(`[DB] Applied migration: ${file}`);
+      }
+      console.log("[DB] All migrations checked/applied");
+    }
   } catch (err: any) {
-    console.error("[DB] Schema push error:", err.message);
+    console.error("[DB] Migration error:", err.message);
   }
 
   // Initialize plans in database
