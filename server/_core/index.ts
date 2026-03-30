@@ -321,6 +321,14 @@ async function startServer() {
     }
   });
 
+  // Client error reporting endpoint
+  app.post('/api/client-error', express.json(), (req, res) => {
+    console.error("[CLIENT ERROR]", req.body?.message);
+    console.error("[CLIENT STACK]", req.body?.stack?.substring(0, 500));
+    console.error("[CLIENT COMPONENT]", req.body?.componentStack?.substring(0, 500));
+    res.json({ ok: true });
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",
