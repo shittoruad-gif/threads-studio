@@ -43,6 +43,7 @@ async function startServer() {
   initSentry();
 
   const app = express();
+  app.set('trust proxy', 1);
   const server = createServer(app);
 
   // Stripe webhook endpoint - MUST be before express.json() middleware
@@ -453,16 +454,60 @@ async function startServer() {
     console.error("[DB] Schema setup error:", err.message);
   }
 
-  // Set admin user
+  // Ensure DB schema is up-to-date (fix missing columns)
   try {
     const { getDb } = await import("../db");
     const database = await getDb();
     if (database) {
       const { sql } = await import("drizzle-orm");
+
+      // Fix subscriptions table
+      const alterStatements = [
+        `ALTER TABLE subscriptions ADD COLUMN planId varchar(50) NOT NULL DEFAULT 'free'`,
+        `ALTER TABLE subscriptions ADD COLUMN univapaySubscriptionId varchar(255)`,
+        `ALTER TABLE subscriptions ADD COLUMN trialEndsAt timestamp NULL`,
+        `ALTER TABLE subscriptions ADD COLUMN currentPeriodEnd timestamp NULL`,
+        `ALTER TABLE subscriptions ADD COLUMN cancelAtPeriodEnd boolean NOT NULL DEFAULT false`,
+        `ALTER TABLE subscriptions ADD COLUMN updatedAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`,
+        // Fix plans table
+        `ALTER TABLE plans ADD COLUMN maxAiGenerations int NOT NULL DEFAULT 10`,
+        `ALTER TABLE plans ADD COLUMN hasPrioritySupport boolean NOT NULL DEFAULT false`,
+        `ALTER TABLE plans ADD COLUMN stripePriceId varchar(255)`,
+        `ALTER TABLE plans ADD COLUMN isActive boolean NOT NULL DEFAULT true`,
+        // Fix users table
+        `ALTER TABLE users ADD COLUMN emailVerified boolean NOT NULL DEFAULT false`,
+        `ALTER TABLE users ADD COLUMN emailVerificationToken varchar(64)`,
+        `ALTER TABLE users ADD COLUMN autoPostEnabled boolean NOT NULL DEFAULT true`,
+        `ALTER TABLE users ADD COLUMN autoPostFrequency enum('daily','twice_daily','three_daily') NOT NULL DEFAULT 'daily'`,
+        `ALTER TABLE users ADD COLUMN lastAutoPostTypeIndex int NOT NULL DEFAULT 0`,
+        `ALTER TABLE users ADD COLUMN lastAutoPurposeIndex int NOT NULL DEFAULT 0`,
+        `ALTER TABLE users ADD COLUMN referralCode varchar(16)`,
+        `ALTER TABLE users ADD COLUMN credits int NOT NULL DEFAULT 0`,
+        `ALTER TABLE users ADD COLUMN isDemoMode boolean NOT NULL DEFAULT true`,
+        `ALTER TABLE users ADD COLUMN setupStep int NOT NULL DEFAULT 0`,
+        `ALTER TABLE users ADD COLUMN authProvider enum('manus','email') NOT NULL DEFAULT 'manus'`,
+        `ALTER TABLE users ADD COLUMN role enum('user','admin') NOT NULL DEFAULT 'user'`,
+      ];
+
+      for (const stmt of alterStatements) {
+        try {
+          await database.execute(sql.raw(stmt));
+        } catch (e: any) {
+          // Ignore "duplicate column" errors (1060)
+          if (e.errno !== 1060) {
+            // Only log unexpected errors
+          }
+        }
+      }
+      console.log("[DB] Schema columns verified");
+
+      // Set admin
       await database.execute(sql.raw(`UPDATE users SET role = 'admin' WHERE email = 'momen_t421@yahoo.co.jp'`));
       console.log("[Admin] Admin role set for momen_t421@yahoo.co.jp");
     }
-  } catch (e) {}
+  } catch (e: any) {
+    console.error("[DB] Schema fix error:", e.message);
+  }
 
   // Initialize plans in database
   await db.initializePlans();
