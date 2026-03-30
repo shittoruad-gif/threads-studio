@@ -22,7 +22,8 @@ import {
   referrals, Referral, InsertReferral,
   creditTransactions, CreditTransaction, InsertCreditTransaction,
   passwordResetTokens, PasswordResetToken, InsertPasswordResetToken,
-  postAnalytics, PostAnalytics, InsertPostAnalytics
+  postAnalytics, PostAnalytics, InsertPostAnalytics,
+  monitorFeedback, MonitorFeedback, InsertMonitorFeedback
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { PLANS } from '../shared/plans';
@@ -923,7 +924,7 @@ export async function getCouponById(id: number) {
 
 export async function createCoupon(params: {
   code: string;
-  type: 'forever_free' | 'trial_30' | 'trial_14';
+  type: 'forever_free' | 'trial_30' | 'trial_14' | 'discount_50' | 'discount_30' | 'special_price' | 'monitor';
   description?: string;
   maxUses?: number;
   expiresAt?: Date;
@@ -2131,5 +2132,60 @@ export async function getStuckProcessingPosts(timeoutMs: number): Promise<Schedu
       eq(scheduledPosts.status, 'processing'),
       lte(scheduledPosts.updatedAt, cutoff)
     ));
+}
+
+// ============================================================
+// Monitor Feedback
+// ============================================================
+
+export async function createMonitorFeedback(data: { userId: number; page: string; category: string; content: string; screenshotUrl?: string }) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.insert(monitorFeedback).values({
+    userId: data.userId,
+    page: data.page,
+    category: data.category as any,
+    content: data.content,
+    screenshotUrl: data.screenshotUrl || null,
+  });
+  return result[0].insertId;
+}
+
+export async function getMonitorFeedbackByUser(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(monitorFeedback).where(eq(monitorFeedback.userId, userId)).orderBy(desc(monitorFeedback.createdAt));
+}
+
+export async function getAllMonitorFeedback(limit = 50, offset = 0) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    feedback: monitorFeedback,
+    userName: users.name,
+    userEmail: users.email,
+  }).from(monitorFeedback)
+    .leftJoin(users, eq(monitorFeedback.userId, users.id))
+    .orderBy(desc(monitorFeedback.createdAt))
+    .limit(limit)
+    .offset(offset);
+}
+
+export async function countMonitorFeedback() {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select({ count: sql<number>`COUNT(*)` }).from(monitorFeedback);
+  return result[0]?.count || 0;
+}
+
+export async function updateMonitorFeedbackStatus(id: number, status: string, adminNote?: string) {
+  const db = await getDb();
+  if (!db) return false;
+  await db.update(monitorFeedback).set({
+    status: status as any,
+    adminNote: adminNote || null,
+    updatedAt: new Date(),
+  }).where(eq(monitorFeedback.id, id));
+  return true;
 }
 

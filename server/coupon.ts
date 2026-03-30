@@ -121,6 +121,12 @@ export async function applyCoupon(
       trialEndsAt.setDate(trialEndsAt.getDate() + 180);
       planId = "pro";
       break;
+    case "monitor":
+      // Monitor program - 90 days pro plan + monitor status
+      trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + 90);
+      planId = "pro";
+      break;
   }
 
   // Get or create user's subscription
@@ -152,6 +158,15 @@ export async function applyCoupon(
       currentPeriodEnd: trialEndsAt,
       cancelAtPeriodEnd: false,
     });
+  }
+
+  // If monitor coupon, set user as monitor
+  if (coupon.type === "monitor") {
+    const { users } = await import("../drizzle/schema");
+    await db
+      .update(users)
+      .set({ isMonitor: true })
+      .where(eq(users.id, userId));
   }
 
   // Record coupon usage
@@ -188,6 +203,9 @@ export async function applyCoupon(
       break;
     case "special_price":
       message = "特別価格クーポンが適用されました！180日間プロプランをご利用いただけます。";
+      break;
+    case "monitor":
+      message = "モニタープログラムへようこそ！90日間プロプランを無料でご利用いただけます。フィードバック機能が有効になりました。";
       break;
   }
 
@@ -272,6 +290,14 @@ export async function seedCoupons() {
       type: "trial_14",
       description: "14日間無料トライアル",
       maxUses: null,
+      isActive: true,
+    },
+    // モニタープログラム（90日間プロプラン + フィードバック機能）
+    {
+      code: "MONITOR2026",
+      type: "monitor",
+      description: "モニタープログラム - 90日間プロプラン + フィードバック機能",
+      maxUses: 30,
       isActive: true,
     },
   ];

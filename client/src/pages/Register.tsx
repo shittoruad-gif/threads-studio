@@ -13,6 +13,7 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [couponCode, setCouponCode] = useState('');
   const [error, setError] = useState('');
 
   const registerMutation = trpc.auth.register.useMutation({
@@ -60,7 +61,7 @@ export default function Register() {
       return;
     }
 
-    registerMutation.mutate({ email, password, name });
+    registerMutation.mutate({ email, password, name, couponCode: couponCode.trim() || undefined });
   };
 
   return (
@@ -162,6 +163,24 @@ export default function Register() {
                   8文字以上で、数字または記号を1つ以上含む必要があります
                 </p>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="couponCode">
+                クーポンコード <span className="text-muted-foreground text-xs">（任意）</span>
+              </Label>
+              <Input
+                id="couponCode"
+                type="text"
+                placeholder="お持ちの方はコードを入力"
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                disabled={registerMutation.isPending}
+                autoComplete="off"
+              />
+              <p className="text-xs text-muted-foreground">
+                モニター・キャンペーンコードをお持ちの方はこちらに入力してください
+              </p>
             </div>
 
             <Button

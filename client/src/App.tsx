@@ -33,6 +33,7 @@ import Referral from "./pages/Referral";
 import CommentManager from "./pages/CommentManager";
 import PostAnalytics from "./pages/PostAnalytics";
 import AdminPresets from "./pages/AdminPresets";
+import AdminFeedback from "./pages/AdminFeedback";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import FAQ from "./pages/FAQ";
@@ -71,6 +72,7 @@ function DashboardRoutes() {
         <Route path="/admin/coupons" component={AdminCoupons} />
         <Route path="/admin/users" component={AdminUsers} />
         <Route path="/admin/presets" component={AdminPresets} />
+        <Route path="/admin/feedback" component={AdminFeedback} />
         <Route path="/ai-templates" component={AITemplates} />
         <Route path="/referral" component={Referral} />
         <Route path="/settings" component={Settings} />

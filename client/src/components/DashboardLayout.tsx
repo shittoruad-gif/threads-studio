@@ -2,6 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { cn } from "@/lib/utils";
+import MonitorFeedbackWidget from "./MonitorFeedbackWidget";
 import {
   BarChart3,
   BookOpen,
@@ -69,6 +70,7 @@ const adminMenuItems: MenuItem[] = [
   { icon: Users, label: "ユーザー管理", path: "/admin/users", adminOnly: true },
   { icon: CreditCard, label: "クーポン管理", path: "/admin/coupons", adminOnly: true },
   { icon: Sliders, label: "プリセット管理", path: "/admin/presets", adminOnly: true },
+  { icon: MessageCircle, label: "フィードバック", path: "/admin/feedback", adminOnly: true },
 ];
 
 export default function DashboardLayout({
@@ -431,6 +433,9 @@ export default function DashboardLayout({
         {/* Page Content */}
         <main className="p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
+
+      {/* Monitor Feedback Widget - only for monitor users */}
+      {user?.isMonitor && <MonitorFeedbackWidget />}
     </div>
   );
 }

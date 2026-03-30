@@ -33,6 +33,7 @@ export const appRouter = router({
         email: z.string().email(),
         password: z.string().min(8),
         name: z.string().min(1, '名前を入力してください'),
+        couponCode: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const { hashPassword, isValidEmail, isValidPassword } = await import('./auth-helpers');
@@ -77,6 +78,16 @@ export const appRouter = router({
           title: 'メール認証リクエスト',
           content: `新規ユーザー: ${user.email}\n\n認証URL: ${verificationUrl}`,
         });
+
+        // Apply coupon code if provided
+        if (input.couponCode && input.couponCode.trim()) {
+          try {
+            await couponService.applyCoupon(user.id, input.couponCode.trim());
+          } catch (e) {
+            // Don't fail registration if coupon fails - user can apply later
+            console.warn(`[Register] Coupon application failed for user ${user.id}:`, e);
+          }
+        }
 
         return { success: true, userId: user.id };
       }),
@@ -1498,6 +1509,37 @@ ${input.commentText}
       }),
   }),
 
+  // ============ Monitor Feedback ============
+  monitor: router({
+    // Submit feedback (monitor users only)
+    submitFeedback: protectedProcedure
+      .input(z.object({
+        page: z.string().min(1).max(100),
+        category: z.enum(["bug", "usability", "feature_request", "other"]),
+        content: z.string().min(1).max(2000),
+        screenshotUrl: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user.isMonitor) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'モニターユーザーのみフィードバックを送信できます。' });
+        }
+        const id = await db.createMonitorFeedback({
+          userId: ctx.user.id,
+          page: input.page,
+          category: input.category,
+          content: input.content,
+          screenshotUrl: input.screenshotUrl,
+        });
+        return { success: true, id };
+      }),
+
+    // Get my feedback history
+    myFeedback: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.user.isMonitor) return [];
+      return db.getMonitorFeedbackByUser(ctx.user.id);
+    }),
+  }),
+
   // ============ Onboarding Management ============
   onboarding: router({
     // Mark onboarding as completed
@@ -1830,7 +1872,7 @@ ${input.commentText}
     createCoupon: protectedProcedure
       .input(z.object({
         code: z.string().min(1).max(50),
-        type: z.enum(['forever_free', 'trial_30', 'trial_14']),
+        type: z.enum(['forever_free', 'trial_30', 'trial_14', 'discount_50', 'discount_30', 'special_price', 'monitor']),
         description: z.string().optional(),
         maxUses: z.number().optional(),
         expiresAt: z.date().optional(),
@@ -1927,6 +1969,32 @@ ${input.commentText}
         // Reset password
         await db.resetUserPassword(input.userId, passwordHash);
 
+        return { success: true };
+      }),
+
+    // ==================== Monitor Feedback Management (Admin Only) ====================
+    listMonitorFeedback: adminProcedure
+      .input(z.object({
+        limit: z.number().optional().default(50),
+        offset: z.number().optional().default(0),
+      }))
+      .query(async ({ input }) => {
+        const feedbackList = await db.getAllMonitorFeedback(input.limit, input.offset);
+        const total = await db.countMonitorFeedback();
+        return { feedback: feedbackList, total };
+      }),
+
+    updateFeedbackStatus: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(["new", "in_progress", "resolved", "wont_fix"]),
+        adminNote: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const success = await db.updateMonitorFeedbackStatus(input.id, input.status, input.adminNote);
+        if (!success) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'フィードバックが見つかりません。' });
+        }
         return { success: true };
       }),
 

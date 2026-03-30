@@ -36,6 +36,8 @@ export const users = mysqlTable("users", {
   referralCode: varchar("referralCode", { length: 16 }).unique(),
   // User's credit balance (for referral rewards)
   credits: int("credits").default(0).notNull(),
+  // Monitor program participant
+  isMonitor: boolean("isMonitor").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -174,7 +176,7 @@ export type InsertScheduledPost = typeof scheduledPosts.$inferInsert;
 export const coupons = mysqlTable("coupons", {
   id: int("id").autoincrement().primaryKey(),
   code: varchar("code", { length: 50 }).notNull().unique(),
-  type: mysqlEnum("type", ["forever_free", "trial_30", "trial_14", "discount_50", "discount_30", "special_price"]).notNull(),
+  type: mysqlEnum("type", ["forever_free", "trial_30", "trial_14", "discount_50", "discount_30", "special_price", "monitor"]).notNull(),
   description: text("description"),
   maxUses: int("maxUses"), // null = unlimited
   usedCount: int("usedCount").notNull().default(0),
@@ -444,3 +446,31 @@ export const postAnalytics = mysqlTable("postAnalytics", {
 
 export type PostAnalytics = typeof postAnalytics.$inferSelect;
 export type InsertPostAnalytics = typeof postAnalytics.$inferInsert;
+
+/**
+ * Monitor Feedback - stores feedback from monitor program participants
+ */
+export const monitorFeedback = mysqlTable("monitorFeedback", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Which page/feature the feedback is about
+  page: varchar("page", { length: 100 }).notNull(),
+  // Feedback category
+  category: mysqlEnum("category", ["bug", "usability", "feature_request", "other"]).default("other").notNull(),
+  // The feedback content
+  content: text("content").notNull(),
+  // Screenshot URL (optional)
+  screenshotUrl: text("screenshotUrl"),
+  // Admin response
+  adminNote: text("adminNote"),
+  // Status
+  status: mysqlEnum("status", ["new", "in_progress", "resolved", "wont_fix"]).default("new").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("monitor_feedback_user_id_idx").on(table.userId),
+  statusIdx: index("monitor_feedback_status_idx").on(table.status),
+}));
+
+export type MonitorFeedback = typeof monitorFeedback.$inferSelect;
+export type InsertMonitorFeedback = typeof monitorFeedback.$inferInsert;
