@@ -329,17 +329,16 @@ async function startServer() {
     })
   );
 
-  // Run database migrations
+  // Run database schema sync (drizzle-kit push)
   try {
-    const { migrate } = await import("drizzle-orm/mysql2/migrator");
-    const { getDb } = await import("../db");
-    const database = await getDb();
-    if (database) {
-      await migrate(database, { migrationsFolder: "./drizzle" });
-      console.log("[DB] Migrations applied successfully");
-    }
+    const { execSync } = await import("child_process");
+    execSync("npx drizzle-kit push --force", {
+      stdio: "inherit",
+      env: { ...process.env }
+    });
+    console.log("[DB] Schema push completed successfully");
   } catch (err: any) {
-    console.error("[DB] Migration error:", err.message);
+    console.error("[DB] Schema push error:", err.message);
   }
 
   // Initialize plans in database
