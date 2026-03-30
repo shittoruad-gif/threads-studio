@@ -483,10 +483,32 @@ async function startServer() {
     if (database) {
       const { sql } = await import("drizzle-orm");
 
+      // Create missing tables first
+      const createStatements = [
+        `CREATE TABLE IF NOT EXISTS aiGenerationHistory (
+          id int AUTO_INCREMENT PRIMARY KEY,
+          userId int NOT NULL,
+          projectId varchar(50),
+          postType varchar(50) NOT NULL,
+          content text NOT NULL,
+          metadata text,
+          createdAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX user_id_idx (userId),
+          INDEX project_id_idx (projectId),
+          INDEX created_at_idx (createdAt)
+        )`,
+      ];
+
+      for (const stmt of createStatements) {
+        try { await database.execute(sql.raw(stmt)); } catch (e: any) {}
+      }
+
       // Fix subscriptions table
       const alterStatements = [
         `ALTER TABLE subscriptions ADD COLUMN planId varchar(50) NOT NULL DEFAULT 'free'`,
+        `ALTER TABLE subscriptions ADD COLUMN stripeSubscriptionId varchar(255)`,
         `ALTER TABLE subscriptions ADD COLUMN univapaySubscriptionId varchar(255)`,
+        `ALTER TABLE subscriptions ADD COLUMN status enum('trialing','active','canceled','past_due','unpaid','incomplete') NOT NULL DEFAULT 'trialing'`,
         `ALTER TABLE subscriptions ADD COLUMN trialEndsAt timestamp NULL`,
         `ALTER TABLE subscriptions ADD COLUMN currentPeriodEnd timestamp NULL`,
         `ALTER TABLE subscriptions ADD COLUMN cancelAtPeriodEnd boolean NOT NULL DEFAULT false`,
