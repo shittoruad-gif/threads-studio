@@ -401,7 +401,52 @@ async function startServer() {
         await database.execute(sql.raw(`SET FOREIGN_KEY_CHECKS = 1`));
         console.log("[DB] Fresh schema created successfully");
       } else {
-        console.log("[DB] Schema OK - no migration needed");
+        // Schema is correct but we still need to apply any new migrations
+        console.log("[DB] Schema OK - checking for new migrations...");
+        const fs = await import("fs");
+        const path = await import("path");
+        const drizzleDir = path.resolve(process.cwd(), "drizzle");
+        const sqlFiles = fs.readdirSync(drizzleDir)
+          .filter((f: string) => f.endsWith(".sql"))
+          .sort();
+
+        // Create tracking table if not exists
+        await database.execute(sql.raw(`
+          CREATE TABLE IF NOT EXISTS \`__drizzle_migrations\` (
+            \`id\` int AUTO_INCREMENT PRIMARY KEY,
+            \`hash\` varchar(255) NOT NULL,
+            \`created_at\` bigint NOT NULL
+          )
+        `));
+
+        const applied = await database.execute(sql.raw(`SELECT hash FROM \`__drizzle_migrations\``));
+        const appliedHashes = new Set((applied as any)[0]?.map((r: any) => r.hash) || []);
+
+        for (const file of sqlFiles) {
+          const hash = file.replace(".sql", "");
+          if (appliedHashes.has(hash)) continue;
+
+          const filePath = path.join(drizzleDir, file);
+          const content = fs.readFileSync(filePath, "utf-8");
+          const statements = content.split("--> statement-breakpoint").filter((s: string) => s.trim());
+
+          for (const stmt of statements) {
+            const trimmed = stmt.trim();
+            if (!trimmed) continue;
+            try {
+              await database.execute(sql.raw(trimmed));
+            } catch (e: any) {
+              if (e.errno === 1050 || e.errno === 1060 || e.errno === 1061) continue;
+              console.warn(`[DB] Warning in ${file}:`, e.message?.substring(0, 100));
+            }
+          }
+
+          await database.execute(sql.raw(
+            `INSERT INTO \`__drizzle_migrations\` (\`hash\`, \`created_at\`) VALUES ('${hash}', ${Date.now()})`
+          ));
+          console.log(`[DB] Applied migration: ${file}`);
+        }
+        console.log("[DB] Migration check complete");
       }
     }
   } catch (err: any) {
