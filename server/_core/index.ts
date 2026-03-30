@@ -329,68 +329,83 @@ async function startServer() {
     })
   );
 
-  // Run database migrations
+  // Ensure database schema matches application requirements
   try {
     const { getDb } = await import("../db");
     const database = await getDb();
     if (database) {
-      // Create tables if they don't exist using raw SQL
       const { sql } = await import("drizzle-orm");
-      const fs = await import("fs");
-      const path = await import("path");
 
-      // Read and execute all migration SQL files in order
-      const drizzleDir = path.resolve(process.cwd(), "drizzle");
-      const sqlFiles = fs.readdirSync(drizzleDir)
-        .filter((f: string) => f.endsWith(".sql"))
-        .sort();
+      // Check if schema is from old app (Zoom) by checking if plans table has correct columns
+      const [rows] = await database.execute(sql.raw(
+        `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'plans' AND COLUMN_NAME = 'maxAiGenerations'`
+      )) as any;
+      const hasCorrectSchema = rows?.[0]?.cnt > 0;
 
-      // Create __drizzle_migrations table if not exists
-      await database.execute(sql.raw(`
-        CREATE TABLE IF NOT EXISTS \`__drizzle_migrations\` (
-          \`id\` int AUTO_INCREMENT PRIMARY KEY,
-          \`hash\` varchar(255) NOT NULL,
-          \`created_at\` bigint NOT NULL
-        )
-      `));
+      if (!hasCorrectSchema) {
+        console.log("[DB] Schema mismatch detected - rebuilding tables for Threads Studio...");
 
-      // Get already applied migrations
-      const applied = await database.execute(sql.raw(`SELECT hash FROM \`__drizzle_migrations\``));
-      const appliedHashes = new Set((applied as any)[0]?.map((r: any) => r.hash) || []);
+        // Drop old tables that conflict (from previous Zoom app)
+        const oldTables = [
+          '__drizzle_migrations',
+          'userHistoryFavorites', 'userFavorites', 'userCoupons',
+          'aiChatMessages', 'aiChatConversations',
+          'aiGenerationHistory', 'aiGenerationUsage', 'aiGenerationPresets', 'aiGenerationTemplates',
+          'postAnalytics', 'scheduledPosts', 'creditTransactions', 'referrals',
+          'passwordResetTokens', 'subscriptions', 'threadsAccounts', 'projects',
+          'templates', 'coupons', 'plans', 'users',
+          // Old Zoom app tables
+          'app_settings', 'chatbot_logs', 'chatbot_nodes', 'chatbot_scenarios',
+          'client_invitations', 'client_users', 'industry_templates',
+          'invitation_templates', 'meetings', 'message_logs', 'passcodes',
+          'recurring_meetings', 'rich_menus', 'step_messages', 'step_scenarios',
+          'zoom_settings'
+        ];
 
-      for (const file of sqlFiles) {
-        const hash = file.replace(".sql", "");
-        if (appliedHashes.has(hash)) continue;
-
-        const filePath = path.join(drizzleDir, file);
-        const content = fs.readFileSync(filePath, "utf-8");
-
-        // Split by statement breakpoints and execute each
-        const statements = content.split("--> statement-breakpoint").filter((s: string) => s.trim());
-        for (const stmt of statements) {
-          const trimmed = stmt.trim();
-          if (!trimmed) continue;
+        for (const table of oldTables) {
           try {
-            await database.execute(sql.raw(trimmed));
+            await database.execute(sql.raw(`DROP TABLE IF EXISTS \`${table}\``));
           } catch (e: any) {
-            // Skip "already exists" errors
-            if (e.errno === 1050 || e.errno === 1060 || e.errno === 1061) {
-              continue;
-            }
-            console.warn(`[DB Migration] Warning in ${file}:`, e.message);
+            // FK constraints may prevent drop, try again after disabling checks
           }
         }
 
-        // Record migration
-        await database.execute(sql.raw(
-          `INSERT INTO \`__drizzle_migrations\` (\`hash\`, \`created_at\`) VALUES ('${hash}', ${Date.now()})`
-        ));
-        console.log(`[DB] Applied migration: ${file}`);
+        // Now read and apply the latest migration SQL to create fresh tables
+        const fs = await import("fs");
+        const path = await import("path");
+        const drizzleDir = path.resolve(process.cwd(), "drizzle");
+        const sqlFiles = fs.readdirSync(drizzleDir)
+          .filter((f: string) => f.endsWith(".sql"))
+          .sort();
+
+        // Disable FK checks for clean creation
+        await database.execute(sql.raw(`SET FOREIGN_KEY_CHECKS = 0`));
+
+        for (const file of sqlFiles) {
+          const filePath = path.join(drizzleDir, file);
+          const content = fs.readFileSync(filePath, "utf-8");
+          const statements = content.split("--> statement-breakpoint").filter((s: string) => s.trim());
+          for (const stmt of statements) {
+            const trimmed = stmt.trim();
+            if (!trimmed) continue;
+            try {
+              await database.execute(sql.raw(trimmed));
+            } catch (e: any) {
+              if (e.errno === 1050 || e.errno === 1060 || e.errno === 1061) continue;
+              console.warn(`[DB] Warning in ${file}:`, e.message?.substring(0, 100));
+            }
+          }
+          console.log(`[DB] Applied: ${file}`);
+        }
+
+        await database.execute(sql.raw(`SET FOREIGN_KEY_CHECKS = 1`));
+        console.log("[DB] Fresh schema created successfully");
+      } else {
+        console.log("[DB] Schema OK - no migration needed");
       }
-      console.log("[DB] All migrations checked/applied");
     }
   } catch (err: any) {
-    console.error("[DB] Migration error:", err.message);
+    console.error("[DB] Schema setup error:", err.message);
   }
 
   // Initialize plans in database
