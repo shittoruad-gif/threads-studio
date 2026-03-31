@@ -1,5 +1,5 @@
 // Threads Studio Service Worker
-const CACHE_NAME = 'threads-studio-v2';
+const CACHE_NAME = 'threads-studio-v3';
 const OFFLINE_URL = '/offline.html';
 
 // Assets to pre-cache on install
@@ -85,10 +85,12 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Helper: Check if request is for a static asset
+// Helper: Check if request is for a static asset worth caching
+// Do NOT cache JS/CSS bundles - Vite uses content hashes for cache busting
+// Caching them in SW causes stale bundle issues on deploys
 function isStaticAsset(pathname) {
   const staticExtensions = [
-    '.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg',
+    '.png', '.jpg', '.jpeg', '.gif', '.svg',
     '.ico', '.woff', '.woff2', '.ttf', '.eot',
   ];
   return staticExtensions.some((ext) => pathname.endsWith(ext));
