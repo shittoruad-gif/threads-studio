@@ -1,5 +1,5 @@
 // Threads Studio Service Worker
-const CACHE_NAME = 'threads-studio-v1';
+const CACHE_NAME = 'threads-studio-v2';
 const OFFLINE_URL = '/offline.html';
 
 // Assets to pre-cache on install

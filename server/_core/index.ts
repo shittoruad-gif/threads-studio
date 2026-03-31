@@ -529,6 +529,10 @@ async function startServer() {
           }
         }
       }
+      // Fix invalid subscription records (from old Zoom/LINE app)
+      // Set planId to 'free' where it's empty, set status where it's NULL
+      await database.execute(sql.raw(`UPDATE subscriptions SET planId = 'free' WHERE planId IS NULL OR planId = ''`));
+      await database.execute(sql.raw(`UPDATE subscriptions SET status = 'active' WHERE status IS NULL OR status = ''`));
       console.log("[DB] Schema columns verified");
 
       // Set admin
