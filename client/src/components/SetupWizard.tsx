@@ -286,7 +286,7 @@ export default function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" showCloseButton={false}>
         <Button
           variant="ghost"
           size="sm"
