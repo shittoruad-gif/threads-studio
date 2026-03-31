@@ -10,8 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/lib/trpc';
-import { POST_TYPES, POST_PURPOSES, POST_PURPOSES_LIST } from '@shared/threadsPrompts';
-import type { PostPurpose } from '@shared/threadsPrompts';
+import { POST_TYPES, POST_PURPOSES, POST_PURPOSES_LIST, POST_TONES, POST_TONES_LIST } from '@shared/threadsPrompts';
+import type { PostPurpose, PostTone } from '@shared/threadsPrompts';
 import { SchedulePostDialog } from '@/components/SchedulePostDialog';
 import ThreadsPostPreview from '@/components/ThreadsPostPreview';
 import ThreadsPhonePreview from '@/components/ThreadsPhonePreview';
@@ -57,6 +57,7 @@ export default function AIGenerate() {
   const [postType, setPostType] = useState<PostType>('hook_tree');
   const [treeCount, setTreeCount] = useState<number>(3);
   const [trendWord, setTrendWord] = useState<string>('');
+  const [tone, setTone] = useState<PostTone | null>(null);
   const [generatedPost, setGeneratedPost] = useState<GeneratedPost | null>(null);
   const [editedPost, setEditedPost] = useState<GeneratedPost | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -360,6 +361,7 @@ export default function AIGenerate() {
       treeCount,
       trendWord: postType === 'trend' ? trendWord : undefined,
       purpose: purpose || undefined,
+      tone: tone || undefined,
     });
   };
 
@@ -598,6 +600,44 @@ export default function AIGenerate() {
                   </p>
                 </div>
 
+                {/* 口調の選択 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <Label>口調を選ぶ（任意）</Label>
+                    <HelpTooltip content="投稿の文体・トーンを選びます。選ばない場合はAIが自動で判断します" />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTone(null)}
+                      className={`px-3 py-2 rounded-lg border text-sm transition-all ${
+                        tone === null
+                          ? 'border-primary bg-primary/5 text-foreground font-medium'
+                          : 'border-border text-muted-foreground hover:border-primary/50'
+                      }`}
+                    >
+                      🤖 おまかせ
+                    </button>
+                    {POST_TONES_LIST.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setTone(t.id)}
+                        className={`px-3 py-2 rounded-lg border text-sm transition-all ${
+                          tone === t.id
+                            ? 'border-primary bg-primary/5 text-foreground font-medium'
+                            : 'border-border text-muted-foreground hover:border-primary/50'
+                        }`}
+                      >
+                        {t.icon} {t.name}
+                      </button>
+                    ))}
+                  </div>
+                  {tone && POST_TONES[tone] && (
+                    <p className="text-xs text-muted-foreground">{POST_TONES[tone].description}</p>
+                  )}
+                </div>
+
                 {/* AI使用状況表示 */}
                 {aiUsage && (
                   <div className="p-3 bg-muted rounded-lg">
@@ -639,16 +679,16 @@ export default function AIGenerate() {
                 <Button
                   onClick={handleGenerate}
                   disabled={generateMutation.isPending || (aiUsage?.limit !== null && aiUsage?.limit !== undefined && aiUsage?.limit !== -1 && (aiUsage?.count ?? 0) >= aiUsage.limit)}
-                  className="w-full"
+                  className="w-full h-12 text-base"
                 >
                   {generateMutation.isPending ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                       生成中...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="h-4 w-4 mr-2" />
+                      <Sparkles className="h-5 w-5 mr-2" />
                       AI投稿を生成
                     </>
                   )}
@@ -1172,31 +1212,34 @@ export default function AIGenerate() {
                 )}
 
                 {/* アクションボタン */}
-                <div className="flex gap-3">
-                  <Button
-                    onClick={() => setScheduleDialogOpen(true)}
-                    className="flex-1"
-                    size="lg"
-                  >
-                    <Calendar className="h-4 w-4 mr-2" />
-                    予約投稿に追加
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleCopyAll}
-                    size="lg"
-                  >
-                    <Copy className="h-4 w-4 mr-2" />
-                    全てコピー
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setSaveTemplateDialogOpen(true)}
-                    size="lg"
-                  >
-                    <Save className="h-4 w-4 mr-2" />
-                    テンプレートとして保存
-                  </Button>
+                <div className="sticky bottom-4 z-10 bg-background/95 backdrop-blur-sm border border-border rounded-xl p-3 shadow-lg">
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button
+                      onClick={() => setScheduleDialogOpen(true)}
+                      className="flex-1 h-12 text-base"
+                    >
+                      <Calendar className="h-5 w-5 mr-2" />
+                      予約投稿に追加
+                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={handleCopyAll}
+                        className="flex-1 sm:flex-initial h-12 text-base"
+                      >
+                        <Copy className="h-5 w-5 mr-2" />
+                        全てコピー
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setSaveTemplateDialogOpen(true)}
+                        className="flex-1 sm:flex-initial h-12 text-base"
+                      >
+                        <Save className="h-5 w-5 mr-2" />
+                        テンプレートとして保存
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </>
             ) : (

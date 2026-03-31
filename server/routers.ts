@@ -536,6 +536,7 @@ export const appRouter = router({
         treeCount: z.number().min(0).max(5).optional(), // 0 = 本文のみ, 1〜5 = ツリー投稿数
         trendWord: z.string().optional(), // トレンドワード（trend型で使用）
         purpose: z.enum(['cv', 'awareness', 'authority', 'fan']).optional(), // 投稿の目的
+        tone: z.enum(['polite', 'casual', 'professional', 'energetic', 'storytelling']).optional(), // 口調
       }))
       .mutation(async ({ ctx, input }) => {
         // Check AI generation feature
@@ -591,6 +592,7 @@ export const appRouter = router({
           n1Customer: (project as any).n1Customer || undefined,
           trendWord: input.trendWord || undefined,
           purpose: input.purpose,
+          tone: input.tone,
         });
 
         // Call LLM
