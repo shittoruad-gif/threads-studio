@@ -21,6 +21,7 @@ export function DemoModeBanner() {
   const [, setLocation] = useLocation();
   const { data: demoModeData } = trpc.setup.getDemoMode.useQuery();
   const utils = trpc.useUtils();
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   const exitDemoModeMutation = trpc.setup.exitDemoMode.useMutation({
     onSuccess: () => {
@@ -36,8 +37,6 @@ export function DemoModeBanner() {
   if (!demoModeData?.isDemoMode) {
     return null;
   }
-
-  const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   const handleExitDemo = () => {
     setShowExitConfirm(true);
