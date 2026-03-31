@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { AlertTriangle, RotateCcw, Trash2 } from "lucide-react";
 import { Component, ReactNode } from "react";
 
 interface Props {
@@ -35,6 +35,27 @@ class ErrorBoundary extends Component<Props, State> {
     }).catch(() => {});
   }
 
+  async clearCacheAndReload() {
+    // Unregister service workers
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (const reg of registrations) {
+        await reg.unregister();
+      }
+    }
+    // Clear caches
+    if ('caches' in window) {
+      const names = await caches.keys();
+      for (const name of names) {
+        await caches.delete(name);
+      }
+    }
+    // Clear localStorage
+    localStorage.clear();
+    // Hard reload
+    window.location.reload();
+  }
+
   render() {
     if (this.state.hasError) {
       return (
@@ -47,42 +68,61 @@ class ErrorBoundary extends Component<Props, State> {
 
             <h2 className="text-xl font-bold mb-2">予期しないエラーが発生しました</h2>
             <p className="text-sm text-muted-foreground mb-6 text-center">
-              申し訳ございません。問題が解決しない場合は、ページを再読み込みしてください。
+              申し訳ございません。問題が解決しない場合は、キャッシュクリアをお試しください。
             </p>
 
-            <details className="w-full mb-6">
-              <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground">
-                エラー詳細を表示
+            {/* Error details - open by default */}
+            <details className="w-full mb-6" open>
+              <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground font-medium">
+                エラー詳細
               </summary>
-              <div className="p-4 w-full rounded bg-muted overflow-auto mt-2">
-                <pre className="text-xs text-muted-foreground whitespace-break-spaces">
+              <div className="p-4 w-full rounded bg-muted overflow-auto mt-2 max-h-48">
+                <pre className="text-xs text-destructive whitespace-break-spaces font-mono">
                   {this.state.error?.message}
                 </pre>
+                {this.state.error?.stack && (
+                  <pre className="text-xs text-muted-foreground whitespace-break-spaces font-mono mt-2 border-t border-border pt-2">
+                    {this.state.error.stack.split('\n').slice(1, 6).join('\n')}
+                  </pre>
+                )}
               </div>
             </details>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col items-center gap-3 w-full">
               <button
-                onClick={() => { window.location.href = '/dashboard'; }}
+                onClick={() => this.clearCacheAndReload()}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg",
-                  "bg-secondary text-secondary-foreground",
-                  "hover:opacity-90 cursor-pointer"
-                )}
-              >
-                ダッシュボードへ
-              </button>
-              <button
-                onClick={() => window.location.reload()}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg",
+                  "flex items-center justify-center gap-2 px-4 py-2 rounded-lg w-full",
                   "bg-primary text-primary-foreground",
                   "hover:opacity-90 cursor-pointer"
                 )}
               >
-                <RotateCcw size={16} />
-                ページを再読み込み
+                <Trash2 size={16} />
+                キャッシュクリアして再読み込み
               </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => { window.location.href = '/login'; }}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-lg",
+                    "bg-secondary text-secondary-foreground",
+                    "hover:opacity-90 cursor-pointer"
+                  )}
+                >
+                  ログインへ
+                </button>
+                <button
+                  onClick={() => window.location.reload()}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-lg",
+                    "bg-secondary text-secondary-foreground",
+                    "hover:opacity-90 cursor-pointer"
+                  )}
+                >
+                  <RotateCcw size={16} />
+                  再読み込み
+                </button>
+              </div>
             </div>
           </div>
         </div>

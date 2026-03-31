@@ -329,6 +329,33 @@ async function startServer() {
     res.json({ ok: true });
   });
 
+  // Debug: check user data for specific email
+  app.get('/api/debug/user-check', async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const database = await getDb();
+      if (!database) return res.status(503).json({ error: 'no db' });
+      const { sql } = await import("drizzle-orm");
+
+      const [users] = await database.execute(sql.raw(
+        `SELECT id, email, role, authProvider, setupStep FROM users WHERE email = 'momen_t421@yahoo.co.jp' LIMIT 1`
+      )) as any;
+
+      const userId = users?.[0]?.id;
+      let subs: any = [];
+      if (userId) {
+        const [subResult] = await database.execute(sql.raw(
+          `SELECT * FROM subscriptions WHERE userId = ${userId}`
+        )) as any;
+        subs = subResult;
+      }
+
+      res.json({ user: users?.[0] || null, subscriptions: subs });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message, stack: e.stack?.substring(0, 300) });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",
