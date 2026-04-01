@@ -308,17 +308,8 @@ async function startServer() {
   });
 
   // Health check endpoint
-  app.get('/api/health', async (_req, res) => {
-    try {
-      const { getDb } = await import("../db");
-      const database = await getDb();
-      if (!database) {
-        return res.status(503).json({ status: 'unhealthy', error: 'Database unavailable' });
-      }
-      res.json({ status: 'healthy', timestamp: new Date().toISOString() });
-    } catch (error) {
-      res.status(503).json({ status: 'unhealthy', error: 'Health check failed' });
-    }
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
   // Client error reporting endpoint
