@@ -307,6 +307,148 @@ async function startServer() {
     }
   });
 
+  // Static Privacy Policy page (server-rendered HTML for Meta App Review crawlers)
+  app.get("/privacy", (req, res, next) => {
+    // Only serve static HTML for non-browser crawlers (Meta/Facebook bot, curl, etc.)
+    // Let SPA handle it for regular browsers
+    const ua = req.headers['user-agent'] || '';
+    const isCrawler = /facebookexternalhit|facebookcatalog|Facebot|meta-externalagent|curl|wget|bot|crawl|spider|slurp/i.test(ua);
+    if (!isCrawler) return next();
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>プライバシーポリシー - Threads Studio | 株式会社しっとる</title>
+</head>
+<body>
+<h1>プライバシーポリシー</h1>
+<p>最終更新日：2025年6月1日</p>
+<p>運営会社：株式会社しっとる</p>
+<p>サービス名：Threads Studio</p>
+
+<h2>1. はじめに</h2>
+<p>株式会社しっとる（以下「当社」）が運営するThreads Studio（以下「本サービス」）は、ユーザーのプライバシーを尊重し、個人情報の保護に努めます。本プライバシーポリシーは、本サービスがどのような情報を収集し、どのように利用・保護するかについて説明します。</p>
+
+<h2>2. 収集する情報</h2>
+<h3>2.1 アカウント情報</h3>
+<p>メールアドレス、ユーザー名、パスワード（暗号化して保存）など、アカウント作成時に提供される情報。</p>
+<h3>2.2 Threadsアカウント情報</h3>
+<p>Threads APIを通じて取得するThreadsユーザーID、ユーザー名、プロフィール画像URL、アクセストークン。これらはThreads連携機能を提供するために必要です。</p>
+<h3>2.3 投稿コンテンツ</h3>
+<p>本サービスを通じて作成・編集された投稿テキスト、画像、テンプレートデータ。</p>
+<h3>2.4 AI生成に関するデータ</h3>
+<p>AI投稿生成機能を利用する際にユーザーが入力するプロジェクト情報、テーマ、キーワード等のデータ。</p>
+<h3>2.5 決済情報</h3>
+<p>有料プランの決済に必要な情報はStripe社を通じて安全に処理されます。当社はクレジットカード番号等の機密情報を直接保存しません。</p>
+<h3>2.6 利用データ</h3>
+<p>サービスの利用状況、投稿履歴、機能の使用頻度など、サービス改善のために収集する匿名化されたデータ。</p>
+<h3>2.7 インサイトデータ</h3>
+<p>Threads APIのインサイト機能を通じて取得する投稿のビュー数、いいね数、返信数等の統計データ。これらはユーザーの投稿パフォーマンス分析機能を提供するために使用します。</p>
+
+<h2>3. 情報の利用目的</h2>
+<ul>
+<li>本サービスの提供・運営・改善</li>
+<li>Threads APIを通じた投稿の作成・管理・予約投稿の実行</li>
+<li>Threads投稿のインサイト分析・パフォーマンスレポートの提供</li>
+<li>AIによる投稿コンテンツの自動生成・最適化</li>
+<li>ユーザーアカウントの認証・管理</li>
+<li>決済処理およびサブスクリプション管理</li>
+<li>カスタマーサポートの提供</li>
+<li>サービスの安全性確保と不正利用の防止</li>
+<li>利用状況の分析によるサービス改善</li>
+</ul>
+
+<h2>4. Threads APIデータの取り扱い</h2>
+<p>本サービスは、Meta社のThreads APIを利用しています。</p>
+<ul>
+<li>Threads APIから取得したデータは、本サービスの機能提供のみに使用します</li>
+<li>アクセストークンは暗号化して安全に保存します</li>
+<li>第三者にThreads APIデータを販売・共有することはありません</li>
+<li>ユーザーがThreads連携を解除した場合、関連するThreadsデータを速やかに削除します</li>
+<li>インサイトデータはユーザー自身の投稿分析にのみ使用し、第三者と共有しません</li>
+</ul>
+
+<h2>5. AI生成機能におけるデータの取り扱い</h2>
+<ul>
+<li>AIへの入力データは投稿生成の目的でのみ外部APIに送信されます</li>
+<li>生成されたコンテンツはユーザーが確認・編集した上で投稿されます</li>
+<li>AI生成データを第三者のモデル学習に提供することはありません</li>
+</ul>
+
+<h2>6. 決済処理</h2>
+<p>有料プランの決済はStripe社の安全な決済インフラを通じて処理されます。クレジットカード情報は当社サーバーを経由せず、Stripe社が直接処理・保管します。</p>
+
+<h2>7. 情報の共有</h2>
+<p>本サービスは、以下の場合を除き、ユーザーの個人情報を第三者に提供しません。</p>
+<ul>
+<li>ユーザーの同意がある場合</li>
+<li>法令に基づく開示要求がある場合</li>
+<li>サービス提供に必要な業務委託先に対して、必要最小限の情報を提供する場合</li>
+</ul>
+
+<h2>8. データの保存と保護</h2>
+<p>SSL/TLS暗号化通信、パスワードのハッシュ化、アクセストークンの暗号化など、業界標準のセキュリティ対策を実施しています。</p>
+
+<h2>9. ユーザーの権利</h2>
+<ul>
+<li>アクセス権：自身の個人情報へのアクセスを要求する権利</li>
+<li>訂正権：不正確な個人情報の訂正を要求する権利</li>
+<li>削除権：個人情報の削除を要求する権利</li>
+<li>Threads連携解除：いつでもThreadsアカウントの連携を解除する権利</li>
+</ul>
+
+<h2>10. データ削除</h2>
+<p>ユーザーがアカウントの削除を希望する場合、またはThreads連携を解除する場合、関連する個人情報およびThreads APIデータは速やかに削除されます。データ削除のリクエストは、アプリ内の設定画面から行うことができます。</p>
+
+<h2>11. Cookieの使用</h2>
+<p>本サービスでは、ユーザー認証のためにセッションCookieを使用しています。トラッキングや広告目的では使用しません。</p>
+
+<h2>12. 本ポリシーの変更</h2>
+<p>本プライバシーポリシーは、法令の改正やサービスの変更に伴い、予告なく変更される場合があります。重要な変更がある場合は、サービス内で通知します。</p>
+
+<h2>13. お問い合わせ</h2>
+<p>プライバシーに関するご質問やご要望がございましたら、アプリ内のお問い合わせ機能またはサポートまでご連絡ください。</p>
+<p>運営：株式会社しっとる</p>
+<p>所在地：岡山県岡山市</p>
+<p>メール：momen_t421@yahoo.co.jp</p>
+
+<footer>
+<p>&copy; 2025 Threads Studio（株式会社しっとる）. All rights reserved.</p>
+</footer>
+</body>
+</html>`);
+  });
+
+  // Static Terms of Service page (server-rendered HTML for Meta App Review crawlers)
+  app.get("/terms", (req, res, next) => {
+    const ua = req.headers['user-agent'] || '';
+    const isCrawler = /facebookexternalhit|facebookcatalog|Facebot|meta-externalagent|curl|wget|bot|crawl|spider|slurp/i.test(ua);
+    if (!isCrawler) return next();
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>利用規約 - Threads Studio | 株式会社しっとる</title>
+</head>
+<body>
+<h1>利用規約</h1>
+<p>最終更新日：2025年6月1日</p>
+<p>運営会社：株式会社しっとる</p>
+<p>サービス名：Threads Studio</p>
+<p>本利用規約は、株式会社しっとる（以下「当社」）が提供するThreads Studio（以下「本サービス」）の利用条件を定めるものです。詳細はアプリ内でご確認ください。</p>
+<footer>
+<p>&copy; 2025 Threads Studio（株式会社しっとる）. All rights reserved.</p>
+</footer>
+</body>
+</html>`);
+  });
+
   // Health check endpoint
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
