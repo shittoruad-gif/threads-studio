@@ -23,6 +23,7 @@ import HelpTooltip from '@/components/HelpTooltip';
 import { triggerCelebration } from '@/components/Celebration';
 import ErrorGuide from '@/components/ErrorGuide';
 import ProjectLinksManager from '@/components/ProjectLinksManager';
+import TextareaWithEmoji from '@/components/TextareaWithEmoji';
 
 type PostType = 'hook_tree' | 'expertise' | 'local' | 'proof' | 'empathy' | 'story' | 'list' | 'offer' | 'enemy' | 'qa' | 'trend' | 'aruaru' | 'pinned';
 
@@ -1113,10 +1114,10 @@ export default function AIGenerate() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <Textarea
+                    <TextareaWithEmoji
                       value={editedPost.mainPost}
-                      onChange={(e) =>
-                        setEditedPost({ ...editedPost, mainPost: e.target.value })
+                      onChange={(v) =>
+                        setEditedPost({ ...editedPost, mainPost: v })
                       }
                       rows={10}
                       className="text-[15px] leading-relaxed"
@@ -1145,11 +1146,11 @@ export default function AIGenerate() {
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <Textarea
+                      <TextareaWithEmoji
                         value={post}
-                        onChange={(e) => {
+                        onChange={(v) => {
                           const newTreePosts = [...editedPost.treePosts];
-                          newTreePosts[index] = e.target.value;
+                          newTreePosts[index] = v;
                           setEditedPost({ ...editedPost, treePosts: newTreePosts });
                         }}
                         rows={6}
@@ -1165,10 +1166,10 @@ export default function AIGenerate() {
                     <CardTitle className="text-base">CTA（行動喚起）</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Textarea
+                    <TextareaWithEmoji
                       value={editedPost.cta}
-                      onChange={(e) =>
-                        setEditedPost({ ...editedPost, cta: e.target.value })
+                      onChange={(v) =>
+                        setEditedPost({ ...editedPost, cta: v })
                       }
                       rows={2}
                       className="text-[15px] leading-relaxed"
