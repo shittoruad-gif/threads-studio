@@ -363,13 +363,26 @@ export default function PostHistory() {
                     すべて表示
                   </Button>
                 ) : (
-                  <Button
-                    variant="outline"
-                    className="glass hover-lift"
-                    onClick={() => setLocation("/dashboard")}
-                  >
-                    ダッシュボードに戻る
-                  </Button>
+                  <>
+                    <p className="text-xs text-muted-foreground/80 mb-4">
+                      AI投稿生成から投稿を作って、予約投稿として登録できます
+                    </p>
+                    <div className="flex gap-2 justify-center flex-wrap">
+                      <Button
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        onClick={() => setLocation("/ai-generate")}
+                      >
+                        AIで投稿を作成
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="glass hover-lift"
+                        onClick={() => setLocation("/dashboard")}
+                      >
+                        ダッシュボードへ
+                      </Button>
+                    </div>
+                  </>
                 )}
               </div>
             )}
