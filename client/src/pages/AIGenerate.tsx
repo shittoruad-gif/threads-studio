@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import HelpTooltip from '@/components/HelpTooltip';
 import { triggerCelebration } from '@/components/Celebration';
 import ErrorGuide from '@/components/ErrorGuide';
+import ProjectLinksManager from '@/components/ProjectLinksManager';
 
 type PostType = 'hook_tree' | 'expertise' | 'local' | 'proof' | 'empathy' | 'story' | 'list' | 'offer' | 'enemy' | 'qa' | 'trend' | 'aruaru' | 'pinned';
 
@@ -430,6 +431,14 @@ export default function AIGenerate() {
         <div className="grid gap-6 lg:grid-cols-2">
           {/* 左側：設定エリア */}
           <div className="space-y-6">
+            {/* 誘導用URL登録 — 1度設定すれば固定投稿/自動投稿で自動的に使い回される */}
+            {projectId && project && (
+              <ProjectLinksManager
+                projectId={projectId}
+                initialLinksJson={(project as any).links || null}
+              />
+            )}
+
             <Card>
               <CardHeader>
                 <CardTitle>{project?.title}</CardTitle>

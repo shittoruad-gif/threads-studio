@@ -452,6 +452,7 @@ export const appRouter = router({
         strength: z.string().optional(),
         proof: z.string().optional(),
         ctaLink: z.string().optional(),
+        links: z.string().optional(), // JSON string of ProjectLink[]
         usp: z.string().optional(),
         n1Customer: z.string().optional(),
       }))
@@ -495,6 +496,7 @@ export const appRouter = router({
         strength: z.string().optional(),
         proof: z.string().optional(),
         ctaLink: z.string().optional(),
+        links: z.string().optional(), // JSON string of ProjectLink[]
         usp: z.string().optional(),
         n1Customer: z.string().optional(),
       }))
@@ -521,6 +523,33 @@ export const appRouter = router({
 
         await db.deleteProject(input.id);
         return { success: true };
+      }),
+
+    // ── Project links (LINE / 予約 / HP / etc.) ──────────────────────────
+    // Replace the entire links array on a project. Client sends the full
+    // intended state so we don't need separate add/remove/update endpoints.
+    setLinks: protectedProcedure
+      .input(z.object({
+        projectId: z.string(),
+        links: z.array(z.object({
+          id: z.string(),
+          type: z.enum(['line', 'reservation', 'website', 'instagram', 'youtube', 'other']),
+          label: z.string().min(1).max(40),
+          url: z.string().url('有効なURLを入力してください'),
+          isDefault: z.boolean().optional(),
+        })).max(20),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const project = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+        }
+        const { normaliseDefaults } = await import('../shared/projectLinks');
+        const normalised = normaliseDefaults(input.links);
+        await db.updateProject(input.projectId, {
+          links: JSON.stringify(normalised),
+        });
+        return { success: true, links: normalised };
       }),
 
     // Get project count
@@ -578,6 +607,8 @@ export const appRouter = router({
 
         // Generate prompt
         const { generateThreadsPrompt } = await import('../shared/threadsPrompts');
+        const { parseProjectLinks } = await import('../shared/projectLinks');
+        const projectLinks = parseProjectLinks((project as any).links || null);
         const prompt = generateThreadsPrompt({
           businessType: project.businessType,
           area: project.area,
@@ -586,6 +617,7 @@ export const appRouter = router({
           strength: project.strength,
           proof: project.proof || undefined,
           link: project.ctaLink || undefined,
+          links: projectLinks.map(l => ({ type: l.type, label: l.label, url: l.url })),
           postType: input.postType,
           treeCount: input.treeCount,
           usp: (project as any).usp || undefined,

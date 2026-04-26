@@ -97,7 +97,14 @@ export interface ThreadsPromptInput {
   mainProblem: string;
   strength: string;
   proof?: string;
-  link?: string;
+  link?: string; // 後方互換用 — 新規はlinksを使う
+  /**
+   * 登録済みURL一覧（LINE / 予約 / HP / etc.）。
+   * AIはpostType に応じて最適なURLを選んでCTAに含める：
+   *  - pinned / offer → 'line' を最優先（CV直結）、なければ 'reservation'
+   *  - 認知系（trend/aruaru等）→ プロフ誘導を優先しURLは入れない
+   */
+  links?: ProjectLinkLite[];
   postType?: PostType;
   treeCount?: number; // 0 = 本文のみ, 1〜5 = ツリー投稿数
   usp?: string;       // USP（独自の強み）← 第13回追加
@@ -105,6 +112,16 @@ export interface ThreadsPromptInput {
   trendWord?: string;  // トレンドワード
   purpose?: PostPurpose; // 投稿の目的（cv/awareness/authority/fan）
   tone?: PostTone;      // 投稿の口調
+}
+
+/**
+ * Lightweight link shape used inside the prompt (avoid importing the full
+ * ProjectLink type with isDefault etc. since the prompt only needs these).
+ */
+export interface ProjectLinkLite {
+  type: 'line' | 'reservation' | 'website' | 'instagram' | 'youtube' | 'other';
+  label: string;
+  url: string;
 }
 
 /**
@@ -704,6 +721,7 @@ ${input.n1Customer ? `- N1顧客像：${input.n1Customer}` : ''}
 ${input.proof ? `- 実績/証拠：${input.proof}` : ''}
 ${input.link ? `- 誘導先：${input.link}` : ''}
 ${input.trendWord ? `- トレンドワード：${input.trendWord}` : ''}
+${formatLinksForPrompt(input.links, input.postType)}
 
 【投稿タイプ】
 ${postTypeDescription}${localNote}${trendNote}
@@ -712,6 +730,61 @@ ${postTypeDescription}${localNote}${trendNote}
 特に「自然な文章のルール」と「禁止表現リスト」を厳守してください。
 ${treeCount === 0 ? 'ツリーは使わず、本文のみで完結させてください。treePostsは空配列にしてください。' : `ツリーは必ず${treeCount}投稿で構成してください。`}
 必ずJSON形式で出力してください。`;
+}
+
+/**
+ * Render the user's registered URLs into a prompt section that tells the
+ * AI which one to embed for the requested post type.
+ *
+ * Rules:
+ *  - 固定投稿 (pinned): always embed the LINE URL directly (safest place).
+ *    If no LINE link, fall back to reservation URL.
+ *  - オファー型 (offer): embed LINE or reservation URL in the CTA — but in
+ *    a tree post (2段目以降), not the very first line.
+ *  - その他: do NOT embed URLs directly. Refer the user to the固定投稿/
+ *    プロフィール instead. Mentioning "プロフから△△へ" is fine.
+ */
+function formatLinksForPrompt(links: ProjectLinkLite[] | undefined, postType: PostType | undefined): string {
+  if (!links || links.length === 0) return '';
+  const lines: string[] = ['', '【登録済みURL一覧】'];
+  for (const l of links) {
+    const typeLabel = ({
+      line: 'LINE公式', reservation: 'Web予約', website: '公式HP',
+      instagram: 'Instagram', youtube: 'YouTube', other: 'その他',
+    } as const)[l.type];
+    lines.push(`- [${typeLabel}] ${l.label}: ${l.url}`);
+  }
+
+  // Per-type usage rule
+  const linePref = links.find(l => l.type === 'line');
+  const reservationPref = links.find(l => l.type === 'reservation');
+  const websitePref = links.find(l => l.type === 'website');
+
+  lines.push('', '【URL利用ルール（必須）】');
+  if (postType === 'pinned') {
+    // 固定投稿: always embed LINE / reservation
+    if (linePref) {
+      lines.push(`- mainPostの末尾に必ず ${linePref.url} を貼ること。「↓LINE登録はこちら」など導線文も添える。`);
+    } else if (reservationPref) {
+      lines.push(`- mainPostの末尾に必ず ${reservationPref.url} を貼ること。「↓ご予約はこちら」など導線文も添える。`);
+    } else if (websitePref) {
+      lines.push(`- mainPostの末尾に ${websitePref.url} を貼り、詳細はWebでと案内すること。`);
+    }
+  } else if (postType === 'offer') {
+    // オファー: LINE / reservation in tree (not 1段目)
+    if (linePref) {
+      lines.push(`- 最終ツリー投稿（あれば）の末尾に ${linePref.url} を貼ること。1段目には絶対に貼らない。`);
+      lines.push('- 「迷う人向けに ○○ をLINEで配ってます」のように理由付きで誘導する。');
+    } else if (reservationPref) {
+      lines.push(`- 最終ツリー投稿（あれば）の末尾に ${reservationPref.url} を貼ること。1段目には絶対に貼らない。`);
+    }
+  } else {
+    // それ以外: URL直貼りせずプロフィール/固定投稿誘導
+    lines.push('- 投稿本文にURLを直接貼らない（インプが下がる）。');
+    lines.push('- 代わりに「プロフィールの固定投稿にまとめてます」「プロフからLINEへどうぞ」のように誘導する。');
+  }
+  lines.push('');
+  return lines.join('\n');
 }
 
 /**

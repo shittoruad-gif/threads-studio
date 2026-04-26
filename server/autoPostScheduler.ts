@@ -87,6 +87,11 @@ async function generateAutoPost(
   const purpose = PURPOSES[purposeIndex % PURPOSES.length];
 
   try {
+    // Auto-posts also reuse the user's registered URL set so LINE/予約 links
+    // appear in the right slots automatically.
+    const { parseProjectLinks } = await import('../shared/projectLinks');
+    const projectLinks = parseProjectLinks(project.links || null);
+
     // Generate prompt
     const prompt = generateThreadsPrompt({
       businessType: project.businessType,
@@ -96,6 +101,7 @@ async function generateAutoPost(
       strength: project.strength,
       proof: project.proof || undefined,
       link: project.ctaLink || undefined,
+      links: projectLinks.map(l => ({ type: l.type, label: l.label, url: l.url })),
       postType,
       treeCount: 3,
       usp: project.usp || undefined,

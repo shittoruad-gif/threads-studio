@@ -136,7 +136,11 @@ export const projects = mysqlTable("projects", {
   mainProblem: text("mainProblem"), // 主な悩み
   strength: text("strength"), // 強み/特徴
   proof: text("proof"), // 実績/証拠
-  ctaLink: text("ctaLink"), // 誘導先URL
+  ctaLink: text("ctaLink"), // 誘導先URL（後方互換用 — 新規はlinksを使う）
+  // 複数のURL（LINE/Web予約/HP/Instagram等）をJSON配列で保持。
+  // フォーマット: [{ id, type, label, url, isDefault }]
+  // type: 'line' | 'reservation' | 'website' | 'instagram' | 'youtube' | 'other'
+  links: text("links"),
   usp: text("usp"), // USP（第13回：独自の強み）
   n1Customer: text("n1Customer"), // N1分析：実在の1人の顧客像（第11回）
   createdAt: timestamp("createdAt").defaultNow().notNull(),
