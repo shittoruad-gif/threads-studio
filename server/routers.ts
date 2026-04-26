@@ -532,7 +532,7 @@ export const appRouter = router({
     generatePost: protectedProcedure
       .input(z.object({
         projectId: z.string(),
-        postType: z.enum(['hook_tree', 'expertise', 'local', 'proof', 'empathy', 'story', 'list', 'offer', 'enemy', 'qa', 'trend', 'aruaru']).optional(),
+        postType: z.enum(['hook_tree', 'expertise', 'local', 'proof', 'empathy', 'story', 'list', 'offer', 'enemy', 'qa', 'trend', 'aruaru', 'pinned']).optional(),
         treeCount: z.number().min(0).max(5).optional(), // 0 = 本文のみ, 1〜5 = ツリー投稿数
         trendWord: z.string().optional(), // トレンドワード（trend型で使用）
         purpose: z.enum(['cv', 'awareness', 'authority', 'fan']).optional(), // 投稿の目的

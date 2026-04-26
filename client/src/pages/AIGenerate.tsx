@@ -23,7 +23,7 @@ import HelpTooltip from '@/components/HelpTooltip';
 import { triggerCelebration } from '@/components/Celebration';
 import ErrorGuide from '@/components/ErrorGuide';
 
-type PostType = 'hook_tree' | 'expertise' | 'local' | 'proof' | 'empathy' | 'story' | 'list' | 'offer' | 'enemy' | 'qa' | 'trend' | 'aruaru';
+type PostType = 'hook_tree' | 'expertise' | 'local' | 'proof' | 'empathy' | 'story' | 'list' | 'offer' | 'enemy' | 'qa' | 'trend' | 'aruaru' | 'pinned';
 
 interface GeneratedPost {
   title: string;
@@ -358,7 +358,9 @@ export default function AIGenerate() {
     generateMutation.mutate({
       projectId,
       postType,
-      treeCount,
+      // 固定投稿はツリーなしで本文1つに完結させる前提なので
+      // ユーザーが treeCount を選んでいても 0 に強制する。
+      treeCount: postType === 'pinned' ? 0 : treeCount,
       trendWord: postType === 'trend' ? trendWord : undefined,
       purpose: purpose || undefined,
       tone: tone || undefined,
@@ -574,31 +576,43 @@ export default function AIGenerate() {
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5">
-                    <Label>追加の返信投稿（任意）</Label>
-                    <HelpTooltip content="メイン投稿に続くツリー（返信）の数です。3〜5本がおすすめです" />
+                {/* 固定投稿は常に1投稿のみ。treeCount セレクタは隠す。 */}
+                {postType !== 'pinned' ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1.5">
+                      <Label>追加の返信投稿（任意）</Label>
+                      <HelpTooltip content="メイン投稿に続くツリー（返信）の数です。3〜5本がおすすめです" />
+                    </div>
+                    <Select value={treeCount.toString()} onValueChange={(value) => setTreeCount(parseInt(value))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">なし（最初の1投稿のみ）</SelectItem>
+                        <SelectItem value="1">追加1投稿（詳細を補足）</SelectItem>
+                        <SelectItem value="2">追加2投稿</SelectItem>
+                        <SelectItem value="3">追加3投稿</SelectItem>
+                        <SelectItem value="4">追加4投稿</SelectItem>
+                        <SelectItem value="5">追加5投稿（最大）</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">
+                      {treeCount === 0
+                        ? '最初の1投稿だけを生成します'
+                        : `最初の投稿に続けて、追加で${treeCount}投稿分の返信投稿も作ります（詳細や続きを書くのに便利）`
+                      }
+                    </p>
                   </div>
-                  <Select value={treeCount.toString()} onValueChange={(value) => setTreeCount(parseInt(value))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0">なし（最初の1投稿のみ）</SelectItem>
-                      <SelectItem value="1">追加1投稿（詳細を補足）</SelectItem>
-                      <SelectItem value="2">追加2投稿</SelectItem>
-                      <SelectItem value="3">追加3投稿</SelectItem>
-                      <SelectItem value="4">追加4投稿</SelectItem>
-                      <SelectItem value="5">追加5投稿（最大）</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-sm text-muted-foreground">
-                    {treeCount === 0
-                      ? '最初の1投稿だけを生成します'
-                      : `最初の投稿に続けて、追加で${treeCount}投稿分の返信投稿も作ります（詳細や続きを書くのに便利）`
-                    }
-                  </p>
-                </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+                    <p className="text-sm text-amber-900">
+                      📌 <strong>固定投稿モード</strong>：1投稿で完結する形式で生成します。Threadsのプロフィール上部に固定して使ってください。
+                    </p>
+                    <p className="text-xs text-amber-800 mt-1">
+                      生成後、投稿の右上「…」→「プロフィールに固定」でThreads側の固定設定ができます。
+                    </p>
+                  </div>
+                )}
 
                 {/* 口調の選択 */}
                 <div className="space-y-2">

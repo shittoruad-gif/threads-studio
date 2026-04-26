@@ -106,7 +106,7 @@ export function SchedulePostDialog({ open, onOpenChange, projectId, postContent 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-background border border-border relative overflow-hidden">
+      <DialogContent className="bg-background border border-border relative">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-foreground">
             <Clock className="w-5 h-5 text-emerald-600" />
