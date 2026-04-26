@@ -679,6 +679,15 @@ export const appRouter = router({
         return { history, total };
       }),
 
+    // Has the user generated their 固定投稿 (pinned profile post) yet?
+    // Used by the dashboard to surface a "create your pinned post first"
+    // recommendation banner when this returns false.
+    hasPinnedPost: protectedProcedure
+      .query(async ({ ctx }) => {
+        const has = await db.hasGeneratedPinnedPost(ctx.user.id);
+        return { hasPinnedPost: has };
+      }),
+
     // Get AI generation history by ID
     getAiHistoryById: protectedProcedure
       .input(z.object({ id: z.number() }))

@@ -873,6 +873,26 @@ export async function getAiGenerationHistory(userId: number, limit: number = 50,
     .offset(offset);
 }
 
+/**
+ * Has the user generated at least one 固定投稿 (pinned profile post) yet?
+ * Used by the dashboard to surface a "create your pinned post first" banner
+ * for new users — the pinned profile post is the highest-CV element of a
+ * Threads funnel, so we want users to build it before anything else.
+ */
+export async function hasGeneratedPinnedPost(userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+
+  const rows = await db.select({ id: aiGenerationHistory.id })
+    .from(aiGenerationHistory)
+    .where(and(
+      eq(aiGenerationHistory.userId, userId),
+      eq(aiGenerationHistory.postType, 'pinned'),
+    ))
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function getAiGenerationHistoryById(id: number, userId: number) {
   const db = await getDb();
   if (!db) return null;

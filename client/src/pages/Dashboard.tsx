@@ -43,6 +43,7 @@ import { AIChatWidget } from '@/components/AIChatWidget';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
 import WeeklyCalendarView from '@/components/WeeklyCalendarView';
 import ErrorGuide from '@/components/ErrorGuide';
+import PinnedPostRecommendation from '@/components/PinnedPostRecommendation';
 
 export default function Dashboard() {
   const { user, isAuthenticated, loading, logout } = useAuth();
@@ -250,6 +251,9 @@ export default function Dashboard() {
             planName={subscription.plan?.name || 'トライアル'}
           />
         )}
+
+        {/* Pinned post recommendation (auto-hides once user creates one) */}
+        <PinnedPostRecommendation />
 
         {/* Welcome + Plan Badge */}
         <div className="mb-6 flex items-center justify-between">

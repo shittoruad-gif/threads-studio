@@ -51,10 +51,13 @@ export default function AIGenerate() {
   const projectId = searchParams.get('project');
   const historyId = searchParams.get('historyId');
   const templateId = searchParams.get('templateId');
+  // Optional: ?postType=pinned lets the dashboard "create your pinned post"
+  // CTA jump straight into pinned-post mode.
+  const initialPostType = (searchParams.get('postType') as PostType | null) || 'hook_tree';
 
   const [purpose, setPurpose] = useState<PostPurpose | null>(null);
   const [showAllTypes, setShowAllTypes] = useState(false);
-  const [postType, setPostType] = useState<PostType>('hook_tree');
+  const [postType, setPostType] = useState<PostType>(initialPostType);
   const [treeCount, setTreeCount] = useState<number>(3);
   const [trendWord, setTrendWord] = useState<string>('');
   const [tone, setTone] = useState<PostTone | null>(null);
