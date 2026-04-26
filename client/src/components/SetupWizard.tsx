@@ -192,7 +192,7 @@ export default function SetupWizard({ open, onOpenChange }: SetupWizardProps) {
             </li>
             <li className="flex items-start gap-3">
               <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-              <span>最適な時間帯に自動投稿（9時/12時/18時/21時）</span>
+              <span>最適な時間帯に自動投稿（9時/12時/17時/21時）</span>
             </li>
             <li className="flex items-start gap-3">
               <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />

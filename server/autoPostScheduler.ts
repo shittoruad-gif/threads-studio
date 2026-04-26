@@ -22,7 +22,11 @@ const POST_TYPES = [
 const PURPOSES = ['cv', 'awareness', 'authority', 'fan'] as const;
 
 // Optimal posting times (JST hours)
-const POSTING_HOURS = [9, 12, 18, 21];
+// Based on Threads engagement data: 20-22時 is the highest-engagement window,
+// followed by 16-17時. Morning (9時) catches the start-of-day check-in,
+// lunch (12時) catches the break check-in. We avoid 18時 (commute) which
+// performs worse than 17時 or 21時.
+const POSTING_HOURS = [9, 12, 17, 21];
 
 const JSON_SCHEMA = {
   type: 'json_schema' as const,
