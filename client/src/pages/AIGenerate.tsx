@@ -1092,8 +1092,8 @@ export default function AIGenerate() {
                       onChange={(e) =>
                         setEditedPost({ ...editedPost, mainPost: e.target.value })
                       }
-                      rows={6}
-                      className="font-mono text-sm"
+                      rows={10}
+                      className="text-[15px] leading-relaxed"
                     />
                   </CardContent>
                 </Card>
@@ -1126,8 +1126,8 @@ export default function AIGenerate() {
                           newTreePosts[index] = e.target.value;
                           setEditedPost({ ...editedPost, treePosts: newTreePosts });
                         }}
-                        rows={4}
-                        className="font-mono text-sm"
+                        rows={6}
+                        className="text-[15px] leading-relaxed"
                       />
                     </CardContent>
                   </Card>
@@ -1145,26 +1145,32 @@ export default function AIGenerate() {
                         setEditedPost({ ...editedPost, cta: e.target.value })
                       }
                       rows={2}
-                      className="font-mono text-sm"
+                      className="text-[15px] leading-relaxed"
                     />
                   </CardContent>
                 </Card>
 
-                {/* ハッシュタグ */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">ハッシュタグ</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      {editedPost.hashtags.map((tag, index) => (
-                        <Badge key={index} variant="secondary">
-                          #{tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                {/* ハッシュタグ — Threadsはハッシュタグ文化が薄く、現状は1投稿1タグまで対応。
+                    AIには#を生成させていないが、過去履歴で残っているケースのみ表示する。 */}
+                {editedPost.hashtags.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">ハッシュタグ</CardTitle>
+                      <CardDescription className="text-xs">
+                        ※Threadsではハッシュタグは控えめが推奨です（1投稿につき0〜1個）
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-wrap gap-2">
+                        {editedPost.hashtags.map((tag, index) => (
+                          <Badge key={index} variant="secondary">
+                            #{tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* メタ情報 */}
                 <Card>
