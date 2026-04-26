@@ -10,8 +10,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { trpc } from '@/lib/trpc';
-import { Link2, Unlink, AlertCircle, Plus, User, RefreshCw, Users, ShieldCheck } from 'lucide-react';
+import { Link2, Unlink, AlertCircle, Plus, User, RefreshCw, Users, ShieldCheck, LogOut, ArrowRight, Info, ExternalLink, Lightbulb } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { toast } from 'sonner';
 import { getLoginUrl } from '@/const';
@@ -83,20 +91,33 @@ export default function ThreadsConnect() {
     { enabled: isAuthenticated }
   );
 
+  // Track whether the user explicitly intended to add a DIFFERENT account
+  // (set when they confirm the pre-OAuth guide modal)
+  const userIntentRef = useRef<'add-different' | 'reconnect' | null>(null);
+  const [showSameAccountGuide, setShowSameAccountGuide] = useState(false);
+
   const handleCallback = trpc.threads.handleCallback.useMutation({
     onSuccess: (data) => {
       setIsProcessingCallback(false);
       if (data.isReconnection) {
-        toast.success('Threadsアカウントを再連携しました（トークンを更新）');
+        // If the user clicked "別のThreadsアカウントを連携" but ended up reconnecting
+        // the SAME account, show a guide explaining how to switch Threads account.
+        if (userIntentRef.current === 'add-different') {
+          setShowSameAccountGuide(true);
+        } else {
+          toast.success('Threadsアカウントを再連携しました（トークンを更新）');
+        }
       } else {
         toast.success('Threadsアカウントを連携しました');
       }
+      userIntentRef.current = null;
       refetch();
     },
     onError: (error) => {
       setIsProcessingCallback(false);
       console.error('[Threads OAuth] Callback error:', error);
       callbackProcessed.current = false;
+      userIntentRef.current = null;
       toast.error(`連携エラー: ${error.message}`);
     },
   });
@@ -141,13 +162,15 @@ export default function ThreadsConnect() {
     },
   });
 
-  const [showConnectConfirm, setShowConnectConfirm] = useState(false);
+  const [showAddDifferentGuide, setShowAddDifferentGuide] = useState(false);
 
-  const handleConnect = () => {
+  // Internal: actually start the OAuth redirect
+  const startOAuth = (intent: 'add-different' | 'reconnect') => {
     if (!authUrlData?.authUrl) {
       toast.error('認証URLを取得できませんでした');
       return;
     }
+    userIntentRef.current = intent;
     // Save any form state to localStorage before OAuth redirect
     try {
       const currentUrl = window.location.href;
@@ -156,6 +179,25 @@ export default function ThreadsConnect() {
       // Ignore localStorage errors
     }
     window.location.href = authUrlData.authUrl;
+  };
+
+  // Click handler for "別のThreadsアカウントを連携" button.
+  // If at least one account is already connected, show a guide modal first
+  // because Threads OAuth uses whichever account is currently active in the
+  // user's Threads.com session — a fact that catches many users by surprise.
+  const handleAddDifferentAccountClick = () => {
+    if ((accounts?.length || 0) > 0) {
+      setShowAddDifferentGuide(true);
+    } else {
+      // First account: skip guide and go straight to OAuth
+      startOAuth('add-different');
+    }
+  };
+
+  // Click handler for the per-account "再連携" button — token refresh for the
+  // SAME account, no guide needed.
+  const handleReconnect = () => {
+    startOAuth('reconnect');
   };
 
   const maxAccounts = subscription?.plan?.features?.maxThreadsAccounts || 0;
@@ -281,7 +323,7 @@ export default function ThreadsConnect() {
                   variant="outline"
                   size="sm"
                   className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                  onClick={handleConnect}
+                  onClick={handleReconnect}
                   disabled={handleCallback.isPending}
                   title="トークンを更新して再連携"
                 >
@@ -407,12 +449,18 @@ export default function ThreadsConnect() {
         <div className="space-y-3">
           <Button
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-6 text-base"
-            onClick={handleConnect}
+            onClick={handleAddDifferentAccountClick}
             disabled={handleCallback.isPending || !authUrlData}
           >
             <Plus className="w-5 h-5 mr-2" />
             {(accounts?.length || 0) > 0 ? '別のThreadsアカウントを連携' : 'Threadsと連携'}
           </Button>
+          {(accounts?.length || 0) > 0 && canAddMore && (
+            <p className="text-center text-muted-foreground/60 text-xs flex items-center justify-center gap-1">
+              <Info className="w-3 h-3" />
+              別のアカウントを追加する場合は、Threads側で別アカウントに切り替えが必要です（クリック後にガイドが表示されます）
+            </p>
+          )}
           {!canAddMore && (
             <p className="text-center text-muted-foreground/60 text-sm">
               ※ 新しいアカウントの追加は上限に達していますが、既存アカウントの再連携（トークン更新）は可能です
@@ -445,6 +493,142 @@ export default function ThreadsConnect() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Pre-OAuth Guide: Explain how to switch Threads accounts before connecting a different one */}
+      <Dialog open={showAddDifferentGuide} onOpenChange={setShowAddDifferentGuide}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Lightbulb className="w-6 h-6 text-amber-500" />
+              別のThreadsアカウントを連携する前に
+            </DialogTitle>
+            <DialogDescription className="pt-2 text-foreground/80">
+              Threadsの認証画面では、<strong>現在ブラウザでログイン中のThreadsアカウント</strong>がそのまま使われます。
+              そのため、別のアカウントを連携したい場合は<strong>事前にThreads側で切り替え</strong>が必要です。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Currently connected accounts */}
+            {(accounts?.length || 0) > 0 && (
+              <div className="bg-muted/50 border border-border rounded-lg p-3">
+                <p className="text-xs text-muted-foreground mb-2">📌 現在連携済みのアカウント</p>
+                <div className="flex flex-wrap gap-2">
+                  {accounts?.map((a) => (
+                    <span key={a.id} className="text-sm bg-background border border-border rounded px-2 py-1">
+                      @{a.threadsUsername}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground/80 mt-2">
+                  これら以外のアカウントを追加するには、以下の手順をご確認ください。
+                </p>
+              </div>
+            )}
+
+            {/* Method 1: Switch in Threads */}
+            <div className="border border-emerald-200 bg-emerald-50/50 rounded-lg p-4">
+              <p className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                <span className="bg-emerald-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">1</span>
+                方法1: Threadsでアカウントを切り替える（推奨）
+              </p>
+              <ol className="text-sm text-foreground/80 space-y-2 ml-7 list-decimal">
+                <li>
+                  下のボタンから <a href="https://www.threads.com/" target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline inline-flex items-center gap-1">Threads.com<ExternalLink className="w-3 h-3" /></a> を新しいタブで開く
+                </li>
+                <li>左下「<strong>さらに表示</strong>」→「<strong>ログアウト</strong>」で現在のアカウントからログアウト</li>
+                <li>連携したいアカウントで再ログイン</li>
+                <li>このページに戻り、下の「OAuth認証に進む」をクリック</li>
+              </ol>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                onClick={() => window.open('https://www.threads.com/', '_blank', 'noopener,noreferrer')}
+              >
+                <ExternalLink className="w-4 h-4 mr-1.5" />
+                Threadsを新しいタブで開く
+              </Button>
+            </div>
+
+            {/* Method 2: Incognito */}
+            <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-4">
+              <p className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                <span className="bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">2</span>
+                方法2: シークレット/プライベートウィンドウを使う
+              </p>
+              <ol className="text-sm text-foreground/80 space-y-2 ml-7 list-decimal">
+                <li>
+                  シークレットウィンドウを開く（<kbd className="bg-background border border-border rounded px-1.5 py-0.5 text-xs">Cmd</kbd> + <kbd className="bg-background border border-border rounded px-1.5 py-0.5 text-xs">Shift</kbd> + <kbd className="bg-background border border-border rounded px-1.5 py-0.5 text-xs">N</kbd> / Windowsは <kbd className="bg-background border border-border rounded px-1.5 py-0.5 text-xs">Ctrl</kbd> + <kbd className="bg-background border border-border rounded px-1.5 py-0.5 text-xs">Shift</kbd> + <kbd className="bg-background border border-border rounded px-1.5 py-0.5 text-xs">N</kbd>）
+                </li>
+                <li>そのウィンドウでThreadsに連携したいアカウントでログイン</li>
+                <li>このアプリにログインし直して再度「別のThreadsアカウントを連携」をクリック</li>
+              </ol>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setShowAddDifferentGuide(false)}>
+              キャンセル
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => {
+                setShowAddDifferentGuide(false);
+                startOAuth('add-different');
+              }}
+            >
+              準備完了 — OAuth認証に進む
+              <ArrowRight className="w-4 h-4 ml-1.5" />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Post-OAuth: Same account got connected — guide user to switch */}
+      <Dialog open={showSameAccountGuide} onOpenChange={setShowSameAccountGuide}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <AlertCircle className="w-6 h-6 text-amber-500" />
+              同じアカウントが連携されました
+            </DialogTitle>
+            <DialogDescription className="pt-2 text-foreground/80">
+              先ほど連携されたのは<strong>既存のアカウントと同じ</strong>でした。トークンは更新されています。
+              <br /><br />
+              <strong>別のアカウントを追加したい場合</strong>は、Threads側でアカウントを切り替えてから、もう一度お試しください。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="bg-muted/50 border border-border rounded-lg p-3 text-sm">
+              <p className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                <LogOut className="w-4 h-4 text-emerald-600" />
+                クイック手順
+              </p>
+              <ol className="text-foreground/80 space-y-1 ml-5 list-decimal">
+                <li>Threads.comでログアウト</li>
+                <li>連携したい別アカウントでログイン</li>
+                <li>このページに戻って再度「別のThreadsアカウントを連携」をクリック</li>
+              </ol>
+            </div>
+            <Button
+              variant="outline"
+              className="w-full border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              onClick={() => window.open('https://www.threads.com/', '_blank', 'noopener,noreferrer')}
+            >
+              <ExternalLink className="w-4 h-4 mr-1.5" />
+              Threadsを新しいタブで開いてアカウント切り替え
+            </Button>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSameAccountGuide(false)}>
+              わかりました
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
