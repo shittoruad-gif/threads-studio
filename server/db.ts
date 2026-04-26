@@ -32,12 +32,27 @@ let _db: ReturnType<typeof drizzle> | null = null;
 
 /**
  * Get or create a database connection.
+ *
+ * Uses utf8mb4 charset explicitly so emojis (🔥💡📍 etc.) and other
+ * 4-byte UTF-8 characters used heavily in Threads posts persist correctly.
+ * Without this, MySQL's default `utf8` (= utf8mb3) silently corrupts
+ * 4-byte chars on insert, producing 文字化け in stored content.
+ *
  * If the cached connection is stale (ECONNRESET), it will be recreated.
  */
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      // Lazy-import mysql2 (callback style — drizzle's mysql2 driver expects this).
+      // Build a pool with explicit charset so emojis aren't corrupted.
+      const mysql = await import("mysql2");
+      const pool = mysql.createPool({
+        uri: process.env.DATABASE_URL,
+        charset: "utf8mb4",
+        // mysql2 will issue `SET NAMES utf8mb4` on each new connection,
+        // ensuring text inserted (especially emojis) is preserved.
+      });
+      _db = drizzle(pool);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;

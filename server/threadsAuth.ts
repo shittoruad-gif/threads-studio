@@ -27,10 +27,22 @@ export interface ThreadsLongLivedTokenResponse {
   expires_in: number; // 60 days in seconds
 }
 
+export interface ThreadsAuthUrlOptions {
+  /**
+   * When true, forces Threads to show the login screen even if a session exists.
+   * Use this when the user wants to connect a DIFFERENT account than the one
+   * currently active in their Threads.com session.
+   *
+   * Implemented by passing `auth_type=reauthenticate` (Facebook OAuth standard)
+   * which Threads inherits from Meta's OAuth implementation.
+   */
+  forceReauth?: boolean;
+}
+
 /**
  * Generate OAuth authorization URL
  */
-export function getThreadsAuthUrl(config: ThreadsAuthConfig): string {
+export function getThreadsAuthUrl(config: ThreadsAuthConfig, options: ThreadsAuthUrlOptions = {}): string {
   const defaultScopes = [
     "threads_basic",
     "threads_content_publish",
@@ -39,13 +51,20 @@ export function getThreadsAuthUrl(config: ThreadsAuthConfig): string {
   ];
 
   const scopes = config.scope || defaultScopes;
-  
+
   const params = new URLSearchParams({
     client_id: ENV.threadsAppId,
     redirect_uri: config.redirectUri,
     scope: scopes.join(","),
     response_type: "code",
   });
+
+  // Force re-authentication so the user can pick a different Threads account.
+  // Without this, Threads silently uses whichever account is logged into the
+  // browser, which surprises users who want to connect a second account.
+  if (options.forceReauth) {
+    params.set("auth_type", "reauthenticate");
+  }
 
   return `${THREADS_OAUTH_URL}?${params.toString()}`;
 }

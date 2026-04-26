@@ -962,19 +962,36 @@ CTA: ${originalContent.cta}
     }),
 
     // Get OAuth authorization URL
-    getAuthUrl: protectedProcedure.query(async ({ ctx }) => {
-      const { getThreadsAuthUrl } = await import("./threadsAuth");
-      // Use THREADS_REDIRECT_BASE_URL if set (must match Meta Developer Portal callback URL)
-      // Otherwise fall back to origin header for dynamic detection
-      const origin = ENV.threadsRedirectBaseUrl
-        || ctx.req.headers.origin 
-        || `${ctx.req.headers['x-forwarded-proto'] || ctx.req.protocol}://${ctx.req.headers['x-forwarded-host'] || ctx.req.get('host')}`;
-      // Use frontend route /threads-connect directly as redirect_uri
-      // This avoids dependency on /api/threads/callback server route which may not work in production
-      const redirectUri = `${origin}/threads-connect`;
-      console.log('[Threads OAuth] Generated redirect_uri:', redirectUri);
-      return { authUrl: getThreadsAuthUrl({ redirectUri }) };
-    }),
+    // Pass `forceReauth: true` when the user wants to connect a different
+    // Threads account than the one currently active in their Threads.com
+    // session — this adds `auth_type=reauthenticate` to the OAuth URL so
+    // Threads forces a fresh login instead of silently reusing the session.
+    getAuthUrl: protectedProcedure
+      .input(
+        z
+          .object({
+            forceReauth: z.boolean().optional(),
+          })
+          .optional(),
+      )
+      .query(async ({ ctx, input }) => {
+        const { getThreadsAuthUrl } = await import("./threadsAuth");
+        // Use THREADS_REDIRECT_BASE_URL if set (must match Meta Developer Portal callback URL)
+        // Otherwise fall back to origin header for dynamic detection
+        const origin = ENV.threadsRedirectBaseUrl
+          || ctx.req.headers.origin
+          || `${ctx.req.headers['x-forwarded-proto'] || ctx.req.protocol}://${ctx.req.headers['x-forwarded-host'] || ctx.req.get('host')}`;
+        // Use frontend route /threads-connect directly as redirect_uri
+        // This avoids dependency on /api/threads/callback server route which may not work in production
+        const redirectUri = `${origin}/threads-connect`;
+        console.log('[Threads OAuth] Generated redirect_uri:', redirectUri, 'forceReauth:', input?.forceReauth);
+        return {
+          authUrl: getThreadsAuthUrl(
+            { redirectUri },
+            { forceReauth: input?.forceReauth },
+          ),
+        };
+      }),
 
     // Handle OAuth callback
     handleCallback: protectedProcedure
