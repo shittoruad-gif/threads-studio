@@ -155,14 +155,10 @@ export default function AIHistory() {
     setCloneOriginalTitle('');
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
+  // IMPORTANT: derive these BEFORE any early return so hook counts stay
+  // consistent across renders (Rules of Hooks). The previous version put
+  // `useMemo` after `if (isLoading) return ...`, which crashed with React
+  // error #310 once data loaded and the memo started being called.
   const history = data?.history || [];
   const total = data?.total || 0;
 
@@ -197,6 +193,14 @@ export default function AIHistory() {
 
     return filtered;
   }, [history, searchQuery, showFavoritesOnly, favoriteHistoryIds]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   // Pagination
   const totalHistoryPages = Math.ceil(filteredHistory.length / HISTORY_PER_PAGE);
