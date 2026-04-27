@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Pin, ArrowRight, X, Sparkles } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
+import { useAuth } from '@/_core/hooks/useAuth';
 
 const DISMISS_KEY = 'pinned-post-recommendation-dismissed';
 
@@ -22,6 +23,7 @@ const DISMISS_KEY = 'pinned-post-recommendation-dismissed';
  * once the user has generated at least one pinned post.
  */
 export function PinnedPostRecommendation() {
+  const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [dismissed, setDismissed] = useState(true); // start hidden to avoid flash
 
@@ -31,13 +33,18 @@ export function PinnedPostRecommendation() {
     setDismissed(stored === 'true');
   }, []);
 
-  const { data, isLoading } = trpc.project.hasPinnedPost.useQuery();
-  // We need at least one project to navigate to /ai-generate. If the user
-  // hasn't created one yet, the CTA routes them to project creation first.
-  const { data: projects } = trpc.project.list.useQuery();
+  // Only fire the queries when actually logged in. Unauthenticated calls
+  // surface as 401s in tRPC and can race with the auth flow during initial
+  // hydration, causing transient render issues.
+  const { data, isLoading } = trpc.project.hasPinnedPost.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+  const { data: projects } = trpc.project.list.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
 
   // Hide while loading, if already created, or if user dismissed this session
-  if (isLoading || data?.hasPinnedPost || dismissed) return null;
+  if (!isAuthenticated || isLoading || data?.hasPinnedPost || dismissed) return null;
 
   const handleDismiss = () => {
     setDismissed(true);
