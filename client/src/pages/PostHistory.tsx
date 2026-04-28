@@ -2,8 +2,18 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Calendar, CheckCircle2, CheckSquare, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, Square } from "lucide-react";
+import { ArrowLeft, Calendar, CheckCircle2, CheckSquare, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, Square, Trash2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
@@ -17,6 +27,8 @@ export default function PostHistory() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkCanceling, setBulkCanceling] = useState(false);
+  // ID of the post pending delete confirmation. null = no dialog shown.
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
 
   const { data: scheduledPosts, isLoading, refetch } = trpc.scheduledPost.list.useQuery();
   const cancelPost = trpc.scheduledPost.cancel.useMutation({
@@ -35,6 +47,17 @@ export default function PostHistory() {
     },
     onError: (error) => {
       toast.error(error.message);
+    },
+  });
+  const removePost = trpc.scheduledPost.remove.useMutation({
+    onSuccess: () => {
+      toast.success('履歴から削除しました');
+      refetch();
+      setDeleteTargetId(null);
+    },
+    onError: (error) => {
+      toast.error(error.message);
+      setDeleteTargetId(null);
     },
   });
 
@@ -309,6 +332,19 @@ export default function PostHistory() {
                               再試行
                             </Button>
                           )}
+                          {/* Delete: available for any status. For pending posts
+                              this prevents the cron from posting them. For
+                              failed/canceled posts it cleans up history. */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                            onClick={() => setDeleteTargetId(post.id)}
+                            title="履歴から削除"
+                          >
+                            <Trash2 className="w-3 h-3 mr-1" />
+                            削除
+                          </Button>
                         </div>
                         </div>
                       </CardContent>
@@ -389,6 +425,42 @@ export default function PostHistory() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete confirmation. We confirm regardless of status because for
+          a pending post deletion stops the cron from posting it. */}
+      <AlertDialog open={deleteTargetId !== null} onOpenChange={(open) => !open && setDeleteTargetId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>履歴から削除しますか？</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const target = scheduledPosts?.find(p => p.id === deleteTargetId);
+                if (!target) return null;
+                if (target.status === 'pending') {
+                  return '予約投稿が削除され、自動投稿は行われなくなります。この操作は取り消せません。';
+                }
+                if (target.status === 'failed') {
+                  return '失敗した投稿の履歴を削除します。この操作は取り消せません。';
+                }
+                return 'この投稿の履歴を削除します。この操作は取り消せません。';
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTargetId !== null) {
+                  removePost.mutate({ postId: deleteTargetId });
+                }
+              }}
+            >
+              削除する
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

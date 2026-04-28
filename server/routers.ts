@@ -1548,6 +1548,20 @@ ${input.commentText}
         });
         return { success: true };
       }),
+
+    // Permanently remove a scheduled post from history. Allowed for any
+    // status the current user owns. For pending posts this also stops the
+    // cron worker from posting them, since the row is gone.
+    remove: protectedProcedure
+      .input(z.object({ postId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const post = await db.getScheduledPostById(input.postId);
+        if (!post || post.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Post not found' });
+        }
+        await db.deleteScheduledPost(input.postId);
+        return { success: true };
+      }),
   }),
 
   // ============ Coupon Management ============

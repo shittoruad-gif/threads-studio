@@ -43,9 +43,12 @@ interface MenuItem {
   adminOnly?: boolean;
 }
 
+// Sidebar "AI投稿生成" links to /ai-generate (no project= param). The page
+// itself decides whether to auto-redirect to the user's existing project or
+// to /ai-project-create — that way returning users skip the chat/form.
 const mainMenuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
-  { icon: Sparkles, label: "AI投稿生成", path: "/ai-project-create", badge: "NEW" },
+  { icon: Sparkles, label: "AI投稿生成", path: "/ai-generate", badge: "NEW" },
   { icon: History, label: "AI生成履歴", path: "/ai-history", badgeKey: "ai-history" },
   { icon: FileText, label: "AI生成テンプレート", path: "/ai-templates" },
 ];

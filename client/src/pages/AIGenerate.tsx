@@ -389,19 +389,7 @@ export default function AIGenerate() {
   };
 
   if (!projectId) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle>プロジェクトが見つかりません</CardTitle>
-            <CardDescription>有効なプロジェクトを選択してください</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => setLocation('/dashboard')}>ダッシュボードに戻る</Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <ProjectAutoPicker />;
   }
 
   if (projectLoading) {
@@ -1753,6 +1741,83 @@ export default function AIGenerate() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/**
+ * Shown when the user lands on /ai-generate without a `?project=` param.
+ *
+ * Behaviour:
+ *  - 0 projects → punt to /ai-project-create (chat/form first)
+ *  - 1 project → auto-redirect into /ai-generate?project=<id> immediately
+ *  - 2+ projects → show a quick picker so the user doesn't have to
+ *                  re-fill the chat/form for an existing project
+ *
+ * Without this, sidebar "AI投稿生成" forced returning users back through
+ * the project creation chat every single time, which they had to abandon
+ * and dig their existing project out of /dashboard.
+ */
+function ProjectAutoPicker() {
+  const [, setLocation] = useLocation();
+  const { data: projects, isLoading } = trpc.project.list.useQuery();
+
+  // Auto-redirect for the single-project case so the user doesn't even
+  // see this picker — the whole point is "just take me to AI generation".
+  useEffect(() => {
+    if (!projects) return;
+    if (projects.length === 0) {
+      setLocation('/ai-project-create');
+    } else if (projects.length === 1) {
+      setLocation(`/ai-generate?project=${projects[0].id}`);
+    }
+  }, [projects, setLocation]);
+
+  if (isLoading || !projects || projects.length <= 1) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="container max-w-2xl py-10 px-4">
+      <h1 className="text-xl font-bold mb-2">どのプロジェクトでAI投稿を作りますか？</h1>
+      <p className="text-sm text-muted-foreground mb-6">
+        過去に作ったプロジェクトを選ぶと、お店の情報を再入力せずにすぐAI生成に進めます。
+      </p>
+
+      <div className="space-y-2">
+        {projects.map(p => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setLocation(`/ai-generate?project=${p.id}`)}
+            className="w-full text-left rounded-lg border border-border bg-background p-4 hover:border-primary hover:bg-primary/5 transition-colors"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-foreground truncate">{p.title || '無題のプロジェクト'}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                  {[p.businessType, p.area].filter(Boolean).join(' ・ ') || '店舗情報未設定'}
+                </p>
+              </div>
+              <ArrowLeft className="w-4 h-4 text-muted-foreground rotate-180 flex-shrink-0" />
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-6 pt-4 border-t border-border text-center">
+        <Button
+          variant="outline"
+          onClick={() => setLocation('/ai-project-create')}
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          新しいプロジェクトを作る
+        </Button>
+      </div>
     </div>
   );
 }

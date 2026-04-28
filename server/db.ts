@@ -569,6 +569,29 @@ export async function updateScheduledPost(
     .where(eq(scheduledPosts.id, postId));
 }
 
+/**
+ * Permanently delete a scheduled post row. Use this when the user wants
+ * to clear a failed/canceled entry from history (the cancel mutation only
+ * marks status='canceled' but keeps the row visible).
+ *
+ * Caller must already have verified ownership.
+ */
+export async function deleteScheduledPost(postId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(scheduledPosts).where(eq(scheduledPosts.id, postId));
+}
+
+export async function getScheduledPostById(postId: number): Promise<ScheduledPost | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select()
+    .from(scheduledPosts)
+    .where(eq(scheduledPosts.id, postId))
+    .limit(1);
+  return rows[0];
+}
+
 export async function countUserScheduledPosts(userId: number): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
