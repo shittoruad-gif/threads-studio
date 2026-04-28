@@ -1762,6 +1762,15 @@ function ProjectAutoPicker() {
   const [, setLocation] = useLocation();
   const { data: projects, isLoading } = trpc.project.list.useQuery();
 
+  // wouter's setLocation only listens to PATHNAME changes — going from
+  // /ai-generate to /ai-generate?project=xxx is the same pathname, so the
+  // page wouldn't re-mount and AIGenerate (which reads window.location.search
+  // directly) wouldn't pick up the new project. Fall through to a real
+  // browser navigation in that case.
+  const goToProject = (projectId: string) => {
+    window.location.href = `/ai-generate?project=${projectId}`;
+  };
+
   // Auto-redirect for the single-project case so the user doesn't even
   // see this picker — the whole point is "just take me to AI generation".
   useEffect(() => {
@@ -1769,7 +1778,7 @@ function ProjectAutoPicker() {
     if (projects.length === 0) {
       setLocation('/ai-project-create');
     } else if (projects.length === 1) {
-      setLocation(`/ai-generate?project=${projects[0].id}`);
+      goToProject(projects[0].id);
     }
   }, [projects, setLocation]);
 
@@ -1793,7 +1802,7 @@ function ProjectAutoPicker() {
           <button
             key={p.id}
             type="button"
-            onClick={() => setLocation(`/ai-generate?project=${p.id}`)}
+            onClick={() => goToProject(p.id)}
             className="w-full text-left rounded-lg border border-border bg-background p-4 hover:border-primary hover:bg-primary/5 transition-colors"
           >
             <div className="flex items-center justify-between gap-3">
