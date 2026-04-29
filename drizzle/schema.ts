@@ -143,6 +143,14 @@ export const projects = mysqlTable("projects", {
   links: text("links"),
   usp: text("usp"), // USP（第13回：独自の強み）
   n1Customer: text("n1Customer"), // N1分析：実在の1人の顧客像（第11回）
+  // AIカウンセリング結果（JSON）。事実ベース投稿のためにユーザから取得した
+  // 「使ってよい実績」「実在の顧客エピソード」「絶対に書きたくないこと」など。
+  // null の場合は未カウンセリング状態。フォーマット: shared/counseling.ts CounselingResult。
+  counselingResult: text("counselingResult"),
+  // Threadsマーケティング技法（強い1行目・心理トリガー等）をAI生成で使うか。
+  // true: 既存のフルプロンプト  / false: 自然・事実ベース寄りのライト版プロンプト
+  // null/未設定時はtrue扱い（既存挙動）
+  useThreadsKnowhow: boolean("useThreadsKnowhow").default(true),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

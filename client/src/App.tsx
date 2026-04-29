@@ -21,6 +21,7 @@ import Guide from "./pages/Guide";
 import AIProjectCreate from "./pages/AIProjectCreate";
 import AIHistory from "./pages/AIHistory";
 import AIGenerate from "./pages/AIGenerate";
+import AICounseling from "./pages/AICounseling";
 import AdminCoupons from "./pages/AdminCoupons";
 import AdminUsers from "./pages/AdminUsers";
 import AITemplates from "./pages/AITemplates";
@@ -68,6 +69,7 @@ function DashboardRoutes() {
         <Route path="/post-analytics" component={PostAnalytics} />
         <Route path="/ai-project-create" component={AIProjectCreate} />
         <Route path="/ai-generate" component={AIGenerate} />
+        <Route path="/ai-counseling" component={AICounseling} />
         <Route path="/ai-history" component={AIHistory} />
         <Route path="/admin/coupons" component={AdminCoupons} />
         <Route path="/admin/users" component={AdminUsers} />

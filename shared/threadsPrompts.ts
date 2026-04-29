@@ -112,6 +112,35 @@ export interface ThreadsPromptInput {
   trendWord?: string;  // トレンドワード
   purpose?: PostPurpose; // 投稿の目的（cv/awareness/authority/fan）
   tone?: PostTone;      // 投稿の口調
+  /**
+   * AIカウンセリング結果（あれば）。
+   * AIに「使ってよい弾」「使ってはいけない弾」を最初から教えるための情報。
+   * 渡すと「事実ベース」セクションが格段に具体的になり、捏造抑制効果が上がる。
+   */
+  counseling?: CounselingLike | null;
+  /**
+   * Threads特有のマーケティング技法（強い1行目・心理トリガー・〇選等）を
+   * フル活用するかどうか。
+   * - true（デフォルト）: 既存のフルプロンプト
+   * - false: ノウハウは控えめ・自然な投稿スタイルのライト版プロンプト
+   * counseling.useThreadsKnowhow があればそちらが優先される。
+   */
+  useThreadsKnowhow?: boolean;
+}
+
+/**
+ * shared/counseling.ts の CounselingResult を直接importせずに済むように
+ * 必要なフィールドだけを型として再宣言（循環参照回避）。
+ */
+export interface CounselingLike {
+  brandVoice?: string;
+  realProofs?: string[];
+  realEpisodes?: string[];
+  ctaAssets?: string[];
+  ngList?: string[];
+  preferredTypes?: PostType[];
+  useThreadsKnowhow?: boolean;
+  freeFormSummary?: string;
 }
 
 /**
@@ -330,13 +359,150 @@ export const STRONG_GENRES = [
 ];
 
 /**
+ * ライト版システムプロンプト（Threadsノウハウ無効モード）
+ *
+ * 「自然な投稿スタイル」を選んだユーザー向け。
+ * 強い1行目の10型・心理トリガー・煽り型・売れている演出ルールなど
+ * Threads特有のマーケティング技法は外し、シンプルに事実ベースの
+ * 普通の文章で投稿を作る。士業・医療系・落ち着いたブランディングをしたい
+ * 人向け。
+ */
+function buildLiteSystemPrompt(opts: {
+  treeCount: number;
+  postType?: PostType;
+  usp?: string;
+  n1Customer?: string;
+  purpose?: PostPurpose;
+  tone?: PostTone;
+  uspSection: string;
+  n1Section: string;
+  counselingSection: string;
+}): string {
+  const { treeCount, tone, uspSection, n1Section, counselingSection } = opts;
+  const isTreePost = treeCount > 0;
+  const toneSection = tone && POST_TONES[tone] ? `\n${POST_TONES[tone].promptInstruction}` : '';
+
+  return `あなたは「自然な投稿スタイル」を選んだユーザーのためのThreads投稿生成AIです。
+派手なマーケティング技法は使わず、ユーザー本人が普段使う言葉で、信頼感のある自然な投稿を作ります。
+売り込み感を抑え、上品で落ち着いたブランディングを優先します。
+
+【最重要：事実ベースで書くルール（最優先・例外なし）】
+- 入力情報やカウンセリング結果に書かれていないことは絶対に書かない。
+- 数字・実績・年数・人数・金額・期間限定オファー・割引・在庫・予約状況は、入力に明記されているものだけ使う。
+- 顧客エピソード・体験談は入力にあるものだけ使う。なければ作らない。
+- 「予約パンパン」「キャンセル待ち」「先着〇名」のような検証不能な盛り表現は使わない。
+- 迷ったら捏造より省略を選ぶ。
+${counselingSection}${uspSection}${n1Section}${toneSection}
+
+【自然な文章のルール】
+- 人間が普段書くような、飾らない文章にする。
+- 「〜について解説します」「いかがでしたか」のようなAI臭い前置き・締めは使わない。
+- 絵文字は控えめ。1行目には絶対に絵文字を入れない。
+- 1文ずつ改行する（「。」のあとは改行）。意味のかたまりごとに空行を入れる。
+- 同じ語尾・同じ言い回しを連続させない。
+- 「しっかり」「ちゃんと」のような曖昧な副詞は具体例に置換するか省く。
+- ハッシュタグは絶対に使わない。hashtags は必ず空配列。
+
+【スタイル指針（自然モード）】
+- 強い1行目（「〇〇はやめて」「実は間違い」など煽り型）は使わない。代わりに普通の語りかけで始める。
+- 心理トリガー（緊急性・限定性・損失回避など）の煽りは抑える。事実として伝えるべきことだけ淡々と書く。
+- 「予約してください」「来てください」のような直接の売り込みも使わない。代わりに「気になる方はLINEからお気軽に」のような穏やかな誘導にする。
+- 業界規制（薬機法・あはき法・医療法・景品表示法等）の断定表現禁止は厳守する。
+- 投稿の最後は問いかけ or 自分の本音の一言で締める（穏やかに）。
+
+【業界別 広告規制ガイドライン（厳守）】
+- 整体/接骨/鍼灸/エステ/医療: 「治る」「効く」「改善」の断定禁止。「ケア」「サポート」に置換。
+- 飲食/不動産: 「No.1」「最高級」「日本一」根拠なしでは禁止。
+- 全業種: 体験談を使う場合は「個人の感想」を示唆する書き方。「期間限定」常時表示禁止。
+
+【出力形式（必須JSON）】
+{
+  "title": "投稿タイトル（任意・内部用）",
+  "mainPost": "メイン投稿（自然な文章）",
+  "treePosts": [${isTreePost ? `"ツリー1"${treeCount >= 2 ? ', "ツリー2"' : ''}${treeCount >= 3 ? ', ...' : ''}` : ''}],
+  "cta": "CTA（穏やかな誘導1行）",
+  "hashtags": [],
+  "goal": "投稿の狙い",
+  "improvement": "次回改善案",
+  "expectedEffect": "投稿の期待効果",
+  "timingCandidate": "推奨投稿時間帯",
+  "weeklyImprovementPoint": "週次改善ポイント",
+  "hookType": "穏やかな語りかけ",
+  "cvGoal": "LINE登録 or 予約 のどちらか1つ"
+}
+${isTreePost ? `\ntreePostsは必ず${treeCount}個の要素にしてください。` : '\ntreePostsは必ず空配列 [] にしてください。'}`;
+}
+
+/**
  * Threads投稿生成システムプロンプト
  */
-function buildSystemPrompt(treeCount: number, postType?: PostType, usp?: string, n1Customer?: string, purpose?: PostPurpose, tone?: PostTone): string {
+function buildSystemPrompt(
+  treeCount: number,
+  postType?: PostType,
+  usp?: string,
+  n1Customer?: string,
+  purpose?: PostPurpose,
+  tone?: PostTone,
+  counseling?: CounselingLike | null,
+  useThreadsKnowhow: boolean = true,
+): string {
   const isTreePost = treeCount > 0;
 
   const uspSection = usp ? `\n【あなたのUSP（独自の強み）】\n${usp}\n- この強みを投稿に自然に反映させること。` : '';
   const n1Section = n1Customer ? `\n【N1分析：実在の顧客像】\n${n1Customer}\n- この人の言葉・感情・悩みをそのまま投稿に使うこと。架空のペルソナではなく、この実在の人物に刺さる文章を書く。` : '';
+
+  // ────────── カウンセリング結果（最優先で参照） ──────────
+  // ユーザが事前カウンセリングで明示してくれた「使ってよい弾／使ってはいけない弾」。
+  // ここに来た情報は「事実ベース」ルールよりさらに具体的な指示として効く。
+  const counselingSection = (() => {
+    if (!counseling) return '';
+    const lines: string[] = ['', '【★最優先：このユーザーのカウンセリング結果★】', 'これらは事前にユーザー本人が明示してくれた事実・方針です。**全ルールに優先**して参照すること。'];
+    if (counseling.brandVoice && counseling.brandVoice.trim()) {
+      lines.push(`- 口調・話し方: ${counseling.brandVoice.trim()}`);
+      lines.push('  → この口調を投稿全体で再現すること。下の「口調指定」と矛盾する場合はこちらを優先。');
+    }
+    if (counseling.realProofs && counseling.realProofs.length > 0) {
+      lines.push(`- ★使ってよい実績数字（このリストにあるものだけ使用可・捏造禁止）:`);
+      counseling.realProofs.forEach((p) => lines.push(`    ・${p}`));
+    } else {
+      lines.push(`- ★実績数字: ユーザー本人から「数字で出せる実績はない」と回答あり。`);
+      lines.push('  → 数字（年数・人数・売上・順位等）は投稿に出さない。「最近〜の方が増えています」のような検証不能な誇張も禁止。');
+    }
+    if (counseling.realEpisodes && counseling.realEpisodes.length > 0) {
+      lines.push(`- ★使ってよい顧客エピソード（このリストにあるものだけ使用可・架空エピソード禁止）:`);
+      counseling.realEpisodes.forEach((e) => lines.push(`    ・${e}`));
+    } else {
+      lines.push(`- ★顧客エピソード: ユーザーから「実例なし／書きたくない」と回答あり。`);
+      lines.push('  → 「半年前あるお客さんが…」のような物語型エピソードを作らない。「同じ悩みの方がよく来られます」のような一般表現にとどめる。');
+    }
+    if (counseling.ctaAssets && counseling.ctaAssets.length > 0) {
+      lines.push(`- ★CTAで約束してよい特典・サービス（このリストにあるものだけ）:`);
+      counseling.ctaAssets.forEach((c) => lines.push(`    ・${c}`));
+    } else {
+      lines.push(`- ★CTA特典: ユーザーから「特典なし」と回答あり。`);
+      lines.push('  → 「LINEで〇〇を無料配布」のような特典文言を作らない。「ご相談はLINEから気軽にどうぞ」止まり。');
+    }
+    if (counseling.ngList && counseling.ngList.length > 0) {
+      lines.push(`- ★絶対NGリスト（ユーザー本人が「絶対書きたくない」と明言・例外なく禁止）:`);
+      counseling.ngList.forEach((n) => lines.push(`    ・${n}`));
+    }
+    if (counseling.preferredTypes && counseling.preferredTypes.length > 0) {
+      lines.push(`- ユーザーが好む投稿タイプ: ${counseling.preferredTypes.join(', ')}`);
+    }
+    if (counseling.freeFormSummary && counseling.freeFormSummary.trim()) {
+      lines.push(`- 補足: ${counseling.freeFormSummary.trim()}`);
+    }
+    lines.push('');
+    return '\n' + lines.join('\n');
+  })();
+
+  // useThreadsKnowhow=false → ライト版（自然・事実ベース寄り）プロンプトに切り替え
+  if (!useThreadsKnowhow) {
+    return buildLiteSystemPrompt({
+      treeCount, postType, usp, n1Customer, purpose, tone,
+      uspSection, n1Section, counselingSection,
+    });
+  }
 
   const purposeConfig = purpose ? POST_PURPOSES[purpose] : null;
   const purposeSection = purposeConfig ? `\n【今回の投稿の目的】
@@ -448,7 +614,7 @@ Threadsは1行が長いと読み飛ばされます。スマホで読まれるこ
 - ただし「コメントください」「いいねお願いします」のような直接的な依頼はNG。自然な問いかけにする。
 - 共感→自己開示→問いかけの流れが最もコメントが付きやすい。
 - 投稿は「情報提供」だけでなく「感情を動かす」ことを意識する。読んだ人が「わかる！」「自分もそう！」と思える内容にする。
-${purposeSection}${uspSection}${n1Section}${tone && POST_TONES[tone] ? `\n${POST_TONES[tone].promptInstruction}` : ''}
+${counselingSection}${purposeSection}${uspSection}${n1Section}${tone && POST_TONES[tone] ? `\n${POST_TONES[tone].promptInstruction}` : ''}
 
 ${isTreePost ? `【ツリー投稿のルール】
 - ツリー数は${treeCount}投稿で構成すること（必ず${treeCount}投稿ぴったり）。
@@ -712,7 +878,16 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
   const postTypeInfo = input.postType ? POST_TYPES[input.postType] : POST_TYPES.hook_tree;
   const postTypeDescription = postTypeInfo.description;
   const treeCount = input.treeCount ?? 3; // デフォルト3投稿
-  const systemPrompt = buildSystemPrompt(treeCount, input.postType, input.usp, input.n1Customer, input.purpose, input.tone);
+  // useThreadsKnowhow は counseling 内のフラグが優先（カウンセリング済みなら
+  // ユーザの選択を尊重）。直接の input.useThreadsKnowhow も尊重する。
+  // どちらも未指定ならデフォルト true。
+  const useThreadsKnowhow = input.counseling?.useThreadsKnowhow !== undefined
+    ? input.counseling.useThreadsKnowhow
+    : (input.useThreadsKnowhow !== undefined ? input.useThreadsKnowhow : true);
+  const systemPrompt = buildSystemPrompt(
+    treeCount, input.postType, input.usp, input.n1Customer, input.purpose, input.tone,
+    input.counseling, useThreadsKnowhow,
+  );
   
   // 地域性タイプの場合、エリア名を本文に入れるよう明示
   const localNote = input.postType === 'local' 

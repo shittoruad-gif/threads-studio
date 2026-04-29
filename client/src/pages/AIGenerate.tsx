@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { ArrowLeft, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, FileEdit, Smartphone } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, FileEdit, Smartphone } from 'lucide-react';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -107,6 +107,12 @@ export default function AIGenerate() {
   const { data: project, isLoading: projectLoading } = trpc.project.get.useQuery(
     { id: projectId! },
     { enabled: !!projectId }
+  );
+
+  // カウンセリング状態（未受診ならバナーを出す）
+  const { data: counselingState } = trpc.project.getCounseling.useQuery(
+    { projectId: projectId! },
+    { enabled: !!projectId },
   );
 
   const { data: allPresets } = trpc.preset.list.useQuery();
@@ -416,6 +422,30 @@ export default function AIGenerate() {
           </Button>
           <ThreadsAccountSwitcher />
         </div>
+
+        {/* カウンセリング誘導バナー（未受診のときだけ表示） */}
+        {projectId && counselingState && !counselingState.counseledAt && (
+          <Card className="mb-6 border-primary/40 bg-primary/5">
+            <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex-1 space-y-1">
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  AIが「事実だけ」で書けるように、最初にカウンセリングを受けませんか？
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  使ってよい数字・実例・NG項目を最初に教えると、AIが勝手な数字や架空エピソードを作らなくなります。8問・3〜5分。
+                </p>
+              </div>
+              <Button
+                onClick={() => setLocation(`/ai-counseling?project=${projectId}`)}
+                className="shrink-0"
+              >
+                カウンセリングを始める
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* 左側：設定エリア */}

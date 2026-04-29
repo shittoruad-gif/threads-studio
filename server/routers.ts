@@ -499,6 +499,7 @@ export const appRouter = router({
         links: z.string().optional(), // JSON string of ProjectLink[]
         usp: z.string().optional(),
         n1Customer: z.string().optional(),
+        useThreadsKnowhow: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const project = await db.getProjectById(input.id);
@@ -557,6 +558,104 @@ export const appRouter = router({
       return await db.countUserProjects(ctx.user.id);
     }),
 
+    // ── AIカウンセリング: 結果取得 ─────────────────────────────────────
+    // プロジェクトに保存された CounselingResult を返す。未カウンセリング時は null。
+    getCounseling: protectedProcedure
+      .input(z.object({ projectId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        const project = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+        }
+        const raw = (project as any).counselingResult as string | null | undefined;
+        const useThreadsKnowhow = (project as any).useThreadsKnowhow;
+        if (!raw) {
+          return {
+            counseledAt: null as number | null,
+            useThreadsKnowhow: useThreadsKnowhow !== false, // 未設定はON扱い
+            result: null,
+          };
+        }
+        try {
+          const parsed = JSON.parse(raw);
+          return {
+            counseledAt: parsed?.counseledAt ?? null,
+            useThreadsKnowhow: useThreadsKnowhow !== false,
+            result: parsed,
+          };
+        } catch {
+          return {
+            counseledAt: null,
+            useThreadsKnowhow: useThreadsKnowhow !== false,
+            result: null,
+          };
+        }
+      }),
+
+    // ── AIカウンセリング: 一括保存 ─────────────────────────────────────
+    // 質問1〜8の生回答をまとめて受け取り、サーバ側で構造化して保存する。
+    // useThreadsKnowhow フラグも一緒に projects テーブルに反映する。
+    saveCounseling: protectedProcedure
+      .input(z.object({
+        projectId: z.string(),
+        answers: z.object({
+          brandVoiceRaw: z.string().default(''),
+          uspRaw: z.string().default(''),
+          realProofsRaw: z.string().default(''),
+          realEpisodesRaw: z.string().default(''),
+          ctaAssetsRaw: z.string().default(''),
+          ngListRaw: z.string().default(''),
+          preferredTypesRaw: z.string().default(''),
+          useThreadsKnowhow: z.enum(['on', 'off']).default('on'),
+        }),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const project = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+        }
+        const { buildCounselingResult } = await import('../shared/counseling');
+        const result = buildCounselingResult(input.answers);
+
+        // USP / N1 が未設定なら、カウンセリングの内容で埋める（ユーザの手間削減）。
+        const updatePatch: any = {
+          counselingResult: JSON.stringify(result),
+          useThreadsKnowhow: result.useThreadsKnowhow,
+        };
+        if (!project.usp && result.brandVoice) {
+          // brandVoice はUSPとは別物だが、空欄を埋める価値がある場合だけ
+        }
+        if (!project.usp && input.answers.uspRaw.trim()) {
+          updatePatch.usp = input.answers.uspRaw.trim();
+        }
+        if (!project.n1Customer && result.realEpisodes.length > 0) {
+          updatePatch.n1Customer = result.realEpisodes.join('\n');
+        }
+        if (!project.proof && result.realProofs.length > 0) {
+          updatePatch.proof = result.realProofs.join('\n');
+        }
+
+        await db.updateProject(input.projectId, updatePatch);
+        return { success: true, result };
+      }),
+
+    // ── AIカウンセリング: ノウハウ使用フラグだけ後から切り替える ────────
+    setUseThreadsKnowhow: protectedProcedure
+      .input(z.object({
+        projectId: z.string(),
+        useThreadsKnowhow: z.boolean(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const project = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+        }
+        await db.updateProject(input.projectId, {
+          useThreadsKnowhow: input.useThreadsKnowhow,
+        } as any);
+        return { success: true };
+      }),
+
     // Generate AI post
     generatePost: protectedProcedure
       .input(z.object({
@@ -609,6 +708,15 @@ export const appRouter = router({
         const { generateThreadsPrompt } = await import('../shared/threadsPrompts');
         const { parseProjectLinks } = await import('../shared/projectLinks');
         const projectLinks = parseProjectLinks((project as any).links || null);
+
+        // カウンセリング結果（あれば）と Threadsノウハウ使用フラグを取得
+        let counselingResult: any = null;
+        const counselingRaw = (project as any).counselingResult as string | null | undefined;
+        if (counselingRaw) {
+          try { counselingResult = JSON.parse(counselingRaw); } catch {}
+        }
+        const useThreadsKnowhow = (project as any).useThreadsKnowhow !== false;
+
         const prompt = generateThreadsPrompt({
           businessType: project.businessType,
           area: project.area,
@@ -625,6 +733,8 @@ export const appRouter = router({
           trendWord: input.trendWord || undefined,
           purpose: input.purpose,
           tone: input.tone,
+          counseling: counselingResult,
+          useThreadsKnowhow,
         });
 
         // Call LLM

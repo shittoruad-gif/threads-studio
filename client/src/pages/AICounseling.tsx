@@ -1,0 +1,353 @@
+import { useState, useMemo } from 'react';
+import { useLocation } from 'wouter';
+import {
+  ArrowLeft, ArrowRight, Sparkles, Loader2, Check,
+  PartyPopper, Plus,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { trpc } from '@/lib/trpc';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import {
+  COUNSELING_QUESTIONS,
+  type CounselingAnswers,
+  type CounselingQuestion,
+} from '../../../shared/counseling';
+
+/**
+ * AIカウンセリング画面
+ *
+ * URL: /ai-counseling?project=<projectId>
+ *
+ * 設計：
+ *  - 1問ずつ表示（チャット風の進行）
+ *  - 選択肢チップ・例文・「なし」ショートカットで答えやすく
+ *  - 全問終わったら projectt.saveCounseling で一括保存
+ */
+export default function AICounseling() {
+  const [, setLocation] = useLocation();
+  const projectId = useMemo(() => {
+    const url = new URL(window.location.href);
+    return url.searchParams.get('project') || '';
+  }, []);
+
+  const [stepIndex, setStepIndex] = useState(0);
+  const [answers, setAnswers] = useState<Partial<CounselingAnswers>>({});
+
+  const { data: project } = trpc.project.get.useQuery(
+    { id: projectId },
+    { enabled: !!projectId },
+  );
+
+  const saveMutation = trpc.project.saveCounseling.useMutation({
+    onSuccess: () => {
+      toast.success('カウンセリング結果を保存しました');
+      setLocation(`/ai-generate?project=${projectId}`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (!projectId) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-4">
+        <Card className="max-w-md w-full">
+          <CardContent className="py-10 text-center space-y-4">
+            <p className="text-muted-foreground">プロジェクトが指定されていません。</p>
+            <Button onClick={() => setLocation('/ai-generate')}>AI投稿生成へ戻る</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const totalSteps = COUNSELING_QUESTIONS.length;
+  const isLast = stepIndex === totalSteps - 1;
+  const isFirst = stepIndex === 0;
+  const currentQuestion = COUNSELING_QUESTIONS[stepIndex];
+  const currentAnswer = answers[currentQuestion.id] ?? '';
+
+  const setAnswer = (id: keyof CounselingAnswers, value: string) => {
+    setAnswers((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const canProceed = (() => {
+    if (!currentQuestion.required) return true;
+    const v = (currentAnswer as string)?.trim?.() ?? currentAnswer;
+    return Boolean(v && v.length > 0);
+  })();
+
+  const handleNext = () => {
+    if (!canProceed) return;
+    if (isLast) {
+      // 最後の質問なので保存
+      saveMutation.mutate({
+        projectId,
+        answers: {
+          brandVoiceRaw: answers.brandVoiceRaw ?? '',
+          uspRaw: answers.uspRaw ?? '',
+          realProofsRaw: answers.realProofsRaw ?? '',
+          realEpisodesRaw: answers.realEpisodesRaw ?? '',
+          ctaAssetsRaw: answers.ctaAssetsRaw ?? '',
+          ngListRaw: answers.ngListRaw ?? '',
+          preferredTypesRaw: answers.preferredTypesRaw ?? '',
+          useThreadsKnowhow: (answers.useThreadsKnowhow as 'on' | 'off') ?? 'on',
+        },
+      });
+    } else {
+      setStepIndex((i) => i + 1);
+    }
+  };
+
+  const handleBack = () => {
+    if (!isFirst) setStepIndex((i) => i - 1);
+  };
+
+  const handleSkipEmpty = () => {
+    setAnswer(currentQuestion.id, 'なし');
+    setTimeout(() => handleNext(), 50);
+  };
+
+  return (
+    <div className="container max-w-2xl py-6 px-4 space-y-4">
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setLocation(`/ai-generate?project=${projectId}`)}
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          戻る
+        </Button>
+        <Badge variant="secondary" className="gap-1">
+          <Sparkles className="h-3 w-3" />
+          AIカウンセリング
+        </Badge>
+      </div>
+
+      {/* タイトル */}
+      <div>
+        <h1 className="text-xl font-bold">
+          {project?.title || 'プロジェクト'} のAIカウンセリング
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          ここで答えてもらった内容だけをAIは「事実」として使います。書かれていない数字・エピソードを勝手に作ることはありません。
+        </p>
+      </div>
+
+      {/* 進捗 */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>質問 {stepIndex + 1} / {totalSteps}</span>
+          <span>{Math.round(((stepIndex + 1) / totalSteps) * 100)}%</span>
+        </div>
+        <Progress value={((stepIndex + 1) / totalSteps) * 100} className="h-1.5" />
+      </div>
+
+      {/* 質問本体 */}
+      <QuestionCard
+        question={currentQuestion}
+        value={(currentAnswer as string) ?? ''}
+        onChange={(v) => setAnswer(currentQuestion.id, v)}
+      />
+
+      {/* ナビ */}
+      <div className="flex items-center gap-2 sticky bottom-2 bg-background/80 backdrop-blur-sm py-2 -mx-4 px-4">
+        <Button variant="outline" disabled={isFirst} onClick={handleBack}>
+          戻る
+        </Button>
+        <div className="flex-1" />
+        {currentQuestion.allowEmptyShortcut && (
+          <Button variant="ghost" onClick={handleSkipEmpty}>
+            「なし」で進む
+          </Button>
+        )}
+        <Button
+          onClick={handleNext}
+          disabled={!canProceed || saveMutation.isPending}
+        >
+          {saveMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : isLast ? (
+            <>
+              <PartyPopper className="h-4 w-4 mr-1" />
+              完了して保存
+            </>
+          ) : (
+            <>
+              次へ
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 1問ぶんの入力カード
+// ─────────────────────────────────────────────────────────────────────────
+function QuestionCard({
+  question,
+  value,
+  onChange,
+}: {
+  question: CounselingQuestion;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  // multi-choice 用に値をパース
+  const selectedValues = useMemo(
+    () => value.split(/[,\s]+/).filter(Boolean),
+    [value],
+  );
+
+  const toggleMultiChoice = (v: string) => {
+    const set = new Set(selectedValues);
+    if (set.has(v)) set.delete(v); else set.add(v);
+    onChange(Array.from(set).join(','));
+  };
+
+  const insertSuggestion = (s: string) => {
+    if (!value || value.trim() === '') {
+      onChange(s);
+    } else {
+      // 既に同じものが入っていたら無視
+      const lines = value.split('\n').map((l) => l.trim());
+      if (lines.includes(s.trim())) return;
+      onChange((value.endsWith('\n') ? value : value + '\n') + s);
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent className="pt-6 space-y-4">
+        <div className="text-sm whitespace-pre-line leading-relaxed">
+          {question.prompt}
+        </div>
+        {question.helper && (
+          <p className="text-xs text-muted-foreground">{question.helper}</p>
+        )}
+
+        {/* 例文 */}
+        {question.examples && question.examples.length > 0 && (
+          <div className="bg-muted/50 rounded-md p-3 space-y-1 border-l-2 border-primary/40">
+            {question.examples.map((ex, i) => (
+              <p key={i} className="text-xs text-muted-foreground leading-relaxed">{ex}</p>
+            ))}
+          </div>
+        )}
+
+        {/* choice */}
+        {question.ui === 'choice' && question.choices && (
+          <div className="grid gap-2">
+            {question.choices.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => onChange(c.value)}
+                className={cn(
+                  'text-left rounded-lg border p-4 transition-all',
+                  'hover:bg-accent/50',
+                  value === c.value
+                    ? 'border-primary bg-primary/5 ring-2 ring-primary/30'
+                    : 'border-border',
+                )}
+              >
+                <div className="flex items-start gap-2">
+                  <div className={cn(
+                    'h-4 w-4 mt-0.5 rounded-full border-2 flex-shrink-0 flex items-center justify-center',
+                    value === c.value ? 'border-primary bg-primary' : 'border-muted-foreground/40',
+                  )}>
+                    {value === c.value && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm">{c.label}</div>
+                    {c.description && (
+                      <div className="text-xs text-muted-foreground mt-1">{c.description}</div>
+                    )}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* multi-choice */}
+        {question.ui === 'multi-choice' && question.choices && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {question.choices.map((c) => {
+              const isSelected = selectedValues.includes(c.value);
+              return (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => toggleMultiChoice(c.value)}
+                  className={cn(
+                    'text-left rounded-lg border p-3 transition-all',
+                    'hover:bg-accent/50',
+                    isSelected
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                      : 'border-border',
+                  )}
+                >
+                  <div className="flex items-start gap-2">
+                    <div className={cn(
+                      'h-4 w-4 mt-0.5 rounded border-2 flex-shrink-0 flex items-center justify-center',
+                      isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/40',
+                    )}>
+                      {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm leading-tight">{c.label}</div>
+                      {c.description && (
+                        <div className="text-xs text-muted-foreground mt-1">{c.description}</div>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* textarea / multiline-list */}
+        {(question.ui === 'textarea' || question.ui === 'multiline-list') && (
+          <>
+            {question.suggestions && question.suggestions.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {question.suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => insertSuggestion(s)}
+                    className="text-xs bg-secondary hover:bg-secondary/80 rounded-full px-3 py-1 inline-flex items-center gap-1 transition-colors"
+                  >
+                    <Plus className="h-3 w-3" />
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+            <Textarea
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              rows={question.ui === 'multiline-list' ? 6 : 4}
+              placeholder={
+                question.ui === 'multiline-list'
+                  ? '上のチップをタップで挿入できます。1行に1つずつ書いてください。'
+                  : '上のチップから選ぶか、自由に書いてください。'
+              }
+              className="resize-none"
+            />
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
