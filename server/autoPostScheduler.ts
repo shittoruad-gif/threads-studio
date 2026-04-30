@@ -92,6 +92,14 @@ async function generateAutoPost(
     const { parseProjectLinks } = await import('../shared/projectLinks');
     const projectLinks = parseProjectLinks(project.links || null);
 
+    // カウンセリング結果（あれば）と Threadsノウハウ使用フラグを取得。
+    // 自動投稿でもユーザーの「事実だけ書く」設定を尊重する（捏造防止）。
+    let counselingResult: any = null;
+    if (project.counselingResult) {
+      try { counselingResult = JSON.parse(project.counselingResult); } catch {}
+    }
+    const useThreadsKnowhow = project.useThreadsKnowhow !== false;
+
     // Generate prompt
     const prompt = generateThreadsPrompt({
       businessType: project.businessType,
@@ -107,6 +115,8 @@ async function generateAutoPost(
       usp: project.usp || undefined,
       n1Customer: project.n1Customer || undefined,
       purpose,
+      counseling: counselingResult,
+      useThreadsKnowhow,
     });
 
     // Call LLM

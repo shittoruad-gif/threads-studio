@@ -622,9 +622,6 @@ export const appRouter = router({
           counselingResult: JSON.stringify(result),
           useThreadsKnowhow: result.useThreadsKnowhow,
         };
-        if (!project.usp && result.brandVoice) {
-          // brandVoice はUSPとは別物だが、空欄を埋める価値がある場合だけ
-        }
         if (!project.usp && input.answers.uspRaw.trim()) {
           updatePatch.usp = input.answers.uspRaw.trim();
         }
@@ -893,6 +890,22 @@ export const appRouter = router({
           try { metadata = JSON.parse(history.metadata); } catch (e) {}
         }
 
+        // 量産時もカウンセリング結果（あれば）を尊重して捏造を防ぐ
+        let counselingForClone: any = null;
+        if (history.projectId) {
+          const cloneProject = await db.getProjectById(history.projectId);
+          if (cloneProject?.userId === ctx.user.id) {
+            const raw = (cloneProject as any).counselingResult as string | null | undefined;
+            if (raw) {
+              try { counselingForClone = JSON.parse(raw); } catch {}
+            }
+          }
+        }
+        const cloneNgList = (counselingForClone?.ngList ?? []) as string[];
+        const cloneRealProofs = (counselingForClone?.realProofs ?? []) as string[];
+        const cloneRealEpisodes = (counselingForClone?.realEpisodes ?? []) as string[];
+        const cloneCtaAssets = (counselingForClone?.ctaAssets ?? []) as string[];
+
         // Build clone prompt
         const clonePrompt = `以下の投稿が高いエンゲージメントを獲得しました。同じ構成・トーン・長さで、内容を変えた${input.count}本のバリエーションを生成してください。
 
@@ -911,9 +924,23 @@ CTA: ${originalContent.cta}
 ターゲット: ${metadata.target || '不明'}
 主な悩み: ${metadata.mainProblem || '不明'}
 強み: ${metadata.strength || '不明'}
-
+${counselingForClone ? `
+【★このユーザーのカウンセリング結果★（最優先）】
+${cloneRealProofs.length > 0
+  ? `- 使ってよい実績数字（このリスト以外は捏造禁止）:\n${cloneRealProofs.map(p => `    ・${p}`).join('\n')}`
+  : '- 実績数字: ユーザー本人から「数字なし」と回答あり → 数字は出さない'}
+${cloneRealEpisodes.length > 0
+  ? `- 使ってよい顧客エピソード（このリスト以外は架空エピソード禁止）:\n${cloneRealEpisodes.map(e => `    ・${e}`).join('\n')}`
+  : '- 顧客エピソード: 「実例なし」と回答あり → 物語型エピソードを作らない'}
+${cloneCtaAssets.length > 0
+  ? `- CTA特典:\n${cloneCtaAssets.map(c => `    ・${c}`).join('\n')}`
+  : '- CTA特典: なし → 「LINEで気軽に相談」止まり'}
+${cloneNgList.length > 0
+  ? `- 絶対NGリスト（例外なく禁止）:\n${cloneNgList.map(n => `    ・${n}`).join('\n')}`
+  : ''}
+` : ''}
 【最重要：事実ベースルール】
-- **元の投稿または店舗情報に書かれていない事実（数字・実績・年数・キャンセル待ち・予約状況・割引・料金・顧客エピソード・本人の発言）は絶対に作らない**。
+- **元の投稿または店舗情報・カウンセリング結果に書かれていない事実（数字・実績・年数・キャンセル待ち・予約状況・割引・料金・顧客エピソード・本人の発言）は絶対に作らない**。
 - バリエーションを増やすために具体性を盛りたくなっても、入力にない数字・体験談を捏造してはいけない。具体例を変える場合も、店舗情報の \`強み\` の範囲内で書ける一般表現に置き換える。
 - 元の投稿に登場した数字や事例は使ってよい（同じ事業者の同じ事実を別表現で書く）。
 

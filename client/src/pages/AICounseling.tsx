@@ -74,27 +74,41 @@ export default function AICounseling() {
     setAnswers((prev) => ({ ...prev, [id]: value }));
   };
 
+  // canProceed は現在のレンダーで描画されるボタンの enable/disable 用。
+  // 実際の進行判定は handleNext 内でも独立に行うこと（state更新タイミングの
+  // 競合を避けるため）。
   const canProceed = (() => {
     if (!currentQuestion.required) return true;
     const v = (currentAnswer as string)?.trim?.() ?? currentAnswer;
-    return Boolean(v && v.length > 0);
+    return Boolean(v && (v as string).length > 0);
   })();
 
-  const handleNext = () => {
-    if (!canProceed) return;
+  /**
+   * 次へ進む。
+   * @param overrideAnswers - 直前に setAnswer した値を React state 反映を
+   *   待たずに反映するためのオーバーライド。handleSkipEmpty から渡される。
+   */
+  const advance = (overrideAnswers?: Partial<CounselingAnswers>) => {
+    const merged: Partial<CounselingAnswers> = { ...answers, ...(overrideAnswers ?? {}) };
+    // 進行可否を最新の回答で再判定（race condition 防止）
+    if (currentQuestion.required) {
+      const raw = merged[currentQuestion.id];
+      const v = typeof raw === 'string' ? raw.trim() : raw;
+      if (!v || (v as string).length === 0) return;
+    }
+
     if (isLast) {
-      // 最後の質問なので保存
       saveMutation.mutate({
         projectId,
         answers: {
-          brandVoiceRaw: answers.brandVoiceRaw ?? '',
-          uspRaw: answers.uspRaw ?? '',
-          realProofsRaw: answers.realProofsRaw ?? '',
-          realEpisodesRaw: answers.realEpisodesRaw ?? '',
-          ctaAssetsRaw: answers.ctaAssetsRaw ?? '',
-          ngListRaw: answers.ngListRaw ?? '',
-          preferredTypesRaw: answers.preferredTypesRaw ?? '',
-          useThreadsKnowhow: (answers.useThreadsKnowhow as 'on' | 'off') ?? 'on',
+          brandVoiceRaw: merged.brandVoiceRaw ?? '',
+          uspRaw: merged.uspRaw ?? '',
+          realProofsRaw: merged.realProofsRaw ?? '',
+          realEpisodesRaw: merged.realEpisodesRaw ?? '',
+          ctaAssetsRaw: merged.ctaAssetsRaw ?? '',
+          ngListRaw: merged.ngListRaw ?? '',
+          preferredTypesRaw: merged.preferredTypesRaw ?? '',
+          useThreadsKnowhow: (merged.useThreadsKnowhow as 'on' | 'off') ?? 'on',
         },
       });
     } else {
@@ -102,13 +116,17 @@ export default function AICounseling() {
     }
   };
 
+  const handleNext = () => advance();
+
   const handleBack = () => {
     if (!isFirst) setStepIndex((i) => i - 1);
   };
 
   const handleSkipEmpty = () => {
+    // setAnswer の state 反映を待たずに、その値で advance する。
+    // setTimeout だと canProceed が古い値で評価される race を避けるため。
     setAnswer(currentQuestion.id, 'なし');
-    setTimeout(() => handleNext(), 50);
+    advance({ [currentQuestion.id]: 'なし' } as Partial<CounselingAnswers>);
   };
 
   return (
