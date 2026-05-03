@@ -101,6 +101,16 @@ async function generateAutoPost(
     const useThreadsKnowhow = project.useThreadsKnowhow !== false;
 
     // Generate prompt
+    //
+    // ★treeCount=0（本文のみ）に固定する理由:
+    //   以前は treeCount=3 だったが、autoPostScheduler は生成したツリー投稿を
+    //   全部 \n\n で連結して **1つの巨大なThreads投稿** として送っていた。
+    //   結果、毎日の自動投稿が「全部 固定投稿サイズの長文」になっていた。
+    //   Threads は1投稿500文字制限なので、連結時に上限超過で切り詰められる
+    //   リスクもあった。
+    //   本来「毎日自動」のユースケースは短く読みやすい単発投稿の連投なので、
+    //   ここを treeCount=0 に固定する。ツリーで深く語りたいときは
+    //   AIGenerate の手動生成で treeCount を選んでもらう。
     const prompt = generateThreadsPrompt({
       businessType: project.businessType,
       area: project.area,
@@ -111,7 +121,7 @@ async function generateAutoPost(
       link: project.ctaLink || undefined,
       links: projectLinks.map(l => ({ type: l.type, label: l.label, url: l.url })),
       postType,
-      treeCount: 3,
+      treeCount: 0,
       usp: project.usp || undefined,
       n1Customer: project.n1Customer || undefined,
       purpose,
@@ -133,13 +143,31 @@ async function generateAutoPost(
 
     const result = JSON.parse(content);
 
-    // Combine main post + tree posts + CTA + hashtags into full post content
-    const fullContent = [
+    // Combine main post + tree posts + CTA + hashtags into full post content。
+    // treeCount=0 を指定しているので通常 treePosts は空配列。
+    const rawContent = [
       result.mainPost,
       ...(result.treePosts || []),
       result.cta || '',
       (result.hashtags || []).map((h: string) => h.startsWith('#') ? h : `#${h}`).join(' '),
     ].filter(Boolean).join('\n\n');
+
+    // Threads API は1投稿500文字制限。長すぎると API 側で拒否されるか
+    // 切り詰められて無音失敗する。安全側に倒して 480 文字で切る。
+    // （通常は treeCount=0 + プロンプト文字数予算で十分短いはずだが、
+    //   AIが指示を無視した時のための最後の安全網）
+    const THREADS_MAX_CHARS = 500;
+    const SAFETY_LIMIT = 480;
+    let fullContent = rawContent;
+    if (Array.from(rawContent).length > SAFETY_LIMIT) {
+      console.warn(
+        `[AutoPost] Generated content exceeds safety limit ` +
+        `(${Array.from(rawContent).length} chars > ${SAFETY_LIMIT}). Truncating. userId=${userId} projectId=${project.id}`,
+      );
+      // コードポイント単位で切る（絵文字でサロゲートペア破壊を防ぐ）
+      fullContent = Array.from(rawContent).slice(0, SAFETY_LIMIT - 1).join('') + '…';
+    }
+    void THREADS_MAX_CHARS;
 
     // Schedule the post
     const scheduledAt = getNextPostingTime(postingTimeIndex);

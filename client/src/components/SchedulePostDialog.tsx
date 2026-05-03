@@ -183,8 +183,29 @@ export function SchedulePostDialog({ open, onOpenChange, projectId, postContent 
 
           {/* プレビュー */}
           <div className="p-3 rounded-lg bg-muted/50 border border-border">
-            <p className="text-muted-foreground text-sm mb-2">投稿内容プレビュー</p>
-            <p className="text-foreground text-sm line-clamp-3">{postContent}</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-muted-foreground text-sm">投稿内容プレビュー</p>
+              {(() => {
+                // Threads API は1投稿500文字制限。
+                // ツリー連結で長くなりがちなので、ここで明示的に文字数を出して
+                // 「予約してから初めて長すぎることに気付く」のを防ぐ。
+                const len = Array.from(postContent).length;
+                const isWarn = len > 350;
+                const isOver = len > 480;
+                return (
+                  <span
+                    className={`text-xs font-medium ${
+                      isOver ? 'text-destructive' : isWarn ? 'text-orange-600 dark:text-orange-400' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {len} / 500文字
+                    {isOver && ' ⚠ 上限超過・送信時に切り詰められます'}
+                    {!isOver && isWarn && ' ⚠ 長め'}
+                  </span>
+                );
+              })()}
+            </div>
+            <p className="text-foreground text-sm line-clamp-3 whitespace-pre-line">{postContent}</p>
           </div>
         </div>
 

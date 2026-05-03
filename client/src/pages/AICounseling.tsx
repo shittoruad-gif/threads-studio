@@ -38,6 +38,8 @@ export default function AICounseling() {
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<Partial<CounselingAnswers>>({});
 
+  const utils = trpc.useUtils();
+
   const { data: project } = trpc.project.get.useQuery(
     { id: projectId },
     { enabled: !!projectId },
@@ -45,6 +47,9 @@ export default function AICounseling() {
 
   const saveMutation = trpc.project.saveCounseling.useMutation({
     onSuccess: () => {
+      // バナーが残らないように getCounseling と project.get の両方を invalidate。
+      utils.project.getCounseling.invalidate({ projectId });
+      utils.project.get.invalidate({ id: projectId });
       toast.success('カウンセリング結果を保存しました');
       setLocation(`/ai-generate?project=${projectId}`);
     },
