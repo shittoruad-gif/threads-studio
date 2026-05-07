@@ -2162,6 +2162,60 @@ ${input.commentText}
       return await db.getAllUsers();
     }),
 
+    // ──────── 決済失敗ユーザー一覧（管理者用）────────
+    // status が past_due / unpaid / incomplete のサブスクとそのユーザを返す。
+    // 管理者が「いま誰が困っているか」を一覧で把握するための画面。
+    listPaymentIssues: adminProcedure.query(async () => {
+      const subs = await db.getSubscriptionsWithPaymentIssues();
+      const result = await Promise.all(
+        subs.map(async (s) => {
+          const u = await db.getUserById(s.userId);
+          return {
+            subscriptionId: s.id,
+            userId: s.userId,
+            userEmail: u?.email ?? null,
+            userName: u?.name ?? null,
+            planId: s.planId,
+            status: s.status,
+            currentPeriodEnd: s.currentPeriodEnd,
+            cancelAtPeriodEnd: s.cancelAtPeriodEnd,
+            updatedAt: s.updatedAt,
+            stripeSubscriptionId: s.stripeSubscriptionId,
+          };
+        }),
+      );
+      // updatedAt 降順（最近の失敗から表示）
+      result.sort((a, b) =>
+        (b.updatedAt?.getTime?.() ?? 0) - (a.updatedAt?.getTime?.() ?? 0),
+      );
+      return { items: result, total: result.length };
+    }),
+
+    // 管理者が任意のユーザに「決済失敗リマインダー」を再送する
+    resendPaymentFailureEmail: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input }) => {
+        const user = await db.getUserById(input.userId);
+        const sub = await db.getSubscriptionByUserId(input.userId);
+        if (!user?.email) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'ユーザーまたはメールアドレスが見つかりません' });
+        }
+        if (!sub) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'サブスクリプションが見つかりません' });
+        }
+        const { sendPaymentFailedEmail } = await import('./_core/notification');
+        const { getPlan } = await import('../shared/plans');
+        const plan = getPlan(sub.planId);
+        await sendPaymentFailedEmail(
+          user.email,
+          plan?.name ?? sub.planId,
+          null,
+          1, // 手動再送なので 1 回目扱い（強い文言は出さない）
+          null,
+        );
+        return { success: true };
+      }),
+
     // Reset user password (admin only)
     resetUserPassword: adminProcedure
       .input(z.object({

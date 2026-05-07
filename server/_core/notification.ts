@@ -130,5 +130,179 @@ export async function sendTrialReminderEmail(to: string, daysLeft: number, planN
  */
 export async function notifyOwner(payload: NotificationPayload): Promise<boolean> {
   console.log(`[Notification] ${payload.title}: ${payload.content}`);
+  // ADMIN_NOTIFICATION_EMAIL が設定されていれば、そこへもメールを送る
+  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
+  if (adminEmail) {
+    await sendEmail({
+      to: adminEmail,
+      subject: `[Threads Studio Admin] ${payload.title}`,
+      html: `<div style="font-family: sans-serif;"><h2>${payload.title}</h2><pre style="white-space: pre-wrap;">${payload.content}</pre></div>`,
+    });
+  }
   return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 決済関連メール（カード期限切れ・決済失敗・3Dセキュア認証必須）
+// ─────────────────────────────────────────────────────────────────────────
+
+const APP_BASE_URL =
+  process.env.APP_BASE_URL ||
+  'https://threads.shittoru.com';
+
+/**
+ * 共通の見た目テンプレート
+ */
+function emailShell(title: string, body: string, ctaLabel?: string, ctaUrl?: string): string {
+  const cta = ctaLabel && ctaUrl
+    ? `<a href="${ctaUrl}" style="display: inline-block; background: #ef4444; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0; font-weight: bold;">${ctaLabel}</a>`
+    : '';
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #f9fafb;">
+      <div style="background: white; border-radius: 12px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <h2 style="color: #1f2937; margin-top: 0;">${title}</h2>
+        ${body}
+        ${cta}
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+        <p style="color: #9ca3af; font-size: 12px;">
+          このメールは Threads Studio の決済システムから自動送信されています。<br />
+          お心当たりがない場合は、お手数ですがサポートまでご連絡ください。
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * 決済失敗通知メール
+ *
+ * Stripe が定期決済を引き落とそうとして失敗したときに送る。
+ * Stripe は標準で 14 日間で 3〜4 回リトライするので、
+ * その都度（ステータスが past_due の間）このメールを送る。
+ *
+ * @param to ユーザのメールアドレス
+ * @param planName プラン名（「Pro」など）
+ * @param amount 請求額（円）
+ * @param attemptCount これが何回目の失敗か（1〜4 を想定）
+ * @param nextRetryAt 次回リトライ予定日（ある場合）
+ */
+export async function sendPaymentFailedEmail(
+  to: string,
+  planName: string,
+  amount: number | null,
+  attemptCount: number,
+  nextRetryAt: Date | null,
+): Promise<boolean> {
+  const portalUrl = `${APP_BASE_URL}/settings`;
+  const amountStr = amount != null ? `¥${amount.toLocaleString('ja-JP')}` : '';
+  const retryStr = nextRetryAt
+    ? `<p>次回の自動リトライは <strong>${nextRetryAt.toLocaleDateString('ja-JP')}</strong> に行われます。</p>`
+    : '';
+  // 何回目かでメッセージのトーンを変える
+  const urgency =
+    attemptCount >= 3
+      ? '<p style="color:#dc2626;"><strong>※ 何度かリトライを試みていますが決済できていません。最終リトライまでに更新がない場合、サブスクリプションは自動的に停止します。</strong></p>'
+      : attemptCount >= 2
+      ? '<p style="color:#d97706;"><strong>※ 引き落としに失敗しています。お早めにカード情報を更新してください。</strong></p>'
+      : '<p>カードの有効期限切れ・残高不足・利用停止などが原因として考えられます。</p>';
+
+  return sendEmail({
+    to,
+    subject: `【Threads Studio】決済ができませんでした（${attemptCount}回目）`,
+    html: emailShell(
+      'お支払いの確認をお願いいたします',
+      `
+        <p>いつも Threads Studio をご利用いただきありがとうございます。</p>
+        <p><strong>${planName}プラン</strong>の自動更新で、ご登録のクレジットカードからのお引き落としに失敗いたしました。</p>
+        ${amountStr ? `<p>請求額: <strong>${amountStr}</strong></p>` : ''}
+        ${urgency}
+        ${retryStr}
+        <p>サービス停止を避けるため、お手数ですが以下のボタンからお支払い情報をご確認・更新ください。</p>
+      `,
+      'お支払い情報を更新する',
+      portalUrl,
+    ),
+  });
+}
+
+/**
+ * カード有効期限切れ予告メール
+ *
+ * Stripe `customer.source.expiring` イベントで送られる。
+ * カードの有効期限月の前月初めに通知される（Stripe 仕様）。
+ */
+export async function sendCardExpiringEmail(
+  to: string,
+  last4: string,
+  expMonth: number,
+  expYear: number,
+): Promise<boolean> {
+  const portalUrl = `${APP_BASE_URL}/settings`;
+  return sendEmail({
+    to,
+    subject: '【Threads Studio】登録のクレジットカードがもうすぐ期限切れです',
+    html: emailShell(
+      'クレジットカードの有効期限が近づいています',
+      `
+        <p>ご登録のクレジットカード（末尾 <strong>${last4}</strong>）の有効期限が <strong>${expMonth}/${expYear}</strong> までとなっています。</p>
+        <p>このまま期限切れになると、次回の自動更新時にお引き落としができず、サービスが一時停止する可能性があります。</p>
+        <p>サービスをご継続いただくため、お早めにカード情報の更新をお願いいたします。</p>
+      `,
+      'カード情報を更新する',
+      portalUrl,
+    ),
+  });
+}
+
+/**
+ * 3Dセキュア等の追加認証が必要なときの通知
+ *
+ * Stripe の `invoice.payment_action_required` イベント。
+ * カードは有効だが、銀行が追加認証を求めているケース。
+ */
+export async function sendPaymentActionRequiredEmail(
+  to: string,
+  hostedInvoiceUrl: string | null,
+): Promise<boolean> {
+  const url = hostedInvoiceUrl || `${APP_BASE_URL}/settings`;
+  return sendEmail({
+    to,
+    subject: '【Threads Studio】お支払いに追加の認証が必要です',
+    html: emailShell(
+      '本人認証（3Dセキュア）が必要です',
+      `
+        <p>定期決済の処理にあたり、カード会社から本人認証（3Dセキュア）の手続きが求められています。</p>
+        <p>このままだとお引き落としが完了せず、サービスが一時停止する可能性があります。</p>
+        <p>以下のボタンから認証手続きを完了してください（数十秒で終わります）。</p>
+      `,
+      '認証手続きへ進む',
+      url,
+    ),
+  });
+}
+
+/**
+ * サブスクリプションが完全に停止された通知
+ *
+ * Stripe が最終リトライにも失敗してサブスクを `unpaid` または `canceled` にしたとき。
+ */
+export async function sendSubscriptionSuspendedEmail(
+  to: string,
+  planName: string,
+): Promise<boolean> {
+  const portalUrl = `${APP_BASE_URL}/settings`;
+  return sendEmail({
+    to,
+    subject: '【Threads Studio】サブスクリプションが停止されました',
+    html: emailShell(
+      'サブスクリプションを一時停止しました',
+      `
+        <p>長期間お引き落としが完了しなかったため、<strong>${planName}プラン</strong>を一時停止いたしました。</p>
+        <p>有料機能（自動投稿・無制限AI生成など）は現在ご利用いただけません。</p>
+        <p>カード情報を更新して再開する場合は、以下からお手続きください。</p>
+      `,
+      'プランを再開する',
+      portalUrl,
+    ),
+  });
 }

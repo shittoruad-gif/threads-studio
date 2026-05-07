@@ -156,7 +156,119 @@ async function startServer() {
                 status: 'past_due',
               });
               console.log(`[Webhook] Payment failed for subscription ${subscriptionId}`);
+
+              // ── ユーザへメール通知 + 管理者へ通知 ────────────────────
+              try {
+                const sub = await db.getSubscriptionByStripeId(subscriptionId);
+                if (sub) {
+                  const user = await db.getUserById(sub.userId);
+                  const { getPlan } = await import("../../shared/plans");
+                  const plan = getPlan(sub.planId);
+                  const planName = plan?.name ?? sub.planId;
+
+                  // 失敗回数（Stripe が attempt_count を管理）
+                  const attemptCount = (invoice as any).attempt_count ?? 1;
+                  const amountDue = (invoice as any).amount_due ?? null;
+                  const nextRetryUnix = (invoice as any).next_payment_attempt as number | null;
+                  const nextRetryAt = nextRetryUnix ? new Date(nextRetryUnix * 1000) : null;
+
+                  if (user?.email) {
+                    const {
+                      sendPaymentFailedEmail,
+                      sendSubscriptionSuspendedEmail,
+                      notifyOwner,
+                    } = await import("./notification");
+
+                    // attemptCount >= 4 で Stripe は通常諦める。最終なら停止メール。
+                    if (attemptCount >= 4 || !nextRetryUnix) {
+                      await sendSubscriptionSuspendedEmail(user.email, planName);
+                    } else {
+                      await sendPaymentFailedEmail(
+                        user.email,
+                        planName,
+                        amountDue != null ? amountDue : null,
+                        attemptCount,
+                        nextRetryAt,
+                      );
+                    }
+
+                    // 管理者にも通知（要 ADMIN_NOTIFICATION_EMAIL）
+                    await notifyOwner({
+                      title: `決済失敗: user ${user.id} (${user.email})`,
+                      content:
+                        `Plan: ${planName}\n` +
+                        `Subscription: ${subscriptionId}\n` +
+                        `Attempt: ${attemptCount}\n` +
+                        `Amount: ${amountDue ?? 'unknown'}\n` +
+                        `Next retry: ${nextRetryAt?.toISOString() ?? 'none (final)'}\n`,
+                    });
+                  }
+                }
+              } catch (notifyErr) {
+                console.error('[Webhook] Failed to send payment_failed notification:', notifyErr);
+              }
             }
+            break;
+          }
+
+          case 'invoice.payment_action_required': {
+            // 3Dセキュア等の追加認証が必要なケース
+            const invoice = event.data.object as Stripe.Invoice;
+            const subscriptionId = (invoice as any).subscription as string | undefined;
+            const customerId = invoice.customer as string | undefined;
+            try {
+              let userEmail: string | null = null;
+              if (subscriptionId) {
+                const sub = await db.getSubscriptionByStripeId(subscriptionId);
+                if (sub) {
+                  const user = await db.getUserById(sub.userId);
+                  userEmail = user?.email ?? null;
+                }
+              } else if (customerId) {
+                const user = await db.getUserByStripeCustomerId(customerId);
+                userEmail = user?.email ?? null;
+              }
+              if (userEmail) {
+                const { sendPaymentActionRequiredEmail } = await import("./notification");
+                await sendPaymentActionRequiredEmail(
+                  userEmail,
+                  (invoice as any).hosted_invoice_url ?? null,
+                );
+                console.log(`[Webhook] Sent action_required email to ${userEmail}`);
+              }
+            } catch (e) {
+              console.error('[Webhook] payment_action_required handling error:', e);
+            }
+            break;
+          }
+
+          case 'customer.source.expiring': {
+            // カード有効期限切れ予告（前月初めに飛んでくる）
+            const card = event.data.object as Stripe.Card;
+            const customerId = card.customer as string;
+            try {
+              const user = await db.getUserByStripeCustomerId(customerId);
+              if (user?.email) {
+                const { sendCardExpiringEmail } = await import("./notification");
+                await sendCardExpiringEmail(
+                  user.email,
+                  card.last4,
+                  card.exp_month,
+                  card.exp_year,
+                );
+                console.log(`[Webhook] Sent card-expiring email to ${user.email}`);
+              }
+            } catch (e) {
+              console.error('[Webhook] customer.source.expiring handling error:', e);
+            }
+            break;
+          }
+
+          case 'payment_method.automatically_updated': {
+            // Stripe が自動でカード情報を更新したケース（カード再発行等）。
+            // 通知は不要だがログは残す。
+            const pm = event.data.object as Stripe.PaymentMethod;
+            console.log(`[Webhook] Payment method auto-updated for customer ${pm.customer}`);
             break;
           }
 

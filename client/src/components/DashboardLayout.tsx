@@ -3,6 +3,7 @@ import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { cn } from "@/lib/utils";
 import MonitorFeedbackWidget from "./MonitorFeedbackWidget";
+import { SubscriptionAlertBanner } from "./SubscriptionAlertBanner";
 import {
   BarChart3,
   BookOpen,
@@ -432,6 +433,9 @@ export default function DashboardLayout({
             </div>
           </div>
         </header>
+
+        {/* 決済失敗時の警告バナー — past_due / unpaid / incomplete のみ表示 */}
+        <SubscriptionAlertBanner />
 
         {/* Page Content */}
         <main className="p-4 sm:p-6 lg:p-8">{children}</main>

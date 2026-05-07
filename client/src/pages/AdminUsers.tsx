@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Key } from 'lucide-react';
+import { Loader2, Key, AlertTriangle, Mail, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminUsers() {
@@ -58,8 +58,12 @@ export default function AdminUsers() {
   }
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto py-8 space-y-6">
       <PageBreadcrumb items={breadcrumbItems} />
+
+      {/* 決済失敗ユーザー一覧（最重要なので先頭） */}
+      <PaymentIssuesPanel />
+
       <Card>
         <CardHeader>
           <CardTitle>ユーザー管理</CardTitle>
@@ -174,5 +178,108 @@ export default function AdminUsers() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 決済失敗ユーザー一覧パネル
+// ─────────────────────────────────────────────────────────────────────────
+function PaymentIssuesPanel() {
+  const { data, isLoading, refetch } = trpc.admin.listPaymentIssues.useQuery();
+  const resendMutation = trpc.admin.resendPaymentFailureEmail.useMutation({
+    onSuccess: () => toast.success('リマインダーメールを再送しました'),
+    onError: (e) => toast.error(e.message ?? '再送に失敗しました'),
+  });
+
+  const statusLabel = (s: string) => {
+    if (s === 'past_due') return { label: '決済失敗（リトライ中）', cls: 'bg-amber-100 text-amber-800' };
+    if (s === 'unpaid') return { label: '停止中（最終失敗）', cls: 'bg-red-100 text-red-800' };
+    if (s === 'incomplete') return { label: '初回未完了', cls: 'bg-yellow-100 text-yellow-800' };
+    return { label: s, cls: 'bg-muted text-foreground' };
+  };
+
+  return (
+    <Card className="border-red-200">
+      <CardHeader className="bg-red-50/40">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-red-700">
+              <AlertTriangle className="w-5 h-5" />
+              決済失敗ユーザー一覧
+            </CardTitle>
+            <CardDescription className="mt-1">
+              past_due / unpaid / incomplete のサブスク。最近のものから表示。
+            </CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
+            <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+            更新
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : !data || data.items.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">
+            ✅ 現在、決済失敗中のユーザーはいません
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ユーザー</TableHead>
+                  <TableHead>メール</TableHead>
+                  <TableHead>プラン</TableHead>
+                  <TableHead>状態</TableHead>
+                  <TableHead>最終更新</TableHead>
+                  <TableHead>操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.items.map((it) => {
+                  const s = statusLabel(it.status);
+                  return (
+                    <TableRow key={it.subscriptionId}>
+                      <TableCell>
+                        <div className="font-medium">{it.userName ?? '-'}</div>
+                        <div className="text-xs text-muted-foreground">user #{it.userId}</div>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{it.userEmail ?? '-'}</TableCell>
+                      <TableCell>{it.planId}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${s.cls}`}>
+                          {s.label}
+                        </span>
+                        {it.cancelAtPeriodEnd && (
+                          <span className="ml-1 text-xs text-muted-foreground">(解約予約)</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {it.updatedAt ? new Date(it.updatedAt).toLocaleString('ja-JP') : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => resendMutation.mutate({ userId: it.userId })}
+                          disabled={resendMutation.isPending || !it.userEmail}
+                        >
+                          <Mail className="w-3 h-3 mr-1" />
+                          リマインダー再送
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -2,7 +2,7 @@ import { eq, and, desc, sql, lte, gte, gt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { encrypt, decrypt } from "./encryption";
 import {
-  InsertUser, users,
+  InsertUser, User, users,
   plans, InsertPlan, Plan,
   subscriptions, InsertSubscription, Subscription,
   threadsAccounts, InsertThreadsAccount, ThreadsAccount,
@@ -296,6 +296,35 @@ export async function getSubscriptionByStripeId(stripeSubscriptionId: string): P
     .limit(1);
 
   return result.length > 0 ? result[0] : undefined;
+}
+
+/**
+ * Stripe Customer ID からユーザを引く。
+ * Webhook の customer.source.expiring など、subscriptionId が無いイベントで使う。
+ */
+export async function getUserByStripeCustomerId(
+  stripeCustomerId: string,
+): Promise<User | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select()
+    .from(users)
+    .where(eq(users.stripeCustomerId, stripeCustomerId))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+/**
+ * past_due / unpaid 状態のサブスクリプション一覧を返す。
+ * 管理者ダッシュボードで「決済失敗ユーザー一覧」として使用。
+ */
+export async function getSubscriptionsWithPaymentIssues(): Promise<Subscription[]> {
+  const db = await getDb();
+  if (!db) return [];
+  // drizzle の inArray を使う必要があるが import 追加せずに手書きの SQL で
+  return db.select()
+    .from(subscriptions)
+    .where(sql`${subscriptions.status} IN ('past_due', 'unpaid', 'incomplete')`);
 }
 
 export async function updateSubscription(
