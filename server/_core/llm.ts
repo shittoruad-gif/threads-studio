@@ -309,20 +309,76 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
-  const response = await fetch(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  // ★#17 タイムアウトとリトライ付きフェッチ。
+  //   - 60 秒で AbortController によるタイムアウト
+  //   - 5xx / ネットワーク失敗のときだけ最大 2 回リトライ（指数バックオフ 1s → 3s）
+  //   - 4xx は即時失敗（リトライ対象外。プロンプトやスキーマの問題）
+  const TIMEOUT_MS = 60_000;
+  const MAX_ATTEMPTS = 3;
+  const apiUrl = resolveApiUrl();
+  const fetchHeaders = {
+    "content-type": "application/json",
+    authorization: `Bearer ${ENV.forgeApiKey}`,
+  } as const;
+  const body = JSON.stringify(payload);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
-    );
+  let response: Response | null = null;
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      response = await fetch(apiUrl, {
+        method: "POST",
+        headers: fetchHeaders,
+        body,
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+
+      // 4xx は即時失敗（リトライしても直らない）
+      if (!response.ok && response.status >= 400 && response.status < 500) {
+        const errorText = await response.text();
+        throw new Error(
+          `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+        );
+      }
+      // 5xx はリトライ
+      if (!response.ok) {
+        const errorText = await response.text();
+        lastError = new Error(
+          `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+        );
+        if (attempt < MAX_ATTEMPTS) {
+          const backoff = attempt === 1 ? 1000 : 3000;
+          console.warn(`[LLM] ${response.status} on attempt ${attempt}, retrying in ${backoff}ms`);
+          await new Promise((r) => setTimeout(r, backoff));
+          continue;
+        }
+        throw lastError;
+      }
+      // 成功
+      break;
+    } catch (e: any) {
+      clearTimeout(timer);
+      // タイムアウト / ネットワーク系
+      const msg = e?.message ?? String(e);
+      const isAbort = e?.name === 'AbortError';
+      lastError = isAbort
+        ? new Error(`LLM invoke timed out after ${TIMEOUT_MS}ms (attempt ${attempt})`)
+        : e;
+      if (attempt < MAX_ATTEMPTS && (isAbort || msg.includes('fetch failed') || msg.includes('ECONN'))) {
+        const backoff = attempt === 1 ? 1000 : 3000;
+        console.warn(`[LLM] network/timeout on attempt ${attempt}, retrying in ${backoff}ms`);
+        await new Promise((r) => setTimeout(r, backoff));
+        continue;
+      }
+      throw lastError;
+    }
+  }
+
+  if (!response) {
+    throw lastError ?? new Error('LLM invoke failed (no response)');
   }
 
   return (await response.json()) as InvokeResult;

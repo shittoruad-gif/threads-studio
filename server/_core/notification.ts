@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { escapeHtml } from "../../shared/sanitize";
 
 export type NotificationPayload = {
   title: string;
@@ -137,10 +138,13 @@ export async function notifyOwner(payload: NotificationPayload): Promise<boolean
   // ADMIN_NOTIFICATION_EMAIL が設定されていれば、そこへもメールを送る
   const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
   if (adminEmail) {
+    // ★#24 ユーザ由来データを HTML に直接 interpolate しないよう escape する
+    const safeTitle = escapeHtml(payload.title);
+    const safeContent = escapeHtml(payload.content);
     await sendEmail({
       to: adminEmail,
       subject: `[Threads Studio Admin] ${payload.title}`,
-      html: `<div style="font-family: sans-serif;"><h2>${payload.title}</h2><pre style="white-space: pre-wrap;">${payload.content}</pre></div>`,
+      html: `<div style="font-family: sans-serif;"><h2>${safeTitle}</h2><pre style="white-space: pre-wrap;">${safeContent}</pre></div>`,
     });
   }
   return true;

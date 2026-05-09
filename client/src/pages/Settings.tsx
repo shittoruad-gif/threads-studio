@@ -411,16 +411,32 @@ export default function Settings() {
                 </ul>
               </div>
 
-              <div>
-                <Label className="text-sm text-foreground/80">パスワードを入力</Label>
-                <Input
-                  type="password"
-                  value={deletePassword}
-                  onChange={(e) => setDeletePassword(e.target.value)}
-                  placeholder="現在のパスワード"
-                  className="mt-1"
-                />
-              </div>
+              {/* email 認証ユーザはパスワードで確認、OAuth ユーザはメアド完全一致で確認 */}
+              {(user as any)?.authProvider === 'email' ? (
+                <div>
+                  <Label className="text-sm text-foreground/80">パスワードを入力</Label>
+                  <Input
+                    type="password"
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    placeholder="現在のパスワード"
+                    className="mt-1"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <Label className="text-sm text-foreground/80">
+                    確認のため、ご自身のメールアドレスを入力してください
+                  </Label>
+                  <Input
+                    type="email"
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    placeholder={(user as any)?.email ?? 'your@email.com'}
+                    className="mt-1"
+                  />
+                </div>
+              )}
 
               <div>
                 <Label className="text-sm text-foreground/80">
@@ -449,8 +465,10 @@ export default function Settings() {
                   className="bg-red-600 hover:bg-red-700 text-white"
                   disabled={deleteConfirmation !== "DELETE" || !deletePassword || deleteAccount.isPending}
                   onClick={() => {
+                    const isEmailAuth = (user as any)?.authProvider === 'email';
                     deleteAccount.mutate({
-                      password: deletePassword,
+                      password: isEmailAuth ? deletePassword : undefined,
+                      emailConfirmation: isEmailAuth ? undefined : deletePassword,
                       confirmation: "DELETE" as const,
                     });
                   }}

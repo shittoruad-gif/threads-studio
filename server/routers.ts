@@ -2885,34 +2885,70 @@ ${input.commentText}
       }),
 
     // アカウント削除
+    // ★#15 OAuth ユーザもパスワード代わりに「メールアドレスの完全一致」で確認できる
+    // ★#16 削除後は cookie をクリアしてゾンビセッションを残さない
+    // ★#19 Stripe キャンセルが失敗した場合は削除を中止して課金継続事故を防ぐ
     deleteAccount: protectedProcedure
       .input(z.object({
-        password: z.string().min(1),
+        // パスワード（email 認証ユーザのみ） or 自分のメアド（OAuth ユーザ）の確認
+        password: z.string().optional(),
+        emailConfirmation: z.string().optional(),
         confirmation: z.literal("DELETE"),
       }))
       .mutation(async ({ ctx, input }) => {
         const user = await db.getUserById(ctx.user.id);
-        if (!user || !user.passwordHash) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "アカウントの削除ができません" });
+        if (!user) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "ユーザーが見つかりません" });
         }
 
-        const isValid = await bcrypt.compare(input.password, user.passwordHash);
-        if (!isValid) {
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "パスワードが正しくありません" });
+        // 認証方法ごとに確認手段を分岐
+        if (user.authProvider === 'email') {
+          if (!user.passwordHash || !input.password) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "削除にはパスワードの入力が必要です",
+            });
+          }
+          const isValid = await bcrypt.compare(input.password, user.passwordHash);
+          if (!isValid) {
+            throw new TRPCError({ code: "UNAUTHORIZED", message: "パスワードが正しくありません" });
+          }
+        } else {
+          // OAuth ユーザはメアド完全一致で確認
+          if (!input.emailConfirmation || input.emailConfirmation.trim().toLowerCase() !== (user.email ?? '').trim().toLowerCase()) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "確認のためご自身のメールアドレスを入力してください",
+            });
+          }
         }
 
-        // Cancel Stripe subscription if active
+        // ★Stripe サブスクのキャンセルは「削除前」に成功させる。失敗したら削除を中止。
+        //   これがないと、DB は消えたのに Stripe では引き続き課金される事故が起きる。
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
         if (subscription?.stripeSubscriptionId) {
           try {
             await stripeService.cancelSubscription(subscription.stripeSubscriptionId);
           } catch (error) {
-            console.error("[Account Delete] Failed to cancel Stripe subscription:", error);
+            console.error("[Account Delete] Stripe cancel failed:", error);
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message:
+                "決済の停止処理中にエラーが発生したため、アカウント削除を中止しました。" +
+                "サポートまでお問い合わせください（課金継続を防ぐため）。",
+            });
           }
         }
 
         // Delete user (cascades to all related data)
         await db.deleteUser(ctx.user.id);
+
+        // ★#16 セッション cookie をクリア。
+        try {
+          ctx.res.clearCookie(COOKIE_NAME, { path: '/' });
+        } catch {
+          // res.clearCookie は失敗しないが念のため try-catch
+        }
 
         return { success: true };
       }),

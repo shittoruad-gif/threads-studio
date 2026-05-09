@@ -43,7 +43,10 @@ export function getSessionCookieOptions(
   return {
     httpOnly: true,
     path: "/",
-    sameSite: secure ? "none" : "lax",
+    // ★#20 sameSite='none' は CSRF 防御を実質無効化する（クロスサイト送信を許可）。
+    //   このアプリは同一オリジン SPA + API なので 'lax' で十分機能し、
+    //   GET 以外でクロスサイトから cookie が送られなくなる（多層防御）。
+    sameSite: "lax",
     secure,
   };
 }
