@@ -109,6 +109,10 @@ export async function sendVerificationEmail(to: string, token: string, baseUrl: 
  * Send trial ending reminder
  */
 export async function sendTrialReminderEmail(to: string, daysLeft: number, planName: string): Promise<boolean> {
+  // ★旧 Railway URL がハードコードされていたバグを修正。
+  // 本番ドメインは APP_BASE_URL（環境変数）から取得し、未設定時のみ
+  // threads.shittoru.com にフォールバックする。
+  const baseUrl = process.env.APP_BASE_URL || process.env.VITE_APP_URL || 'https://threads.shittoru.com';
   return sendEmail({
     to,
     subject: `【Threads Studio】無料トライアルがあと${daysLeft}日で終了します`,
@@ -117,7 +121,7 @@ export async function sendTrialReminderEmail(to: string, daysLeft: number, planN
         <h2>無料トライアル期限のお知らせ</h2>
         <p>${planName}の無料トライアルがあと<strong>${daysLeft}日</strong>で終了します。</p>
         <p>トライアル終了後も引き続きご利用いただくには、有料プランへの移行をお願いいたします。</p>
-        <a href="https://threads-studio-production-c190.up.railway.app/pricing" style="display: inline-block; background: #10b981; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0;">
+        <a href="${baseUrl}/pricing" style="display: inline-block; background: #10b981; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0;">
           プランを確認する
         </a>
       </div>

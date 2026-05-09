@@ -58,7 +58,7 @@ export default function ResetPassword() {
     }
 
     if (password.length < 8) {
-      toast.error("パスワードは8文字以上で入力してください");
+      toast.error("パスワードは10文字以上で入力してください");
       return;
     }
 
@@ -140,7 +140,7 @@ export default function ResetPassword() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="8文字以上"
+                  placeholder="10文字以上"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 pr-10"
@@ -155,7 +155,7 @@ export default function ResetPassword() {
                 </button>
               </div>
               <p className="text-xs text-muted-foreground">
-                8文字以上、数字または記号を1つ以上含む
+                10文字以上、英字・数字・記号のうち2種類以上を含む
               </p>
             </div>
 

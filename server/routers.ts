@@ -14,6 +14,8 @@ import { TRPCError } from "@trpc/server";
 // Global rate limit store for tryGenerate
 declare global {
   var __tryGenerateRateLimit: Map<string, number[]> | undefined;
+  var __pwResetRateLimit: Map<string, number[]> | undefined;
+  var __loginAttempts: Map<string, { count: number; lockedUntil: number }> | undefined;
 }
 
 export const appRouter = router({
@@ -31,7 +33,7 @@ export const appRouter = router({
     register: publicProcedure
       .input(z.object({
         email: z.string().email(),
-        password: z.string().min(8),
+        password: z.string().min(10),
         name: z.string().min(1, '名前を入力してください'),
         couponCode: z.string().optional(),
       }))
@@ -47,7 +49,7 @@ export const appRouter = router({
         if (!isValidPassword(input.password)) {
           throw new TRPCError({ 
             code: 'BAD_REQUEST', 
-            message: 'パスワードは8文字以上で、数字または記号を1つ以上含む必要があります。' 
+            message: 'パスワードは10文字以上で、英字・数字・記号のうち2種類以上を含む必要があります。' 
           });
         }
 
@@ -107,23 +109,47 @@ export const appRouter = router({
           throw new TRPCError({ code: 'UNAUTHORIZED', message: 'メールアドレスまたはパスワードが正しくありません。' });
         }
 
-        // Check if user is email auth provider
-        if (user.authProvider !== 'email') {
-          throw new TRPCError({ 
-            code: 'BAD_REQUEST', 
-            message: 'このアカウントは別の方法で登録されています。' 
-          });
+        // ★認証プロバイダの違いを外部に漏らさないため、すべて同じメッセージで弾く。
+        // メアド列挙 / OAuth ユーザ判定攻撃を防止。
+        const GENERIC_LOGIN_FAIL = 'メールアドレスまたはパスワードが正しくありません。';
+
+        if (user.authProvider !== 'email' || !user.passwordHash) {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: GENERIC_LOGIN_FAIL });
         }
 
-        // Verify password
-        if (!user.passwordHash) {
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'パスワードが設定されていません。' });
+        // ─── #4 ログイン試行回数のレート制限（per-account & per-IP） ───
+        // 5 回失敗で 15 分ロック。短期ブルートフォースを止める。
+        const ipForLogin = ctx.req.ip || ctx.req.headers['x-forwarded-for'] || 'unknown';
+        const ipForLoginStr = Array.isArray(ipForLogin) ? ipForLogin[0] : ipForLogin;
+        if (!globalThis.__loginAttempts) {
+          globalThis.__loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+        }
+        const attempts = globalThis.__loginAttempts as Map<string, { count: number; lockedUntil: number }>;
+        const lockKey = `${user.id}:${ipForLoginStr}`;
+        const lockEntry = attempts.get(lockKey);
+        const lockNow = Date.now();
+        if (lockEntry && lockEntry.lockedUntil > lockNow) {
+          const remainMin = Math.ceil((lockEntry.lockedUntil - lockNow) / 60000);
+          throw new TRPCError({
+            code: 'TOO_MANY_REQUESTS',
+            message: `連続して失敗しました。${remainMin}分後に再度お試しください。`,
+          });
         }
 
         const isValid = await verifyPassword(input.password, user.passwordHash);
         if (!isValid) {
-          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'メールアドレスまたはパスワードが正しくありません。' });
+          // 失敗カウンタを進める
+          const cur = attempts.get(lockKey) ?? { count: 0, lockedUntil: 0 };
+          cur.count += 1;
+          if (cur.count >= 5) {
+            cur.lockedUntil = lockNow + 15 * 60 * 1000;
+            cur.count = 0;
+          }
+          attempts.set(lockKey, cur);
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: GENERIC_LOGIN_FAIL });
         }
+        // 成功時はカウンタをクリア
+        attempts.delete(lockKey);
 
         // Update last signed in
         if (!user.openId) {
@@ -146,20 +172,42 @@ export const appRouter = router({
       .input(z.object({
         email: z.string().email(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const { generateToken } = await import('./auth-helpers');
-        
-        // Get user by email
-        const user = await db.getUserByEmail(input.email);
-        if (!user) {
-          // Don't reveal if email exists - return same shape but no token
-          return { success: true, resetToken: null };
+        const { sendPasswordResetEmail } = await import('./_core/notification');
+
+        // ── 濫用防止：メアドごと・IPごとに 3 回 / 60 分制限 ──────────
+        // 任意のメールアドレスに対する大量のリセットメール送信を防ぐ。
+        const ip = ctx.req.ip || ctx.req.headers['x-forwarded-for'] || 'unknown';
+        const ipStr = Array.isArray(ip) ? ip[0] : ip;
+        const now = Date.now();
+        const windowMs = 60 * 60 * 1000;
+        if (!globalThis.__pwResetRateLimit) {
+          globalThis.__pwResetRateLimit = new Map<string, number[]>();
+        }
+        const rate = globalThis.__pwResetRateLimit as Map<string, number[]>;
+        const keys = [`ip:${ipStr}`, `mail:${input.email.toLowerCase()}`];
+        for (const k of keys) {
+          const arr = (rate.get(k) || []).filter((t) => now - t < windowMs);
+          if (arr.length >= 3) {
+            // 同じメッセージで返す（攻撃者にレート制限の有無を悟らせない）
+            return { success: true };
+          }
         }
 
-        // Check if user is email auth provider
-        if (user.authProvider !== 'email') {
-          // Don't reveal if email exists
-          return { success: true, resetToken: null };
+        // Get user by email
+        const user = await db.getUserByEmail(input.email);
+
+        // ★成功・失敗いずれでもレートカウンタは進める（メアド存在の探り防止）
+        for (const k of keys) {
+          const arr = (rate.get(k) || []).filter((t) => now - t < windowMs);
+          arr.push(now);
+          rate.set(k, arr);
+        }
+
+        // メアドが存在しない / OAuth ユーザの場合は何もしない（成功レスポンスのみ返す）
+        if (!user || user.authProvider !== 'email') {
+          return { success: true };
         }
 
         // Generate reset token
@@ -172,15 +220,25 @@ export const appRouter = router({
         // Create new token
         await db.createPasswordResetToken(user.id, token, expiresAt);
 
-        // Return the token directly so the frontend can show the reset link
-        return { success: true, resetToken: token };
+        // ★トークンはメールでのみ送る。HTTP レスポンスには絶対に含めない。
+        const baseUrl =
+          process.env.APP_BASE_URL ||
+          process.env.VITE_APP_URL ||
+          ctx.req.headers.origin ||
+          'https://threads.shittoru.com';
+        if (user.email) {
+          await sendPasswordResetEmail(user.email, token, baseUrl);
+        }
+
+        // フロントには「メール送信した」とだけ伝える。トークンは返さない。
+        return { success: true };
       }),
 
     // Reset Password
     resetPassword: publicProcedure
       .input(z.object({
         token: z.string(),
-        newPassword: z.string().min(8),
+        newPassword: z.string().min(10),
       }))
       .mutation(async ({ input }) => {
         const { hashPassword, isValidPassword } = await import('./auth-helpers');
@@ -189,7 +247,7 @@ export const appRouter = router({
         if (!isValidPassword(input.newPassword)) {
           throw new TRPCError({ 
             code: 'BAD_REQUEST', 
-            message: 'パスワードは8文字以上で、数字または記号を1つ以上含む必要があります。' 
+            message: 'パスワードは10文字以上で、英字・数字・記号のうち2種類以上を含む必要があります。' 
           });
         }
 
@@ -232,6 +290,17 @@ export const appRouter = router({
         const user = await db.getUserByEmailVerificationToken(input.token);
         if (!user) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '無効な認証トークンです。' });
+        }
+
+        // ★#8 トークンの有効期限を 7 日に設定（既存の createdAt を基準に判定）。
+        //   過去の永続的に有効だったトークンを期限切れにする。
+        const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+        const issuedAt = user.createdAt;
+        if (issuedAt && Date.now() - new Date(issuedAt).getTime() > TOKEN_TTL_MS) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: '認証リンクの有効期限が切れています（7日）。サポートまでお問い合わせください。',
+          });
         }
 
         // Update email verification status
@@ -670,20 +739,30 @@ export const appRouter = router({
         const plan = getPlan(planId);
         
         // デモモードではAI生成を許可
-        if (!ctx.user.isDemoMode && (!plan || plan.features.maxAiGenerations === 0)) {
+        // ★#2 デモモードの場合は 10 回までで打ち切り → 自動的に通常判定へ。
+        //   バイパス不能の収益保護ルール。
+        let effectiveDemo = ctx.user.isDemoMode;
+        if (effectiveDemo) {
+          const demo = await db.checkAndEnforceDemoCap(ctx.user.id, true);
+          if (!demo.allowed) {
+            // デモ枠終了。以降は通常プラン判定へ移行
+            effectiveDemo = false;
+          }
+        }
+        if (!effectiveDemo && (!plan || plan.features.maxAiGenerations === 0)) {
           throw new TRPCError({
             code: 'FORBIDDEN',
-            message: 'AI文章生成機能は有料プランでのみ利用可能です。'
+            message: 'デモ枠（10回）を使い切りました。続けてご利用には有料プランへのアップグレードが必要です。'
           });
         }
 
-        // Check AI generation limit (skip for demo mode)
-        const canGenerate = ctx.user.isDemoMode || await db.checkAiGenerationLimit(ctx.user.id);
+        // Check AI generation limit (skip for demo mode within cap)
+        const canGenerate = effectiveDemo || await db.checkAiGenerationLimit(ctx.user.id);
         if (!canGenerate) {
           const { count, limit } = await db.getAiGenerationUsage(ctx.user.id);
-          throw new TRPCError({ 
-            code: 'FORBIDDEN', 
-            message: `今月のAI生成回数の上限（${limit}回）に達しました。プロプラン以上にアップグレードすると無制限でご利用いただけます。` 
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: `今月のAI生成回数の上限（${limit}回）に達しました。プロプラン以上にアップグレードすると無制限でご利用いただけます。`
           });
         }
 
@@ -2220,7 +2299,7 @@ ${input.commentText}
     resetUserPassword: adminProcedure
       .input(z.object({
         userId: z.number(),
-        newPassword: z.string().min(8),
+        newPassword: z.string().min(10),
       }))
       .mutation(async ({ input }) => {
         const { hashPassword, isValidPassword } = await import('./auth-helpers');
@@ -2229,7 +2308,7 @@ ${input.commentText}
         if (!isValidPassword(input.newPassword)) {
           throw new TRPCError({ 
             code: 'BAD_REQUEST', 
-            message: 'パスワードは8文字以上で、数字または記号を1つ以上含む必要があります。' 
+            message: 'パスワードは10文字以上で、英字・数字・記号のうち2種類以上を含む必要があります。' 
           });
         }
 
@@ -2786,7 +2865,7 @@ ${input.commentText}
     changePassword: protectedProcedure
       .input(z.object({
         currentPassword: z.string().min(1),
-        newPassword: z.string().min(8).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, "パスワードは大文字・小文字・数字を含む8文字以上にしてください"),
+        newPassword: z.string().min(10),
       }))
       .mutation(async ({ ctx, input }) => {
         const user = await db.getUserById(ctx.user.id);

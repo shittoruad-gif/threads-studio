@@ -586,6 +586,29 @@ export async function getPendingScheduledPosts(): Promise<ScheduledPost[]> {
     ));
 }
 
+/**
+ * #3 アトミックに予約投稿を「処理中」に遷移させる（CAS）。
+ *
+ * 並列実行（cron 多重・複数インスタンス）時に同じ投稿が二重送信されないよう、
+ *   UPDATE ... WHERE id=? AND status='pending'
+ * の条件付き UPDATE を発行し、更新行数 1 のときだけ「自分が処理権を取った」と見なす。
+ *
+ * @returns 処理権を取得できたら true、既に他で処理されていたら false
+ */
+export async function claimScheduledPost(postId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const result: any = await db.update(scheduledPosts)
+    .set({ status: 'processing' })
+    .where(and(
+      eq(scheduledPosts.id, postId),
+      eq(scheduledPosts.status, 'pending'),
+    ));
+  // drizzle/mysql2 では affectedRows で確認できる
+  const affected = result?.[0]?.affectedRows ?? result?.affectedRows ?? 0;
+  return affected > 0;
+}
+
 export async function updateScheduledPost(
   postId: number,
   data: Partial<InsertScheduledPost>
@@ -877,9 +900,36 @@ export async function getAiGenerationUsage(userId: number): Promise<{ count: num
   return { count, limit };
 }
 
+/**
+ * #2 デモモードユーザの AI 生成は 10 回までで打ち切る（収益保護）。
+ *
+ * 戻り値:
+ *   - allowed: 生成を許可するか
+ *   - exitedDemo: デモ枠を使い切ったので isDemoMode を false に切り替えた場合 true
+ *                 （この場合呼び出し側でプラン判定をやり直す）
+ */
+export const DEMO_AI_GEN_CAP = 10;
+
+export async function checkAndEnforceDemoCap(
+  userId: number,
+  isDemoMode: boolean,
+): Promise<{ allowed: boolean; exitedDemo: boolean; remaining: number | null }> {
+  if (!isDemoMode) {
+    return { allowed: false, exitedDemo: false, remaining: null };
+  }
+  const { count } = await getAiGenerationUsage(userId);
+  const remaining = Math.max(0, DEMO_AI_GEN_CAP - count);
+  if (count < DEMO_AI_GEN_CAP) {
+    return { allowed: true, exitedDemo: false, remaining };
+  }
+  // 上限到達 → 自動でデモを抜ける
+  await setUserDemoMode(userId, false);
+  return { allowed: false, exitedDemo: true, remaining: 0 };
+}
+
 export async function checkAiGenerationLimit(userId: number): Promise<boolean> {
   const { count, limit } = await getAiGenerationUsage(userId);
-  
+
   // If limit is null or -1 (unlimited), always allow
   if (limit === null || limit === -1) return true;
   

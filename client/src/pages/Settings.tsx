@@ -270,10 +270,10 @@ export default function Settings() {
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="新しいパスワード（8文字以上）"
+                    placeholder="新しいパスワード（10文字以上）"
                   />
                   <p className="text-xs text-muted-foreground/60 mt-1">
-                    8文字以上で、数字または記号を1つ以上含む必要があります
+                    10文字以上で、英字・数字・記号のうち2種類以上を含む必要があります
                   </p>
                 </div>
               </div>
@@ -284,7 +284,7 @@ export default function Settings() {
               disabled={!currentPassword || !newPassword || changePassword.isPending}
               onClick={() => {
                 if (newPassword.length < 8) {
-                  toast.error("新しいパスワードは8文字以上にしてください");
+                  toast.error("新しいパスワードは10文字以上にしてください");
                   return;
                 }
                 changePassword.mutate({ currentPassword, newPassword });

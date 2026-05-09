@@ -7,28 +7,25 @@ import { Card } from "@/components/ui/card";
 
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Sparkles, Mail, ArrowLeft, KeyRound, Copy, CheckCircle, AlertTriangle } from "lucide-react";
+import { Sparkles, Mail, ArrowLeft, MailCheck } from "lucide-react";
 
+/**
+ * パスワードリセット申請画面
+ *
+ * 2026年5月のセキュリティ修正:
+ *  - 以前は API がリセットトークンをそのまま返していたため、メアドさえ
+ *    知っていれば誰でもアカウント乗っ取り可能だった。
+ *  - 修正後はトークンを HTTP レスポンスに含めず、メールでのみ送信。
+ *  - メアドの存在/非存在を漏らさないため、画面は常に「メール送信しました」を表示する。
+ */
 export default function ForgotPassword() {
-
   const [email, setEmail] = useState("");
-  const [resetLink, setResetLink] = useState<string | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   const requestResetMutation = trpc.auth.requestPasswordReset.useMutation({
-    onSuccess: (data) => {
-      if (data.resetToken) {
-        // Build the reset URL
-        const baseUrl = window.location.origin;
-        const link = `${baseUrl}/reset-password?token=${data.resetToken}`;
-        setResetLink(link);
-        setNotFound(false);
-      } else {
-        // Email not found or not email auth
-        setResetLink(null);
-        setNotFound(true);
-      }
+    onSuccess: () => {
+      // メアド存在に関わらず常に同じ表示
+      setSubmitted(true);
     },
     onError: (error) => {
       toast.error(`エラー: ${error.message}`);
@@ -37,36 +34,18 @@ export default function ForgotPassword() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setResetLink(null);
-    setNotFound(false);
-    setCopied(false);
-
     if (!email) {
       toast.error("メールアドレスを入力してください");
       return;
     }
-
     requestResetMutation.mutate({ email });
   };
 
-  const handleCopy = async () => {
-    if (resetLink) {
-      try {
-        await navigator.clipboard.writeText(resetLink);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch (err) {
-        toast.error('コピーに失敗しました');
-      }
-    }
-  };
-
-  // Show reset link result
-  if (resetLink) {
+  // 「メール送信しました」画面
+  if (submitted) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          {/* Logo */}
           <div className="text-center mb-8">
             <Link href="/">
               <div className="inline-flex items-center gap-2 cursor-pointer mb-4">
@@ -74,110 +53,42 @@ export default function ForgotPassword() {
                 <span className="text-2xl font-bold gradient-text">Threads Studio</span>
               </div>
             </Link>
-            <h1 className="text-3xl font-bold mb-2">パスワードリセット</h1>
+            <h1 className="text-3xl font-bold mb-2">メールを送信しました</h1>
           </div>
 
-          {/* Reset Link Display */}
           <Card className="glass-card p-8">
             <div className="text-center space-y-4">
               <div className="flex justify-center">
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-                  <KeyRound className="w-8 h-8 text-primary" />
+                  <MailCheck className="w-8 h-8 text-primary" />
                 </div>
               </div>
-              <p className="text-muted-foreground">
-                パスワードリセット用のリンクを生成しました。
+              <p className="text-muted-foreground leading-relaxed">
+                ご入力いただいたアドレスにアカウントが存在する場合、
                 <br />
-                下のボタンをクリックしてパスワードを再設定してください。
+                パスワードリセット用のリンクをメールでお送りしました。
               </p>
+              <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg p-3 text-left space-y-1">
+                <p>📧 メールが見つからない場合：</p>
+                <ul className="list-disc list-inside space-y-0.5 pl-1">
+                  <li>迷惑メールフォルダもご確認ください</li>
+                  <li>noreply@ ドメインからのメールが受信可能か確認</li>
+                  <li>メールアドレスのスペル間違いがないか確認</li>
+                  <li>リンクの有効期限は1時間です</li>
+                </ul>
+              </div>
             </div>
 
-            {/* Reset Link Button */}
             <div className="mt-6 space-y-3">
-              <Link href={`/reset-password?token=${resetLink.split('token=')[1]}`}>
-                <Button className="w-full neon-border" size="lg">
-                  パスワードを再設定する
-                </Button>
-              </Link>
-
-              {/* Copy Link */}
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={handleCopy}
-              >
-                {copied ? (
-                  <>
-                    <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
-                    コピーしました
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4 mr-2" />
-                    リンクをコピー
-                  </>
-                )}
-              </Button>
-            </div>
-
-            <p className="text-xs text-muted-foreground text-center mt-4">
-              リンクの有効期限は1時間です。
-            </p>
-
-            {/* Back to Login */}
-            <div className="mt-6 text-center">
-              <Link href="/login">
-                <Button variant="ghost" className="w-full">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  ログインページに戻る
-                </Button>
-              </Link>
-            </div>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  // Show not found message
-  if (notFound) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-          {/* Logo */}
-          <div className="text-center mb-8">
-            <Link href="/">
-              <div className="inline-flex items-center gap-2 cursor-pointer mb-4">
-                <Sparkles className="w-8 h-8 text-primary" />
-                <span className="text-2xl font-bold gradient-text">Threads Studio</span>
-              </div>
-            </Link>
-            <h1 className="text-3xl font-bold mb-2">パスワードリセット</h1>
-          </div>
-
-          <Card className="glass-card p-8">
-            <div className="text-center space-y-4">
-              <div className="flex justify-center">
-                <div className="w-16 h-16 bg-yellow-500/10 rounded-full flex items-center justify-center">
-                  <AlertTriangle className="w-8 h-8 text-yellow-500" />
-                </div>
-              </div>
-              <p className="text-muted-foreground">
-                入力されたメールアドレスに該当するアカウントが見つかりませんでした。
-                <br />
-                メールアドレスをご確認の上、もう一度お試しください。
-              </p>
-            </div>
-
-            <div className="mt-6 space-y-3">
-              <Button
-                className="w-full neon-border"
                 onClick={() => {
-                  setNotFound(false);
+                  setSubmitted(false);
                   setEmail("");
                 }}
               >
-                もう一度試す
+                別のメールアドレスで再送
               </Button>
               <Link href="/login">
                 <Button variant="ghost" className="w-full">
@@ -195,7 +106,6 @@ export default function ForgotPassword() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
-        {/* Logo */}
         <div className="text-center mb-8">
           <Link href="/">
             <div className="inline-flex items-center gap-2 cursor-pointer mb-4">
@@ -209,10 +119,8 @@ export default function ForgotPassword() {
           </p>
         </div>
 
-        {/* Reset Request Form */}
         <Card className="glass-card p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email */}
             <div className="space-y-2">
               <Label htmlFor="email">メールアドレス</Label>
               <div className="relative">
@@ -220,35 +128,35 @@ export default function ForgotPassword() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="example@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com"
                   className="pl-10"
                   required
+                  autoFocus
+                  disabled={requestResetMutation.isPending}
                 />
               </div>
             </div>
 
-            {/* Submit Button */}
             <Button
               type="submit"
               className="w-full neon-border"
               size="lg"
               disabled={requestResetMutation.isPending}
             >
-              {requestResetMutation.isPending ? "確認中..." : "パスワードをリセット"}
+              {requestResetMutation.isPending ? "送信中..." : "リセットメールを送信"}
             </Button>
-          </form>
 
-          {/* Back to Login */}
-          <div className="mt-6 text-center text-sm">
-            <Link href="/login">
-              <a className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-                <ArrowLeft className="w-4 h-4" />
-                ログインページに戻る
-              </a>
-            </Link>
-          </div>
+            <div className="text-center">
+              <Link href="/login">
+                <Button variant="ghost" size="sm">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  ログインページに戻る
+                </Button>
+              </Link>
+            </div>
+          </form>
         </Card>
       </div>
     </div>

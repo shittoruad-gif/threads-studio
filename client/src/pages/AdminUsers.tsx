@@ -149,7 +149,7 @@ export default function AdminUsers() {
               <Input
                 id="newPassword"
                 type="password"
-                placeholder="8文字以上、数字または記号を含む"
+                placeholder="10文字以上、英字・数字・記号のうち2種類以上"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 disabled={resetPasswordMutation.isPending}

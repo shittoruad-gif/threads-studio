@@ -48,8 +48,13 @@ export async function executePendingPosts() {
 
     for (const post of posts) {
       try {
-        // Mark as processing to prevent duplicate execution
-        await db.updateScheduledPost(post.id, { status: 'processing' });
+        // ★#3 アトミック CAS で処理権を取得（他のワーカーと競合した場合は false）。
+        //   失敗（既に他で処理済み）ならこの投稿はスキップ → 二重送信を防止。
+        const claimed = await db.claimScheduledPost(post.id);
+        if (!claimed) {
+          console.log(`[Scheduled Post] Post ${post.id} already claimed by another worker, skipping`);
+          continue;
+        }
 
         // Get Threads account
         const account = await db.getThreadsAccountById(post.threadsAccountId);
@@ -76,7 +81,14 @@ export async function executePendingPosts() {
               const refreshed = await refreshAccessToken(account.accessToken);
               if (refreshed) {
                 accessToken = refreshed.access_token;
-                console.log(`[Scheduled Post] Refreshed expired token for account ${account.id}`);
+                // ★#5 リフレッシュしたトークンを必ず DB にも保存する。
+                //   これがないと毎回失効トークンで refresh しに行く無限ループになる。
+                await db.updateThreadsAccountToken(
+                  account.id,
+                  refreshed.access_token,
+                  refreshed.expires_in,
+                );
+                console.log(`[Scheduled Post] Refreshed expired token for account ${account.id} (persisted)`);
               } else {
                 await db.updateScheduledPost(post.id, {
                   status: 'failed',
@@ -99,7 +111,13 @@ export async function executePendingPosts() {
               const refreshed = await refreshAccessToken(account.accessToken);
               if (refreshed) {
                 accessToken = refreshed.access_token;
-                console.log(`[Scheduled Post] Proactively refreshed token for account ${account.id}`);
+                // ★#5 同上：DB にも保存
+                await db.updateThreadsAccountToken(
+                  account.id,
+                  refreshed.access_token,
+                  refreshed.expires_in,
+                );
+                console.log(`[Scheduled Post] Proactively refreshed token for account ${account.id} (persisted)`);
               }
             } catch {
               // Continue with existing token if refresh fails

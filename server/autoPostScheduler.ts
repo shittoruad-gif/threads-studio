@@ -235,13 +235,16 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
       processed++;
 
       try {
-        // Get user's first project (primary project for auto-posting)
-        const projects = await db.getUserProjects(user.id);
-        if (!projects || projects.length === 0) continue;
-
-        const project = projects[0]; // Use first/primary project
-        if (!project.businessType || !project.area || !project.target || !project.mainProblem || !project.strength) {
-          console.log(`[AutoPost] Skipping user ${user.id} - incomplete project`);
+        // ★#7 すべてのプロジェクトを対象に。複数店舗運営ユーザに対応。
+        //   完成済みプロジェクト（必須項目埋まっている）だけを対象にし、
+        //   日替わりでローテーションして1つ選ぶ（postCount のぶんだけ）。
+        const allProjects = await db.getUserProjects(user.id);
+        if (!allProjects || allProjects.length === 0) continue;
+        const eligibleProjects = allProjects.filter((p) =>
+          p.businessType && p.area && p.target && p.mainProblem && p.strength,
+        );
+        if (eligibleProjects.length === 0) {
+          console.log(`[AutoPost] Skipping user ${user.id} - no project with required fields`);
           continue;
         }
 
@@ -258,7 +261,13 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
         let typeIdx = user.lastAutoPostTypeIndex;
         let purposeIdx = user.lastAutoPurposeIndex;
 
+        // 日替わりでプロジェクトを巡回するためのオフセット
+        // 当日処理する postCount 本のうち i 本目は eligibleProjects[(dayOffset + i) % N]
+        const dayOffset = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
+
         for (let i = 0; i < postCount; i++) {
+          const project = eligibleProjects[(dayOffset + i) % eligibleProjects.length];
+
           const success = await generateAutoPost(
             user.id,
             project,

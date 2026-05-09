@@ -160,7 +160,7 @@ export default function Register() {
 
               {password.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  8文字以上で、数字または記号を1つ以上含む必要があります
+                  10文字以上で、英字・数字・記号のうち2種類以上を含む必要があります
                 </p>
               )}
             </div>

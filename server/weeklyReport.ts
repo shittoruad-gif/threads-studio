@@ -63,7 +63,8 @@ export async function sendWeeklyReportEmail(userId: number): Promise<boolean> {
 
   const report = await generateWeeklyReport(userId);
 
-  const dashboardUrl = process.env.VITE_APP_URL || 'https://threads-studio-production-c190.up.railway.app';
+  // ★旧 Railway URL を本番ドメインのフォールバックに変更
+  const dashboardUrl = process.env.APP_BASE_URL || process.env.VITE_APP_URL || 'https://threads.shittoru.com';
 
   const html = `
     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">

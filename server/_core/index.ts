@@ -14,6 +14,10 @@ import Stripe from "stripe";
 import { initTrialReminderScheduler } from "../trialReminder";
 import { startTokenRefreshJob } from "../tokenRefreshJob";
 
+declare global {
+  var __stripeWebhookSeen: { id: string; ts: number }[] | undefined;
+}
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -73,7 +77,29 @@ async function startServer() {
         return res.json({ verified: true });
       }
 
-      console.log(`[Webhook] Received event: ${event.type}`);
+      // ── #6 冪等性チェック（in-memory） ────────────────────────────
+      // Stripe は 5xx 応答時に同じ event を最大3日間リトライする。
+      // 1時間ウィンドウでメモリ内に処理済み event.id を覚えておき、
+      // 重複処理を防ぐ。プロセス再起動で失われるが Stripe の再送間隔を
+      // 考えれば実害は許容範囲。完全な冪等性が必要なら DB テーブル化。
+      type WebhookSeen = { id: string; ts: number };
+      if (!globalThis.__stripeWebhookSeen) {
+        globalThis.__stripeWebhookSeen = [] as WebhookSeen[];
+      }
+      const seen = globalThis.__stripeWebhookSeen as WebhookSeen[];
+      const nowTs = Date.now();
+      const ONE_HOUR = 60 * 60 * 1000;
+      // 古いエントリを掃除
+      while (seen.length > 0 && nowTs - seen[0].ts > ONE_HOUR) seen.shift();
+      if (seen.find((s) => s.id === event.id)) {
+        console.log(`[Webhook] Duplicate event ignored: ${event.id}`);
+        return res.json({ received: true, duplicate: true });
+      }
+      seen.push({ id: event.id, ts: nowTs });
+      // 上限を設けてメモリ暴走を防ぐ
+      if (seen.length > 5000) seen.splice(0, seen.length - 5000);
+
+      console.log(`[Webhook] Received event: ${event.type} (${event.id})`);
 
       try {
         switch (event.type) {
@@ -882,5 +908,17 @@ async function startServer() {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
+
+// ─── #10 グローバル例外ハンドラ ─────────────────────────────────
+// 非同期エラーが拾われずにプロセスが落ちるのを防ぐ。
+// 起動前に登録してログだけ残す。プロセスは継続させる（最低限の可用性）。
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+  // Sentry などがあれば送信。落とさない（サービス継続）。
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[unhandledRejection]', reason);
+  void promise;
+});
 
 startServer().catch(console.error);
