@@ -37,6 +37,8 @@ export const appRouter = router({
         password: z.string().min(10),
         name: z.string().min(1, '名前を入力してください'),
         couponCode: z.string().optional(),
+        // #28 紹介コード（/register?ref=XXX から取得）
+        referralCode: z.string().trim().min(1).max(16).optional(),
       }))
       .mutation(async ({ input }) => {
         const { hashPassword, isValidEmail, isValidPassword } = await import('./auth-helpers');
@@ -89,6 +91,34 @@ export const appRouter = router({
           } catch (e) {
             // Don't fail registration if coupon fails - user can apply later
             console.warn(`[Register] Coupon application failed for user ${user.id}:`, e);
+          }
+        }
+
+        // ── #28 紹介コードを消費（あれば） ──────────────────────────
+        // 紹介者・被紹介者の両方にクレジットを付与。
+        // 自己参照（同一ユーザ）/ 重複適用（既に紹介関係あり）はDB側で拒否。
+        if (input.referralCode && input.referralCode.trim()) {
+          try {
+            const referrer = await db.getUserByReferralCode(input.referralCode.trim().toUpperCase());
+            if (referrer && referrer.id !== user.id) {
+              // 自己参照を防ぐ（同一メアド or 同一openId）
+              const sameUser =
+                (referrer.email && referrer.email === user.email) ||
+                (referrer.openId && referrer.openId === user.openId);
+              if (!sameUser) {
+                const REFERRER_REWARD = 100;
+                const REFERRED_REWARD = 50;
+                await db.createReferralWithRewards({
+                  referrerId: referrer.id,
+                  referredUserId: user.id,
+                  referrerReward: REFERRER_REWARD,
+                  referredReward: REFERRED_REWARD,
+                });
+                console.log(`[Referral] Applied: referrer=${referrer.id} referred=${user.id}`);
+              }
+            }
+          } catch (e) {
+            console.warn(`[Register] Referral application failed for user ${user.id}:`, e);
           }
         }
 

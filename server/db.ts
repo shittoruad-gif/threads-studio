@@ -1778,16 +1778,83 @@ export async function generateReferralCode(): Promise<string> {
   return code;
 }
 
+/**
+ * Referral コードからユーザを引く（招待者の特定）
+ */
+export async function getUserByReferralCode(code: string): Promise<User | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select()
+    .from(users)
+    .where(eq(users.referralCode, code))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+/**
+ * 紹介関係を作成し、両者にクレジットを付与する。
+ *
+ * 自己参照・重複適用は呼び出し側で防ぐ。
+ */
+export async function createReferralWithRewards(opts: {
+  referrerId: number;
+  referredUserId: number;
+  referrerReward: number;
+  referredReward: number;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  // 既に紹介関係が登録されていないかチェック（重複防止）
+  const existing = await db.select()
+    .from(referrals)
+    .where(eq(referrals.referredUserId, opts.referredUserId))
+    .limit(1);
+  if (existing.length > 0) return; // 既に紹介済み
+
+  await db.insert(referrals).values({
+    referrerId: opts.referrerId,
+    referredUserId: opts.referredUserId,
+    referrerReward: opts.referrerReward,
+    referredReward: opts.referredReward,
+  });
+
+  // クレジットを付与（紹介者・被紹介者の両方）
+  if (opts.referrerReward > 0) {
+    await db.insert(creditTransactions).values({
+      userId: opts.referrerId,
+      amount: opts.referrerReward,
+      type: 'referral_bonus',
+      description: `紹介ボーナス: user #${opts.referredUserId} を招待`,
+    });
+    await db.update(users)
+      .set({ credits: sql`${users.credits} + ${opts.referrerReward}` })
+      .where(eq(users.id, opts.referrerId));
+  }
+  if (opts.referredReward > 0) {
+    await db.insert(creditTransactions).values({
+      userId: opts.referredUserId,
+      amount: opts.referredReward,
+      type: 'referred_bonus',
+      description: `紹介経由ボーナス: 紹介リンクから登録`,
+    });
+    await db.update(users)
+      .set({ credits: sql`${users.credits} + ${opts.referredReward}` })
+      .where(eq(users.id, opts.referredUserId));
+  }
+}
+
 export async function updateUserReferralCode(userId: number, referralCode: string) {
   const db = await getDb();
   if (!db) {
     throw new Error("Database not available");
   }
-  
+
   await db.update(users)
     .set({ referralCode })
     .where(eq(users.id, userId));
-  
+
+
   return true;
 }
 

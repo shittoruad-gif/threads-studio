@@ -16,6 +16,13 @@ export default function Register() {
   const [couponCode, setCouponCode] = useState('');
   const [error, setError] = useState('');
 
+  // #28 紹介コード（?ref=XXX）を URL から取得
+  const referralCode = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const params = new URLSearchParams(window.location.search);
+    return (params.get('ref') || '').trim().toUpperCase().slice(0, 16);
+  }, []);
+
   const registerMutation = trpc.auth.register.useMutation({
     onSuccess: () => {
       setLocation('/login?registered=true');
@@ -61,7 +68,13 @@ export default function Register() {
       return;
     }
 
-    registerMutation.mutate({ email, password, name, couponCode: couponCode.trim() || undefined });
+    registerMutation.mutate({
+      email,
+      password,
+      name,
+      couponCode: couponCode.trim() || undefined,
+      referralCode: referralCode || undefined,
+    });
   };
 
   return (
@@ -81,6 +94,17 @@ export default function Register() {
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* #28 紹介コード適用中バナー */}
+          {referralCode && (
+            <Alert className="border-emerald-300 bg-emerald-50">
+              <Sparkles className="h-4 w-4 text-emerald-600" />
+              <AlertDescription className="text-emerald-900">
+                紹介コード <strong className="font-mono">{referralCode}</strong> が適用されます。
+                登録完了で<strong>50ポイント</strong>のボーナスを受け取れます。
+              </AlertDescription>
             </Alert>
           )}
 
