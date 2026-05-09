@@ -2,6 +2,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
+import { toPublicErrorMessage } from "../shared/sanitize";
 import { z } from "zod";
 import * as db from "./db";
 import { ENV } from "./_core/env";
@@ -762,7 +763,7 @@ export const appRouter = router({
           const { count, limit } = await db.getAiGenerationUsage(ctx.user.id);
           throw new TRPCError({
             code: 'FORBIDDEN',
-            message: `今月のAI生成回数の上限（${limit}回）に達しました。プロプラン以上にアップグレードすると無制限でご利用いただけます。`
+            message: `${limit === -1 ? `今月のAI生成回数のハードキャップ（${db.HARD_AI_GEN_CAP_PER_MONTH}回）に達しました。利用が異常に多い場合はサポートまでご連絡ください。` : `今月のAI生成回数の上限（${limit}回）に達しました。プロプラン以上にアップグレードすると無制限でご利用いただけます。`}`
           });
         }
 
@@ -953,7 +954,7 @@ export const appRouter = router({
           const { count, limit } = await db.getAiGenerationUsage(ctx.user.id);
           throw new TRPCError({
             code: 'FORBIDDEN',
-            message: `今月のAI生成回数の上限（${limit}回）に達しました。プロプラン以上にアップグレードすると無制限でご利用いただけます。`
+            message: `${limit === -1 ? `今月のAI生成回数のハードキャップ（${db.HARD_AI_GEN_CAP_PER_MONTH}回）に達しました。利用が異常に多い場合はサポートまでご連絡ください。` : `今月のAI生成回数の上限（${limit}回）に達しました。プロプラン以上にアップグレードすると無制限でご利用いただけます。`}`
           });
         }
 
@@ -1394,7 +1395,7 @@ ${cloneNgList.length > 0
           console.error('[Threads Post Error]', error);
           throw new TRPCError({ 
             code: 'INTERNAL_SERVER_ERROR', 
-            message: `投稿に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}` 
+            message: `投稿に失敗しました: ${toPublicErrorMessage(error)}` 
           });
         }
       }),
@@ -1420,7 +1421,7 @@ ${cloneNgList.length > 0
           console.error('[Check Limit Error]', error);
           throw new TRPCError({ 
             code: 'INTERNAL_SERVER_ERROR', 
-            message: `レート制限の確認に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}` 
+            message: `レート制限の確認に失敗しました: ${toPublicErrorMessage(error)}` 
           });
         }
       }),
@@ -1459,7 +1460,7 @@ ${cloneNgList.length > 0
           console.error('[Profile Sync Error]', error);
           throw new TRPCError({ 
             code: 'INTERNAL_SERVER_ERROR', 
-            message: `プロフィールの同期に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}` 
+            message: `プロフィールの同期に失敗しました: ${toPublicErrorMessage(error)}` 
           });
         }
       }),
@@ -1573,7 +1574,7 @@ ${cloneNgList.length > 0
           console.error('[Get Comments Error]', error);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: `コメントの取得に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`
+            message: `コメントの取得に失敗しました: ${toPublicErrorMessage(error)}`
           });
         }
       }),
@@ -1689,7 +1690,7 @@ ${input.commentText}
           console.error('[Post Reply Error]', error);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: `返信の投稿に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`
+            message: `返信の投稿に失敗しました: ${toPublicErrorMessage(error)}`
           });
         }
       }),

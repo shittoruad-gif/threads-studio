@@ -89,3 +89,54 @@ export function isAllowedRedirectHost(url: string, allowedHosts: string[]): bool
     return false;
   }
 }
+
+/**
+ * #26 クライアントに返してよい安全な公開エラーメッセージに変換する。
+ *
+ * - DB スキーマ・SQL・スタックトレース・Threads API の生レスポンスを露出させない
+ * - 既知の安全カテゴリ（Threadsの「Rate limit」「Token expired」等）は短縮して返す
+ * - それ以外は generic な「サービスエラー」に置き換える
+ *
+ * 元のエラーは呼び出し側で必ず console.error すること（運用追跡用）。
+ */
+export function toPublicErrorMessage(err: unknown, fallback = '一時的なエラーが発生しました。しばらく経ってから再度お試しください。'): string {
+  if (!err) return fallback;
+  const raw = err instanceof Error ? err.message : String(err);
+  const lower = raw.toLowerCase();
+
+  // Threads API のよくあるエラー（ユーザに伝えると行動できるもの）
+  if (lower.includes('rate limit') || lower.includes('rate-limit')) {
+    return 'Threads APIのレート制限に達しました。しばらく待ってから再度お試しください。';
+  }
+  if (lower.includes('access token') || lower.includes('expired') || lower.includes('invalid token')) {
+    return 'アクセストークンの有効期限が切れています。Threads再連携してください。';
+  }
+  if (lower.includes('429')) return 'リクエストが多すぎます。しばらく待ってから再度お試しください。';
+  if (lower.includes('503') || lower.includes('502') || lower.includes('504')) {
+    return '外部サービスが一時的に利用できません。少し時間を置いてから再度お試しください。';
+  }
+  if (lower.includes('timed out') || lower.includes('timeout')) {
+    return 'リクエストがタイムアウトしました。再度お試しください。';
+  }
+  if (lower.includes('not found') || lower.includes('404')) {
+    return '対象が見つかりませんでした。';
+  }
+
+  // 内部実装が漏れる可能性のあるパターンは fallback に置換
+  const looksInternal =
+    lower.includes('select ') ||
+    lower.includes('insert ') ||
+    lower.includes('update ') ||
+    lower.includes('delete from') ||
+    lower.includes('econn') ||
+    lower.includes('mysql') ||
+    lower.includes('drizzle') ||
+    lower.includes('typeerror') ||
+    lower.includes('referenceerror') ||
+    lower.includes('cannot read') ||
+    lower.includes('undefined') ||
+    lower.length > 200;
+  if (looksInternal) return fallback;
+
+  return raw;
+}

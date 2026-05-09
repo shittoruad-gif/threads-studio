@@ -927,8 +927,25 @@ export async function checkAndEnforceDemoCap(
   return { allowed: false, exitedDemo: true, remaining: 0 };
 }
 
+/**
+ * #25 ハードキャップ：無制限プランでも1ユーザあたりの月間生成数を物理的に制限する。
+ * 悪意あるユーザによるLLMコスト暴走を防ぐ最後のセーフティネット。
+ * 通常の運用ではここに到達しないが、暴走時の保険として機能する。
+ *
+ * 数値の根拠：
+ *   - Pro/Business プランの想定「重ヘビーユーザ」が月 500〜1000 回
+ *   - 2倍のマージンで 2000 回をハード上限に
+ *   - 超過時は管理者にも通知して状況確認できるようにする
+ */
+export const HARD_AI_GEN_CAP_PER_MONTH = 2000;
+
 export async function checkAiGenerationLimit(userId: number): Promise<boolean> {
   const { count, limit } = await getAiGenerationUsage(userId);
+
+  // ★#25 無制限プランでもハードキャップを適用
+  if (count >= HARD_AI_GEN_CAP_PER_MONTH) {
+    return false;
+  }
 
   // If limit is null or -1 (unlimited), always allow
   if (limit === null || limit === -1) return true;
