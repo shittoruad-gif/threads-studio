@@ -1,6 +1,22 @@
 /**
  * Threads投稿生成プロンプトテンプレート
  */
+import { buildAdRegulationsPromptSection } from './adRegulations';
+
+/**
+ * スタイル校正（サンプル投稿選択）の結果。AIに「ユーザはこういう書き方が好き」を伝える。
+ */
+export interface StylePreferenceLike {
+  selectedStyleIds?: string[];
+  /** 「ユーザはこういう文章を好む」というサマリー文 */
+  summary?: string;
+  /** 投稿の長さの好み */
+  length?: 'short' | 'medium' | 'long';
+  /** 口調の好み（テンプレIDの安定的タグ） */
+  tone?: 'gentle' | 'casual' | 'sharp' | 'professional' | 'warm' | 'playful';
+  /** 絵文字の好み */
+  emojiUsage?: 'none' | 'minimal' | 'moderate';
+}
 
 import { sanitizeForPrompt } from './sanitize';
 
@@ -128,6 +144,10 @@ export interface ThreadsPromptInput {
    * counseling.useThreadsKnowhow があればそちらが優先される。
    */
   useThreadsKnowhow?: boolean;
+  /**
+   * スタイル校正（サンプル投稿選択）の結果。あれば AI に「ユーザの好みの書き方」を伝える。
+   */
+  stylePreference?: StylePreferenceLike | null;
 }
 
 /**
@@ -379,8 +399,10 @@ function buildLiteSystemPrompt(opts: {
   uspSection: string;
   n1Section: string;
   counselingSection: string;
+  adRegSection: string;
+  styleSection: string;
 }): string {
-  const { treeCount, tone, uspSection, n1Section, counselingSection } = opts;
+  const { treeCount, tone, uspSection, n1Section, counselingSection, adRegSection, styleSection } = opts;
   const isTreePost = treeCount > 0;
   const toneSection = tone && POST_TONES[tone] ? `\n${POST_TONES[tone].promptInstruction}` : '';
 
@@ -394,7 +416,7 @@ function buildLiteSystemPrompt(opts: {
 - 顧客エピソード・体験談は入力にあるものだけ使う。なければ作らない。
 - 「予約パンパン」「キャンセル待ち」「先着〇名」のような検証不能な盛り表現は使わない。
 - 迷ったら捏造より省略を選ぶ。
-${counselingSection}${uspSection}${n1Section}${toneSection}
+${adRegSection}${counselingSection}${styleSection}${uspSection}${n1Section}${toneSection}
 
 【自然な文章のルール】
 - 人間が普段書くような、飾らない文章にする。
@@ -452,6 +474,8 @@ function buildSystemPrompt(
   tone?: PostTone,
   counseling?: CounselingLike | null,
   useThreadsKnowhow: boolean = true,
+  businessType?: string,
+  stylePreference?: StylePreferenceLike | null,
 ): string {
   const isTreePost = treeCount > 0;
 
@@ -503,11 +527,53 @@ function buildSystemPrompt(
     return '\n' + lines.join('\n');
   })();
 
+  // ────────── 広告規制セクション（業界別・最新法令ベース） ──────────
+  const adRegSection = buildAdRegulationsPromptSection(businessType);
+
+  // ────────── スタイル校正（ユーザが選んだサンプル）──────────
+  const styleSection = (() => {
+    if (!stylePreference) return '';
+    const lines: string[] = ['', '【ユーザーが好むスタイル（サンプル投稿選択結果）】'];
+    if (stylePreference.summary && stylePreference.summary.trim()) {
+      lines.push(`- 好みの傾向: ${stylePreference.summary.trim()}`);
+    }
+    if (stylePreference.tone) {
+      const toneLabels: Record<string, string> = {
+        gentle: '柔らかく丁寧（共感重視）',
+        casual: 'カジュアル・親しみやすい',
+        sharp: '断定的・キレ味重視',
+        professional: '専門家らしい落ち着き',
+        warm: '温かみのある語り口',
+        playful: '少し遊び心がある',
+      };
+      lines.push(`- 口調: ${toneLabels[stylePreference.tone] ?? stylePreference.tone}`);
+    }
+    if (stylePreference.length) {
+      const lengthLabels: Record<string, string> = {
+        short: '短め（120文字前後）',
+        medium: '標準（200〜300文字）',
+        long: '読みごたえあり（400文字超）',
+      };
+      lines.push(`- 文章の長さの好み: ${lengthLabels[stylePreference.length]}`);
+    }
+    if (stylePreference.emojiUsage) {
+      const emoLabels: Record<string, string> = {
+        none: '絵文字は使わない',
+        minimal: '絵文字は最小限（0〜1個）',
+        moderate: '絵文字は控えめに（1〜2個）',
+      };
+      lines.push(`- 絵文字: ${emoLabels[stylePreference.emojiUsage]}`);
+    }
+    lines.push('- これらは「ユーザー本人が好きと選んだ」記述です。投稿全体でこのトーン・長さ・絵文字感に揃えること。');
+    return '\n' + lines.join('\n');
+  })();
+
   // useThreadsKnowhow=false → ライト版（自然・事実ベース寄り）プロンプトに切り替え
   if (!useThreadsKnowhow) {
     return buildLiteSystemPrompt({
       treeCount, postType, usp, n1Customer, purpose, tone,
       uspSection, n1Section, counselingSection,
+      adRegSection, styleSection,
     });
   }
 
@@ -621,7 +687,7 @@ Threadsは1行が長いと読み飛ばされます。スマホで読まれるこ
 - ただし「コメントください」「いいねお願いします」のような直接的な依頼はNG。自然な問いかけにする。
 - 共感→自己開示→問いかけの流れが最もコメントが付きやすい。
 - 投稿は「情報提供」だけでなく「感情を動かす」ことを意識する。読んだ人が「わかる！」「自分もそう！」と思える内容にする。
-${counselingSection}${purposeSection}${uspSection}${n1Section}${tone && POST_TONES[tone] ? `\n${POST_TONES[tone].promptInstruction}` : ''}
+${adRegSection}${counselingSection}${styleSection}${purposeSection}${uspSection}${n1Section}${tone && POST_TONES[tone] ? `\n${POST_TONES[tone].promptInstruction}` : ''}
 
 ${isTreePost ? `【ツリー投稿のルール】
 - ツリー数は${treeCount}投稿で構成すること（必ず${treeCount}投稿ぴったり）。
@@ -812,56 +878,10 @@ NG例：
 - 一般人との対比投稿（私はビジネス、夫はエコノミー）が刺さる
 
 【業界別 広告規制ガイドライン（必須遵守）】
-入力された業種に応じて、以下の広告規制を厳守すること。
+※ このプロンプトの先頭にある「★最優先：広告規制ルール」セクションが、入力された業種（businessType）から自動判定された最新の業界別 NG表現・推奨置換・注意事項のリストです。
+そのリストを最優先で遵守すること。重複は避けるためここでは省略します。
 
-■ 整体院・接骨院・整骨院
-- 柔道整復師法に基づき「治療」「治す」「診断」は使用禁止。「施術」「ケア」「サポート」に置き換える
-- 「骨折・脱臼の治療」等の医療行為を暗示する表現は禁止
-- 「保険適用」の記載は具体的な適用条件を明示しない限り禁止
-
-■ 鍼灸院・鍼灸マッサージ
-- あはき法（あん摩マッサージ指圧師、はり師、きゅう師等に関する法律）に基づく
-- 「治療」「治る」「効果がある」「〜に効く」は使用禁止。「施術」「ケア」「アプローチ」に置き換え
-- 適応症の列挙は禁止（「肩こり・腰痛・頭痛に効く」等はNG）
-- 広告可能事項：施術者名、住所、電話番号、施術日・時間、もみりょうじ/はり/きゅうの別のみ
-- 体験談や「◯◯が改善した」等の表現は広告では使えないため、あくまで一般的な情報発信として書く
-
-■ 美容サロン・エステ
-- 薬機法（旧薬事法）に基づき「アンチエイジング」「若返り」「シミが消える」は使用禁止
-- 「〜が治る」「〜が改善する」等の医療効果を暗示する表現は禁止
-- 「個人の感想です」でも効果効能の断定は不可
-- Before/Afterの表現は「個人差があります」を必ず添える
-
-■ ピラティス・ヨガ・フィットネス
-- 「痩せる」「ダイエット効果」の断定は景品表示法違反。「目指せる」「サポート」に置き換え
-- 「医学的に証明された」等の根拠不明な表現は禁止
-- 「◯kg減量」等の具体的数値を保証する表現は禁止
-
-■ 飲食店・カフェ
-- 景品表示法に基づき「日本一」「最高級」「No.1」は根拠なしでは使用禁止
-- 「無添加」「オーガニック」はJAS法等の基準を満たさない限り使用注意
-- 「健康に良い」「〜に効く」等の健康効果の暗示は薬機法違反
-
-■ 歯科医院・クリニック
-- 医療法に基づき「絶対に治る」「必ず改善」は使用禁止
-- 「最新」「最先端」は根拠が必要。「比較優良広告」は禁止
-- 自由診療の費用を記載する場合は標準的な費用を明示
-- 「患者の体験談」は医療広告では原則禁止
-
-■ 習い事・スクール・塾
-- 景品表示法に基づき「合格率◯%」「必ず上達」等の保証表現は根拠なしでは禁止
-- 「〜ができるようになります」は断定を避け「目指せます」に
-- 特定商取引法に基づくクーリングオフ等の表示義務に注意
-
-■ 不動産
-- 宅建業法・景品表示法に基づき「格安」「掘り出し物」は不当表示の恐れ
-- 「徒歩◯分」は80m=1分で計算。実態と乖離する表記は禁止
-
-■ 共通ルール（全業種）
-- 景品表示法：「No.1」「日本初」「唯一」等は客観的根拠がない限り使用禁止
-- 「期間限定」「今だけ」は常時表示すると不当表示になる
-- 体験談を使う場合は「個人の感想であり効果を保証するものではありません」を示唆する書き方にする
-- 「〜と言われています」「一般的に〜」等の曖昧な根拠づけも避ける
+【ハッシュタグ運用】
 - **ハッシュタグ（#）は絶対に使わないこと。投稿本文にもCTAにも#を含めない。hashtagsは必ず空配列にすること。**
 
 【出力形式（必須JSON）】
@@ -916,6 +936,7 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
   const systemPrompt = buildSystemPrompt(
     treeCount, input.postType, input.usp, input.n1Customer, input.purpose, input.tone,
     input.counseling, useThreadsKnowhow,
+    input.businessType, input.stylePreference,
   );
   
   // 地域性タイプの場合、エリア名を本文に入れるよう明示

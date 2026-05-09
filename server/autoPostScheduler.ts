@@ -100,6 +100,13 @@ async function generateAutoPost(
     }
     const useThreadsKnowhow = project.useThreadsKnowhow !== false;
 
+    // スタイル校正結果（あれば）— サンプル投稿選択でユーザが好きな雰囲気を学習済み。
+    // 自動投稿でもユーザの好みの口調・長さに寄せる。
+    let stylePreference: any = null;
+    if ((project as any).stylePreference) {
+      try { stylePreference = JSON.parse((project as any).stylePreference); } catch {}
+    }
+
     // Generate prompt
     //
     // ★treeCount=0（本文のみ）に固定する理由:
@@ -127,6 +134,7 @@ async function generateAutoPost(
       purpose,
       counseling: counselingResult,
       useThreadsKnowhow,
+      stylePreference,
     });
 
     // Call LLM

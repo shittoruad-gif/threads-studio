@@ -753,6 +753,67 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // ── スタイル校正: サンプル投稿を6パターン返す ────────────────────
+    // LLM 呼び出しなし。テンプレート集 (shared/styleSamples.ts) の
+    // tone 別バリエーションからランダムに 6 個ピックして、プロジェクト固有の
+    // businessType / area / target / mainProblem を差し込んで返す。
+    generateStyleSamples: protectedProcedure
+      .input(z.object({ projectId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        const project = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+        }
+        const { generateStyleSamples } = await import('../shared/styleSamples');
+        const samples = generateStyleSamples({
+          businessType: project.businessType ?? null,
+          area: project.area ?? null,
+          target: project.target ?? null,
+          mainProblem: project.mainProblem ?? null,
+          strength: project.strength ?? null,
+        }, 6);
+        return { samples };
+      }),
+
+    // ── スタイル校正: ユーザが選んだサンプルから好みを抽出して保存 ──────
+    saveStylePreference: protectedProcedure
+      .input(z.object({
+        projectId: z.string(),
+        selectedStyleIds: z.array(z.string()).min(1).max(6),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const project = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+        }
+        const { buildStylePreferenceFromSelection } = await import('../shared/styleSamples');
+        const profile = buildStylePreferenceFromSelection(input.selectedStyleIds);
+        if (!profile) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'サンプルが見つかりませんでした' });
+        }
+        await db.updateProject(input.projectId, {
+          stylePreference: JSON.stringify(profile),
+        } as any);
+        return { success: true, profile };
+      }),
+
+    // ── スタイル校正: 現在の好みプロファイルを取得 ──────────────────
+    getStylePreference: protectedProcedure
+      .input(z.object({ projectId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        const project = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+        }
+        const raw = (project as any).stylePreference as string | null | undefined;
+        if (!raw) return { profile: null };
+        try {
+          return { profile: JSON.parse(raw) };
+        } catch {
+          return { profile: null };
+        }
+      }),
+
     // Generate AI post
     generatePost: protectedProcedure
       .input(z.object({
@@ -824,6 +885,13 @@ export const appRouter = router({
         }
         const useThreadsKnowhow = (project as any).useThreadsKnowhow !== false;
 
+        // スタイル校正結果（あれば）— ユーザがサンプル投稿で選んだ好みの口調
+        let stylePreference: any = null;
+        const styleRaw = (project as any).stylePreference as string | null | undefined;
+        if (styleRaw) {
+          try { stylePreference = JSON.parse(styleRaw); } catch {}
+        }
+
         const prompt = generateThreadsPrompt({
           businessType: project.businessType,
           area: project.area,
@@ -842,6 +910,7 @@ export const appRouter = router({
           tone: input.tone,
           counseling: counselingResult,
           useThreadsKnowhow,
+          stylePreference,
         });
 
         // Call LLM

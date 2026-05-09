@@ -151,6 +151,10 @@ export const projects = mysqlTable("projects", {
   // true: 既存のフルプロンプト  / false: 自然・事実ベース寄りのライト版プロンプト
   // null/未設定時はtrue扱い（既存挙動）
   useThreadsKnowhow: boolean("useThreadsKnowhow").default(true),
+  // スタイル校正結果（サンプル投稿選択結果）。JSON。
+  // shared/styleSamples.ts StylePreferenceProfile 形式。
+  // null=未校正（AI生成は既存挙動）
+  stylePreference: text("stylePreference"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

@@ -51,7 +51,9 @@ export default function AICounseling() {
       utils.project.getCounseling.invalidate({ projectId });
       utils.project.get.invalidate({ id: projectId });
       toast.success('カウンセリング結果を保存しました');
-      setLocation(`/ai-generate?project=${projectId}`);
+      // カウンセリング完了後はスタイル校正へ自動誘導
+      // （スタイル校正でスキップ or 完了どちらも /ai-generate に戻る）
+      setLocation(`/ai-style-calibration?project=${projectId}`);
     },
     onError: (e) => toast.error(e.message),
   });
