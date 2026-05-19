@@ -310,6 +310,184 @@ async function startServer() {
     }
   );
 
+  // ── Univapay webhook endpoint ──────────────────────────────────────
+  // 決済完了/失敗/解約の通知を受けてサブスクを有効化/更新する。
+  // express.json() より前に登録（署名検証に生ボディが必要）。
+  // 設計: リンクフォーム方式（プラン共通の固定リンク）のため、
+  //   - ユーザ特定: 決済時メールアドレス ⇄ アプリ登録メールで照合
+  //   - プラン特定: 金額 ⇄ PLANS.priceMonthly で照合
+  // Univapayの実イベント構造は環境で差があるため、生ペイロードを必ずログし、
+  // 主要フィールドは複数経路で防御的に読む。未知イベントでも200で返し
+  // Univapay側のリトライ嵐を防ぐ（署名NG時のみ400）。
+  app.post('/api/univapay/webhook',
+    express.raw({ type: '*/*' }),
+    async (req, res) => {
+      const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : String(req.body ?? '');
+      try {
+        const { ENV } = await import('./env');
+        const secret = ENV.univapayWebhookSecret;
+        // Univapay の署名ヘッダ名は環境により差があるため複数候補を見る
+        const sig =
+          (req.headers['x-univapay-signature'] as string) ||
+          (req.headers['x-univapay-webhook-signature'] as string) ||
+          (req.headers['univapay-signature'] as string) ||
+          '';
+
+        // 署名シークレットが設定されている場合のみ厳格検証。
+        // 未設定（テスト導入初期）は警告して通す（実ペイロード収集のため）。
+        if (secret) {
+          const { verifyWebhookSignature } = await import('../univapay');
+          const ok = verifyWebhookSignature(rawBody, sig, secret);
+          if (!ok) {
+            console.warn('[Univapay Webhook] 署名検証失敗。リクエストを拒否');
+            return res.status(400).json({ error: 'invalid signature' });
+          }
+        } else {
+          console.warn('[Univapay Webhook] UNIVAPAY_WEBHOOK_SECRET未設定。署名検証スキップ（テスト導入中）');
+        }
+
+        let event: any = {};
+        try { event = JSON.parse(rawBody || '{}'); } catch { event = {}; }
+
+        // 実イベント構造の調査用に必ず生ログを残す（本番投入後ここで実構造を確認）
+        console.log('[Univapay Webhook] received:', JSON.stringify(event).slice(0, 2000));
+
+        // ── 主要フィールドを防御的に抽出 ──────────────────────────
+        const data = event?.data ?? event ?? {};
+        const eventType: string =
+          String(event?.event ?? event?.type ?? event?.event_type ?? data?.event ?? '').toLowerCase();
+        const status: string = String(data?.status ?? event?.status ?? '').toLowerCase();
+
+        // メールアドレスをペイロード内から再帰的に探す
+        const findEmail = (o: any, depth = 0): string | null => {
+          if (!o || depth > 6) return null;
+          if (typeof o === 'string') {
+            const m = o.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+            return m ? m[0] : null;
+          }
+          if (typeof o !== 'object') return null;
+          for (const k of Object.keys(o)) {
+            if (/email/i.test(k) && typeof o[k] === 'string' && o[k].includes('@')) return o[k];
+          }
+          for (const k of Object.keys(o)) {
+            const r = findEmail(o[k], depth + 1);
+            if (r) return r;
+          }
+          return null;
+        };
+        const email = findEmail(event);
+
+        // 金額を抽出（amount / charge.amount / data.amount 等）
+        const amountRaw =
+          data?.amount ?? data?.charge?.amount ?? event?.amount ?? data?.money?.amount ?? null;
+        const amount = amountRaw != null ? Number(amountRaw) : null;
+
+        const univapaySubId: string | null =
+          data?.subscription_id ?? data?.subscription?.id ?? data?.id ?? event?.id ?? null;
+
+        // ── プラン特定（金額 ⇄ PLANS.priceMonthly）──────────────
+        const { PLANS, TRIAL_DAYS } = await import('../../shared/plans');
+        let matchedPlanId: string | null = null;
+        if (amount != null) {
+          for (const [pid, p] of Object.entries(PLANS)) {
+            if (p.priceMonthly > 0 && p.priceMonthly === amount) { matchedPlanId = pid; break; }
+          }
+        }
+
+        const db = await import('../db');
+
+        // ── イベント分類（成功 / 失敗 / 解約）──────────────────────
+        const isPaid =
+          /subscription|charge|payment/.test(eventType) &&
+          /(success|successful|paid|current|completed|authorized|active)/.test(eventType + ' ' + status);
+        const isCanceled =
+          /(cancel|canceled|cancelled|unsubscrib|suspend)/.test(eventType + ' ' + status);
+        const isFailed =
+          /(fail|failed|error|declined|past_due|unpaid)/.test(eventType + ' ' + status);
+
+        if (!email) {
+          console.warn('[Univapay Webhook] メール特定不可。手動確認が必要（生ログ参照）');
+          // 200で返す（Univapayのリトライ嵐回避）。運用者に通知。
+          try {
+            const { notifyOwner } = await import('./notification');
+            await notifyOwner({
+              title: 'Univapay webhook: ユーザ特定不可',
+              content: `event=${eventType} status=${status} amount=${amount}\n生: ${JSON.stringify(event).slice(0, 1500)}`,
+            });
+          } catch {}
+          return res.json({ received: true, note: 'email not found' });
+        }
+
+        const user = await db.getUserByEmail(email);
+        if (!user) {
+          console.warn(`[Univapay Webhook] 未登録メール: ${email}（決済したがアプリ未登録の可能性）`);
+          try {
+            const { notifyOwner } = await import('./notification');
+            await notifyOwner({
+              title: 'Univapay webhook: 決済メールがアプリ未登録',
+              content: `email=${email} event=${eventType} amount=${amount}\nアプリ登録メールと一致しません。手動対応が必要かもしれません。`,
+            });
+          } catch {}
+          return res.json({ received: true, note: 'user not found for email' });
+        }
+
+        const existing = await db.getSubscriptionByUserId(user.id);
+
+        if (isCanceled) {
+          if (existing) {
+            await db.updateSubscription(existing.id, { status: 'canceled' });
+          }
+          console.log(`[Univapay Webhook] サブスク解約: user=${user.id}`);
+        } else if (isFailed) {
+          if (existing) {
+            await db.updateSubscription(existing.id, { status: 'past_due' });
+          }
+          console.log(`[Univapay Webhook] 決済失敗: user=${user.id}`);
+          // 既存の決済失敗通知導線を流用
+          try {
+            const { sendPaymentFailedEmail, notifyOwner } = await import('./notification');
+            const { getPlan } = await import('../../shared/plans');
+            const pn = getPlan(existing?.planId ?? matchedPlanId ?? 'light')?.name ?? 'プラン';
+            if (user.email) await sendPaymentFailedEmail(user.email, pn, amount, 1, null);
+            await notifyOwner({ title: `Univapay決済失敗: user ${user.id}`, content: `email=${email} amount=${amount}` });
+          } catch {}
+        } else if (isPaid) {
+          const planId = matchedPlanId ?? existing?.planId ?? 'light';
+          const currentPeriodEnd = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000);
+          if (existing) {
+            await db.updateSubscription(existing.id, {
+              planId,
+              status: 'active',
+              univapaySubscriptionId: univapaySubId ?? existing.univapaySubscriptionId ?? undefined,
+              currentPeriodEnd,
+              cancelAtPeriodEnd: false,
+            });
+            console.log(`[Univapay Webhook] サブスク更新→active: user=${user.id} plan=${planId}`);
+          } else {
+            await db.createSubscription({
+              userId: user.id,
+              planId,
+              univapaySubscriptionId: univapaySubId ?? undefined,
+              status: 'active',
+              trialEndsAt: null,
+              currentPeriodEnd,
+            } as any);
+            console.log(`[Univapay Webhook] サブスク新規作成→active: user=${user.id} plan=${planId}`);
+          }
+          void TRIAL_DAYS;
+        } else {
+          console.log(`[Univapay Webhook] 未分類イベント（無視・要構造確認）: event=${eventType} status=${status}`);
+        }
+
+        return res.json({ received: true });
+      } catch (err: any) {
+        // 失敗してもUnivapayにはエラーを返しすぎない（リトライ嵐回避）。ログで追う。
+        console.error('[Univapay Webhook] 処理エラー:', err?.message ?? err, '\n生:', rawBody.slice(0, 1000));
+        return res.status(200).json({ received: true, note: 'processing error logged' });
+      }
+    }
+  );
+
   // Rate limiting for API endpoints
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
