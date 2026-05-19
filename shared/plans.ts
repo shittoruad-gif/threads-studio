@@ -21,7 +21,39 @@ export interface PlanConfig {
   univapayLinkUrl?: string; // Univapay link form URL
   features: PlanFeatures;
   popular?: boolean;
+  /** キャンペーンプランか（3回課金で自動終了→無料に戻る） */
+  isCampaign?: boolean;
+  /** キャンペーン終了までの課金回数（isCampaign時のみ） */
+  campaignCharges?: number;
+  /** キャンペーン終了後に案内する通常プランのID（isCampaign時のみ） */
+  normalCounterpartId?: string;
 }
+
+// ライト/プロ/ビジネスの機能定義（通常・キャンペーン共通で参照）
+const FEATURES_LIGHT: PlanFeatures = {
+  maxProjects: 3,
+  maxThreadsAccounts: 1,
+  maxScheduledPosts: 10,
+  maxAiGenerations: 10,
+  hasPrioritySupport: false,
+  hasApiAccess: false,
+};
+const FEATURES_PRO: PlanFeatures = {
+  maxProjects: 10,
+  maxThreadsAccounts: 3,
+  maxScheduledPosts: 100,
+  maxAiGenerations: -1,
+  hasPrioritySupport: false,
+  hasApiAccess: false,
+};
+const FEATURES_BUSINESS: PlanFeatures = {
+  maxProjects: 50,
+  maxThreadsAccounts: 10,
+  maxScheduledPosts: 500,
+  maxAiGenerations: -1,
+  hasPrioritySupport: true,
+  hasApiAccess: true,
+};
 
 export const PLANS: Record<string, PlanConfig> = {
   free: {
@@ -38,63 +70,80 @@ export const PLANS: Record<string, PlanConfig> = {
       hasApiAccess: false,
     },
   },
+
+  // ───────── キャンペーンプラン（3回課金で自動終了→無料に戻る）─────────
+  light_campaign: {
+    id: 'light_campaign',
+    name: 'ライト キャンペーン',
+    description: '3ヶ月お試し価格（3回課金で自動終了）。機能はライトプランと同じ',
+    priceMonthly: 2980,
+    univapayLinkUrl: 'https://univa.cc/2Tfu-Z',
+    isCampaign: true,
+    campaignCharges: 3,
+    normalCounterpartId: 'light',
+    features: { ...FEATURES_LIGHT },
+  },
+  pro_campaign: {
+    id: 'pro_campaign',
+    name: 'プロ キャンペーン',
+    description: '3ヶ月お試し価格（3回課金で自動終了）。機能はプロプランと同じ',
+    priceMonthly: 6980,
+    univapayLinkUrl: 'https://univa.cc/qm0Uj5',
+    isCampaign: true,
+    campaignCharges: 3,
+    normalCounterpartId: 'pro',
+    popular: true,
+    features: { ...FEATURES_PRO },
+  },
+  business_campaign: {
+    id: 'business_campaign',
+    name: 'ビジネス キャンペーン',
+    description: '3ヶ月お試し価格（3回課金で自動終了）。機能はビジネスプランと同じ',
+    priceMonthly: 19800,
+    univapayLinkUrl: 'https://univa.cc/HJNLau',
+    isCampaign: true,
+    campaignCharges: 3,
+    normalCounterpartId: 'business',
+    features: { ...FEATURES_BUSINESS },
+  },
+
+  // ───────── 通常プラン（継続課金）─────────
   light: {
     id: 'light',
     name: 'ライトプラン',
     description: '個人利用・小規模店舗向け',
-    priceMonthly: 2980,
-    univapayLinkUrl: 'https://univa.cc/ecEkZB',
-    features: {
-      maxProjects: 3,
-      maxThreadsAccounts: 1,
-      maxScheduledPosts: 10,
-      maxAiGenerations: 10, // 月10回まで
-      hasPrioritySupport: false,
-      hasApiAccess: false,
-    },
+    priceMonthly: 4980,
+    univapayLinkUrl: 'https://univa.cc/CEmTK2',
+    features: { ...FEATURES_LIGHT },
   },
   pro: {
     id: 'pro',
     name: 'プロプラン',
     description: 'AI投稿生成で集客を加速',
     priceMonthly: 9800,
-    univapayLinkUrl: 'https://univa.cc/vy43QS',
+    univapayLinkUrl: 'https://univa.cc/tprohn',
     popular: true,
-    features: {
-      maxProjects: 10,
-      maxThreadsAccounts: 3,
-      maxScheduledPosts: 100,
-      maxAiGenerations: -1, // 無制限
-      hasPrioritySupport: false,
-      hasApiAccess: false,
-    },
+    features: { ...FEATURES_PRO },
   },
   business: {
     id: 'business',
     name: 'ビジネスプラン',
     description: '複数店舗・チーム運用向け',
     priceMonthly: 29800,
-    univapayLinkUrl: 'https://univa.cc/pC3r5d',
-    features: {
-      maxProjects: 50,
-      maxThreadsAccounts: 10,
-      maxScheduledPosts: 500,
-      maxAiGenerations: -1, // 無制限
-      hasPrioritySupport: true,
-      hasApiAccess: true,
-    },
+    univapayLinkUrl: 'https://univa.cc/W4Cxr3',
+    features: { ...FEATURES_BUSINESS },
   },
   agency: {
     id: 'agency',
     name: '代理店プラン',
     description: '代理店ビジネス向け最上位プラン',
-    priceMonthly: 50000,
-    univapayLinkUrl: 'https://univa.cc/Z2dqJa',
+    priceMonthly: 55000,
+    univapayLinkUrl: 'https://univa.cc/loi7Uw',
     features: {
-      maxProjects: -1, // Unlimited
-      maxThreadsAccounts: -1, // Unlimited
-      maxScheduledPosts: -1, // Unlimited
-      maxAiGenerations: -1, // 無制限
+      maxProjects: -1,
+      maxThreadsAccounts: -1,
+      maxScheduledPosts: -1,
+      maxAiGenerations: -1,
       hasPrioritySupport: true,
       hasApiAccess: true,
     },

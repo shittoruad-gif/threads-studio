@@ -13,6 +13,9 @@ import { CouponInput } from '@/components/CouponInput';
 
 const PLAN_ICONS: Record<string, React.ReactNode> = {
   free: <Zap className="w-6 h-6" />,
+  light_campaign: <Sparkles className="w-6 h-6" />,
+  pro_campaign: <Crown className="w-6 h-6" />,
+  business_campaign: <Building2 className="w-6 h-6" />,
   light: <Sparkles className="w-6 h-6" />,
   pro: <Crown className="w-6 h-6" />,
   business: <Building2 className="w-6 h-6" />,
@@ -21,6 +24,10 @@ const PLAN_ICONS: Record<string, React.ReactNode> = {
 
 const PLAN_COLORS: Record<string, { bg: string; text: string; icon: string; border: string }> = {
   free: { bg: 'bg-muted/50', text: 'text-foreground/80', icon: 'text-muted-foreground', border: 'border-border' },
+  // キャンペーンは「限定・お得」が伝わるローズ系で統一
+  light_campaign: { bg: 'bg-rose-50', text: 'text-rose-700', icon: 'text-rose-500', border: 'border-rose-300' },
+  pro_campaign: { bg: 'bg-rose-50', text: 'text-rose-700', icon: 'text-rose-500', border: 'border-rose-400' },
+  business_campaign: { bg: 'bg-rose-50', text: 'text-rose-700', icon: 'text-rose-500', border: 'border-rose-300' },
   light: { bg: 'bg-blue-50', text: 'text-blue-700', icon: 'text-blue-500', border: 'border-blue-200' },
   pro: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: 'text-emerald-500', border: 'border-emerald-300' },
   business: { bg: 'bg-purple-50', text: 'text-purple-700', icon: 'text-purple-500', border: 'border-purple-200' },
@@ -260,11 +267,22 @@ export default function Pricing() {
                   </div>
                 </div>
                 <h3 className="text-lg font-bold text-foreground mb-2">{plan.name}</h3>
+                {plan.isCampaign && (
+                  <div className="mb-2">
+                    <Badge className="bg-rose-500 text-white border-0 text-xs">
+                      期間限定・{plan.campaignCharges ?? 3}回課金で自動終了
+                    </Badge>
+                  </div>
+                )}
                 <div className="mb-4">
                   <div className="text-3xl font-bold text-foreground">
                     ¥{plan.priceMonthly.toLocaleString()}
                   </div>
-                  <div className="text-muted-foreground/60 text-sm">/月</div>
+                  <div className="text-muted-foreground/60 text-sm">
+                    {plan.isCampaign
+                      ? `/月 ×${plan.campaignCharges ?? 3}回（その後フリープランに戻ります）`
+                      : '/月'}
+                  </div>
                 </div>
                 <p className="text-muted-foreground text-xs mb-4 min-h-[2.5rem]">
                   {plan.description}

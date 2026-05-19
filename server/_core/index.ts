@@ -386,7 +386,7 @@ async function startServer() {
           data?.subscription_id ?? data?.subscription?.id ?? data?.id ?? event?.id ?? null;
 
         // ── プラン特定（金額 ⇄ PLANS.priceMonthly）──────────────
-        const { PLANS, TRIAL_DAYS } = await import('../../shared/plans');
+        const { PLANS, TRIAL_DAYS, getPlan } = await import('../../shared/plans');
         let matchedPlanId: string | null = null;
         if (amount != null) {
           for (const [pid, p] of Object.entries(PLANS)) {
@@ -437,7 +437,34 @@ async function startServer() {
           if (existing) {
             await db.updateSubscription(existing.id, { status: 'canceled' });
           }
-          console.log(`[Univapay Webhook] サブスク解約: user=${user.id}`);
+          // キャンペーンプランの3回課金完了による自動終了か、通常解約かを判定。
+          // どちらも canceled=フリーに戻る挙動だが、キャンペーン終了時は
+          // 「継続するには通常プラン登録を」と案内メールを送る（Q2=A方針）。
+          const endedPlan = getPlan(existing?.planId ?? matchedPlanId ?? '');
+          if (endedPlan?.isCampaign) {
+            console.log(`[Univapay Webhook] キャンペーン終了→フリーへ: user=${user.id} plan=${endedPlan.id}`);
+            try {
+              const normal = endedPlan.normalCounterpartId ? getPlan(endedPlan.normalCounterpartId) : undefined;
+              const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
+              const { sendEmail } = await import('./notification');
+              if (user.email) {
+                await sendEmail({
+                  to: user.email,
+                  subject: '【Threads Studio】キャンペーン期間が終了しました',
+                  html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+                    <h2>キャンペーン期間（${endedPlan.campaignCharges ?? 3}回分）が終了しました</h2>
+                    <p>${endedPlan.name} のキャンペーン課金が完了し、現在フリープランに戻っています。</p>
+                    <p>引き続き有料機能（自動投稿・無制限AI生成など）をご利用になる場合は、
+                    ${normal ? `「${normal.name}（月¥${normal.priceMonthly.toLocaleString()}）」` : '通常プラン'}
+                    へのご登録をお願いいたします。</p>
+                    <a href="${base}/pricing" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0;">通常プランを見る</a>
+                  </div>`,
+                });
+              }
+            } catch (e) { console.error('[Univapay Webhook] campaign-end mail error:', e); }
+          } else {
+            console.log(`[Univapay Webhook] サブスク解約: user=${user.id}`);
+          }
         } else if (isFailed) {
           if (existing) {
             await db.updateSubscription(existing.id, { status: 'past_due' });
@@ -446,7 +473,6 @@ async function startServer() {
           // 既存の決済失敗通知導線を流用
           try {
             const { sendPaymentFailedEmail, notifyOwner } = await import('./notification');
-            const { getPlan } = await import('../../shared/plans');
             const pn = getPlan(existing?.planId ?? matchedPlanId ?? 'light')?.name ?? 'プラン';
             if (user.email) await sendPaymentFailedEmail(user.email, pn, amount, 1, null);
             await notifyOwner({ title: `Univapay決済失敗: user ${user.id}`, content: `email=${email} amount=${amount}` });
