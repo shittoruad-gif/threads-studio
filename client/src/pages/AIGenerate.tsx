@@ -1313,7 +1313,7 @@ export default function AIGenerate() {
           open={scheduleDialogOpen}
           onOpenChange={setScheduleDialogOpen}
           projectId={projectId!}
-          postContent={`${editedPost.mainPost}\n\n${editedPost.treePosts.join('\n\n')}\n\n${editedPost.cta}\n\n${editedPost.hashtags.map(t => `#${t}`).join(' ')}`}
+          postContent={`${editedPost.mainPost}\n\n${editedPost.treePosts.join('\n\n')}\n\n${editedPost.cta}`}
         />
       )}
 

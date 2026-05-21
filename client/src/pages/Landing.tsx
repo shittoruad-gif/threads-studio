@@ -506,8 +506,8 @@ export default function Landing() {
           </div>
           
           <div className="flex flex-wrap justify-center gap-6 text-sm text-white/80">
+            <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-white" />登録不要で3回お試し</div>
             <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-white" />クレジットカード不要</div>
-            <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-white" />いつでもキャンセル可能</div>
             <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-white" />安全フィルタ搭載</div>
           </div>
         </div>
@@ -709,8 +709,8 @@ export default function Landing() {
         <div className="container mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-4 text-white">まずはお気軽にお試しください</h2>
           <p className="text-lg text-white/80 mb-8 max-w-xl mx-auto">
-            クレジットカード不要・いつでもキャンセル可能<br />
-            無料プランで基本機能をお試しいただけます
+            登録不要・クレジットカード不要<br />
+            AI投稿生成を3回まで無料でお試しいただけます
           </p>
           <Button size="lg" className="bg-white text-primary hover:bg-white/90 text-lg px-10 py-6 shadow-lg" onClick={handleSignupClick} disabled={loading}>
             <Sparkles className="w-5 h-5 mr-2" />

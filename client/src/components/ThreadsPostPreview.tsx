@@ -138,31 +138,22 @@ export default function ThreadsPostPreview({
   mainPost,
   treePosts = [],
   cta,
-  hashtags = [],
   darkMode = true,
 }: ThreadsPostPreviewProps) {
-  // CTAとハッシュタグを最後のポストに結合
+  // CTAを最後のポストに結合（ハッシュタグ（#）は使わない方針のため本文に連結しない）
   const allPosts: string[] = [];
-  
+
   // メイン投稿
   allPosts.push(mainPost);
-  
+
   // ツリー投稿
   treePosts.forEach(post => {
     if (post.trim()) allPosts.push(post);
   });
-  
+
   // CTAを最後のポストに追加、またはCTAだけの投稿を追加
   if (cta && cta.trim()) {
     allPosts.push(cta);
-  }
-
-  // ハッシュタグを最後のポストに追加
-  if (hashtags.length > 0) {
-    const hashtagStr = hashtags.map(t => `#${t}`).join(' ');
-    if (allPosts.length > 0) {
-      allPosts[allPosts.length - 1] += '\n\n' + hashtagStr;
-    }
   }
 
   const bg = darkMode ? 'bg-black' : 'bg-background';

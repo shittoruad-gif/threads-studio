@@ -151,13 +151,13 @@ async function generateAutoPost(
 
     const result = JSON.parse(content);
 
-    // Combine main post + tree posts + CTA + hashtags into full post content。
+    // Combine main post + tree posts + CTA into full post content。
     // treeCount=0 を指定しているので通常 treePosts は空配列。
+    // ハッシュタグ（#）は使わない方針のため、AIが誤って返しても本文には連結しない。
     const rawContent = [
       result.mainPost,
       ...(result.treePosts || []),
       result.cta || '',
-      (result.hashtags || []).map((h: string) => h.startsWith('#') ? h : `#${h}`).join(' '),
     ].filter(Boolean).join('\n\n');
 
     // Threads API は1投稿500文字制限。長すぎると API 側で拒否されるか

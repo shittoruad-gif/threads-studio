@@ -7,7 +7,13 @@ import { Check, X, Sparkles, Zap, Building2, Crown, Users, RefreshCw, ArrowLeft,
 import { useLocation } from 'wouter';
 import { toast } from 'sonner';
 import { getLoginUrl } from '@/const';
-import { PLANS } from '../../../shared/plans';
+import {
+  PLANS,
+  isValidCampaignCode,
+  getCampaignSlotsRemaining,
+  getCampaignCounterpart,
+  CAMPAIGN_SLOT_TOTAL,
+} from '../../../shared/plans';
 import { PlanChangeDialog } from '@/components/PlanChangeDialog';
 import { CouponInput } from '@/components/CouponInput';
 
@@ -60,7 +66,6 @@ const COMPARISON_FEATURES: ComparisonFeature[] = [
     category: 'AI機能',
     features: [
       { name: 'AI生成機能', free: false, light: true, pro: true, business: true, agency: true },
-      { name: 'ハッシュタグ生成', free: false, light: true, pro: true, business: true, agency: true },
       { name: 'フック生成', free: false, light: true, pro: true, business: true, agency: true },
     ],
   },
@@ -115,7 +120,27 @@ export default function Pricing() {
   const [changeDialogOpen, setChangeDialogOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  
+
+  // ── キャンペーンコード（限定価格の解除）──
+  const [campaignCode, setCampaignCode] = useState('');
+  const [campaignCodeError, setCampaignCodeError] = useState('');
+  const [campaignUnlocked, setCampaignUnlocked] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('ts_campaign_unlocked') === '1';
+  });
+  const slotsRemaining = getCampaignSlotsRemaining();
+
+  const handleApplyCampaignCode = () => {
+    if (isValidCampaignCode(campaignCode)) {
+      setCampaignUnlocked(true);
+      setCampaignCodeError('');
+      window.localStorage.setItem('ts_campaign_unlocked', '1');
+      toast.success('限定キャンペーン価格が適用されました！');
+    } else {
+      setCampaignCodeError('コードが正しくありません。お手元のコードをご確認ください。');
+    }
+  };
+
   const { data: currentSubscription, refetch } = trpc.subscription.getStatus.useQuery(
     undefined,
     { enabled: isAuthenticated }
@@ -174,7 +199,8 @@ export default function Pricing() {
     return <span className="text-foreground/80 font-medium">{value}</span>;
   };
 
-  const plans = Object.values(PLANS);
+  // キャンペーンプランはカードとして直接表示しない（コード適用時に通常カードの価格を切替）
+  const plans = Object.values(PLANS).filter((p) => !p.isCampaign);
 
   return (
     <div className="min-h-screen bg-muted/50">
@@ -229,6 +255,52 @@ export default function Pricing() {
           </p>
         </div>
 
+        {/* Campaign Code */}
+        <div className="max-w-2xl mx-auto mb-8">
+          {campaignUnlocked ? (
+            <div className="rounded-xl border-2 border-rose-300 bg-rose-50 p-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-rose-500 flex items-center justify-center shrink-0">
+                <Check className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="font-bold text-rose-700">限定キャンペーン価格が適用されています</p>
+                <p className="text-sm text-rose-600">
+                  先着{CAMPAIGN_SLOT_TOTAL}名様限定 ・ 残り{slotsRemaining}名 ｜ 3回課金で自動終了、その後フリープランに戻ります
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-background p-5">
+              <div className="flex items-center gap-2 mb-1">
+                <Sparkles className="w-4 h-4 text-rose-500" />
+                <p className="font-semibold text-foreground">キャンペーンコードをお持ちの方</p>
+              </div>
+              <p className="text-sm text-muted-foreground mb-3">
+                整骨院クライアント様・セミナー参加者様限定の特別価格コードを入力すると、先着{CAMPAIGN_SLOT_TOTAL}名様限定のキャンペーン価格が適用されます。
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={campaignCode}
+                  onChange={(e) => { setCampaignCode(e.target.value); setCampaignCodeError(''); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleApplyCampaignCode(); }}
+                  placeholder="キャンペーンコードを入力"
+                  className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+                />
+                <Button
+                  className="bg-rose-500 hover:bg-rose-600 text-white"
+                  onClick={handleApplyCampaignCode}
+                >
+                  適用する
+                </Button>
+              </div>
+              {campaignCodeError && (
+                <p className="text-sm text-rose-600 mt-2">{campaignCodeError}</p>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Coupon Input */}
         {isAuthenticated && (
           <div className="max-w-2xl mx-auto mb-12">
@@ -240,6 +312,8 @@ export default function Pricing() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 max-w-7xl mx-auto mb-20">
           {plans.map((plan) => {
             const colors = PLAN_COLORS[plan.id] || PLAN_COLORS.free;
+            // コード適用時、このプランに対応するキャンペーンプランがあれば価格を切替
+            const campaignPlan = campaignUnlocked ? getCampaignCounterpart(plan.id) : undefined;
             return (
               <div
                 key={plan.id}
@@ -267,23 +341,33 @@ export default function Pricing() {
                   </div>
                 </div>
                 <h3 className="text-lg font-bold text-foreground mb-2">{plan.name}</h3>
-                {plan.isCampaign && (
-                  <div className="mb-2">
-                    <Badge className="bg-rose-500 text-white border-0 text-xs">
-                      期間限定・{plan.campaignCharges ?? 3}回課金で自動終了
-                    </Badge>
+                {campaignPlan ? (
+                  <>
+                    <div className="mb-2">
+                      <Badge className="bg-rose-500 text-white border-0 text-xs">
+                        限定{CAMPAIGN_SLOT_TOTAL}名・残り{slotsRemaining}名
+                      </Badge>
+                    </div>
+                    <div className="mb-4">
+                      <div className="text-sm text-muted-foreground line-through">
+                        通常 ¥{plan.priceMonthly.toLocaleString()}/月
+                      </div>
+                      <div className="text-3xl font-bold text-rose-600">
+                        ¥{campaignPlan.priceMonthly.toLocaleString()}
+                      </div>
+                      <div className="text-rose-500 text-xs font-medium">
+                        /月 ×{campaignPlan.campaignCharges ?? 3}回（その後フリープランに戻ります）
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="mb-4">
+                    <div className="text-3xl font-bold text-foreground">
+                      ¥{plan.priceMonthly.toLocaleString()}
+                    </div>
+                    <div className="text-muted-foreground/60 text-sm">/月</div>
                   </div>
                 )}
-                <div className="mb-4">
-                  <div className="text-3xl font-bold text-foreground">
-                    ¥{plan.priceMonthly.toLocaleString()}
-                  </div>
-                  <div className="text-muted-foreground/60 text-sm">
-                    {plan.isCampaign
-                      ? `/月 ×${plan.campaignCharges ?? 3}回（その後フリープランに戻ります）`
-                      : '/月'}
-                  </div>
-                </div>
                 <p className="text-muted-foreground text-xs mb-4 min-h-[2.5rem]">
                   {plan.description}
                 </p>
@@ -295,7 +379,7 @@ export default function Pricing() {
                       ? 'bg-muted text-muted-foreground cursor-default'
                       : 'bg-background border border-border text-foreground/80 hover:bg-muted/50'
                   }`}
-                  onClick={() => handleSelectPlan(plan.id)}
+                  onClick={() => handleSelectPlan(campaignPlan ? campaignPlan.id : plan.id)}
                   disabled={isCurrentPlan(plan.id) || createCheckout.isPending}
                 >
                   {isCurrentPlan(plan.id) ? (

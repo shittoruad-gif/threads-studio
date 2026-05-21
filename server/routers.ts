@@ -1218,6 +1218,8 @@ ${cloneNgList.length > 0
         target: z.string().min(1),
         mainProblem: z.string().min(1),
         strength: z.string().min(1),
+        // 投稿の狙い（任意）。指定するとAIがその目的に最適化して生成する。
+        purpose: z.enum(['cv', 'awareness', 'authority', 'fan']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         // Rate limit by IP: max 3 per hour
@@ -1237,7 +1239,7 @@ ${cloneNgList.length > 0
         if (recentTimestamps.length >= 3) {
           throw new TRPCError({
             code: 'TOO_MANY_REQUESTS',
-            message: 'お試し生成は1時間に3回までです。続けてご利用いただくには無料登録してください。',
+            message: '無料お試しの上限に達しました。続けてご利用いただくには無料登録してください。',
           });
         }
 
@@ -1253,6 +1255,7 @@ ${cloneNgList.length > 0
           mainProblem: input.mainProblem,
           strength: input.strength,
           treeCount: 0, // main post only
+          purpose: input.purpose, // 投稿の狙い（任意）
         });
 
         // Call LLM

@@ -205,3 +205,45 @@ export function getAiGenerationLimitText(limit: number): string {
   if (limit === 0) return '利用不可';
   return `月${limit}回`;
 }
+
+// ───────── キャンペーンコード（限定キャンペーン料金の解除）─────────
+
+/**
+ * キャンペーン料金（light_campaign等）を解除する共通クーポンコード。
+ * どのコードを入力しても全キャンペーンプランが解除される（全プラン共通）。
+ */
+export const CAMPAIGN_UNLOCK_CODES = ['SEIKOTSU2026', 'SEMINAR2026', 'PARTNER2026'];
+
+/** 「限定◯名」表示用の総枠数（演出のみ・実際の登録制限はかけない） */
+export const CAMPAIGN_SLOT_TOTAL = 10;
+
+/** 残り枠カウントダウンの起点（JST） */
+const CAMPAIGN_COUNTDOWN_START = '2026-05-21T00:00:00+09:00';
+
+/**
+ * 入力されたコードがキャンペーン解除コードとして有効かを判定。
+ * 大文字小文字・前後の空白は無視する。
+ */
+export function isValidCampaignCode(code: string): boolean {
+  return CAMPAIGN_UNLOCK_CODES.includes(code.trim().toUpperCase());
+}
+
+/**
+ * 「残り◯名」の表示用カウント（演出のみ）。
+ * 起点日から5日ごとに1名ずつ減り、最低2名で止まる。
+ * 実際の登録数とは無関係で、登録制限もかけない。
+ */
+export function getCampaignSlotsRemaining(now: Date = new Date()): number {
+  const start = new Date(CAMPAIGN_COUNTDOWN_START).getTime();
+  const days = Math.max(0, Math.floor((now.getTime() - start) / 86_400_000));
+  return Math.max(2, CAMPAIGN_SLOT_TOTAL - 1 - Math.floor(days / 5));
+}
+
+/**
+ * 通常プランIDに対応するキャンペーンプランを返す（なければundefined）。
+ */
+export function getCampaignCounterpart(normalPlanId: string): PlanConfig | undefined {
+  return Object.values(PLANS).find(
+    (p) => p.isCampaign && p.normalCounterpartId === normalPlanId,
+  );
+}
