@@ -299,14 +299,6 @@ export async function seedCoupons() {
       maxUses: null,
       isActive: true,
     },
-    // モニタープログラム（90日間プロプラン + フィードバック機能）
-    {
-      code: "MONITOR2026",
-      type: "monitor",
-      description: "モニタープログラム - 90日間プロプラン + フィードバック機能",
-      maxUses: 30,
-      isActive: true,
-    },
     // キャンペーンモニター（フィードバック機能のみ有効化・プランと料金は変更しない）
     {
       code: "CPMONITOR2026",
