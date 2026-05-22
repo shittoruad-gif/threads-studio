@@ -129,39 +129,43 @@ export async function applyCoupon(
       break;
   }
 
-  // Get or create user's subscription
-  const existingSubscription = await db
-    .select()
-    .from(subscriptions)
-    .where(eq(subscriptions.userId, userId))
-    .limit(1);
+  // monitor_only クーポンはプラン（サブスク）を一切変更しない。
+  // モニターフラグだけを立てるため、キャンペーン価格の課金はそのまま維持される。
+  if (coupon.type !== "monitor_only") {
+    // Get or create user's subscription
+    const existingSubscription = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.userId, userId))
+      .limit(1);
 
-  if (existingSubscription.length > 0) {
-    // Update existing subscription
-    await db
-      .update(subscriptions)
-      .set({
+    if (existingSubscription.length > 0) {
+      // Update existing subscription
+      await db
+        .update(subscriptions)
+        .set({
+          planId,
+          trialEndsAt,
+          status: "trialing",
+          updatedAt: new Date(),
+        })
+        .where(eq(subscriptions.id, existingSubscription[0]!.id));
+    } else {
+      // Create new subscription
+      await db.insert(subscriptions).values({
+        userId,
         planId,
         trialEndsAt,
         status: "trialing",
-        updatedAt: new Date(),
-      })
-      .where(eq(subscriptions.id, existingSubscription[0]!.id));
-  } else {
-    // Create new subscription
-    await db.insert(subscriptions).values({
-      userId,
-      planId,
-      trialEndsAt,
-      status: "trialing",
-      stripeSubscriptionId: null,
-      currentPeriodEnd: trialEndsAt,
-      cancelAtPeriodEnd: false,
-    });
+        stripeSubscriptionId: null,
+        currentPeriodEnd: trialEndsAt,
+        cancelAtPeriodEnd: false,
+      });
+    }
   }
 
-  // If monitor coupon, set user as monitor
-  if (coupon.type === "monitor") {
+  // monitor / monitor_only クーポンはユーザーをモニターに設定
+  if (coupon.type === "monitor" || coupon.type === "monitor_only") {
     const { users } = await import("../drizzle/schema");
     await db
       .update(users)
@@ -206,6 +210,9 @@ export async function applyCoupon(
       break;
     case "monitor":
       message = "モニタープログラムへようこそ！90日間プロプランを無料でご利用いただけます。フィードバック機能が有効になりました。";
+      break;
+    case "monitor_only":
+      message = "モニター登録が完了しました！ダッシュボード右下のボタンからフィードバックを送信いただけます。ご協力をお願いいたします。";
       break;
   }
 
@@ -297,6 +304,14 @@ export async function seedCoupons() {
       code: "MONITOR2026",
       type: "monitor",
       description: "モニタープログラム - 90日間プロプラン + フィードバック機能",
+      maxUses: 30,
+      isActive: true,
+    },
+    // キャンペーンモニター（フィードバック機能のみ有効化・プランと料金は変更しない）
+    {
+      code: "CPMONITOR2026",
+      type: "monitor_only",
+      description: "キャンペーンモニター - フィードバック機能のみ有効化（プラン・料金は変更しない）",
       maxUses: 30,
       isActive: true,
     },

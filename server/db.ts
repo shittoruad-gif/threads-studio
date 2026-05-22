@@ -1078,7 +1078,7 @@ export async function getCouponById(id: number) {
 
 export async function createCoupon(params: {
   code: string;
-  type: 'forever_free' | 'trial_30' | 'trial_14' | 'discount_50' | 'discount_30' | 'special_price' | 'monitor';
+  type: 'forever_free' | 'trial_30' | 'trial_14' | 'discount_50' | 'discount_30' | 'special_price' | 'monitor' | 'monitor_only';
   description?: string;
   maxUses?: number;
   expiresAt?: Date;

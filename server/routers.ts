@@ -2270,7 +2270,7 @@ ${input.commentText}
     createCoupon: protectedProcedure
       .input(z.object({
         code: z.string().min(1).max(50),
-        type: z.enum(['forever_free', 'trial_30', 'trial_14', 'discount_50', 'discount_30', 'special_price', 'monitor']),
+        type: z.enum(['forever_free', 'trial_30', 'trial_14', 'discount_50', 'discount_30', 'special_price', 'monitor', 'monitor_only']),
         description: z.string().optional(),
         maxUses: z.number().optional(),
         expiresAt: z.date().optional(),

@@ -33,6 +33,11 @@ const COUPON_TYPE_LABELS: Record<string, string> = {
   forever_free: '永久無料',
   trial_30: '30日間トライアル',
   trial_14: '14日間トライアル',
+  discount_50: '50%OFF',
+  discount_30: '30%OFF',
+  special_price: '特別価格',
+  monitor: 'モニター（90日プロ付き）',
+  monitor_only: 'モニターのみ（料金変更なし）',
 };
 
 interface CouponFormData {
