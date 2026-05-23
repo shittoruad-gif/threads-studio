@@ -203,7 +203,7 @@ export default function Register() {
                 autoComplete="off"
               />
               <p className="text-xs text-muted-foreground">
-                モニター・キャンペーンコードをお持ちの方はこちらに入力してください
+                クーポンコードをお持ちの方はこちらに入力してください（登録後、料金ページでキャンペーン価格が表示されます）
               </p>
             </div>
 

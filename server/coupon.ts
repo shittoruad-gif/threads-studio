@@ -299,11 +299,34 @@ export async function seedCoupons() {
       maxUses: null,
       isActive: true,
     },
-    // キャンペーンモニター（フィードバック機能のみ有効化・プランと料金は変更しない）
+    // キャンペーンモニター（モニター化＋キャンペーン価格表示・料金変更なし）
+    // 入力したユーザーは isMonitor=true になり、料金ページでキャンペーン価格が表示される。
+    // 配布先別に複数コードを用意（経路分析用）。挙動はすべて同じ。
+    {
+      code: "SEIKOTSU2026",
+      type: "monitor_only",
+      description: "整骨院クライアント様向けキャンペーン（モニター化＋キャンペーン価格）",
+      maxUses: 30,
+      isActive: true,
+    },
+    {
+      code: "SEMINAR2026",
+      type: "monitor_only",
+      description: "セミナー参加者様向けキャンペーン（モニター化＋キャンペーン価格）",
+      maxUses: 30,
+      isActive: true,
+    },
+    {
+      code: "PARTNER2026",
+      type: "monitor_only",
+      description: "紹介・パートナー様向けキャンペーン（モニター化＋キャンペーン価格）",
+      maxUses: 30,
+      isActive: true,
+    },
     {
       code: "CPMONITOR2026",
       type: "monitor_only",
-      description: "キャンペーンモニター - フィードバック機能のみ有効化（プラン・料金は変更しない）",
+      description: "モニター指定キャンペーン（モニター化＋キャンペーン価格）",
       maxUses: 30,
       isActive: true,
     },

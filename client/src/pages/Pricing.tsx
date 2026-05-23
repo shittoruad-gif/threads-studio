@@ -9,13 +9,11 @@ import { toast } from 'sonner';
 import { getLoginUrl } from '@/const';
 import {
   PLANS,
-  isValidCampaignCode,
   getCampaignSlotsRemaining,
   getCampaignCounterpart,
   CAMPAIGN_SLOT_TOTAL,
 } from '../../../shared/plans';
 import { PlanChangeDialog } from '@/components/PlanChangeDialog';
-import { CouponInput } from '@/components/CouponInput';
 
 const PLAN_ICONS: Record<string, React.ReactNode> = {
   free: <Zap className="w-6 h-6" />,
@@ -115,31 +113,16 @@ const FAQ_ITEMS = [
 ];
 
 export default function Pricing() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [, setLocation] = useLocation();
   const [changeDialogOpen, setChangeDialogOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
-  // ── キャンペーンコード（限定価格の解除）──
-  const [campaignCode, setCampaignCode] = useState('');
-  const [campaignCodeError, setCampaignCodeError] = useState('');
-  const [campaignUnlocked, setCampaignUnlocked] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.localStorage.getItem('ts_campaign_unlocked') === '1';
-  });
+  // モニター（キャンペーンクーポン適用済み）のユーザーには
+  // キャンペーン価格を自動表示する。コード入力欄は新規登録時のみ。
+  const campaignUnlocked = Boolean(user?.isMonitor);
   const slotsRemaining = getCampaignSlotsRemaining();
-
-  const handleApplyCampaignCode = () => {
-    if (isValidCampaignCode(campaignCode)) {
-      setCampaignUnlocked(true);
-      setCampaignCodeError('');
-      window.localStorage.setItem('ts_campaign_unlocked', '1');
-      toast.success('限定キャンペーン価格が適用されました！');
-    } else {
-      setCampaignCodeError('コードが正しくありません。お手元のコードをご確認ください。');
-    }
-  };
 
   const { data: currentSubscription, refetch } = trpc.subscription.getStatus.useQuery(
     undefined,
@@ -255,9 +238,9 @@ export default function Pricing() {
           </p>
         </div>
 
-        {/* Campaign Code */}
-        <div className="max-w-2xl mx-auto mb-8">
-          {campaignUnlocked ? (
+        {/* 限定キャンペーン適用中バナー（クーポン適用済みのモニターユーザーのみ表示） */}
+        {campaignUnlocked && (
+          <div className="max-w-2xl mx-auto mb-10">
             <div className="rounded-xl border-2 border-rose-300 bg-rose-50 p-5 flex items-center gap-4">
               <div className="w-10 h-10 rounded-full bg-rose-500 flex items-center justify-center shrink-0">
                 <Check className="w-5 h-5 text-white" />
@@ -269,42 +252,6 @@ export default function Pricing() {
                 </p>
               </div>
             </div>
-          ) : (
-            <div className="rounded-xl border border-border bg-background p-5">
-              <div className="flex items-center gap-2 mb-1">
-                <Sparkles className="w-4 h-4 text-rose-500" />
-                <p className="font-semibold text-foreground">キャンペーンコードをお持ちの方</p>
-              </div>
-              <p className="text-sm text-muted-foreground mb-3">
-                整骨院クライアント様・セミナー参加者様限定の特別価格コードを入力すると、先着{CAMPAIGN_SLOT_TOTAL}名様限定のキャンペーン価格が適用されます。
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={campaignCode}
-                  onChange={(e) => { setCampaignCode(e.target.value); setCampaignCodeError(''); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleApplyCampaignCode(); }}
-                  placeholder="キャンペーンコードを入力"
-                  className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
-                />
-                <Button
-                  className="bg-rose-500 hover:bg-rose-600 text-white"
-                  onClick={handleApplyCampaignCode}
-                >
-                  適用する
-                </Button>
-              </div>
-              {campaignCodeError && (
-                <p className="text-sm text-rose-600 mt-2">{campaignCodeError}</p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Coupon Input */}
-        {isAuthenticated && (
-          <div className="max-w-2xl mx-auto mb-12">
-            <CouponInput onSuccess={() => window.location.reload()} />
           </div>
         )}
 

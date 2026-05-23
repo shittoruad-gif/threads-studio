@@ -206,27 +206,15 @@ export function getAiGenerationLimitText(limit: number): string {
   return `月${limit}回`;
 }
 
-// ───────── キャンペーンコード（限定キャンペーン料金の解除）─────────
-
-/**
- * キャンペーン料金（light_campaign等）を解除する共通クーポンコード。
- * どのコードを入力しても全キャンペーンプランが解除される（全プラン共通）。
- */
-export const CAMPAIGN_UNLOCK_CODES = ['SEIKOTSU2026', 'SEMINAR2026', 'PARTNER2026'];
+// ───────── キャンペーン料金表示（モニター登録者向けの自動表示）─────────
+// キャンペーンコードはDBクーポン（type: monitor_only）として管理。
+// クーポン適用でユーザーがモニター化されると、料金ページがキャンペーン価格を自動表示する。
 
 /** 「限定◯名」表示用の総枠数（演出のみ・実際の登録制限はかけない） */
 export const CAMPAIGN_SLOT_TOTAL = 10;
 
 /** 残り枠カウントダウンの起点（JST） */
 const CAMPAIGN_COUNTDOWN_START = '2026-05-21T00:00:00+09:00';
-
-/**
- * 入力されたコードがキャンペーン解除コードとして有効かを判定。
- * 大文字小文字・前後の空白は無視する。
- */
-export function isValidCampaignCode(code: string): boolean {
-  return CAMPAIGN_UNLOCK_CODES.includes(code.trim().toUpperCase());
-}
 
 /**
  * 「残り◯名」の表示用カウント（演出のみ）。
