@@ -169,11 +169,6 @@ export default function Dashboard() {
   });
 
   const createPortalSession = trpc.subscription.createPortalSession.useMutation({
-    onSuccess: (data) => {
-      if (data.url) {
-        window.open(data.url, '_blank');
-      }
-    },
     onError: (error) => {
       toast.error(error.message);
     },

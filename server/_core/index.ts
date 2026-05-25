@@ -8,15 +8,9 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { stripe } from "../stripe";
 import * as db from "../db";
-import Stripe from "stripe";
 import { initTrialReminderScheduler } from "../trialReminder";
 import { startTokenRefreshJob } from "../tokenRefreshJob";
-
-declare global {
-  var __stripeWebhookSeen: { id: string; ts: number }[] | undefined;
-}
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -50,265 +44,6 @@ async function startServer() {
   app.set('trust proxy', 1);
   const server = createServer(app);
 
-  // Stripe webhook endpoint - MUST be before express.json() middleware
-  app.post('/api/stripe/webhook', 
-    express.raw({ type: 'application/json' }),
-    async (req, res) => {
-      const sig = req.headers['stripe-signature'] as string;
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-      if (!webhookSecret) {
-        console.error('[Webhook] Missing STRIPE_WEBHOOK_SECRET');
-        return res.status(500).json({ error: 'Webhook secret not configured' });
-      }
-
-      let event: Stripe.Event;
-
-      try {
-        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-      } catch (err: any) {
-        console.error('[Webhook] Signature verification failed:', err.message);
-        return res.status(400).json({ error: `Webhook Error: ${err.message}` });
-      }
-
-      // Handle test events
-      if (event.id.startsWith('evt_test_')) {
-        console.log("[Webhook] Test event detected, returning verification response");
-        return res.json({ verified: true });
-      }
-
-      // ── #6 冪等性チェック（in-memory） ────────────────────────────
-      // Stripe は 5xx 応答時に同じ event を最大3日間リトライする。
-      // 1時間ウィンドウでメモリ内に処理済み event.id を覚えておき、
-      // 重複処理を防ぐ。プロセス再起動で失われるが Stripe の再送間隔を
-      // 考えれば実害は許容範囲。完全な冪等性が必要なら DB テーブル化。
-      type WebhookSeen = { id: string; ts: number };
-      if (!globalThis.__stripeWebhookSeen) {
-        globalThis.__stripeWebhookSeen = [] as WebhookSeen[];
-      }
-      const seen = globalThis.__stripeWebhookSeen as WebhookSeen[];
-      const nowTs = Date.now();
-      const ONE_HOUR = 60 * 60 * 1000;
-      // 古いエントリを掃除
-      while (seen.length > 0 && nowTs - seen[0].ts > ONE_HOUR) seen.shift();
-      if (seen.find((s) => s.id === event.id)) {
-        console.log(`[Webhook] Duplicate event ignored: ${event.id}`);
-        return res.json({ received: true, duplicate: true });
-      }
-      seen.push({ id: event.id, ts: nowTs });
-      // 上限を設けてメモリ暴走を防ぐ
-      if (seen.length > 5000) seen.splice(0, seen.length - 5000);
-
-      console.log(`[Webhook] Received event: ${event.type} (${event.id})`);
-
-      try {
-        switch (event.type) {
-          case 'checkout.session.completed': {
-            const session = event.data.object as Stripe.Checkout.Session;
-            const userId = parseInt(session.metadata?.userId || session.client_reference_id || '0');
-            const planId = session.metadata?.planId || 'light';
-            const subscriptionId = session.subscription as string;
-
-            if (userId && subscriptionId) {
-              // Get subscription details from Stripe
-              const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId);
-              
-              // Calculate trial end date
-              const trialEndsAt = stripeSubscription.trial_end 
-                ? new Date(stripeSubscription.trial_end * 1000) 
-                : null;
-              
-              const currentPeriodEnd = new Date((stripeSubscription as any).current_period_end * 1000);
-
-              // Create subscription in database
-              await db.createSubscription({
-                userId,
-                planId,
-                stripeSubscriptionId: subscriptionId,
-                status: stripeSubscription.status === 'trialing' ? 'trialing' : 'active',
-                trialEndsAt,
-                currentPeriodEnd,
-              });
-
-              console.log(`[Webhook] Created subscription for user ${userId}, plan: ${planId}`);
-            }
-            break;
-          }
-
-          case 'customer.subscription.updated': {
-            const subscription = event.data.object as Stripe.Subscription;
-            const stripeSubscriptionId = subscription.id;
-            
-            // Map Stripe status to our status enum
-            let status: 'trialing' | 'active' | 'canceled' | 'past_due' | 'unpaid' | 'incomplete' = 'active';
-            if (subscription.status === 'trialing') status = 'trialing';
-            else if (subscription.status === 'canceled') status = 'canceled';
-            else if (subscription.status === 'past_due') status = 'past_due';
-            else if (subscription.status === 'unpaid') status = 'unpaid';
-            else if (subscription.status === 'incomplete') status = 'incomplete';
-
-            const currentPeriodEnd = new Date((subscription as any).current_period_end * 1000);
-            const planId = subscription.metadata?.planId;
-
-            await db.updateSubscriptionByStripeId(stripeSubscriptionId, {
-              status,
-              currentPeriodEnd,
-              cancelAtPeriodEnd: subscription.cancel_at_period_end,
-              ...(planId && { planId }),
-            });
-
-            console.log(`[Webhook] Updated subscription ${stripeSubscriptionId}, status: ${status}`);
-            break;
-          }
-
-          case 'customer.subscription.deleted': {
-            const subscription = event.data.object as Stripe.Subscription;
-            const stripeSubscriptionId = subscription.id;
-
-            await db.updateSubscriptionByStripeId(stripeSubscriptionId, {
-              status: 'canceled',
-            });
-
-            console.log(`[Webhook] Subscription ${stripeSubscriptionId} canceled`);
-            break;
-          }
-
-          case 'invoice.payment_failed': {
-            const invoice = event.data.object as Stripe.Invoice;
-            const subscriptionId = (invoice as any).subscription as string;
-
-            if (subscriptionId) {
-              await db.updateSubscriptionByStripeId(subscriptionId, {
-                status: 'past_due',
-              });
-              console.log(`[Webhook] Payment failed for subscription ${subscriptionId}`);
-
-              // ── ユーザへメール通知 + 管理者へ通知 ────────────────────
-              try {
-                const sub = await db.getSubscriptionByStripeId(subscriptionId);
-                if (sub) {
-                  const user = await db.getUserById(sub.userId);
-                  const { getPlan } = await import("../../shared/plans");
-                  const plan = getPlan(sub.planId);
-                  const planName = plan?.name ?? sub.planId;
-
-                  // 失敗回数（Stripe が attempt_count を管理）
-                  const attemptCount = (invoice as any).attempt_count ?? 1;
-                  const amountDue = (invoice as any).amount_due ?? null;
-                  const nextRetryUnix = (invoice as any).next_payment_attempt as number | null;
-                  const nextRetryAt = nextRetryUnix ? new Date(nextRetryUnix * 1000) : null;
-
-                  if (user?.email) {
-                    const {
-                      sendPaymentFailedEmail,
-                      sendSubscriptionSuspendedEmail,
-                      notifyOwner,
-                    } = await import("./notification");
-
-                    // attemptCount >= 4 で Stripe は通常諦める。最終なら停止メール。
-                    if (attemptCount >= 4 || !nextRetryUnix) {
-                      await sendSubscriptionSuspendedEmail(user.email, planName);
-                    } else {
-                      await sendPaymentFailedEmail(
-                        user.email,
-                        planName,
-                        amountDue != null ? amountDue : null,
-                        attemptCount,
-                        nextRetryAt,
-                      );
-                    }
-
-                    // 管理者にも通知（要 ADMIN_NOTIFICATION_EMAIL）
-                    await notifyOwner({
-                      title: `決済失敗: user ${user.id} (${user.email})`,
-                      content:
-                        `Plan: ${planName}\n` +
-                        `Subscription: ${subscriptionId}\n` +
-                        `Attempt: ${attemptCount}\n` +
-                        `Amount: ${amountDue ?? 'unknown'}\n` +
-                        `Next retry: ${nextRetryAt?.toISOString() ?? 'none (final)'}\n`,
-                    });
-                  }
-                }
-              } catch (notifyErr) {
-                console.error('[Webhook] Failed to send payment_failed notification:', notifyErr);
-              }
-            }
-            break;
-          }
-
-          case 'invoice.payment_action_required': {
-            // 3Dセキュア等の追加認証が必要なケース
-            const invoice = event.data.object as Stripe.Invoice;
-            const subscriptionId = (invoice as any).subscription as string | undefined;
-            const customerId = invoice.customer as string | undefined;
-            try {
-              let userEmail: string | null = null;
-              if (subscriptionId) {
-                const sub = await db.getSubscriptionByStripeId(subscriptionId);
-                if (sub) {
-                  const user = await db.getUserById(sub.userId);
-                  userEmail = user?.email ?? null;
-                }
-              } else if (customerId) {
-                const user = await db.getUserByStripeCustomerId(customerId);
-                userEmail = user?.email ?? null;
-              }
-              if (userEmail) {
-                const { sendPaymentActionRequiredEmail } = await import("./notification");
-                await sendPaymentActionRequiredEmail(
-                  userEmail,
-                  (invoice as any).hosted_invoice_url ?? null,
-                );
-                console.log(`[Webhook] Sent action_required email to ${userEmail}`);
-              }
-            } catch (e) {
-              console.error('[Webhook] payment_action_required handling error:', e);
-            }
-            break;
-          }
-
-          case 'customer.source.expiring': {
-            // カード有効期限切れ予告（前月初めに飛んでくる）
-            const card = event.data.object as Stripe.Card;
-            const customerId = card.customer as string;
-            try {
-              const user = await db.getUserByStripeCustomerId(customerId);
-              if (user?.email) {
-                const { sendCardExpiringEmail } = await import("./notification");
-                await sendCardExpiringEmail(
-                  user.email,
-                  card.last4,
-                  card.exp_month,
-                  card.exp_year,
-                );
-                console.log(`[Webhook] Sent card-expiring email to ${user.email}`);
-              }
-            } catch (e) {
-              console.error('[Webhook] customer.source.expiring handling error:', e);
-            }
-            break;
-          }
-
-          case 'payment_method.automatically_updated': {
-            // Stripe が自動でカード情報を更新したケース（カード再発行等）。
-            // 通知は不要だがログは残す。
-            const pm = event.data.object as Stripe.PaymentMethod;
-            console.log(`[Webhook] Payment method auto-updated for customer ${pm.customer}`);
-            break;
-          }
-
-          default:
-            console.log(`[Webhook] Unhandled event type: ${event.type}`);
-        }
-
-        res.json({ received: true });
-      } catch (err: any) {
-        console.error('[Webhook] Error processing event:', err);
-        res.status(500).json({ error: 'Webhook processing failed' });
-      }
-    }
-  );
 
   // ── Univapay webhook endpoint ──────────────────────────────────────
   // 決済完了/失敗/解約の通知を受けてサブスクを有効化/更新する。
@@ -684,7 +419,7 @@ async function startServer() {
 <h3>2.4 AI生成に関するデータ</h3>
 <p>AI投稿生成機能を利用する際にユーザーが入力するプロジェクト情報、テーマ、キーワード等のデータ。</p>
 <h3>2.5 決済情報</h3>
-<p>有料プランの決済に必要な情報はStripe社を通じて安全に処理されます。当社はクレジットカード番号等の機密情報を直接保存しません。</p>
+<p>有料プランの決済に必要な情報はUnivapay（株式会社ジャパン・ペイメント・サービス）を通じて安全に処理されます。当社はクレジットカード番号等の機密情報を直接保存しません。</p>
 <h3>2.6 利用データ</h3>
 <p>サービスの利用状況、投稿履歴、機能の使用頻度など、サービス改善のために収集する匿名化されたデータ。</p>
 <h3>2.7 インサイトデータ</h3>
@@ -721,7 +456,7 @@ async function startServer() {
 </ul>
 
 <h2>6. 決済処理</h2>
-<p>有料プランの決済はStripe社の安全な決済インフラを通じて処理されます。クレジットカード情報は当社サーバーを経由せず、Stripe社が直接処理・保管します。</p>
+<p>有料プランの決済はUnivapay（株式会社ジャパン・ペイメント・サービス）の安全な決済インフラを通じて処理されます。クレジットカード情報は当社サーバーを経由せず、Univapayが直接処理・保管します。</p>
 
 <h2>7. 情報の共有</h2>
 <p>本サービスは、以下の場合を除き、ユーザーの個人情報を第三者に提供しません。</p>

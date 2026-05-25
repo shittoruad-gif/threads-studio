@@ -7,7 +7,6 @@ import { z } from "zod";
 import * as db from "./db";
 import { ENV } from "./_core/env";
 import bcrypt from "bcryptjs";
-import * as stripeService from "./stripe";
 import * as couponService from "./coupon";
 import { PLANS, TRIAL_DAYS, getPlan } from "../shared/plans";
 import { TRPCError } from "@trpc/server";
@@ -396,122 +395,59 @@ export const appRouter = router({
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot checkout free plan' });
         }
 
-        // UnivaPayリンクが設定されている場合はそちらを優先
-        if (plan.univapayLinkUrl) {
-          return { url: plan.univapayLinkUrl };
+        // 決済はUnivapayリンク経由に一本化。リンクが未設定なら設定不備として弾く。
+        if (!plan.univapayLinkUrl) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'このプランの決済リンクが未設定です。お手数ですがサポートまでお問い合わせください。',
+          });
         }
-
-        const origin = ctx.req.headers.origin || 'http://localhost:3000';
-        const checkoutUrl = await stripeService.createCheckoutSession(
-          ctx.user.id,
-          ctx.user.email || '',
-          ctx.user.name || null,
-          input.planId,
-          origin
-        );
-
-        return { url: checkoutUrl };
+        return { url: plan.univapayLinkUrl };
       }),
 
-    // Create billing portal session
-    createPortalSession: protectedProcedure.mutation(async ({ ctx }) => {
-      const user = await db.getUserById(ctx.user.id);
-      if (!user?.stripeCustomerId) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'No billing account found' });
-      }
-
-      const origin = ctx.req.headers.origin || 'http://localhost:3000';
-      const portalUrl = await stripeService.createBillingPortalSession(
-        user.stripeCustomerId,
-        `${origin}/dashboard`
-      );
-
-      return { url: portalUrl };
+    // 課金ポータル／キャンセル／再開／請求書／プラン変更プレビュー
+    // ── Stripe撤廃に伴い、これらはアプリ側では未対応に。Univapay（ジャパン・
+    //    ペイメント・サービス）のサブスクライバー画面 or サポート経由で対応する運用。
+    createPortalSession: protectedProcedure.mutation(async () => {
+      throw new TRPCError({
+        code: 'NOT_IMPLEMENTED',
+        message: 'カード情報の変更はUnivapayのご案内メール内リンク、またはサポートまでお問い合わせください。',
+      });
     }),
 
-    // Cancel subscription
-    cancel: protectedProcedure.mutation(async ({ ctx }) => {
-      const subscription = await db.getSubscriptionByUserId(ctx.user.id);
-      if (!subscription?.stripeSubscriptionId) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'No active subscription' });
-      }
-
-      await stripeService.cancelSubscription(subscription.stripeSubscriptionId);
-      await db.updateSubscription(subscription.id, { cancelAtPeriodEnd: true });
-
-      return { success: true };
+    cancel: protectedProcedure.mutation(async () => {
+      throw new TRPCError({
+        code: 'NOT_IMPLEMENTED',
+        message: '解約はサポートまでお問い合わせください（Univapay側で停止処理を行います）。',
+      });
     }),
 
-    // Resume canceled subscription
-    resume: protectedProcedure.mutation(async ({ ctx }) => {
-      const subscription = await db.getSubscriptionByUserId(ctx.user.id);
-      if (!subscription?.stripeSubscriptionId) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'No subscription to resume' });
-      }
-
-      await stripeService.resumeSubscription(subscription.stripeSubscriptionId);
-      await db.updateSubscription(subscription.id, { cancelAtPeriodEnd: false });
-
-      return { success: true };
+    resume: protectedProcedure.mutation(async () => {
+      throw new TRPCError({
+        code: 'NOT_IMPLEMENTED',
+        message: '再開はサポートまでお問い合わせください。',
+      });
     }),
 
-    // Get invoices
-    getInvoices: protectedProcedure.query(async ({ ctx }) => {
-      const user = await db.getUserById(ctx.user.id);
-      if (!user?.stripeCustomerId) {
-        return [];
-      }
-
-      const invoices = await stripeService.getInvoices(user.stripeCustomerId);
-      return invoices.map(inv => ({
-        id: inv.id,
-        amount: inv.amount_paid,
-        currency: inv.currency,
-        status: inv.status,
-        created: inv.created,
-        invoiceUrl: inv.hosted_invoice_url,
-        pdfUrl: inv.invoice_pdf,
-      }));
+    getInvoices: protectedProcedure.query(async () => {
+      return [] as Array<{
+        id: string;
+        amount: number;
+        currency: string;
+        status: string | null;
+        created: number;
+        invoiceUrl: string | null;
+        pdfUrl: string | null;
+      }>;
     }),
 
-    // Preview plan change (calculate proration)
     previewPlanChange: protectedProcedure
       .input(z.object({ newPlanId: z.string() }))
-      .query(async ({ ctx, input }) => {
-        const subscription = await db.getSubscriptionByUserId(ctx.user.id);
-        const currentPlanId = subscription?.planId || 'free';
-        
-        if (currentPlanId === 'free') {
-          throw new TRPCError({ 
-            code: 'BAD_REQUEST', 
-            message: '無料プランからの変更は新規購入として行ってください。' 
-          });
-        }
-
-        if (!subscription?.stripeSubscriptionId) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'No active subscription' });
-        }
-
-        if (currentPlanId === input.newPlanId) {
-          throw new TRPCError({ 
-            code: 'BAD_REQUEST', 
-            message: '現在と同じプランには変更できません。' 
-          });
-        }
-
-        const proration = await stripeService.calculatePlanChangeProration(
-          subscription.stripeSubscriptionId,
-          input.newPlanId
-        );
-
-        const currentPlan = getPlan(currentPlanId);
-        const newPlan = getPlan(input.newPlanId);
-
-        return {
-          ...proration,
-          currentPlan,
-          newPlan,
-        };
+      .query(async () => {
+        throw new TRPCError({
+          code: 'NOT_IMPLEMENTED',
+          message: 'プラン変更はサポートまでお問い合わせください。',
+        });
       }),
 
 
@@ -2990,7 +2926,7 @@ ${input.commentText}
     // アカウント削除
     // ★#15 OAuth ユーザもパスワード代わりに「メールアドレスの完全一致」で確認できる
     // ★#16 削除後は cookie をクリアしてゾンビセッションを残さない
-    // ★#19 Stripe キャンセルが失敗した場合は削除を中止して課金継続事故を防ぐ
+    // ★#19 有料プラン契約中の場合は事前に解約必須（Univapay側の課金継続事故を防ぐ）
     deleteAccount: protectedProcedure
       .input(z.object({
         // パスワード（email 認証ユーザのみ） or 自分のメアド（OAuth ユーザ）の確認
@@ -3026,21 +2962,17 @@ ${input.commentText}
           }
         }
 
-        // ★Stripe サブスクのキャンセルは「削除前」に成功させる。失敗したら削除を中止。
-        //   これがないと、DB は消えたのに Stripe では引き続き課金される事故が起きる。
+        // Univapayの定期課金は、アプリ側のアカウント削除では止められない仕様。
+        // 有料プラン契約中のユーザーが誤って削除すると、課金が継続してしまうため、
+        // 削除を拒否してサポート経由での解約を案内する。
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
-        if (subscription?.stripeSubscriptionId) {
-          try {
-            await stripeService.cancelSubscription(subscription.stripeSubscriptionId);
-          } catch (error) {
-            console.error("[Account Delete] Stripe cancel failed:", error);
-            throw new TRPCError({
-              code: "INTERNAL_SERVER_ERROR",
-              message:
-                "決済の停止処理中にエラーが発生したため、アカウント削除を中止しました。" +
-                "サポートまでお問い合わせください（課金継続を防ぐため）。",
-            });
-          }
+        if (subscription && subscription.planId !== 'free' && subscription.status === 'active') {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "有料プランの契約中はアカウントを削除できません。" +
+              "課金継続を防ぐため、先にサポートまで解約をお申し込みください。",
+          });
         }
 
         // Delete user (cascades to all related data)

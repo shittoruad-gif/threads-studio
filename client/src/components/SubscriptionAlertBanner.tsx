@@ -14,7 +14,7 @@ import { toast } from 'sonner';
  *   - subscription.status が past_due / unpaid / incomplete のいずれか
  *
  * アクション:
- *   - 「お支払い情報を更新」ボタン → Stripe Billing Portal にリダイレクト
+ *   - 「お支払い情報を更新」ボタン → サポート案内（Univapay側で対応）
  *
  * 設置場所:
  *   - DashboardLayout の最上部（メインコンテンツの前）。
@@ -23,9 +23,6 @@ import { toast } from 'sonner';
 export function SubscriptionAlertBanner() {
   const { subscription } = useSubscription();
   const portalMutation = trpc.subscription.createPortalSession.useMutation({
-    onSuccess: (data) => {
-      window.location.href = data.url;
-    },
     onError: (e) => {
       toast.error(e.message ?? 'ポータルへの接続に失敗しました');
     },
@@ -49,7 +46,7 @@ export function SubscriptionAlertBanner() {
 
   const detail =
     status === 'past_due'
-      ? `${planName}プランの自動更新に失敗しました。Stripeが数回にわたって自動でリトライしますが、このままだとサービスが停止します。クレジットカードの有効期限切れ・残高不足が主な原因です。`
+      ? `${planName}プランの自動更新に失敗しました。Univapay側で数回自動リトライしますが、このままだとサービスが停止します。クレジットカードの有効期限切れ・残高不足が主な原因です。`
       : status === 'unpaid'
       ? `${planName}プランの決済が完了せず、有料機能（自動投稿・無制限AI生成等）が一時停止しています。カード情報を更新するとすぐに再開できます。`
       : `${planName}プランの初回決済が確定していません。カード情報の認証が必要な場合があります。`;
