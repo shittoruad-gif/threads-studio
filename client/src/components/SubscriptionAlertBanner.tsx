@@ -1,8 +1,7 @@
-import { AlertTriangle, CreditCard, ExternalLink } from 'lucide-react';
+import { AlertTriangle, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSubscription } from '@/contexts/SubscriptionContext';
-import { trpc } from '@/lib/trpc';
-import { toast } from 'sonner';
+import { useLocation } from 'wouter';
 
 /**
  * SubscriptionAlertBanner
@@ -14,19 +13,16 @@ import { toast } from 'sonner';
  *   - subscription.status が past_due / unpaid / incomplete のいずれか
  *
  * アクション:
- *   - 「お支払い情報を更新」ボタン → サポート案内（Univapay側で対応）
+ *   - 「料金プランを確認」ボタン → /pricing へ。カード再登録（再申込）で復旧できる。
+ *     Univapayリンクフォーム方式のため、カード情報のみの更新ポータルは無く、
+ *     再申込（新しいカードで再登録）で支払いを復旧する運用とする。
  *
  * 設置場所:
  *   - DashboardLayout の最上部（メインコンテンツの前）。
- *     どの画面に来ても気づけるようにする。
  */
 export function SubscriptionAlertBanner() {
   const { subscription } = useSubscription();
-  const portalMutation = trpc.subscription.createPortalSession.useMutation({
-    onError: (e) => {
-      toast.error(e.message ?? 'ポータルへの接続に失敗しました');
-    },
-  });
+  const [, setLocation] = useLocation();
 
   if (!subscription) return null;
   const { status, plan } = subscription;
@@ -48,7 +44,7 @@ export function SubscriptionAlertBanner() {
     status === 'past_due'
       ? `${planName}プランの自動更新に失敗しました。Univapay側で数回自動リトライしますが、このままだとサービスが停止します。クレジットカードの有効期限切れ・残高不足が主な原因です。`
       : status === 'unpaid'
-      ? `${planName}プランの決済が完了せず、有料機能（自動投稿・無制限AI生成等）が一時停止しています。カード情報を更新するとすぐに再開できます。`
+      ? `${planName}プランの決済が完了せず、有料機能（自動投稿・無制限AI生成等）が一時停止しています。料金プランから再登録すると再開できます。`
       : `${planName}プランの初回決済が確定していません。カード情報の認証が必要な場合があります。`;
 
   return (
@@ -65,12 +61,10 @@ export function SubscriptionAlertBanner() {
           size="sm"
           variant="default"
           className="bg-red-600 hover:bg-red-700 text-white shrink-0"
-          onClick={() => portalMutation.mutate()}
-          disabled={portalMutation.isPending}
+          onClick={() => setLocation('/pricing')}
         >
           <CreditCard className="h-4 w-4 mr-1" />
-          {portalMutation.isPending ? '接続中...' : 'お支払い情報を更新'}
-          <ExternalLink className="h-3 w-3 ml-1" />
+          料金プランを確認
         </Button>
       </div>
     </div>

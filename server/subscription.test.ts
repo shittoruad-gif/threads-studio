@@ -14,14 +14,6 @@ vi.mock('./db', () => ({
   countUserScheduledPosts: vi.fn(),
 }));
 
-// Mock the stripe module
-vi.mock('./stripe', () => ({
-  createCheckoutSession: vi.fn(),
-  createBillingPortalSession: vi.fn(),
-  cancelSubscription: vi.fn(),
-  resumeSubscription: vi.fn(),
-  getInvoices: vi.fn(),
-}));
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
@@ -175,23 +167,15 @@ describe("subscription.createCheckout", () => {
     ).rejects.toThrow('Invalid plan');
   });
 
-  it("creates checkout session for valid paid plan", async () => {
-    const stripeService = await import('./stripe');
-    vi.mocked(stripeService.createCheckoutSession).mockResolvedValue('https://checkout.stripe.com/session_123');
-
+  it("returns the Univapay link for a valid paid plan", async () => {
+    const { getPlan } = await import('../shared/plans');
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 
     const result = await caller.subscription.createCheckout({ planId: 'light' });
 
-    expect(result.url).toBe('https://checkout.stripe.com/session_123');
-    expect(stripeService.createCheckoutSession).toHaveBeenCalledWith(
-      1, // userId
-      'test@example.com',
-      'Test User',
-      'light',
-      expect.any(String)
-    );
+    // 決済はUnivapayリンクに一本化。プラン定義のリンクがそのまま返る。
+    expect(result.url).toBe(getPlan('light')!.univapayLinkUrl);
   });
 });
 
@@ -202,8 +186,8 @@ describe("project.create", () => {
 
   it("allows project creation within limit", async () => {
     const db = await import('./db');
-    vi.mocked(db.getSubscriptionByUserId).mockResolvedValue(undefined); // No subscription (free)
-    vi.mocked(db.countUserProjects).mockResolvedValue(2); // 2 of 3 projects used
+    vi.mocked(db.getSubscriptionByUserId).mockResolvedValue(undefined); // No subscription (free, maxProjects=1)
+    vi.mocked(db.countUserProjects).mockResolvedValue(0); // 0 of 1 projects used（上限内）
     vi.mocked(db.createProject).mockResolvedValue();
 
     const ctx = createAuthContext();

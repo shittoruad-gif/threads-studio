@@ -112,10 +112,25 @@ async function startServer() {
         };
         const email = findEmail(event);
 
-        // 金額を抽出（amount / charge.amount / data.amount 等）
-        const amountRaw =
-          data?.amount ?? data?.charge?.amount ?? event?.amount ?? data?.money?.amount ?? null;
-        const amount = amountRaw != null ? Number(amountRaw) : null;
+        // ── 金額抽出 ──────────────────────────────────────────────
+        // 7日トライアル設定では「初回=カード登録(課金¥0)」「8日目以降=プラン額」。
+        // ・課金金額(chargeAmount): 実際に課金された額（初回は0、以降はプラン額）
+        // ・継続金額(subscriptionAmount): サブスク自体の月額（初回¥0でもプラン額が入る）
+        // プラン特定には継続金額を最優先で使う（¥0でもプランを特定できるように）。
+        const toNum = (v: any) => (v != null && !Number.isNaN(Number(v)) ? Number(v) : null);
+        const subscriptionAmount =
+          toNum(data?.subscription?.amount) ??
+          toNum(data?.subscription?.money?.amount) ??
+          (/subscription/.test(eventType) ? toNum(data?.amount) : null);
+        const chargeAmount =
+          toNum(data?.charge?.amount) ??
+          (/charge/.test(eventType) ? toNum(data?.amount) : null) ??
+          toNum(data?.money?.amount);
+        const anyAmount = toNum(data?.amount) ?? toNum(event?.amount);
+        // ログ・メール表示用（実課金額を優先）
+        const amount = chargeAmount ?? anyAmount;
+        // プラン特定用（継続額を最優先）
+        const planAmount = subscriptionAmount ?? chargeAmount ?? anyAmount;
 
         const univapaySubId: string | null =
           data?.subscription_id ?? data?.subscription?.id ?? data?.id ?? event?.id ?? null;
@@ -123,22 +138,30 @@ async function startServer() {
         // ── プラン特定（金額 ⇄ PLANS.priceMonthly）──────────────
         const { PLANS, TRIAL_DAYS, getPlan } = await import('../../shared/plans');
         let matchedPlanId: string | null = null;
-        if (amount != null) {
+        if (planAmount != null) {
           for (const [pid, p] of Object.entries(PLANS)) {
-            if (p.priceMonthly > 0 && p.priceMonthly === amount) { matchedPlanId = pid; break; }
+            if (p.priceMonthly > 0 && p.priceMonthly === planAmount) { matchedPlanId = pid; break; }
           }
         }
 
         const db = await import('../db');
 
-        // ── イベント分類（成功 / 失敗 / 解約）──────────────────────
-        const isPaid =
-          /subscription|charge|payment/.test(eventType) &&
-          /(success|successful|paid|current|completed|authorized|active)/.test(eventType + ' ' + status);
+        // ── イベント分類 ──────────────────────────────────────────
+        const blob = eventType + ' ' + status;
         const isCanceled =
-          /(cancel|canceled|cancelled|unsubscrib|suspend)/.test(eventType + ' ' + status);
+          /(cancel|canceled|cancelled|unsubscrib|suspend|refund)/.test(blob);
         const isFailed =
-          /(fail|failed|error|declined|past_due|unpaid)/.test(eventType + ' ' + status);
+          /(fail|failed|error|declined|past_due|unpaid|chargeback)/.test(blob);
+        // 実際にお金が動いた課金成功（金額 > 0）。トライアル後の初回課金や継続課金。
+        const isPaidCharge =
+          /charge|payment/.test(eventType) &&
+          /(finish|finished|success|successful|paid|completed|captured|authorized|current)/.test(blob) &&
+          (chargeAmount ?? 0) > 0;
+        // カード登録・サブスク開始（初回課金¥0 = トライアル開始）。誤って課金成功扱いしない。
+        const isSubscriptionStart =
+          !isCanceled && !isFailed && !isPaidCharge &&
+          (/subscription|token|card|registration/.test(eventType) ||
+            (chargeAmount === 0 && /charge/.test(eventType)));
 
         if (!email) {
           console.warn('[Univapay Webhook] メール特定不可。手動確認が必要（生ログ参照）');
@@ -212,30 +235,99 @@ async function startServer() {
             if (user.email) await sendPaymentFailedEmail(user.email, pn, amount, 1, null);
             await notifyOwner({ title: `Univapay決済失敗: user ${user.id}`, content: `email=${email} amount=${amount}` });
           } catch {}
-        } else if (isPaid) {
-          const planId = matchedPlanId ?? existing?.planId ?? 'light';
-          const currentPeriodEnd = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000);
-          if (existing) {
-            await db.updateSubscription(existing.id, {
-              planId,
-              status: 'active',
-              univapaySubscriptionId: univapaySubId ?? existing.univapaySubscriptionId ?? undefined,
-              currentPeriodEnd,
-              cancelAtPeriodEnd: false,
-            });
-            console.log(`[Univapay Webhook] サブスク更新→active: user=${user.id} plan=${planId}`);
+        } else if (isPaidCharge) {
+          // ── 実課金成功（金額>0）→ active 化 ──
+          // プランは「金額一致 → 既存プラン維持」の順。どちらも不明なら誤付与を避けて保留通知。
+          const planId = matchedPlanId ?? existing?.planId ?? null;
+          if (!planId) {
+            console.warn(`[Univapay Webhook] 課金成功だがプラン特定不可: user=${user.id} amount=${amount}`);
+            try {
+              const { notifyOwner } = await import('./notification');
+              await notifyOwner({
+                title: 'Univapay webhook: 課金成功だがプラン特定不可',
+                content: `email=${email} chargeAmount=${chargeAmount} subAmount=${subscriptionAmount}\n手動でプラン割当が必要。生: ${JSON.stringify(event).slice(0, 1200)}`,
+              });
+            } catch {}
           } else {
-            await db.createSubscription({
-              userId: user.id,
-              planId,
-              univapaySubscriptionId: univapaySubId ?? undefined,
-              status: 'active',
-              trialEndsAt: null,
-              currentPeriodEnd,
-            } as any);
-            console.log(`[Univapay Webhook] サブスク新規作成→active: user=${user.id} plan=${planId}`);
+            const currentPeriodEnd = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000);
+            if (existing) {
+              await db.updateSubscription(existing.id, {
+                planId,
+                status: 'active',
+                trialEndsAt: null,
+                univapaySubscriptionId: univapaySubId ?? existing.univapaySubscriptionId ?? undefined,
+                currentPeriodEnd,
+                cancelAtPeriodEnd: false,
+              });
+              console.log(`[Univapay Webhook] サブスク更新→active: user=${user.id} plan=${planId}`);
+            } else {
+              await db.createSubscription({
+                userId: user.id,
+                planId,
+                univapaySubscriptionId: univapaySubId ?? undefined,
+                status: 'active',
+                trialEndsAt: null,
+                currentPeriodEnd,
+              } as any);
+              console.log(`[Univapay Webhook] サブスク新規作成→active: user=${user.id} plan=${planId}`);
+            }
           }
-          void TRIAL_DAYS;
+        } else if (isSubscriptionStart) {
+          // ── カード登録(¥0) = 7日間トライアル開始 → trialing で即時に有料機能を開放 ──
+          // プラン特定できない場合は誤付与を避けて保留通知（'light'等への暗黙フォールバックはしない）。
+          const planId = matchedPlanId ?? existing?.planId ?? null;
+          if (!planId) {
+            console.warn(`[Univapay Webhook] トライアル開始だがプラン特定不可: user=${user.id}`);
+            try {
+              const { notifyOwner } = await import('./notification');
+              await notifyOwner({
+                title: 'Univapay webhook: トライアル開始だがプラン特定不可',
+                content: `email=${email} subAmount=${subscriptionAmount} chargeAmount=${chargeAmount}\n手動対応が必要。生: ${JSON.stringify(event).slice(0, 1200)}`,
+              });
+            } catch {}
+          } else if (existing && existing.status === 'active') {
+            // 既に課金済み(active)のユーザーには何もしない（トライアルへ巻き戻さない）
+            console.log(`[Univapay Webhook] サブスク開始イベントだが既にactive: user=${user.id}（無視）`);
+          } else {
+            const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+            if (existing) {
+              await db.updateSubscription(existing.id, {
+                planId,
+                status: 'trialing',
+                trialEndsAt,
+                univapaySubscriptionId: univapaySubId ?? existing.univapaySubscriptionId ?? undefined,
+                currentPeriodEnd: trialEndsAt,
+                cancelAtPeriodEnd: false,
+              });
+            } else {
+              await db.createSubscription({
+                userId: user.id,
+                planId,
+                univapaySubscriptionId: univapaySubId ?? undefined,
+                status: 'trialing',
+                trialEndsAt,
+                currentPeriodEnd: trialEndsAt,
+              } as any);
+            }
+            console.log(`[Univapay Webhook] トライアル開始→trialing: user=${user.id} plan=${planId} 終了=${trialEndsAt.toISOString()}`);
+            // トライアル開始メール（任意・失敗しても無視）
+            try {
+              const planName = getPlan(planId)?.name ?? 'プラン';
+              const { sendEmail } = await import('./notification');
+              if (user.email) {
+                await sendEmail({
+                  to: user.email,
+                  subject: '【Threads Studio】7日間の無料トライアルが始まりました',
+                  html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+                    <h2>無料トライアルが始まりました</h2>
+                    <p>${planName} の全機能を、本日から7日間無料でお試しいただけます。</p>
+                    <p>トライアル終了後（8日目）に、登録いただいたカードへ初回のお支払いが発生します。
+                    期間中に停止をご希望の場合は、ダッシュボードからお手続きください。</p>
+                  </div>`,
+                });
+              }
+            } catch (e) { console.error('[Univapay Webhook] trial-start mail error:', e); }
+          }
         } else {
           console.log(`[Univapay Webhook] 未分類イベント（無視・要構造確認）: event=${eventType} status=${status}`);
         }

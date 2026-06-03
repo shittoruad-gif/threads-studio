@@ -1,8 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { generateHashtags, generateHooks } from "@shared/generator";
+import { generateHooks } from "@shared/generator";
 import { ProjectInputs } from "@shared/types";
-import { Hash, Lightbulb, Copy, Check } from "lucide-react";
+import { Lightbulb, Copy, Check } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -10,16 +10,11 @@ interface AIAssistantProps {
   inputs: ProjectInputs;
 }
 
+// ハッシュタグ（#）はThreadsで業者っぽさを出し到達も伸びないため、本ツールでは一切使わない方針。
+// 以前あったハッシュタグ生成機能は撤去し、フック案生成のみ提供する。
 export function AIAssistant({ inputs }: AIAssistantProps) {
-  const [hashtags, setHashtags] = useState<string[]>([]);
   const [hooks, setHooks] = useState<string[]>([]);
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
-
-  const handleGenerateHashtags = () => {
-    const generated = generateHashtags(inputs);
-    setHashtags(generated);
-    toast.success("ハッシュタグを生成しました");
-  };
 
   const handleGenerateHooks = () => {
     const generated = generateHooks(inputs);
@@ -36,64 +31,6 @@ export function AIAssistant({ inputs }: AIAssistantProps) {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Hash className="w-5 h-5" />
-            ハッシュタグ候補
-          </CardTitle>
-          <CardDescription>
-            入力内容から関連するハッシュタグを生成します
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button
-            onClick={handleGenerateHashtags}
-            variant="outline"
-            className="w-full"
-          >
-            <Hash className="w-4 h-4 mr-2" />
-            ハッシュタグを生成
-          </Button>
-          {hashtags.length > 0 && (
-            <div className="space-y-2">
-              {hashtags.map((tag, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border"
-                >
-                  <span className="text-sm font-medium">{tag}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleCopy(tag, `hashtag-${idx}`)}
-                  >
-                    {copiedItem === `hashtag-${idx}` ? (
-                      <Check className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <Copy className="w-4 h-4" />
-                    )}
-                  </Button>
-                </div>
-              ))}
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => handleCopy(hashtags.join(" "), "all-hashtags")}
-              >
-                {copiedItem === "all-hashtags" ? (
-                  <Check className="w-4 h-4 mr-2 text-green-500" />
-                ) : (
-                  <Copy className="w-4 h-4 mr-2" />
-                )}
-                すべてコピー
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

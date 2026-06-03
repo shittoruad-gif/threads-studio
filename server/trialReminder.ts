@@ -1,8 +1,9 @@
 import cron from "node-cron";
-import { withDbRetry } from "./db";
+import { withDbRetry, getUserById } from "./db";
 import { subscriptions } from "../drizzle/schema";
-import { eq, and, isNotNull, lt, gt } from "drizzle-orm";
-import { notifyOwner } from "./_core/notification";
+import { eq, and, isNotNull } from "drizzle-orm";
+import { notifyOwner, sendEmail } from "./_core/notification";
+import { getPlan } from "../shared/plans";
 
 /**
  * Check for trials ending soon and send reminders
@@ -79,18 +80,26 @@ async function sendTrialReminder(
     day: 'numeric',
   });
 
-  const title = `トライアル終了まであと${daysRemaining}日`;
-  const content = `
-ユーザーID: ${userId}
-プラン: ${planId}
-トライアル終了日: ${formattedDate}
-
-トライアル期間があと${daysRemaining}日で終了します。
-継続してご利用いただく場合は、料金プランをご選択ください。
-  `.trim();
+  const plan = getPlan(planId);
+  const planName = plan?.name ?? 'プラン';
+  const priceText = plan ? `月¥${plan.priceMonthly.toLocaleString()}` : '';
+  const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
 
   try {
-    await notifyOwner({ title, content });
+    const user = await getUserById(userId);
+    if (user?.email) {
+      await sendEmail({
+        to: user.email,
+        subject: `【Threads Studio】無料トライアル終了まであと${daysRemaining}日`,
+        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+          <h2>無料トライアル終了まであと${daysRemaining}日です</h2>
+          <p>${planName}（${priceText}）の無料トライアルが <strong>${formattedDate}</strong> に終了します。</p>
+          <p>そのまま継続される場合は、トライアル終了後に登録済みのカードへ自動でお支払いが発生します（お手続き不要）。</p>
+          <p>継続をご希望でない場合は、トライアル終了日までにダッシュボードから解約してください。期間内の解約であれば料金は一切発生しません。</p>
+          <a href="${base}/dashboard" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0;">ダッシュボードを開く</a>
+        </div>`,
+      });
+    }
   } catch (error) {
     console.error(`[TrialReminder] Failed to send reminder for user ${userId}:`, error);
   }
@@ -108,22 +117,27 @@ async function sendTrialEndingToday(
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
   });
-
-  const title = `トライアル終了日（本日）`;
-  const content = `
-ユーザーID: ${userId}
-プラン: ${planId}
-トライアル終了日時: ${formattedDate}
-
-トライアル期間が本日終了します。
-継続してご利用いただく場合は、料金プランをご選択ください。
-  `.trim();
+  const plan = getPlan(planId);
+  const planName = plan?.name ?? 'プラン';
+  const priceText = plan ? `月¥${plan.priceMonthly.toLocaleString()}` : '';
+  const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
 
   try {
-    await notifyOwner({ title, content });
+    const user = await getUserById(userId);
+    if (user?.email) {
+      await sendEmail({
+        to: user.email,
+        subject: `【Threads Studio】本日、無料トライアルが終了します`,
+        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+          <h2>本日、無料トライアルが終了します</h2>
+          <p>${planName}（${priceText}）の無料トライアルが本日（${formattedDate}）で終了します。</p>
+          <p>継続される場合は、登録済みのカードへ自動でお支払いが発生します（お手続き不要）。</p>
+          <p>継続をご希望でない場合は、本日中にダッシュボードから解約してください。</p>
+          <a href="${base}/dashboard" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0;">ダッシュボードを開く</a>
+        </div>`,
+      });
+    }
   } catch (error) {
     console.error(`[TrialReminder] Failed to send ending notification for user ${userId}:`, error);
   }

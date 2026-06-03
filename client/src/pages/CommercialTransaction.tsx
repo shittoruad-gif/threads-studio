@@ -85,14 +85,16 @@ export default function CommercialTransaction() {
               <tr>
                 <td className="py-4 px-4 font-semibold text-foreground bg-muted/50 align-top">支払い方法</td>
                 <td className="py-4 px-4 text-muted-foreground">
-                  クレジットカード決済（Visa、Mastercard、American Express、JCB）
+                  クレジットカード決済（Visa、Mastercard、American Express、JCB）<br />
+                  決済代行：Univapay（株式会社ジャパン・ペイメント・サービス）
                 </td>
               </tr>
               <tr>
                 <td className="py-4 px-4 font-semibold text-foreground bg-muted/50 align-top">支払い時期</td>
                 <td className="py-4 px-4 text-muted-foreground">
-                  サブスクリプション契約時に初回の決済が行われ、以降は契約期間に応じて自動更新されます。
-                  無料トライアル期間がある場合は、トライアル終了後に初回決済が行われます。
+                  有料プランには7日間の無料トライアルがあります。お申し込み時にカードをご登録いただき、
+                  トライアル期間（7日間）の終了後に初回決済が行われ、以降は毎月自動更新されます。
+                  キャンペーンプランは、お申し込み時から所定の回数分が課金され、完了後に自動終了します。
                 </td>
               </tr>
               <tr>
@@ -106,8 +108,8 @@ export default function CommercialTransaction() {
                 <td className="py-4 px-4 text-muted-foreground">
                   <ul className="list-disc pl-5 space-y-1">
                     <li>デジタルサービスの性質上、お支払い済みの利用料金の返金には原則として応じかねます。</li>
-                    <li>サブスクリプションはいつでもキャンセル可能です。キャンセル後も現在の請求期間の終了まではサービスをご利用いただけます。</li>
-                    <li>無料トライアル期間中のキャンセルについては、料金は一切発生しません。</li>
+                    <li>サブスクリプションはダッシュボードからいつでも解約可能です。解約後も現在の請求期間の終了まではサービスをご利用いただけます。</li>
+                    <li>7日間の無料トライアル期間中に解約された場合、料金は一切発生しません。</li>
                   </ul>
                 </td>
               </tr>

@@ -22,7 +22,7 @@ export default function TrialBanner({ trialEndsAt, planName }: TrialBannerProps)
 
   if (daysRemaining < 0) return null;
 
-  const totalDays = 30;
+  const totalDays = 7;
   const progressPercentage = Math.max(0, Math.min(100, ((totalDays - daysRemaining) / totalDays) * 100));
 
   let bgColor = "bg-blue-50";

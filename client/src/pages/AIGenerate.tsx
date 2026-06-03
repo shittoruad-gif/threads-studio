@@ -1195,27 +1195,8 @@ export default function AIGenerate() {
                   </CardContent>
                 </Card>
 
-                {/* ハッシュタグ — Threadsはハッシュタグ文化が薄く、現状は1投稿1タグまで対応。
-                    AIには#を生成させていないが、過去履歴で残っているケースのみ表示する。 */}
-                {editedPost.hashtags.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">ハッシュタグ</CardTitle>
-                      <CardDescription className="text-xs">
-                        ※Threadsではハッシュタグは控えめが推奨です（1投稿につき0〜1個）
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex flex-wrap gap-2">
-                        {editedPost.hashtags.map((tag, index) => (
-                          <Badge key={index} variant="secondary">
-                            #{tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
+                {/* ハッシュタグ（#）はThreadsで業者っぽさを出し到達も伸びないため、本ツールでは一切使わない方針。
+                    生成・プレビュー・投稿のいずれにも # は含めない。 */}
 
                 {/* メタ情報 */}
                 <Card>

@@ -168,25 +168,10 @@ export default function Dashboard() {
     },
   });
 
-  const createPortalSession = trpc.subscription.createPortalSession.useMutation({
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
-
   const cancelSubscription = trpc.univapay.cancelSubscription.useMutation({
     onSuccess: () => {
-      toast.success('サブスクリプションのキャンセルを予約しました');
+      toast.success('サブスクリプションを解約しました');
       utils.subscription.getStatus.invalidate();
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
-
-  const resumeSubscription = trpc.subscription.resume.useMutation({
-    onSuccess: () => {
-      toast.success('サブスクリプションを再開しました');
     },
     onError: (error) => {
       toast.error(error.message);
@@ -626,18 +611,11 @@ export default function Dashboard() {
               <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-yellow-800 font-medium">キャンセル予約済み</p>
+                  <p className="text-yellow-800 font-medium">解約済み</p>
                   <p className="text-yellow-700 text-sm">
                     現在の請求期間終了後にサブスクリプションが終了します。
+                    再度ご利用になる場合は、料金プランから再登録してください。
                   </p>
-                  <Button
-                    variant="link"
-                    className="text-yellow-700 p-0 h-auto mt-2 hover:text-yellow-900"
-                    onClick={() => resumeSubscription.mutate()}
-                    disabled={resumeSubscription.isPending}
-                  >
-                    サブスクリプションを再開する
-                  </Button>
                 </div>
               </div>
             )}
@@ -651,32 +629,19 @@ export default function Dashboard() {
                 <Crown className="w-4 h-4 mr-2" />
                 クーポンコードを適用
               </Button>
-              {subscription?.planId !== 'free' && (
-                <>
-                  <Button
-                    variant="outline"
-                    className="text-foreground/80"
-                    onClick={() => createPortalSession.mutate()}
-                    disabled={createPortalSession.isPending}
-                  >
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    支払い情報を管理
-                  </Button>
-                  {!subscription?.cancelAtPeriodEnd && (
-                    <Button
-                      variant="ghost"
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                      onClick={() => {
-                        if (confirm('本当にサブスクリプションをキャンセルしますか？')) {
-                          cancelSubscription.mutate();
-                        }
-                      }}
-                      disabled={cancelSubscription.isPending}
-                    >
-                      キャンセル
-                    </Button>
-                  )}
-                </>
+              {subscription?.planId !== 'free' && !subscription?.cancelAtPeriodEnd && (
+                <Button
+                  variant="ghost"
+                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => {
+                    if (confirm('本当にサブスクリプションを解約しますか？')) {
+                      cancelSubscription.mutate();
+                    }
+                  }}
+                  disabled={cancelSubscription.isPending}
+                >
+                  解約する
+                </Button>
               )}
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"

@@ -108,7 +108,7 @@ export default function AIHistory() {
   const handleCopy = async (content: string) => {
     try {
       const parsed = JSON.parse(content);
-      const text = `${parsed.title}\n\n${parsed.mainPost}\n\n${parsed.treePosts.join('\n\n')}\n\n${parsed.cta}\n\n${parsed.hashtags.join(' ')}`;
+      const text = `${parsed.title}\n\n${parsed.mainPost}\n\n${parsed.treePosts.join('\n\n')}\n\n${parsed.cta}`;
       await navigator.clipboard.writeText(text);
       toast.success('コピーしました');
     } catch (error) {
@@ -118,7 +118,7 @@ export default function AIHistory() {
 
   const handleCopyVariation = async (variation: any) => {
     try {
-      const text = `${variation.title}\n\n${variation.mainPost}\n\n${variation.treePosts.join('\n\n')}\n\n${variation.cta}\n\n${variation.hashtags.join(' ')}`;
+      const text = `${variation.title}\n\n${variation.mainPost}\n\n${variation.treePosts.join('\n\n')}\n\n${variation.cta}`;
       await navigator.clipboard.writeText(text);
       toast.success('コピーしました');
     } catch (error) {
@@ -537,9 +537,6 @@ export default function AIHistory() {
                           <p className="text-xs bg-white px-2 py-1 rounded border">
                             CTA: {variation.cta}
                           </p>
-                          <p className="text-xs bg-white px-2 py-1 rounded border">
-                            {variation.hashtags.join(' ')}
-                          </p>
                         </div>
                       </div>
                     </CardContent>
@@ -598,10 +595,6 @@ export default function AIHistory() {
                     <div>
                       <p className="font-medium mb-2">CTA</p>
                       <p className="text-sm whitespace-pre-wrap bg-muted p-3 rounded">{content.cta}</p>
-                    </div>
-                    <div>
-                      <p className="font-medium mb-2">ハッシュタグ</p>
-                      <p className="text-sm bg-muted p-3 rounded">{content.hashtags.join(' ')}</p>
                     </div>
                     {content.hookType && (
                       <div className="p-3 bg-primary/10 rounded-lg">

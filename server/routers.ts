@@ -405,30 +405,10 @@ export const appRouter = router({
         return { url: plan.univapayLinkUrl };
       }),
 
-    // 課金ポータル／キャンセル／再開／請求書／プラン変更プレビュー
-    // ── Stripe撤廃に伴い、これらはアプリ側では未対応に。Univapay（ジャパン・
-    //    ペイメント・サービス）のサブスクライバー画面 or サポート経由で対応する運用。
-    createPortalSession: protectedProcedure.mutation(async () => {
-      throw new TRPCError({
-        code: 'NOT_IMPLEMENTED',
-        message: 'カード情報の変更はUnivapayのご案内メール内リンク、またはサポートまでお問い合わせください。',
-      });
-    }),
-
-    cancel: protectedProcedure.mutation(async () => {
-      throw new TRPCError({
-        code: 'NOT_IMPLEMENTED',
-        message: '解約はサポートまでお問い合わせください（Univapay側で停止処理を行います）。',
-      });
-    }),
-
-    resume: protectedProcedure.mutation(async () => {
-      throw new TRPCError({
-        code: 'NOT_IMPLEMENTED',
-        message: '再開はサポートまでお問い合わせください。',
-      });
-    }),
-
+    // 解約・プラン変更は univapay ルーター（univapay.cancelSubscription /
+    // changePlan / previewPlanChange）に一本化済み。カード情報の更新ポータルは
+    // Univapayリンクフォーム方式には無く、再申込（再登録）で復旧する運用。
+    // 請求履歴はアプリ側では保持しないため空配列を返す（UIは非表示になる）。
     getInvoices: protectedProcedure.query(async () => {
       return [] as Array<{
         id: string;
@@ -440,15 +420,6 @@ export const appRouter = router({
         pdfUrl: string | null;
       }>;
     }),
-
-    previewPlanChange: protectedProcedure
-      .input(z.object({ newPlanId: z.string() }))
-      .query(async () => {
-        throw new TRPCError({
-          code: 'NOT_IMPLEMENTED',
-          message: 'プラン変更はサポートまでお問い合わせください。',
-        });
-      }),
 
 
   }),
