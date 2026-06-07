@@ -298,25 +298,25 @@ export default function ThreadsConnect() {
         {accounts?.map((account) => (
           <div key={account.id} className="bg-background border border-border rounded-xl p-6">
             {/* Account Header */}
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+              <div className="flex items-center gap-4 min-w-0">
                 {account.profilePictureUrl ? (
                   <img
                     src={account.profilePictureUrl}
                     alt={`${account.threadsUsername || 'ユーザー'}のプロフィール画像`}
-                    className="w-14 h-14 rounded-full object-cover border-2 border-border/50"
+                    className="w-14 h-14 rounded-full object-cover border-2 border-border/50 shrink-0"
                   />
                 ) : (
-                  <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
                     <User className="w-7 h-7 text-emerald-600" />
                   </div>
                 )}
-                <div>
-                  <p className="text-foreground font-semibold text-lg">@{account.threadsUsername}</p>
-                  <p className="text-muted-foreground/60 text-sm">ID: {account.threadsUserId}</p>
+                <div className="min-w-0">
+                  <p className="text-foreground font-semibold text-lg truncate">@{account.threadsUsername}</p>
+                  <p className="text-muted-foreground/60 text-sm truncate">ID: {account.threadsUserId}</p>
                 </div>
               </div>
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2 flex-wrap sm:justify-end shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
