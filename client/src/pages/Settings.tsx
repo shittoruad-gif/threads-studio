@@ -283,7 +283,7 @@ export default function Settings() {
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
               disabled={!currentPassword || !newPassword || changePassword.isPending}
               onClick={() => {
-                if (newPassword.length < 8) {
+                if (newPassword.length < 10) {
                   toast.error("新しいパスワードは10文字以上にしてください");
                   return;
                 }

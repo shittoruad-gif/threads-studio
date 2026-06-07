@@ -28,6 +28,7 @@ export default function CommercialTransaction() {
         <p className="text-sm text-muted-foreground mb-8">最終更新日：2026年3月27日</p>
 
         <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
+          <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <tbody className="divide-y divide-border">
               <tr>
@@ -131,6 +132,7 @@ export default function CommercialTransaction() {
               </tr>
             </tbody>
           </table>
+          </div>
         </div>
       </main>
     </div>

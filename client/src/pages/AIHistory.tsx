@@ -278,8 +278,8 @@ export default function AIHistory() {
             return (
               <Card key={item.id}>
                 <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <Badge variant="secondary">
                           {POST_TYPE_LABELS[item.postType] || item.postType}
@@ -299,14 +299,14 @@ export default function AIHistory() {
                           {new Date(item.createdAt).toLocaleString('ja-JP')}
                         </div>
                       </div>
-                      <CardTitle className="text-xl">{content.title}</CardTitle>
+                      <CardTitle className="text-xl break-words">{content.title}</CardTitle>
                       {metadata.businessType && (
                         <CardDescription className="mt-1">
                           {metadata.businessType} | {metadata.area}
                         </CardDescription>
                       )}
                     </div>
-                    <div className="flex gap-2 flex-wrap justify-end">
+                    <div className="flex gap-2 flex-wrap justify-end shrink-0">
                       <Button
                         size="sm"
                         variant="ghost"

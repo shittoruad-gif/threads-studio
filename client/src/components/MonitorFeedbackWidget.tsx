@@ -57,7 +57,7 @@ export default function MonitorFeedbackWidget() {
   if (submitted) {
     return (
       <div className="fixed bottom-6 right-6 z-50">
-        <div className="bg-background border border-border rounded-2xl shadow-xl p-6 w-80 flex flex-col items-center gap-3">
+        <div className="bg-background border border-border rounded-2xl shadow-xl p-6 w-[min(20rem,calc(100vw-2rem))] flex flex-col items-center gap-3">
           <CheckCircle2 className="h-10 w-10 text-green-500" />
           <p className="text-sm font-medium text-foreground">送信完了！</p>
           <p className="text-xs text-muted-foreground">ご協力ありがとうございます</p>
@@ -69,7 +69,7 @@ export default function MonitorFeedbackWidget() {
   return (
     <div className="fixed bottom-6 right-6 z-50">
       {isOpen ? (
-        <div className="bg-background border border-border rounded-2xl shadow-xl w-80 overflow-hidden">
+        <div className="bg-background border border-border rounded-2xl shadow-xl w-[min(20rem,calc(100vw-2rem))] overflow-hidden">
           {/* Header */}
           <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">

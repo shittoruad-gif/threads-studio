@@ -75,6 +75,7 @@ export default function AIProjectCreate() {
         strength: template.strength,
         proof: template.proof,
         ctaLink: form.ctaLink,
+        ngWords: form.ngWords,
       });
     }
   };

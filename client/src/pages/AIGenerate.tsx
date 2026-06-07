@@ -988,7 +988,7 @@ export default function AIGenerate() {
             {editedPost ? (
               <>
                 {/* 表示モード切り替え */}
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
                   <div className="flex bg-muted rounded-lg p-1">
                     <button
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${

@@ -283,8 +283,8 @@ export default function PostHistory() {
                               )}
                             </button>
                           )}
-                          <div className="flex-1 space-y-2">
-                            <div className="flex items-center gap-2">
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               {getStatusBadge(post.status)}
                               <span className="text-sm text-muted-foreground">
                                 {formatDate(post.scheduledAt)}
@@ -302,7 +302,7 @@ export default function PostHistory() {
                             )}
 
                             {post.errorMessage && (
-                              <p className="text-xs text-red-600">
+                              <p className="text-xs text-red-600 break-words">
                                 エラー: {post.errorMessage}
                               </p>
                             )}

@@ -421,7 +421,7 @@ export default function ThreadsConnect() {
                 </div>
               )}
               {account.lastSyncedAt && (
-                <div className="ml-auto text-muted-foreground/60 text-xs">
+                <div className="w-full sm:w-auto sm:ml-auto text-muted-foreground/60 text-xs">
                   最終同期: {new Date(account.lastSyncedAt).toLocaleString('ja-JP')}
                 </div>
               )}

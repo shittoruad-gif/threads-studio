@@ -122,14 +122,14 @@ export default function AITemplates() {
   return (
     <div className="container py-8">
       <PageBreadcrumb items={breadcrumbItems} />
-      <div className="flex items-center justify-between mb-6">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold">AI生成テンプレート</h1>
           <p className="text-muted-foreground mt-2">
             よく使う生成パターンをテンプレートとして保存し、ワンクリックで再利用できます
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <ThreadsAccountSwitcher />
           <Button onClick={() => setCreateDialogOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />

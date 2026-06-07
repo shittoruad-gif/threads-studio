@@ -72,14 +72,14 @@ export default function Referral() {
         ) : referralData?.referralCode ? (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="flex-1 bg-muted/50 border border-border rounded-lg p-4">
-                <p className="text-2xl font-mono font-bold text-foreground text-center">
+              <div className="flex-1 min-w-0 bg-muted/50 border border-border rounded-lg p-4">
+                <p className="text-xl sm:text-2xl font-mono font-bold text-foreground text-center break-all">
                   {referralData.referralCode}
                 </p>
               </div>
               <Button
                 onClick={handleCopyReferralCode}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
               >
                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               </Button>

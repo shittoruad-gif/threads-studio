@@ -126,7 +126,7 @@ export default function ThreadsAccountSwitcher({ compact = false, className = ''
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border border-border hover:bg-muted transition-colors ${
-          compact ? 'min-w-0' : 'min-w-[180px]'
+          compact ? 'w-full min-w-0' : 'min-w-[180px]'
         }`}
       >
         {selectedAccount?.profilePictureUrl ? (

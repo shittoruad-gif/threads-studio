@@ -236,16 +236,16 @@ export default function Dashboard() {
         <PinnedPostRecommendation />
 
         {/* Welcome + Plan Badge */}
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">ようこそ、{user?.name || 'ユーザー'}さん</h1>
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-foreground truncate">ようこそ、{user?.name || 'ユーザー'}さん</h1>
             <p className="text-muted-foreground text-sm mt-1">
               {autoPostSettings?.autoPostEnabled
                 ? 'AIが自動で投稿を生成・公開しています'
                 : '自動投稿は停止中です'}
             </p>
           </div>
-          <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-sm px-3 py-1">
+          <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-sm px-3 py-1 shrink-0">
             {subscription?.plan?.name || '無料プラン'}
           </Badge>
         </div>

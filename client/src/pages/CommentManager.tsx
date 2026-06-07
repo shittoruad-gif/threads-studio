@@ -199,8 +199,8 @@ export default function CommentManager() {
                         <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
                           <User className="w-4 h-4 text-orange-600" />
                         </div>
-                        <div>
-                          <p className="text-sm font-semibold">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold truncate">
                             @{comment.username || '不明'}
                           </p>
                           {comment.timestamp && (
@@ -210,7 +210,7 @@ export default function CommentManager() {
                           )}
                         </div>
                         {isPosted && (
-                          <Badge className="bg-green-100 text-green-700 border-green-300 ml-auto">
+                          <Badge className="bg-green-100 text-green-700 border-green-300 ml-auto shrink-0">
                             <Check className="w-3 h-3 mr-1" />
                             返信済み
                           </Badge>

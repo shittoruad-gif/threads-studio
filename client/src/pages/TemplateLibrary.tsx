@@ -152,7 +152,7 @@ export default function TemplateLibrary() {
         </div>
 
         {/* Templates Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTemplates?.map((template) => {
             const isFavorited = favorites?.some((fav) => fav.id === template.id);
             
@@ -183,7 +183,7 @@ export default function TemplateLibrary() {
                 </div>
 
                 {/* Template Info */}
-                <h3 className="text-xl font-bold text-foreground mb-2">{template.title}</h3>
+                <h3 className="text-xl font-bold text-foreground mb-2 pr-8 break-words">{template.title}</h3>
                 <p className="text-sm text-muted-foreground mb-4">{template.description}</p>
                 
                 {/* Preview Text */}

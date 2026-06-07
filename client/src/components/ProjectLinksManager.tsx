@@ -135,11 +135,11 @@ export default function ProjectLinksManager({
                   key={link.id}
                   className="rounded-lg border border-border bg-background/50 p-3 space-y-2"
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {/* Type badge */}
-                    <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-muted text-xs font-medium">
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-muted text-xs font-medium min-w-0">
                       <span className="text-base leading-none">{cfg.emoji}</span>
-                      <span>{cfg.name}</span>
+                      <span className="truncate">{cfg.name}</span>
                     </div>
 
                     {/* Default toggle */}
