@@ -301,13 +301,13 @@ export const appRouter = router({
         // Hash new password
         const passwordHash = await hashPassword(input.newPassword);
 
-        // Update user password
+        // Update user password（専用の更新関数でユーザーIDを直接更新する）
         const user = await db.getUserById(resetToken.userId);
-        if (!user || !user.openId) {
+        if (!user) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'ユーザーが見つかりません。' });
         }
 
-        await db.upsertUser({ openId: user.openId, passwordHash });
+        await db.updateUserPassword(user.id, passwordHash);
 
         // Delete token
         await db.deletePasswordResetToken(resetToken.id);
