@@ -287,6 +287,15 @@ export default function Settings() {
                   toast.error("新しいパスワードは10文字以上にしてください");
                   return;
                 }
+                // バックエンドと同じ「英字・数字・記号のうち2種類以上」をフロントでも事前チェック
+                const kinds =
+                  (/[a-zA-Z]/.test(newPassword) ? 1 : 0) +
+                  (/[0-9]/.test(newPassword) ? 1 : 0) +
+                  (/[!@#$%^&*(),.?":{}|<>_\-+=/\\\[\];'`~]/.test(newPassword) ? 1 : 0);
+                if (kinds < 2) {
+                  toast.error("英字・数字・記号のうち2種類以上を含めてください");
+                  return;
+                }
                 changePassword.mutate({ currentPassword, newPassword });
               }}
             >
