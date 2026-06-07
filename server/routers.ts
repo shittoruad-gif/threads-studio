@@ -878,9 +878,9 @@ export const appRouter = router({
         }
 
         const rawResult = JSON.parse(content);
-        // ★NGワードを確定除去（プロンプト指示に加え、機械的に必ず取り除く）
-        const { applyNgWordFilter } = await import('../shared/ngwords');
-        const result = applyNgWordFilter(rawResult, ngWords);
+        // ★NGワードを「自然な文章のまま」除外（違反時のみAI書き換え→最終手段で確定削除）
+        const { enforceNgWords } = await import('./ngwordGuard');
+        const result = await enforceNgWords(rawResult, ngWords);
 
         // Increment AI generation usage count
         await db.incrementAiGenerationUsage(ctx.user.id);
@@ -1106,10 +1106,10 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
 
         const result = JSON.parse(content);
 
-        // ★NGワードを各バリエーションから確定除去
-        const { applyNgWordFilter } = await import('../shared/ngwords');
+        // ★NGワードを各バリエーションから自然な形で除外（違反時のみ書き換え→最終手段で削除）
+        const { enforceNgWords } = await import('./ngwordGuard');
         const filteredVariations = Array.isArray(result.variations)
-          ? result.variations.map((v: any) => applyNgWordFilter(v, cloneNgWords))
+          ? await Promise.all(result.variations.map((v: any) => enforceNgWords(v, cloneNgWords)))
           : result.variations;
 
         // Increment AI generation usage count

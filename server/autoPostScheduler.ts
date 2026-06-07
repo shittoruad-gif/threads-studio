@@ -90,7 +90,8 @@ async function generateAutoPost(
     // Auto-posts also reuse the user's registered URL set so LINE/予約 links
     // appear in the right slots automatically.
     const { parseProjectLinks } = await import('../shared/projectLinks');
-    const { parseNgWords, applyNgWordFilter } = await import('../shared/ngwords');
+    const { parseNgWords } = await import('../shared/ngwords');
+    const { enforceNgWords } = await import('./ngwordGuard');
     const projectLinks = parseProjectLinks(project.links || null);
     const ngWords = parseNgWords((project as any).ngWords || null);
 
@@ -152,7 +153,7 @@ async function generateAutoPost(
       return false;
     }
 
-    const result = applyNgWordFilter(JSON.parse(content), ngWords);
+    const result = await enforceNgWords(JSON.parse(content), ngWords);
 
     // Combine main post + tree posts + CTA into full post content。
     // treeCount=0 を指定しているので通常 treePosts は空配列。
