@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,6 @@ import { Sparkles, Lock, Eye, EyeOff, CheckCircle } from "lucide-react";
 
 export default function ResetPassword() {
   const navigate = (path: string) => window.location.href = path;
-  const [location] = useLocation();
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -19,13 +18,15 @@ export default function ResetPassword() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    // Get token from URL query parameter
-    const params = new URLSearchParams(location.split('?')[1]);
+    // クエリ文字列からトークンを取得。
+    // ※ wouter の useLocation() はパス名のみでクエリを含まないため、
+    //   window.location.search から直接読む。
+    const params = new URLSearchParams(window.location.search);
     const tokenParam = params.get('token');
     if (tokenParam) {
       setToken(tokenParam);
     }
-  }, [location]);
+  }, []);
 
   const resetPasswordMutation = trpc.auth.resetPassword.useMutation({
     onSuccess: () => {
@@ -57,7 +58,7 @@ export default function ResetPassword() {
       return;
     }
 
-    if (password.length < 8) {
+    if (password.length < 10) {
       toast.error("パスワードは10文字以上で入力してください");
       return;
     }

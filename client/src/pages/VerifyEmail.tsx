@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
@@ -7,7 +7,6 @@ import { Sparkles, CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 export default function VerifyEmail() {
   const navigate = (path: string) => window.location.href = path;
-  const [location] = useLocation();
   const [token, setToken] = useState("");
   const [verifying, setVerifying] = useState(true);
   const [success, setSuccess] = useState(false);
@@ -28,8 +27,9 @@ export default function VerifyEmail() {
   });
 
   useEffect(() => {
-    // Get token from URL query parameter
-    const params = new URLSearchParams(location.split('?')[1]);
+    // クエリ文字列からトークンを取得（wouterのuseLocationはクエリを含まないため
+    // window.location.search から直接読む）。
+    const params = new URLSearchParams(window.location.search);
     const tokenParam = params.get('token');
     if (tokenParam) {
       setToken(tokenParam);
@@ -39,7 +39,8 @@ export default function VerifyEmail() {
       setError("認証トークンが見つかりません");
       setVerifying(false);
     }
-  }, [location]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">
