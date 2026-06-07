@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, Sparkles, CheckCircle2, AlertCircle, Ticket } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -17,12 +18,29 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showRegisteredMessage, setShowRegisteredMessage] = useState(registered);
+  // クーポン/モニターコード（ログイン成功時に適用）
+  const [couponCode, setCouponCode] = useState('');
+  const [showCoupon, setShowCoupon] = useState(false);
 
-  // Don't auto-hide the registered message - user should see it until they interact
-  // (removed the 5 second timer)
+  const applyCoupon = trpc.coupon.applyCode.useMutation();
 
   const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
+      // ログインに成功したら、クーポン/モニターコードが入力されていれば適用する。
+      // （登録時に入れ損ねた・ログインで詰まったモニターでも確実に反映できる動線）
+      const code = couponCode.trim();
+      if (code) {
+        try {
+          const res = await applyCoupon.mutateAsync({ code });
+          if (res?.success) {
+            toast.success(res.message || 'コードを適用しました');
+          } else {
+            toast.error(res?.message || 'コードの適用に失敗しました（コードをご確認ください）');
+          }
+        } catch (e: any) {
+          toast.error(e?.message || 'コードの適用に失敗しました');
+        }
+      }
       // Redirect to dashboard after successful login
       window.location.href = '/dashboard';
     },
@@ -119,6 +137,39 @@ export default function Login() {
                 disabled={loginMutation.isPending}
                 autoComplete="current-password"
               />
+            </div>
+
+            {/* クーポン/モニターコード（任意） */}
+            <div className="space-y-2">
+              {showCoupon ? (
+                <>
+                  <Label htmlFor="couponCode" className="flex items-center gap-1.5">
+                    <Ticket className="h-3.5 w-3.5 text-emerald-600" />
+                    クーポン / モニターコード（任意）
+                  </Label>
+                  <Input
+                    id="couponCode"
+                    type="text"
+                    placeholder="お持ちの方はコードを入力"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    disabled={loginMutation.isPending}
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    ログインすると、このコードが自動で適用されます（モニターの方はこちらに入力してください）。
+                  </p>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowCoupon(true)}
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                >
+                  <Ticket className="h-3.5 w-3.5" />
+                  クーポン / モニターコードをお持ちの方
+                </button>
+              )}
             </div>
 
             <Button

@@ -82,6 +82,20 @@ export async function applyCoupon(
   // Check if user has already used this coupon
   const alreadyUsed = await hasUserUsedCoupon(userId, coupon.id);
   if (alreadyUsed) {
+    // モニター系コードは冪等に扱う。再入力しても「エラー」ではなく、
+    // isMonitorを確実に立て直して成功として返す（モニター取りこぼし防止）。
+    if (coupon.type === "monitor" || coupon.type === "monitor_only") {
+      try {
+        const { users } = await import("../drizzle/schema");
+        const db2 = await getDb();
+        if (db2) {
+          await db2.update(users).set({ isMonitor: true }).where(eq(users.id, userId));
+        }
+      } catch (e) {
+        console.error("[Coupon] monitor re-apply isMonitor set failed:", e);
+      }
+      return { success: true, message: "モニター登録は既に有効です。ダッシュボード右下のボタンからフィードバックを送信いただけます。" };
+    }
     return { success: false, message: "このクーポンは既に使用されています" };
   }
 
