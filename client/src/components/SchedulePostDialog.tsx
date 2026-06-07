@@ -37,6 +37,19 @@ export function SchedulePostDialog({ open, onOpenChange, projectId, postContent 
       setSelectedAccountId(globalAccountId.toString());
     }
   }, [globalAccountId, open]);
+
+  // ダイアログを開いたら、日時の「表示上のデフォルト」を実際の state にも反映する。
+  // （input の value はデフォルト表示でも state は空のままだと「日時を選択してください」が出るため）
+  useEffect(() => {
+    if (open) {
+      const now = new Date();
+      now.setHours(now.getHours() + 1);
+      const date = now.toISOString().split('T')[0];
+      const time = now.toTimeString().slice(0, 5);
+      setScheduledDate((prev) => prev || date);
+      setScheduledTime((prev) => prev || time);
+    }
+  }, [open]);
   const createScheduledPost = trpc.scheduledPost.create.useMutation({
     onSuccess: () => {
       toast.success('予約投稿を設定しました');
@@ -92,17 +105,6 @@ export function SchedulePostDialog({ open, onOpenChange, projectId, postContent 
     setShowConfirm(false);
     setConfirmData(null);
   };
-
-  // デフォルト値を設定（現在時刻の1時間後）
-  const getDefaultDateTime = () => {
-    const now = new Date();
-    now.setHours(now.getHours() + 1);
-    const date = now.toISOString().split('T')[0];
-    const time = now.toTimeString().slice(0, 5);
-    return { date, time };
-  };
-
-  const defaultDateTime = getDefaultDateTime();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -162,7 +164,7 @@ export function SchedulePostDialog({ open, onOpenChange, projectId, postContent 
             <input
               id="date"
               type="date"
-              value={scheduledDate || defaultDateTime.date}
+              value={scheduledDate}
               onChange={(e) => setScheduledDate(e.target.value)}
               className="w-full mt-2 px-3 py-2 rounded-lg bg-background border border-border text-foreground"
               min={new Date().toISOString().split('T')[0]}
@@ -175,7 +177,7 @@ export function SchedulePostDialog({ open, onOpenChange, projectId, postContent 
             <input
               id="time"
               type="time"
-              value={scheduledTime || defaultDateTime.time}
+              value={scheduledTime}
               onChange={(e) => setScheduledTime(e.target.value)}
               className="w-full mt-2 px-3 py-2 rounded-lg bg-background border border-border text-foreground"
             />

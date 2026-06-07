@@ -503,7 +503,7 @@ export default function ChatProjectSetup({
                 }
               }}
               placeholder="入力してください..."
-              className="flex-1 bg-muted/50 border border-border rounded-full px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 transition-all placeholder:text-muted-foreground/60"
+              className="flex-1 min-w-0 bg-muted/50 border border-border rounded-full px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 transition-all placeholder:text-muted-foreground/60"
               disabled={isTyping}
             />
             <button

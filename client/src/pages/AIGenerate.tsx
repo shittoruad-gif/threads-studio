@@ -448,9 +448,9 @@ export default function AIGenerate() {
           </Card>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* 左側：設定エリア */}
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0">
             {/* 誘導用URL登録 — 1度設定すれば固定投稿/自動投稿で自動的に使い回される */}
             {projectId && project && (
               <ProjectLinksManager
@@ -984,7 +984,7 @@ export default function AIGenerate() {
           </div>
 
           {/* 右側：生成結果エリア */}
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0">
             {editedPost ? (
               <>
                 {/* 表示モード切り替え */}
