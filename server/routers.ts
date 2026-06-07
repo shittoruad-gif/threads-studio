@@ -467,6 +467,7 @@ export const appRouter = router({
         links: z.string().optional(), // JSON string of ProjectLink[]
         usp: z.string().optional(),
         n1Customer: z.string().optional(),
+        ngWords: z.string().optional(), // 投稿に入れたくないワード（改行/カンマ区切り）
       }))
       .mutation(async ({ ctx, input }) => {
         // Check project limit
@@ -512,6 +513,7 @@ export const appRouter = router({
         usp: z.string().optional(),
         n1Customer: z.string().optional(),
         useThreadsKnowhow: z.boolean().optional(),
+        ngWords: z.string().optional(), // 投稿に入れたくないワード（改行/カンマ区切り）
       }))
       .mutation(async ({ ctx, input }) => {
         const project = await db.getProjectById(input.id);
@@ -787,7 +789,9 @@ export const appRouter = router({
         // Generate prompt
         const { generateThreadsPrompt } = await import('../shared/threadsPrompts');
         const { parseProjectLinks } = await import('../shared/projectLinks');
+        const { parseNgWords } = await import('../shared/ngwords');
         const projectLinks = parseProjectLinks((project as any).links || null);
+        const ngWords = parseNgWords((project as any).ngWords || null);
 
         // カウンセリング結果（あれば）と Threadsノウハウ使用フラグを取得
         let counselingResult: any = null;
@@ -823,6 +827,7 @@ export const appRouter = router({
           counseling: counselingResult,
           useThreadsKnowhow,
           stylePreference,
+          ngWords,
         });
 
         // Call LLM
@@ -872,7 +877,10 @@ export const appRouter = router({
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI応答が空です。' });
         }
 
-        const result = JSON.parse(content);
+        const rawResult = JSON.parse(content);
+        // ★NGワードを確定除去（プロンプト指示に加え、機械的に必ず取り除く）
+        const { applyNgWordFilter } = await import('../shared/ngwords');
+        const result = applyNgWordFilter(rawResult, ngWords);
 
         // Increment AI generation usage count
         await db.incrementAiGenerationUsage(ctx.user.id);
@@ -983,6 +991,7 @@ export const appRouter = router({
 
         // 量産時もカウンセリング結果（あれば）を尊重して捏造を防ぐ
         let counselingForClone: any = null;
+        let cloneNgWords: string[] = [];
         if (history.projectId) {
           const cloneProject = await db.getProjectById(history.projectId);
           if (cloneProject?.userId === ctx.user.id) {
@@ -990,6 +999,8 @@ export const appRouter = router({
             if (raw) {
               try { counselingForClone = JSON.parse(raw); } catch {}
             }
+            const { parseNgWords } = await import('../shared/ngwords');
+            cloneNgWords = parseNgWords((cloneProject as any).ngWords || null);
           }
         }
         const cloneNgList = (counselingForClone?.ngList ?? []) as string[];
@@ -1035,6 +1046,11 @@ ${cloneNgList.length > 0
 - バリエーションを増やすために具体性を盛りたくなっても、入力にない数字・体験談を捏造してはいけない。具体例を変える場合も、店舗情報の \`強み\` の範囲内で書ける一般表現に置き換える。
 - 元の投稿に登場した数字や事例は使ってよい（同じ事業者の同じ事実を別表現で書く）。
 
+${cloneNgWords.length > 0 ? `
+【★最優先・絶対禁止ワード（ユーザー指定）】
+次の語句は全バリエーションのタイトル・本文・ツリー・CTAのどこにも絶対に使わないこと：
+${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
+` : ''}
 元の投稿の構成（段落構成、トーン、長さ、絵文字の使い方）を維持しつつ、具体的な内容・エピソード・表現を変えて${input.count}本のバリエーションを生成してください。各バリエーションは独立した投稿として使えるようにしてください。`;
 
         // Call LLM
@@ -1090,10 +1106,16 @@ ${cloneNgList.length > 0
 
         const result = JSON.parse(content);
 
+        // ★NGワードを各バリエーションから確定除去
+        const { applyNgWordFilter } = await import('../shared/ngwords');
+        const filteredVariations = Array.isArray(result.variations)
+          ? result.variations.map((v: any) => applyNgWordFilter(v, cloneNgWords))
+          : result.variations;
+
         // Increment AI generation usage count
         await db.incrementAiGenerationUsage(ctx.user.id);
 
-        return { variations: result.variations, originalTitle: originalContent.title };
+        return { variations: filteredVariations, originalTitle: originalContent.title };
       }),
 
     // Regenerate from history

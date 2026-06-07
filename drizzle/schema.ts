@@ -155,6 +155,9 @@ export const projects = mysqlTable("projects", {
   // shared/styleSamples.ts StylePreferenceProfile 形式。
   // null=未校正（AI生成は既存挙動）
   stylePreference: text("stylePreference"),
+  // 投稿に入れたくないワード（NGワード）。改行/カンマ/読点区切りのテキストで保持。
+  // 生成プロンプトで禁止し、生成後に shared/ngwords.ts で機械的に除去して必ず含めないようにする。
+  ngWords: text("ngWords"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

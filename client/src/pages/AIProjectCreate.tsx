@@ -37,6 +37,7 @@ export default function AIProjectCreate() {
       strength: '',
       proof: '',
       ctaLink: '',
+      ngWords: '',
     };
   });
 
@@ -104,6 +105,7 @@ export default function AIProjectCreate() {
       strength: form.strength,
       proof: form.proof || undefined,
       ctaLink: form.ctaLink || undefined,
+      ngWords: form.ngWords || undefined,
     });
   };
 
@@ -307,6 +309,18 @@ export default function AIProjectCreate() {
                     {form.ctaLink && !form.ctaLink.startsWith('http') && (
                       <p className="text-xs text-destructive">URLはhttp://またはhttps://で始めてください</p>
                     )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>投稿に入れたくないワード（任意）</Label>
+                    <Textarea
+                      value={form.ngWords}
+                      onChange={(e) => setForm({...form, ngWords: e.target.value})}
+                      rows={2}
+                      placeholder="改行またはカンマ区切りで入力（例：激安, 最安値, 〇〇クリニック）"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      ここに入れた言葉は、AIが生成する投稿に<strong>必ず含めません</strong>（自動投稿・量産でも除外されます）。
+                    </p>
                   </div>
                 </div>
               )}

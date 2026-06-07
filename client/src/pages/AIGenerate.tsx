@@ -102,6 +102,7 @@ export default function AIGenerate() {
     proof: '',
     usp: '',
     n1Customer: '',
+    ngWords: '',
   });
 
   const { data: project, isLoading: projectLoading } = trpc.project.get.useQuery(
@@ -776,6 +777,7 @@ export default function AIGenerate() {
                           proof: project.proof || '',
                           usp: (project as any).usp || '',
                           n1Customer: (project as any).n1Customer || '',
+                          ngWords: (project as any).ngWords || '',
                         });
                         setEditingProject(true);
                       }}
@@ -906,6 +908,17 @@ export default function AIGenerate() {
                           rows={3}
                           className="text-sm"
                         />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">投稿に入れたくないワード</Label>
+                        <Textarea
+                          value={editForm.ngWords}
+                          onChange={(e) => setEditForm({ ...editForm, ngWords: e.target.value })}
+                          placeholder="改行またはカンマ区切り（例：激安, 最安値）"
+                          rows={2}
+                          className="text-sm"
+                        />
+                        <p className="text-[11px] text-muted-foreground">この言葉は生成投稿に必ず含めません（自動投稿・量産も含む）。</p>
                       </div>
                     </>
                   ) : (

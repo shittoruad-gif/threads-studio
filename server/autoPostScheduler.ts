@@ -90,7 +90,9 @@ async function generateAutoPost(
     // Auto-posts also reuse the user's registered URL set so LINE/予約 links
     // appear in the right slots automatically.
     const { parseProjectLinks } = await import('../shared/projectLinks');
+    const { parseNgWords, applyNgWordFilter } = await import('../shared/ngwords');
     const projectLinks = parseProjectLinks(project.links || null);
+    const ngWords = parseNgWords((project as any).ngWords || null);
 
     // カウンセリング結果（あれば）と Threadsノウハウ使用フラグを取得。
     // 自動投稿でもユーザーの「事実だけ書く」設定を尊重する（捏造防止）。
@@ -135,6 +137,7 @@ async function generateAutoPost(
       counseling: counselingResult,
       useThreadsKnowhow,
       stylePreference,
+      ngWords,
     });
 
     // Call LLM
@@ -149,7 +152,7 @@ async function generateAutoPost(
       return false;
     }
 
-    const result = JSON.parse(content);
+    const result = applyNgWordFilter(JSON.parse(content), ngWords);
 
     // Combine main post + tree posts + CTA into full post content。
     // treeCount=0 を指定しているので通常 treePosts は空配列。
