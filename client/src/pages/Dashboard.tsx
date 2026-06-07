@@ -313,7 +313,7 @@ export default function Dashboard() {
         {/* Hero: Auto Post + Stats Row */}
         <div className="grid lg:grid-cols-3 gap-4 mb-6">
           {/* Auto Post Status - Takes 2 columns */}
-          <div className="lg:col-span-2 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-6" data-tour="auto-post">
+          <div className="lg:col-span-2 min-w-0 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-6" data-tour="auto-post">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="bg-emerald-100 p-3 rounded-xl shrink-0">
@@ -450,7 +450,7 @@ export default function Dashboard() {
           </div>
 
           {/* Stats Column */}
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             <div className="bg-background rounded-xl p-4 border border-border">
               <p className="text-muted-foreground text-xs mb-1">総投稿数</p>
               <p className="text-2xl font-bold text-foreground">{stats?.totalPosts || 0}</p>
