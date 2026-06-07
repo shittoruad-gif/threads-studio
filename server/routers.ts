@@ -75,13 +75,18 @@ export const appRouter = router({
         const verificationToken = generateToken(32);
         await db.updateEmailVerificationToken(user.id, verificationToken);
 
-        // Send verification email (using Manus notification)
-        const { notifyOwner } = await import('./_core/notification');
-        const verificationUrl = `${process.env.VITE_APP_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
-        await notifyOwner({
-          title: 'メール認証リクエスト',
-          content: `新規ユーザー: ${user.email}\n\n認証URL: ${verificationUrl}`,
-        });
+        // 認証メールはユーザー本人へ送る（本番URL = APP_BASE_URL を使用）。
+        // 送信失敗（Resendドメイン未認証等）でも登録自体は成功させる。
+        try {
+          const { sendVerificationEmail } = await import('./_core/notification');
+          const baseUrl =
+            process.env.APP_BASE_URL || process.env.VITE_APP_URL || 'https://threads-studio.com';
+          if (user.email) {
+            await sendVerificationEmail(user.email, verificationToken, baseUrl);
+          }
+        } catch (e) {
+          console.warn(`[Register] verification email send failed for ${user.email}:`, e);
+        }
 
         // Apply coupon code if provided
         if (input.couponCode && input.couponCode.trim()) {

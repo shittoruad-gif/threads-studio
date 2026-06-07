@@ -32,16 +32,20 @@ export default function Register() {
     },
   });
 
-  // Password strength check
+  // Password strength check（サーバー側 isValidPassword と完全一致させる：
+  // 10文字以上 ＋ 英字・数字・記号のうち2種類以上）
   const passwordChecks = useMemo(() => {
+    const hasLetter = /[a-zA-Z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSymbol = /[!@#$%^&*(),.?":{}|<>_\-+=/\\\[\];'`~]/.test(password);
+    const kinds = (hasLetter ? 1 : 0) + (hasNumber ? 1 : 0) + (hasSymbol ? 1 : 0);
     return {
-      length: password.length >= 8,
-      hasNumber: /\d/.test(password),
-      hasSymbol: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+      length: password.length >= 10,
+      twoKinds: kinds >= 2,
     };
   }, [password]);
 
-  const passwordValid = passwordChecks.length && (passwordChecks.hasNumber || passwordChecks.hasSymbol);
+  const passwordValid = passwordChecks.length && passwordChecks.twoKinds;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,17 +170,17 @@ export default function Register() {
                       <XCircle className="h-3.5 w-3.5 text-muted-foreground/40 flex-shrink-0" />
                     )}
                     <span className={`text-xs ${passwordChecks.length ? 'text-green-600' : 'text-muted-foreground/60'}`}>
-                      8文字以上
+                      10文字以上
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {passwordChecks.hasNumber || passwordChecks.hasSymbol ? (
+                    {passwordChecks.twoKinds ? (
                       <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
                     ) : (
                       <XCircle className="h-3.5 w-3.5 text-muted-foreground/40 flex-shrink-0" />
                     )}
-                    <span className={`text-xs ${passwordChecks.hasNumber || passwordChecks.hasSymbol ? 'text-green-600' : 'text-muted-foreground/60'}`}>
-                      数字または記号を1つ以上含む
+                    <span className={`text-xs ${passwordChecks.twoKinds ? 'text-green-600' : 'text-muted-foreground/60'}`}>
+                      英字・数字・記号のうち2種類以上を含む
                     </span>
                   </div>
                 </div>
