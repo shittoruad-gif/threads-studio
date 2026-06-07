@@ -1953,82 +1953,69 @@ ${input.commentText}
 
     // Change subscription plan
     changePlan: protectedProcedure
-      .input(z.object({ 
+      .input(z.object({
         newPlanId: z.string(),
-        changeTiming: z.enum(['immediate', 'next_period']).default('immediate')
+        // 互換のため受け取るが、Univapayは将来予約の金額切替を持たないため常に即時変更。
+        changeTiming: z.enum(['immediate', 'next_period']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
         const currentPlanId = subscription?.planId || 'free';
-        
+
         if (currentPlanId === 'free') {
-          throw new TRPCError({ 
-            code: 'BAD_REQUEST', 
-            message: '無料プランからの変更は新規購入として行ってください。' 
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: '無料プランからの変更は、料金プランから新規にお申し込みください。',
           });
         }
 
         if (!subscription?.univapaySubscriptionId) {
-          throw new TRPCError({ 
-            code: 'BAD_REQUEST', 
-            message: 'アクティブなサブスクリプションが見つかりません。' 
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'アクティブなサブスクリプションが見つかりません。',
           });
         }
 
         if (currentPlanId === input.newPlanId) {
-          throw new TRPCError({ 
-            code: 'BAD_REQUEST', 
-            message: '現在と同じプランには変更できません。' 
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: '現在と同じプランには変更できません。',
           });
         }
 
         const currentPlan = getPlan(currentPlanId);
         const newPlan = getPlan(input.newPlanId);
-        
+
         if (!currentPlan || !newPlan) {
-          throw new TRPCError({ 
-            code: 'BAD_REQUEST', 
-            message: 'プラン情報が見つかりません。' 
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'プラン情報が見つかりません。',
           });
         }
 
-        // Calculate price difference
-        const priceDiff = newPlan.priceMonthly - currentPlan.priceMonthly;
-        const isUpgrade = priceDiff > 0;
-
-        if (input.changeTiming === 'immediate') {
-          // Immediate change: cancel old subscription and create new one
-          const univapayService = await import('./univapay');
-          await univapayService.updateSubscription(subscription.univapaySubscriptionId, input.newPlanId);
-
-          // Update database immediately
-          await db.updateSubscription(subscription.id, { 
-            planId: input.newPlanId,
-            currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
+        // キャンペーンプラン（回数制限付き定期課金）はUnivapay仕様上、
+        // 金額のAPI変更ができない。変更元・変更先のどちらかがキャンペーンなら、
+        // 一旦解約 → 希望プランに新規申込、という運用にする（サポート案内）。
+        if (currentPlan.isCampaign || newPlan.isCampaign) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'キャンペーンプランからの変更・キャンペーンプランへの変更は、現在のプランを解約のうえ、料金プランから希望プランに新規お申し込みください。',
           });
-
-          return { 
-            success: true, 
-            changeTiming: 'immediate',
-            message: 'プランが即座に変更されました。' 
-          };
-        } else {
-          // Next period change: schedule the change
-          // In Univapay, we can't schedule changes, so we just update the database
-          // The actual change will happen when the current period ends
-          await db.updateSubscription(subscription.id, { 
-            // Store the pending plan change in a custom field (you may need to add this to schema)
-            planId: input.newPlanId,
-            cancelAtPeriodEnd: false
-          });
-
-          return { 
-            success: true, 
-            changeTiming: 'next_period',
-            message: '次回請求時にプランが変更されます。',
-            effectiveDate: subscription.currentPeriodEnd || undefined
-          };
         }
+
+        // 通常プラン同士の変更のみ。Univapayの定期課金金額を即時更新する。
+        const univapayService = await import('./univapay');
+        await univapayService.updateSubscription(subscription.univapaySubscriptionId, input.newPlanId);
+
+        await db.updateSubscription(subscription.id, {
+          planId: input.newPlanId,
+        });
+
+        return {
+          success: true,
+          changeTiming: 'immediate' as const,
+          message: 'プランを変更しました。次回のお支払いから新しいプランの金額が適用されます。',
+        };
       }),
 
     // Preview plan change (calculate proration)

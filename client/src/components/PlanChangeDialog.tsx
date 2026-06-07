@@ -1,12 +1,9 @@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
-import { PLANS, getPlan, getFeatureLimitText } from '../../../shared/plans';
-import { AlertCircle, Zap, Clock, Check, X, ArrowUp, ArrowDown } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { getPlan, getFeatureLimitText } from '../../../shared/plans';
+import { AlertCircle, Check, X, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface PlanChangeDialogProps {
   open: boolean;
@@ -24,7 +21,6 @@ export function PlanChangeDialog({
   onConfirm,
 }: PlanChangeDialogProps) {
   const utils = trpc.useUtils();
-  const [changeTiming, setChangeTiming] = useState<'immediate' | 'next_period'>('immediate');
 
   const { data: preview, isLoading: previewLoading } = trpc.univapay.previewPlanChange.useQuery(
     { newPlanId },
@@ -32,17 +28,8 @@ export function PlanChangeDialog({
   );
 
   const changePlan = trpc.univapay.changePlan.useMutation({
-    onSuccess: (data: { success: boolean; changeTiming: string; message: string; effectiveDate?: Date }) => {
+    onSuccess: (data: { success: boolean; message: string }) => {
       toast.success(data.message);
-      
-      if (data.changeTiming === 'immediate') {
-        const linkFormUrl = process.env[`VITE_UNIVAPAY_LINK_${newPlanId.toUpperCase()}`];
-        if (linkFormUrl) {
-          toast.info('新しいプランの決済ページに移動します...');
-          window.open(linkFormUrl, '_blank');
-        }
-      }
-      
       onOpenChange(false);
       utils.subscription.getStatus.invalidate();
       onConfirm?.();
@@ -60,7 +47,7 @@ export function PlanChangeDialog({
   }
 
   const handleConfirm = () => {
-    changePlan.mutate({ newPlanId, changeTiming });
+    changePlan.mutate({ newPlanId });
   };
 
   const priceDiff = newPlan.priceMonthly - currentPlan.priceMonthly;
@@ -239,60 +226,15 @@ export function PlanChangeDialog({
             </div>
           )}
 
-          {/* Change timing selection */}
-          <div className="space-y-3">
-            <Label className="text-sm font-semibold text-foreground">変更タイミングを選択</Label>
-            <RadioGroup value={changeTiming} onValueChange={(value) => setChangeTiming(value as 'immediate' | 'next_period')}>
-              <div className="flex items-start space-x-3 p-3 bg-muted/50 rounded-lg border-2 border-transparent hover:border-emerald-300 transition-colors cursor-pointer"
-                   onClick={() => setChangeTiming('immediate')}>
-                <RadioGroupItem value="immediate" id="immediate" className="mt-1" />
-                <div className="flex-1">
-                  <Label htmlFor="immediate" className="flex items-center gap-2 font-semibold cursor-pointer text-foreground">
-                    <Zap className="w-4 h-4 text-yellow-500" />
-                    即座に変更
-                  </Label>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    現在のサブスクリプションをキャンセルし、新しいプランの決済ページに移動します。
-                    {isUpgrade && preview && preview.proratedAmount > 0 && (
-                      <span className="block mt-1 text-yellow-600">
-                        日割り計算で約¥{preview.proratedAmount.toLocaleString()}の追加料金が発生します。
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-3 p-3 bg-muted/50 rounded-lg border-2 border-transparent hover:border-emerald-300 transition-colors cursor-pointer"
-                   onClick={() => setChangeTiming('next_period')}>
-                <RadioGroupItem value="next_period" id="next_period" className="mt-1" />
-                <div className="flex-1">
-                  <Label htmlFor="next_period" className="flex items-center gap-2 font-semibold cursor-pointer text-foreground">
-                    <Clock className="w-4 h-4 text-blue-500" />
-                    次回請求時に変更
-                  </Label>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    現在の請求期間が終了するまで現在のプランを継続し、次回請求時に新しいプランに変更します。
-                    {preview && preview.daysRemaining > 0 && (
-                      <span className="block mt-1 text-blue-600">
-                        あと{preview.daysRemaining}日間は現在のプランを利用できます。
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
-            </RadioGroup>
-          </div>
-
-          {/* Warning */}
-          {changeTiming === 'immediate' && (
-            <div className="flex items-start gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-yellow-800">
-                <p className="font-semibold mb-1">重要なお知らせ</p>
-                <p>即座に変更する場合、現在のサブスクリプションはキャンセルされ、新しいプランの決済ページに移動します。</p>
-              </div>
+          {/* Note */}
+          <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-blue-800">
+              <p className="font-semibold mb-1">変更のタイミングについて</p>
+              <p>プランは確定後すぐに切り替わり、<strong>次回のお支払いから新しいプランの金額</strong>が適用されます。
+              （キャンペーンプランへの変更・からの変更はこの画面では行えません。料金プランから新規にお申し込みください。）</p>
             </div>
-          )}
+          </div>
         </div>
 
         <DialogFooter className="gap-2">

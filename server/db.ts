@@ -189,15 +189,6 @@ export async function getUserById(userId: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function updateUserStripeCustomerId(userId: number, stripeCustomerId: string) {
-  const db = await getDb();
-  if (!db) return;
-
-  await db.update(users)
-    .set({ stripeCustomerId })
-    .where(eq(users.id, userId));
-}
-
 export async function updateUserOnboardingCompleted(userId: number, completed: boolean) {
   const db = await getDb();
   if (!db) return;
@@ -255,15 +246,6 @@ export async function getPlanById(planId: string): Promise<Plan | undefined> {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function updatePlanStripePriceId(planId: string, stripePriceId: string) {
-  const db = await getDb();
-  if (!db) return;
-
-  await db.update(plans)
-    .set({ stripePriceId })
-    .where(eq(plans.id, planId));
-}
-
 // ============ Subscription Functions ============
 
 export async function createSubscription(data: InsertSubscription): Promise<void> {
@@ -283,34 +265,6 @@ export async function getSubscriptionByUserId(userId: number): Promise<Subscript
     .orderBy(desc(subscriptions.createdAt))
     .limit(1);
 
-  return result.length > 0 ? result[0] : undefined;
-}
-
-export async function getSubscriptionByStripeId(stripeSubscriptionId: string): Promise<Subscription | undefined> {
-  const db = await getDb();
-  if (!db) return undefined;
-
-  const result = await db.select()
-    .from(subscriptions)
-    .where(eq(subscriptions.stripeSubscriptionId, stripeSubscriptionId))
-    .limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
-}
-
-/**
- * Stripe Customer ID からユーザを引く。
- * Webhook の customer.source.expiring など、subscriptionId が無いイベントで使う。
- */
-export async function getUserByStripeCustomerId(
-  stripeCustomerId: string,
-): Promise<User | undefined> {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select()
-    .from(users)
-    .where(eq(users.stripeCustomerId, stripeCustomerId))
-    .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -337,18 +291,6 @@ export async function updateSubscription(
   await db.update(subscriptions)
     .set(data)
     .where(eq(subscriptions.id, subscriptionId));
-}
-
-export async function updateSubscriptionByStripeId(
-  stripeSubscriptionId: string,
-  data: Partial<InsertSubscription>
-): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-
-  await db.update(subscriptions)
-    .set(data)
-    .where(eq(subscriptions.stripeSubscriptionId, stripeSubscriptionId));
 }
 
 // ============ Threads Account Functions ============

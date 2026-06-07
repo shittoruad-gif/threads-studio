@@ -2,6 +2,12 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import { createHash } from "crypto";
+
+declare global {
+  // Univapay Webhook の重複イベント排除用（生ボディのハッシュを一定時間記憶）
+  var __univapayWebhookSeen: { h: string; ts: number }[] | undefined;
+}
 import rateLimit from "express-rate-limit";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
@@ -86,6 +92,25 @@ async function startServer() {
 
         // 実イベント構造の調査用に必ず生ログを残す（本番投入後ここで実構造を確認）
         console.log('[Univapay Webhook] received:', JSON.stringify(event).slice(0, 2000));
+
+        // ── 冪等性チェック（重複イベント排除）──────────────────────
+        // Univapayが同じ通知を再送しても二重処理しないよう、生ボディのハッシュを
+        // 10分ウィンドウで記憶。実課金イベントは charge.id 等が毎回異なるため、
+        // 正当な月次課金まで誤って弾くことはない（完全一致の再送のみ排除）。
+        const bodyHash = createHash('sha256').update(rawBody || '').digest('hex');
+        if (!globalThis.__univapayWebhookSeen) globalThis.__univapayWebhookSeen = [];
+        const seen = globalThis.__univapayWebhookSeen;
+        const nowMs = Date.now();
+        const TEN_MIN = 10 * 60 * 1000;
+        while (seen.length > 0 && nowMs - seen[0].ts > TEN_MIN) seen.shift();
+        if (rawBody && seen.some((s) => s.h === bodyHash)) {
+          console.log('[Univapay Webhook] 重複イベントを無視:', bodyHash.slice(0, 12));
+          return res.json({ received: true, duplicate: true });
+        }
+        if (rawBody) {
+          seen.push({ h: bodyHash, ts: nowMs });
+          if (seen.length > 5000) seen.splice(0, seen.length - 5000);
+        }
 
         // ── 主要フィールドを防御的に抽出 ──────────────────────────
         const data = event?.data ?? event ?? {};
