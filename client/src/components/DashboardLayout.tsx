@@ -402,14 +402,14 @@ export default function DashboardLayout({
       {/* Main Content */}
       <div
         className={cn(
-          "flex-1 transition-all duration-200",
+          "flex-1 min-w-0 overflow-x-hidden transition-all duration-200",
           !isMobile && sidebarOpen ? "ml-[260px]" : !isMobile ? "ml-[68px]" : "ml-0"
         )}
       >
         {/* Top Header */}
         <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border">
-          <div className="flex items-center justify-between h-14 px-4 sm:px-6">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-2 h-14 px-4 sm:px-6">
+            <div className="flex items-center gap-3 shrink-0">
               {isMobile && (
                 <button
                   onClick={() => setMobileSidebarOpen(true)}
@@ -420,8 +420,8 @@ export default function DashboardLayout({
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <ThreadsAccountSwitcher />
+            <div className="flex items-center gap-2 min-w-0">
+              <ThreadsAccountSwitcher compact={isMobile} className="min-w-0 max-w-[60vw] sm:max-w-none" />
               <button
                 onClick={() => setLocation("/")}
                 className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground/80 transition-colors"

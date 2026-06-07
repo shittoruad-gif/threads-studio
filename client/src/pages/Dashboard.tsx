@@ -314,12 +314,12 @@ export default function Dashboard() {
         <div className="grid lg:grid-cols-3 gap-4 mb-6">
           {/* Auto Post Status - Takes 2 columns */}
           <div className="lg:col-span-2 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-6" data-tour="auto-post">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-emerald-100 p-3 rounded-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="bg-emerald-100 p-3 rounded-xl shrink-0">
                   <Sparkles className="w-6 h-6 text-emerald-600" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <h2 className="font-bold text-lg text-foreground">自動投稿</h2>
                     <HelpTooltip content="ONにすると、AIが毎日自動で投稿を生成してThreadsに投稿します" />
@@ -329,7 +329,7 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 shrink-0">
                 <div className="flex items-center gap-1">
                   <HelpTooltip content="1日に投稿する回数です。多いほど認知が広がりますが、3回/日が推奨です" side="left" />
                   <select
@@ -417,7 +417,7 @@ export default function Dashboard() {
               <div className="mt-4 space-y-1.5">
                 {autoPostHistory.slice(0, 2).map((post: any) => (
                   <div key={post.id} className="flex items-center justify-between text-sm bg-white/70 rounded-lg px-3 py-2">
-                    <span className="truncate flex-1 mr-2 text-muted-foreground">{post.postContent?.substring(0, 40)}...</span>
+                    <span className="truncate flex-1 min-w-0 mr-2 text-muted-foreground">{post.postContent?.substring(0, 40)}...</span>
                     <Badge variant={post.status === 'posted' ? 'default' : post.status === 'pending' ? 'secondary' : 'destructive'} className="text-xs">
                       {post.status === 'posted' ? '投稿済' : post.status === 'pending' ? '予約中' : '失敗'}
                     </Badge>
