@@ -240,9 +240,11 @@ export default function Dashboard() {
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-foreground truncate">ようこそ、{user?.name || 'ユーザー'}さん</h1>
             <p className="text-muted-foreground text-sm mt-1">
-              {autoPostSettings?.autoPostEnabled
-                ? 'AIが自動で投稿を生成・公開しています'
-                : '自動投稿は停止中です'}
+              {!threadsAccounts || threadsAccounts.length === 0
+                ? 'まずはThreadsを連携して、投稿の自動化を始めましょう'
+                : autoPostSettings?.autoPostEnabled
+                  ? 'AIが毎日自動で投稿を生成・公開しています'
+                  : '準備OK！自動投稿をONにすると毎日自動で投稿されます'}
             </p>
           </div>
           <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-sm px-3 py-1 shrink-0">

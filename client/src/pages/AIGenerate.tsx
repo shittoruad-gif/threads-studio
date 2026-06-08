@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { ArrowLeft, ArrowRight, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, FileEdit, Smartphone } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, FileEdit, Smartphone, Send, Link2 } from 'lucide-react';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -68,7 +68,18 @@ export default function AIGenerate() {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'phone'>('edit');
-  const { selectedAccount } = useThreadsAccount();
+  const { selectedAccount, selectedAccountId, accounts: connectedAccounts } = useThreadsAccount();
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
+  const publishNow = trpc.threads.post.useMutation({
+    onSuccess: () => {
+      toast.success('Threadsに投稿しました！');
+      setPublishConfirmOpen(false);
+      triggerCelebration('first-post');
+    },
+    onError: (e) => {
+      toast.error(e.message || '投稿に失敗しました。時間をおいて再度お試しください。');
+    },
+  });
   const [saveTemplateDialogOpen, setSaveTemplateDialogOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
@@ -987,6 +998,11 @@ export default function AIGenerate() {
           <div className="space-y-6 min-w-0">
             {editedPost ? (
               <>
+                {/* 生成完了→次の一手を明示 */}
+                <div className="flex items-start gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 mb-3 text-sm text-emerald-800">
+                  <Check className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>投稿ができました！内容を確認して、下の「今すぐThreadsに投稿」または「投稿を予約する」を押してください。</span>
+                </div>
                 {/* 表示モード切り替え */}
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <div className="flex bg-muted rounded-lg p-1">
@@ -1054,7 +1070,7 @@ export default function AIGenerate() {
                           </div>
                           {editedPost.treePosts.map((post, i) => (
                             <div key={i}>
-                              <span className="text-muted-foreground">ツリー{i + 1}：</span>
+                              <span className="text-muted-foreground">続きの投稿{i + 1}：</span>
                               <span className={`font-medium ${post.length > 500 ? 'text-red-500' : 'text-foreground'}`}>
                                 {post.length} / 500文字
                               </span>
@@ -1107,7 +1123,7 @@ export default function AIGenerate() {
                           </div>
                           {editedPost.treePosts.map((post, i) => (
                             <div key={i}>
-                              <span className="text-muted-foreground">ツリー{i + 1}：</span>
+                              <span className="text-muted-foreground">続きの投稿{i + 1}：</span>
                               <span className={`font-medium ${post.length > 500 ? 'text-red-500' : 'text-foreground'}`}>
                                 {post.length} / 500文字
                               </span>
@@ -1161,11 +1177,11 @@ export default function AIGenerate() {
                   <Card key={index}>
                     <CardHeader>
                       <div className="flex items-center justify-between">
-                        <CardTitle className="text-base">ツリー投稿 {index + 1}</CardTitle>
+                        <CardTitle className="text-base">続きの投稿 {index + 1}</CardTitle>
                         <Button
                           variant="ghost"
                           size="sm"
-                          aria-label={`ツリー投稿${index + 1}をコピー`}
+                          aria-label={`続きの投稿${index + 1}をコピー`}
                           onClick={() => handleCopy(post, index + 1)}
                         >
                           {copiedIndex === index + 1 ? (
@@ -1194,7 +1210,7 @@ export default function AIGenerate() {
                 {/* CTA */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base">CTA（行動喚起）</CardTitle>
+                    <CardTitle className="text-base">最後のひと押し（予約・問い合わせの案内）</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <TextareaWithEmoji
@@ -1257,33 +1273,57 @@ export default function AIGenerate() {
                 )}
 
                 {/* アクションボタン */}
-                <div className="sticky bottom-4 z-10 bg-background/95 backdrop-blur-sm border border-border rounded-xl p-3 shadow-lg">
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <Button
-                      onClick={() => setScheduleDialogOpen(true)}
-                      className="flex-1 h-12 text-base"
-                    >
-                      <Calendar className="h-5 w-5 mr-2" />
-                      予約投稿に追加
-                    </Button>
-                    <div className="flex gap-2">
+                <div className="sticky bottom-4 z-10 bg-background/95 backdrop-blur-sm border border-border rounded-xl p-3 shadow-lg space-y-2">
+                  {/* 未連携のときは投稿前に連携を促す */}
+                  {(connectedAccounts?.length ?? 0) === 0 && (
+                    <div className="flex items-center gap-2 rounded-lg bg-yellow-50 border border-yellow-200 px-3 py-2 text-sm text-yellow-800">
+                      <Link2 className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1">投稿するにはThreadsの連携が必要です。</span>
                       <Button
+                        size="sm"
                         variant="outline"
-                        onClick={handleCopyAll}
-                        className="flex-1 sm:flex-initial h-12 text-base"
+                        className="shrink-0 border-yellow-300 text-yellow-800 hover:bg-yellow-100"
+                        onClick={() => setLocation('/threads-connect')}
                       >
-                        <Copy className="h-5 w-5 mr-2" />
-                        全てコピー
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setSaveTemplateDialogOpen(true)}
-                        className="flex-1 sm:flex-initial h-12 text-base"
-                      >
-                        <Save className="h-5 w-5 mr-2" />
-                        テンプレートとして保存
+                        連携する
                       </Button>
                     </div>
+                  )}
+                  {/* 主アクション：今すぐ投稿 */}
+                  <Button
+                    onClick={() => setPublishConfirmOpen(true)}
+                    disabled={(connectedAccounts?.length ?? 0) === 0 || !selectedAccountId}
+                    className="w-full h-12 text-base bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    <Send className="h-5 w-5 mr-2" />
+                    今すぐThreadsに投稿
+                  </Button>
+                  {/* 副アクション */}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setScheduleDialogOpen(true)}
+                      className="flex-1 h-11"
+                    >
+                      <Calendar className="h-5 w-5 mr-2" />
+                      投稿を予約する
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleCopyAll}
+                      className="flex-1 h-11"
+                    >
+                      <Copy className="h-5 w-5 mr-2" />
+                      全てコピー
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setSaveTemplateDialogOpen(true)}
+                      className="flex-1 h-11"
+                    >
+                      <Save className="h-5 w-5 mr-2" />
+                      ひな形に保存
+                    </Button>
                   </div>
                 </div>
               </>
@@ -1310,6 +1350,42 @@ export default function AIGenerate() {
           postContent={`${editedPost.mainPost}\n\n${editedPost.treePosts.join('\n\n')}\n\n${editedPost.cta}`}
         />
       )}
+
+      {/* 今すぐ投稿の確認ダイアログ */}
+      <Dialog open={publishConfirmOpen} onOpenChange={setPublishConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-5 w-5 text-emerald-600" />
+              今すぐ投稿しますか？
+            </DialogTitle>
+            <DialogDescription>
+              {selectedAccount ? <><span className="font-medium text-foreground">@{selectedAccount.threadsUsername}</span> に今すぐ公開されます。公開後は取り消せません。</> : 'Threadsに今すぐ公開されます。'}
+            </DialogDescription>
+          </DialogHeader>
+          {editedPost && (
+            <div className="rounded-lg bg-muted/50 border border-border p-3 text-sm text-foreground whitespace-pre-line max-h-48 overflow-y-auto">
+              {`${editedPost.mainPost}\n\n${editedPost.treePosts.join('\n\n')}\n\n${editedPost.cta}`.trim()}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPublishConfirmOpen(false)} disabled={publishNow.isPending}>
+              キャンセル
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={publishNow.isPending || !selectedAccountId || !editedPost}
+              onClick={() => {
+                if (!selectedAccountId || !editedPost) return;
+                const text = `${editedPost.mainPost}\n\n${editedPost.treePosts.join('\n\n')}\n\n${editedPost.cta}`.trim();
+                publishNow.mutate({ accountId: selectedAccountId, text });
+              }}
+            >
+              {publishNow.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />投稿中...</> : '投稿する'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* プリセット選択ダイアログ */}
       <Dialog open={presetDialogOpen} onOpenChange={setPresetDialogOpen}>

@@ -32,6 +32,7 @@ export default function AdminFeedback() {
   ];
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [selectedFeedback, setSelectedFeedback] = useState<any>(null);
   const [newStatus, setNewStatus] = useState<string>('');
   const [adminNote, setAdminNote] = useState('');
@@ -53,8 +54,9 @@ export default function AdminFeedback() {
   });
 
   const filteredFeedback = data?.feedback?.filter((item: any) => {
-    if (statusFilter === 'all') return true;
-    return item.feedback.status === statusFilter;
+    if (statusFilter !== 'all' && item.feedback.status !== statusFilter) return false;
+    if (categoryFilter !== 'all' && item.feedback.category !== categoryFilter) return false;
+    return true;
   }) || [];
 
   const stats = {
@@ -117,18 +119,30 @@ export default function AdminFeedback() {
       </div>
 
       {/* Filter */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Filter className="h-4 w-4 text-muted-foreground" />
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-40">
             <SelectValue placeholder="ステータス" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">すべて</SelectItem>
+            <SelectItem value="all">すべてのステータス</SelectItem>
             <SelectItem value="new">新規</SelectItem>
             <SelectItem value="in_progress">対応中</SelectItem>
             <SelectItem value="resolved">解決済み</SelectItem>
             <SelectItem value="wont_fix">対応不要</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="カテゴリ" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">すべてのカテゴリ</SelectItem>
+            <SelectItem value="bug">バグ</SelectItem>
+            <SelectItem value="usability">使いにくさ</SelectItem>
+            <SelectItem value="feature_request">機能要望</SelectItem>
+            <SelectItem value="other">その他</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -160,7 +174,7 @@ export default function AdminFeedback() {
                     <TableHead>ユーザー</TableHead>
                     <TableHead>ステータス</TableHead>
                     <TableHead>日時</TableHead>
-                    <TableHead className="w-[80px]">操作</TableHead>
+                    <TableHead className="w-[140px]">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -195,13 +209,27 @@ export default function AdminFeedback() {
                           {new Date(item.feedback.createdAt).toLocaleDateString('ja-JP')}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openDetail(item)}
-                          >
-                            詳細
-                          </Button>
+                          <div className="flex gap-1">
+                            {item.feedback.status !== 'resolved' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs border-green-200 text-green-700 hover:bg-green-50 whitespace-nowrap"
+                                disabled={updateMutation.isPending}
+                                onClick={() => updateMutation.mutate({ id: item.feedback.id, status: 'resolved' as any })}
+                              >
+                                解決
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => openDetail(item)}
+                            >
+                              詳細
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );

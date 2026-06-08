@@ -2210,7 +2210,7 @@ ${input.commentText}
       .input(z.object({
         id: z.number(),
         code: z.string().min(1).max(50).optional(),
-        type: z.enum(['forever_free', 'trial_30', 'trial_14']).optional(),
+        type: z.enum(['forever_free', 'trial_30', 'trial_14', 'discount_50', 'discount_30', 'special_price', 'monitor', 'monitor_only']).optional(),
         description: z.string().optional(),
         maxUses: z.number().optional(),
         expiresAt: z.date().nullable().optional(),
@@ -2264,6 +2264,14 @@ ${input.commentText}
     getAllUsers: adminProcedure.query(async () => {
       return await db.getAllUsers();
     }),
+
+    // モニターフラグの ON/OFF（DB/SSH不要で運営者が切替できるように）
+    setUserMonitor: adminProcedure
+      .input(z.object({ userId: z.number(), isMonitor: z.boolean() }))
+      .mutation(async ({ input }) => {
+        await db.setUserMonitor(input.userId, input.isMonitor);
+        return { success: true };
+      }),
 
     // ──────── 決済失敗ユーザー一覧（管理者用）────────
     // status が past_due / unpaid / incomplete のサブスクとそのユーザを返す。

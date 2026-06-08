@@ -211,7 +211,16 @@ export default function AdminCoupons() {
                       <CardDescription>{coupon.description}</CardDescription>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={updateMutation.isPending}
+                      onClick={() => updateMutation.mutate({ id: coupon.id, isActive: !coupon.isActive })}
+                      title={coupon.isActive ? 'このコードを無効にする' : 'このコードを有効にする'}
+                    >
+                      {coupon.isActive ? '無効にする' : '有効にする'}
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"

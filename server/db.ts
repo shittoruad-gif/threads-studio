@@ -1049,7 +1049,7 @@ export async function createCoupon(params: {
 
 export async function updateCoupon(id: number, params: {
   code?: string;
-  type?: 'forever_free' | 'trial_30' | 'trial_14';
+  type?: 'forever_free' | 'trial_30' | 'trial_14' | 'discount_50' | 'discount_30' | 'special_price' | 'monitor' | 'monitor_only';
   description?: string;
   maxUses?: number;
   expiresAt?: Date | null;
@@ -1672,8 +1672,8 @@ export async function updateUserPassword(userId: number, passwordHash: string) {
 export async function getAllUsers() {
   const db = await getDb();
   if (!db) return [];
-  
-  return await db.select({
+
+  const userRows = await db.select({
     id: users.id,
     openId: users.openId,
     email: users.email,
@@ -1682,7 +1682,50 @@ export async function getAllUsers() {
     authProvider: users.authProvider,
     createdAt: users.createdAt,
     lastSignedIn: users.lastSignedIn,
+    isMonitor: users.isMonitor,
   }).from(users).orderBy(desc(users.createdAt));
+
+  if (userRows.length === 0) return [];
+
+  // 各ユーザーの最新サブスク（createdAt 降順で先頭を採用）
+  const subRows = await db.select({
+    userId: subscriptions.userId,
+    planId: subscriptions.planId,
+    status: subscriptions.status,
+    trialEndsAt: subscriptions.trialEndsAt,
+  }).from(subscriptions).orderBy(desc(subscriptions.createdAt));
+  const subByUser = new Map<number, { planId: string; status: string; trialEndsAt: Date | null }>();
+  for (const s of subRows) {
+    if (!subByUser.has(s.userId)) {
+      subByUser.set(s.userId, { planId: s.planId, status: s.status, trialEndsAt: s.trialEndsAt ?? null });
+    }
+  }
+
+  // 連携中（有効）Threadsアカウント数
+  const acctRows = await db.select({
+    userId: threadsAccounts.userId,
+    count: sql<number>`count(*)`,
+  }).from(threadsAccounts).where(eq(threadsAccounts.isActive, true)).groupBy(threadsAccounts.userId);
+  const acctByUser = new Map<number, number>();
+  for (const a of acctRows) acctByUser.set(a.userId, Number(a.count));
+
+  return userRows.map((u) => {
+    const sub = subByUser.get(u.id);
+    return {
+      ...u,
+      planId: sub?.planId ?? null,
+      subscriptionStatus: sub?.status ?? null,
+      trialEndsAt: sub?.trialEndsAt ?? null,
+      threadsAccountCount: acctByUser.get(u.id) ?? 0,
+    };
+  });
+}
+
+export async function setUserMonitor(userId: number, isMonitor: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ isMonitor }).where(eq(users.id, userId));
+  return true;
 }
 
 export async function resetUserPassword(userId: number, newPasswordHash: string) {

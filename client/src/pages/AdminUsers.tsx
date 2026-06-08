@@ -8,8 +8,42 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Key, AlertTriangle, Mail, RefreshCw } from 'lucide-react';
+import { Loader2, Key, AlertTriangle, Mail, RefreshCw, Search } from 'lucide-react';
 import { toast } from 'sonner';
+
+// プラン表示名
+const PLAN_LABELS: Record<string, string> = {
+  free: '無料', light: 'ライト', standard: 'スタンダード', pro: 'プロ', premium: 'プレミアム',
+};
+const planLabel = (planId: string | null) => (planId ? (PLAN_LABELS[planId] || planId) : '無料');
+
+// サブスク状態バッジ
+function statusBadge(status: string | null, trialEndsAt: string | Date | null) {
+  if (!status) return { label: '未契約', cls: 'bg-muted text-muted-foreground' };
+  if (status === 'trialing') {
+    let days = '';
+    if (trialEndsAt) {
+      const d = Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86400000);
+      days = d > 0 ? `（残${d}日）` : '（期限切れ）';
+    }
+    return { label: `トライアル中${days}`, cls: 'bg-blue-100 text-blue-800' };
+  }
+  if (status === 'active') return { label: '有効', cls: 'bg-emerald-100 text-emerald-800' };
+  if (status === 'past_due') return { label: '決済失敗', cls: 'bg-amber-100 text-amber-800' };
+  if (status === 'unpaid') return { label: '停止中', cls: 'bg-red-100 text-red-800' };
+  if (status === 'incomplete') return { label: '初回未完了', cls: 'bg-yellow-100 text-yellow-800' };
+  if (status === 'canceled') return { label: '解約済み', cls: 'bg-muted text-muted-foreground' };
+  return { label: status, cls: 'bg-muted text-foreground' };
+}
+
+const relativeDays = (d: string | Date | null) => {
+  if (!d) return '-';
+  const days = Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
+  if (days <= 0) return '今日';
+  if (days === 1) return '昨日';
+  if (days < 30) return `${days}日前`;
+  return `${Math.floor(days / 30)}ヶ月前`;
+};
 
 export default function AdminUsers() {
   const breadcrumbItems = [
@@ -21,8 +55,31 @@ export default function AdminUsers() {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
 
   const { data: users, isLoading, refetch } = trpc.admin.getAllUsers.useQuery();
+  const setMonitorMutation = trpc.admin.setUserMonitor.useMutation({
+    onSuccess: () => { toast.success('モニター設定を更新しました'); refetch(); },
+    onError: (e) => toast.error(e.message ?? '更新に失敗しました'),
+  });
+
+  // 検索（名前・メール・ID）
+  const q = search.trim().toLowerCase();
+  const filteredUsers = (users ?? []).filter((u) =>
+    !q ||
+    (u.name ?? '').toLowerCase().includes(q) ||
+    (u.email ?? '').toLowerCase().includes(q) ||
+    String(u.id).includes(q)
+  );
+
+  // サマリー集計
+  const summary = {
+    total: users?.length ?? 0,
+    paid: (users ?? []).filter((u) => (u as any).planId && (u as any).planId !== 'free' && (u as any).subscriptionStatus === 'active').length,
+    trialing: (users ?? []).filter((u) => (u as any).subscriptionStatus === 'trialing').length,
+    monitors: (users ?? []).filter((u) => (u as any).isMonitor).length,
+    issues: (users ?? []).filter((u) => ['past_due', 'unpaid', 'incomplete'].includes((u as any).subscriptionStatus)).length,
+  };
   const resetPasswordMutation = trpc.admin.resetUserPassword.useMutation({
     onSuccess: () => {
       toast.success('パスワードをリセットしました');
@@ -64,12 +121,39 @@ export default function AdminUsers() {
       {/* 決済失敗ユーザー一覧（最重要なので先頭） */}
       <PaymentIssuesPanel />
 
+      {/* サマリー */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {[
+          { label: '総ユーザー', value: summary.total, cls: 'text-foreground' },
+          { label: '有料（有効）', value: summary.paid, cls: 'text-emerald-600' },
+          { label: 'トライアル中', value: summary.trialing, cls: 'text-blue-600' },
+          { label: 'モニター', value: summary.monitors, cls: 'text-amber-600' },
+          { label: '決済問題', value: summary.issues, cls: 'text-red-600' },
+        ].map((s) => (
+          <Card key={s.label}>
+            <CardContent className="py-4 text-center">
+              <div className={`text-2xl font-bold ${s.cls}`}>{s.value}</div>
+              <div className="text-xs text-muted-foreground mt-1">{s.label}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>ユーザー管理</CardTitle>
           <CardDescription>
-            登録ユーザーの一覧とパスワードリセット
+            登録ユーザーの状況（プラン・状態・モニター・連携・最終ログイン）
           </CardDescription>
+          <div className="relative mt-3 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="名前・メール・IDで検索"
+              className="pl-9"
+            />
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -79,33 +163,51 @@ export default function AdminUsers() {
                 <TableHead>ID</TableHead>
                 <TableHead>名前</TableHead>
                 <TableHead>メールアドレス</TableHead>
-                <TableHead>認証方法</TableHead>
-                <TableHead>権限</TableHead>
+                <TableHead>プラン</TableHead>
+                <TableHead>状態</TableHead>
+                <TableHead>連携</TableHead>
+                <TableHead>モニター</TableHead>
+                <TableHead>最終ログイン</TableHead>
                 <TableHead>登録日</TableHead>
                 <TableHead>操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users?.map((user) => (
+              {filteredUsers.map((user) => {
+                const u = user as any;
+                const sb = statusBadge(u.subscriptionStatus, u.trialEndsAt);
+                return (
                 <TableRow key={user.id}>
                   <TableCell>{user.id}</TableCell>
-                  <TableCell>{user.name || '-'}</TableCell>
-                  <TableCell>{user.email || '-'}</TableCell>
-                  <TableCell>
-                    {user.authProvider === 'email' ? 'メール' : user.authProvider === 'manus' ? 'Manus' : user.authProvider}
-                  </TableCell>
-                  <TableCell>
-                    {user.role === 'admin' ? (
-                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-800">
-                        管理者
-                      </span>
-                    ) : (
-                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-muted text-foreground">
-                        ユーザー
-                      </span>
+                  <TableCell className="max-w-[160px] truncate">
+                    {user.name || '-'}
+                    {user.role === 'admin' && (
+                      <span className="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-indigo-100 text-indigo-800">管理者</span>
                     )}
                   </TableCell>
+                  <TableCell className="max-w-[200px] truncate text-xs">{user.email || '-'}</TableCell>
+                  <TableCell>{planLabel(u.planId)}</TableCell>
                   <TableCell>
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full whitespace-nowrap ${sb.cls}`}>{sb.label}</span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {u.threadsAccountCount > 0
+                      ? <span className="font-medium">{u.threadsAccountCount}</span>
+                      : <span className="text-muted-foreground/50">0</span>}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant={u.isMonitor ? 'default' : 'outline'}
+                      size="sm"
+                      className={u.isMonitor ? 'bg-amber-500 hover:bg-amber-600 text-white h-7 text-xs' : 'h-7 text-xs'}
+                      disabled={setMonitorMutation.isPending}
+                      onClick={() => setMonitorMutation.mutate({ userId: user.id, isMonitor: !u.isMonitor })}
+                    >
+                      {u.isMonitor ? 'モニター' : 'OFF'}
+                    </Button>
+                  </TableCell>
+                  <TableCell className="text-xs whitespace-nowrap">{relativeDays(user.lastSignedIn)}</TableCell>
+                  <TableCell className="text-xs whitespace-nowrap">
                     {user.createdAt ? new Date(user.createdAt).toLocaleDateString('ja-JP') : '-'}
                   </TableCell>
                   <TableCell>
@@ -113,15 +215,17 @@ export default function AdminUsers() {
                       <Button
                         variant="outline"
                         size="sm"
+                        className="h-7 text-xs whitespace-nowrap"
                         onClick={() => openResetDialog(user.id)}
                       >
-                        <Key className="h-4 w-4 mr-1" />
-                        パスワードリセット
+                        <Key className="h-3.5 w-3.5 mr-1" />
+                        PW再設定
                       </Button>
                     )}
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
           </div>

@@ -24,12 +24,27 @@ export function SetupProgress() {
     undefined,
     { enabled: isAuthenticated }
   );
+  const { data: aiHistory } = trpc.project.getAiHistory.useQuery(
+    { limit: 1, offset: 0 },
+    { enabled: isAuthenticated }
+  );
 
   const hasProjects = (projects?.length ?? 0) > 0;
   const hasThreadsAccounts = (threadsAccounts?.length ?? 0) > 0;
+  const hasGenerated = (aiHistory?.total ?? 0) > 0;
   const isAutoPostEnabled = autoPostSettings?.autoPostEnabled ?? false;
   const isDemoMode = demoModeData?.isDemoMode ?? true;
 
+  // 自動投稿カードまでスクロールして注目させる（ダッシュボード内のトグルへ誘導）
+  const scrollToAutoPost = () => {
+    setLocation("/dashboard");
+    setTimeout(() => {
+      const el = document.querySelector('[data-tour="auto-post"]');
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 200);
+  };
+
+  // 正しい順番：連携 → 店舗情報 → 生成 → 自動投稿
   const statusItems: StatusItem[] = [
     {
       id: "account",
@@ -38,27 +53,37 @@ export function SetupProgress() {
     },
     {
       id: "threads",
-      label: "Threads連携",
+      label: "Threadsアカウントを連携",
       completed: hasThreadsAccounts,
       actionLabel: "連携する",
       action: () => setLocation("/threads-connect"),
     },
     {
       id: "project",
-      label: "プロジェクト設定",
+      label: "お店の情報を登録",
       completed: hasProjects,
-      actionLabel: "設定する",
+      actionLabel: "登録する",
       action: () => setLocation("/ai-project-create"),
     },
     {
+      id: "generate",
+      label: "最初の投稿をAIで作成",
+      completed: hasGenerated,
+      actionLabel: "作成する",
+      action: () => setLocation("/ai-generate"),
+    },
+    {
       id: "autopost",
-      label: "自動投稿",
+      label: "自動投稿をONにする",
       completed: isAutoPostEnabled,
-      actionLabel: "ONにする",
-      action: () => setLocation("/dashboard"),
+      actionLabel: "設定する",
+      action: scrollToAutoPost,
       warning: !isAutoPostEnabled && hasProjects && hasThreadsAccounts,
     },
   ];
+
+  // 次にやるべき1ステップ（最初の未完了）
+  const nextStep = statusItems.find((s) => !s.completed && s.action);
 
   const completedCount = statusItems.filter((s) => s.completed).length;
   const totalCount = statusItems.length;
@@ -121,8 +146,8 @@ export function SetupProgress() {
                 <AlertCircle className="w-4 h-4 text-amber-500" />
               </div>
             ) : (
-              <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                <Circle className="w-4 h-4 text-red-400" />
+              <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                <Circle className="w-4 h-4 text-muted-foreground/50" />
               </div>
             )}
 
@@ -146,7 +171,7 @@ export function SetupProgress() {
                 className={`h-7 text-xs px-3 flex-shrink-0 ${
                   item.warning
                     ? "border-amber-300 text-amber-700 hover:bg-amber-50"
-                    : "border-red-200 text-red-600 hover:bg-red-50"
+                    : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
                 }`}
               >
                 {item.actionLabel}
@@ -163,6 +188,19 @@ export function SetupProgress() {
           </div>
         ))}
       </div>
+
+      {/* 次にやること（最重要の1アクションを大きく提示） */}
+      {nextStep && (
+        <div className="px-5 pb-5 pt-1">
+          <Button
+            onClick={nextStep.action}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-11"
+          >
+            次にやること：{nextStep.label}
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }
