@@ -69,6 +69,13 @@ export default function AIGenerate() {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'phone'>('edit');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [introDismissed, setIntroDismissed] = useState(() => {
+    try { return localStorage.getItem('aigen_intro_dismissed') === '1'; } catch { return false; }
+  });
+  const dismissIntro = () => {
+    setIntroDismissed(true);
+    try { localStorage.setItem('aigen_intro_dismissed', '1'); } catch { /* ignore */ }
+  };
   const { selectedAccount, selectedAccountId, accounts: connectedAccounts } = useThreadsAccount();
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const publishNow = trpc.threads.post.useMutation({
@@ -479,11 +486,38 @@ export default function AIGenerate() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* はじめての方へ：3ステップ案内（閉じると再表示なし） */}
+                {!introDismissed && (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        はじめての方へ：3ステップで完成します
+                      </p>
+                      <button
+                        type="button"
+                        onClick={dismissIntro}
+                        aria-label="この案内を閉じる"
+                        className="text-muted-foreground/60 hover:text-foreground shrink-0"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <ol className="mt-2 space-y-1.5 text-sm text-muted-foreground">
+                      <li><span className="font-medium text-primary">①</span> <span className="text-foreground">投稿の目的を選ぶ</span>（迷ったら「予約・LINE登録を増やしたい」でOK）</li>
+                      <li><span className="font-medium text-primary">②</span> <span className="text-foreground">「AI投稿を生成」</span>を押す（細かい設定は不要です）</li>
+                      <li><span className="font-medium text-primary">③</span> 内容を確認して <span className="text-foreground">「今すぐThreadsに投稿」または「予約する」</span></li>
+                    </ol>
+                  </div>
+                )}
                 {/* プリセット選択ボタン */}
                 <div className="p-4 bg-muted rounded-lg">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div className="min-w-0">
-                      <h3 className="font-medium">プリセットから選択</h3>
+                      <h3 className="font-medium flex items-center gap-1.5">
+                        プリセットから選択
+                        <HelpTooltip content="過去に保存した設定や、業種・目的別のおすすめ設定を呼び出して、入力の手間なく生成できます。初めての方は使わなくてもOKです。" />
+                      </h3>
                       <p className="text-sm text-muted-foreground">業種・目的別のテンプレートを使って簡単に生成</p>
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
