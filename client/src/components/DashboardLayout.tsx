@@ -50,12 +50,12 @@ interface MenuItem {
 const mainMenuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
   { icon: Sparkles, label: "AI投稿生成", path: "/ai-generate", badge: "NEW" },
-  { icon: History, label: "AI生成履歴", path: "/ai-history", badgeKey: "ai-history" },
-  { icon: FileText, label: "AI生成テンプレート", path: "/ai-templates" },
+  { icon: History, label: "作成した投稿の履歴", path: "/ai-history", badgeKey: "ai-history" },
+  { icon: FileText, label: "保存したひな形", path: "/ai-templates" },
 ];
 
 const contentMenuItems: MenuItem[] = [
-  { icon: FileText, label: "テンプレート", path: "/templates" },
+  { icon: FileText, label: "投稿テンプレート集", path: "/templates" },
   { icon: FolderOpen, label: "ライブラリ", path: "/library" },
 ];
 

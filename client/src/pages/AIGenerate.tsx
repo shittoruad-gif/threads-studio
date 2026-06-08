@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { ArrowLeft, ArrowRight, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, FileEdit, Smartphone, Send, Link2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, FileEdit, Smartphone, Send, Link2, ChevronDown, Settings2 } from 'lucide-react';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -68,6 +68,7 @@ export default function AIGenerate() {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'phone'>('edit');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const { selectedAccount, selectedAccountId, accounts: connectedAccounts } = useThreadsAccount();
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const publishNow = trpc.threads.post.useMutation({
@@ -536,6 +537,26 @@ export default function AIGenerate() {
                   )}
                 </div>
 
+                {/* 詳細設定トグル（初心者はそのまま生成でOK） */}
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="flex items-center justify-between w-full px-3 py-2.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Settings2 className="h-4 w-4 text-muted-foreground" />
+                    詳細設定（スタイル・返信数・口調）
+                  </span>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+                </button>
+                {!showAdvanced && (
+                  <p className="text-xs text-muted-foreground -mt-1">
+                    そのまま下の「AI投稿を生成」を押せば、目的に合った投稿が作れます。細かく調整したいときだけ開いてください。
+                  </p>
+                )}
+
+                {showAdvanced && (
+                <div className="space-y-4 border-l-2 border-primary/20 pl-3">
                 {/* 投稿のスタイルを選ぶ */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -694,6 +715,8 @@ export default function AIGenerate() {
                     <p className="text-xs text-muted-foreground">{POST_TONES[tone].description}</p>
                   )}
                 </div>
+                </div>
+                )}
 
                 {/* AI使用状況表示 */}
                 {aiUsage && (

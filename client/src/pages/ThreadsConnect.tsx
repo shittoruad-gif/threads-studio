@@ -261,9 +261,9 @@ export default function ThreadsConnect() {
         <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-foreground/80 text-sm">
-            <strong>Threads連携について：</strong> 「Threadsと連携」ボタンをクリックすると、
-            ThreadsのOAuth認証画面に移動します。アカウントを認証すると、
-            自動的にアカウント情報が取得され、投稿機能が利用可能になります。
+            <strong>連携の前に：</strong> スマホのThreads（Instagram）にログインできる状態にしておいてください。
+            下の「Threadsと連携」ボタンを押すとThreadsの画面が開くので、<strong>「許可」を押すだけ</strong>で完了です。
+            連携すると、AIで作った投稿をこのアプリから直接投稿・自動投稿できるようになります。
           </p>
         </div>
       </div>
