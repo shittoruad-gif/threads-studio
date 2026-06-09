@@ -432,8 +432,27 @@ export default function ThreadsConnect() {
         {accounts?.length === 0 && (
           <div className="bg-background border border-border border-dashed rounded-xl p-10 text-center">
             <Link2 className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
-            <p className="text-muted-foreground mb-2">まだアカウントが連携されていません</p>
-            <p className="text-muted-foreground/60 text-sm">下のボタンからThreadsアカウントを連携してください</p>
+            <p className="text-foreground font-medium mb-1">まだThreadsアカウントが連携されていません</p>
+            <p className="text-muted-foreground/70 text-sm mb-5">
+              連携すると、AIで作った投稿をこのアプリから直接投稿・自動投稿できます。
+            </p>
+            {maxAccounts > 0 ? (
+              <Button
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-6"
+                onClick={handleAddDifferentAccountClick}
+                disabled={handleCallback.isPending || !authUrlData}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Threadsと連携する
+              </Button>
+            ) : (
+              <Button
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-6"
+                onClick={() => setLocation('/pricing')}
+              >
+                プランを選んで連携を始める
+              </Button>
+            )}
           </div>
         )}
       </div>

@@ -1216,6 +1216,7 @@ export default function AIGenerate() {
                         )}
                       </Button>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1">Threadsで最初に表示される一番大事な投稿です。ここで興味を引きます。</p>
                   </CardHeader>
                   <CardContent>
                     <TextareaWithEmoji
@@ -1248,6 +1249,7 @@ export default function AIGenerate() {
                           )}
                         </Button>
                       </div>
+                      <p className="text-xs text-muted-foreground mt-1">メイン投稿への返信としてぶら下がる補足です。詳しい説明や続きを書きます。</p>
                     </CardHeader>
                     <CardContent>
                       <TextareaWithEmoji
@@ -1268,6 +1270,7 @@ export default function AIGenerate() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base">最後のひと押し（予約・問い合わせの案内）</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">読者にしてほしい行動（予約・LINE登録・問い合わせ）を促す締めの一文です。</p>
                   </CardHeader>
                   <CardContent>
                     <TextareaWithEmoji
@@ -1387,9 +1390,11 @@ export default function AIGenerate() {
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <Sparkles className="h-12 w-12 text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">
-                    投稿タイプを選択して「AI投稿を生成」ボタンをクリックしてください
+                  <Sparkles className="h-12 w-12 text-primary/40 mb-4" />
+                  <p className="text-foreground font-medium mb-1">ここに投稿の下書きが表示されます</p>
+                  <p className="text-sm text-muted-foreground max-w-xs">
+                    左の「投稿の目的を選ぶ」から目的を選んで、<br />
+                    「AI投稿を生成」を押すとAIが下書きを作ります。
                   </p>
                 </CardContent>
               </Card>
