@@ -76,9 +76,10 @@ export default function AIGenerate() {
     setIntroDismissed(true);
     try { localStorage.setItem('aigen_intro_dismissed', '1'); } catch { /* ignore */ }
   };
-  // 3案生成：候補と生成中フラグ
+  // 生成：候補（3案）と生成中フラグ（1案 / 3案）
   const [candidates, setCandidates] = useState<(GeneratedPost & { _postType?: PostType })[] | null>(null);
   const [isGeneratingOptions, setIsGeneratingOptions] = useState(false);
+  const [isGeneratingSingle, setIsGeneratingSingle] = useState(false);
   const { selectedAccount, selectedAccountId, accounts: connectedAccounts } = useThreadsAccount();
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const publishNow = trpc.threads.post.useMutation({
@@ -389,8 +390,37 @@ export default function AIGenerate() {
     return uniq.slice(0, 3);
   };
 
+  // 通常：1案だけ生成してそのまま編集画面へ
+  const handleGenerateSingle = async () => {
+    if (!projectId || isGeneratingSingle || isGeneratingOptions) return;
+    setGenerationError(null);
+    setCandidates(null);
+    setGeneratedPost(null);
+    setEditedPost(null);
+    setIsGeneratingSingle(true);
+    try {
+      const data = await generateMutation.mutateAsync({
+        projectId,
+        postType,
+        treeCount: postType === 'pinned' ? 0 : treeCount,
+        trendWord: postType === 'trend' ? trendWord : undefined,
+        purpose: purpose || undefined,
+        tone: tone || undefined,
+      });
+      setGeneratedPost(data as GeneratedPost);
+      setEditedPost(data as GeneratedPost);
+      utils.subscription.getAiUsage.invalidate();
+      triggerCelebration('first-generation');
+    } catch (e: any) {
+      setGenerationError(e?.message || 'AI生成に失敗しました。時間をおいて再度お試しください。');
+      toast.error('AI生成に失敗しました');
+    } finally {
+      setIsGeneratingSingle(false);
+    }
+  };
+
   const handleGenerate = async () => {
-    if (!projectId || isGeneratingOptions) return;
+    if (!projectId || isGeneratingOptions || isGeneratingSingle) return;
     setGenerationError(null);
     setCandidates(null);
     setGeneratedPost(null);
@@ -827,26 +857,40 @@ export default function AIGenerate() {
                   </div>
                 )}
 
-                <Button
-                  onClick={handleGenerate}
-                  disabled={isGeneratingOptions || (aiUsage?.limit !== null && aiUsage?.limit !== undefined && aiUsage?.limit !== -1 && (aiUsage?.count ?? 0) >= aiUsage.limit)}
-                  className="w-full h-12 text-base"
-                >
-                  {isGeneratingOptions ? (
+                {(() => {
+                  const quotaReached = aiUsage?.limit !== null && aiUsage?.limit !== undefined && aiUsage?.limit !== -1 && (aiUsage?.count ?? 0) >= aiUsage.limit;
+                  const busy = isGeneratingSingle || isGeneratingOptions;
+                  return (
                     <>
-                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                      3案を生成中...
+                      <Button
+                        onClick={handleGenerateSingle}
+                        disabled={busy || quotaReached}
+                        className="w-full h-12 text-base"
+                      >
+                        {isGeneratingSingle ? (
+                          <><Loader2 className="h-5 w-5 mr-2 animate-spin" />生成中...</>
+                        ) : (
+                          <><Sparkles className="h-5 w-5 mr-2" />AI投稿を生成</>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleGenerate}
+                        disabled={busy || quotaReached}
+                        className="w-full h-11"
+                      >
+                        {isGeneratingOptions ? (
+                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" />3案を生成中...</>
+                        ) : (
+                          <>3案から選んで作る（AI生成3回分）</>
+                        )}
+                      </Button>
+                      <p className="text-xs text-muted-foreground text-center">
+                        まず1案だけ作ります。いろいろ見比べたいときは「3案から選んで作る」を押してください。
+                      </p>
                     </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-5 w-5 mr-2" />
-                      AI投稿を生成（3案）
-                    </>
-                  )}
-                </Button>
-                <p className="text-xs text-muted-foreground text-center">
-                  切り口の違う3案を作ります。気に入った1案を選んで投稿できます（AI生成3回分を使用）。
-                </p>
+                  );
+                })()}
 
                 {/* AI Generation Error Guide */}
                 {generationError && (
@@ -1472,11 +1516,11 @@ export default function AIGenerate() {
                   別の3案を作り直す
                 </Button>
               </div>
-            ) : isGeneratingOptions ? (
+            ) : (isGeneratingOptions || isGeneratingSingle) ? (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                   <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
-                  <p className="text-foreground font-medium mb-1">3案を生成しています…</p>
+                  <p className="text-foreground font-medium mb-1">{isGeneratingOptions ? '3案を生成しています…' : '投稿を生成しています…'}</p>
                   <p className="text-sm text-muted-foreground">少しお待ちください（10〜30秒ほど）</p>
                 </CardContent>
               </Card>
@@ -1487,7 +1531,7 @@ export default function AIGenerate() {
                   <p className="text-foreground font-medium mb-1">ここに投稿の下書きが表示されます</p>
                   <p className="text-sm text-muted-foreground max-w-xs">
                     左の「投稿の目的を選ぶ」から目的を選んで、<br />
-                    「AI投稿を生成（3案）」を押すとAIが3案つくります。
+                    「AI投稿を生成」を押すと下書きができます。
                   </p>
                 </CardContent>
               </Card>
