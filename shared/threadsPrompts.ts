@@ -1048,7 +1048,7 @@ ${safe.belief ? `- 主張・信念：${safe.belief}（投稿に一貫してに�
 ${safe.catchphrase ? `- 口癖・方言・決めゼリフ：${safe.catchphrase}（文体に自然に混ぜてキャラ付けする。毎回・不自然に多用はしない）` : ''}
 ${safe.customerWords ? `- お客さんが実際に使った言葉：${safe.customerWords}（★最優先。この生の言葉をそのまま投稿に1〜2個使う。専門用語より優先）` : ''}
 ${safe.proof ? `- 実績/証拠：${safe.proof}` : ''}
-${safe.link ? `- 誘導先：${safe.link}` : ''}
+${safe.link ? `- 誘導先：登録あり（★本文にURLは貼らず、「プロフィールのリンクから」「固定投稿にまとめています」の間接誘導にすること）` : ''}
 ${safe.trendWord ? `- トレンドワード：${safe.trendWord}` : ''}
 ${formatLinksForPrompt(input.links, input.postType)}
 
@@ -1082,13 +1082,14 @@ ${treeCount === 0 ? 'ツリーは使わず、本文のみで完結させてく�
  */
 function formatLinksForPrompt(links: ProjectLinkLite[] | undefined, postType: PostType | undefined): string {
   if (!links || links.length === 0) return '';
-  const lines: string[] = ['', '【登録済みURL一覧】'];
+  const lines: string[] = ['', '【登録済みの誘導先（チャネル）】'];
   for (const l of links) {
     const typeLabel = ({
       line: 'LINE公式', reservation: 'Web予約', website: '公式HP',
       instagram: 'Instagram', youtube: 'YouTube', other: 'その他',
     } as const)[l.type];
-    lines.push(`- [${typeLabel}] ${l.label}: ${l.url}`);
+    // ★URL文字列は渡さない（本文へのURL混入を防ぐ）。チャネル名とラベルのみ。
+    lines.push(`- ${typeLabel}（${l.label}）`);
   }
 
   // Per-type usage rule
@@ -1096,28 +1097,17 @@ function formatLinksForPrompt(links: ProjectLinkLite[] | undefined, postType: Po
   const reservationPref = links.find(l => l.type === 'reservation');
   const websitePref = links.find(l => l.type === 'website');
 
-  lines.push('', '【URL利用ルール（必須）】');
+  // メインの誘導チャネル（LINE優先→Web予約→公式HP→先頭）
+  const cvChannel = linePref ? 'LINE' : reservationPref ? 'Web予約' : websitePref ? '公式HP'
+    : ({ line: 'LINE', reservation: 'Web予約', website: '公式HP', instagram: 'Instagram', youtube: 'YouTube', other: '登録先' } as const)[links[0].type];
+
+  // ★方針A（教科書準拠）：本文・CTAに生URLは一切貼らず、プロフィール／固定投稿への間接誘導に統一する。
+  lines.push('', '【誘導ルール（必須・教科書準拠）】');
+  lines.push('- 投稿本文・CTA・ツリーのどこにも、生のURL（https://… 等）を絶対に貼らないこと。Threadsでは本文URLで到達が落ちるため。');
+  lines.push(`- 主な誘導先は「${cvChannel}」。誘導は必ず「プロフィールのリンクから${cvChannel}へ」「固定投稿にまとめています」のような間接表現にする。`);
+  lines.push(`- CTAには ${cvChannel} に進む"理由"（特典・得られるもの）をセットで書く。ただし特典はカウンセリング/入力にあるものだけ。無ければ「気軽にご相談ください」程度に留める。`);
   if (postType === 'pinned') {
-    // 固定投稿: always embed LINE / reservation
-    if (linePref) {
-      lines.push(`- mainPostの末尾に必ず ${linePref.url} を貼ること。「↓LINE登録はこちら」など導線文も添える。`);
-    } else if (reservationPref) {
-      lines.push(`- mainPostの末尾に必ず ${reservationPref.url} を貼ること。「↓ご予約はこちら」など導線文も添える。`);
-    } else if (websitePref) {
-      lines.push(`- mainPostの末尾に ${websitePref.url} を貼り、詳細はWebでと案内すること。`);
-    }
-  } else if (postType === 'offer') {
-    // オファー: LINE / reservation in tree (not 1段目)
-    if (linePref) {
-      lines.push(`- 最終ツリー投稿（あれば）の末尾に ${linePref.url} を貼ること。1段目には絶対に貼らない。`);
-      lines.push('- 「迷う人向けに ○○ をLINEで配ってます」のように理由付きで誘導する。');
-    } else if (reservationPref) {
-      lines.push(`- 最終ツリー投稿（あれば）の末尾に ${reservationPref.url} を貼ること。1段目には絶対に貼らない。`);
-    }
-  } else {
-    // それ以外: URL直貼りせずプロフィール/固定投稿誘導
-    lines.push('- 投稿本文にURLを直接貼らない（インプが下がる）。');
-    lines.push('- 代わりに「プロフィールの固定投稿にまとめてます」「プロフからLINEへどうぞ」のように誘導する。');
+    lines.push('- 固定投稿でも本文にURLは貼らない。「プロフィールのリンクから」へ誘導する（リンクはユーザーがプロフィール欄に設定する前提）。');
   }
   lines.push('');
   return lines.join('\n');
