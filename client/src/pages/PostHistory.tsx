@@ -12,6 +12,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Calendar, CheckCircle2, CheckSquare, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, Square, Trash2 } from "lucide-react";
 import { useLocation } from "wouter";
@@ -19,7 +27,7 @@ import { toast } from "sonner";
 
 const ITEMS_PER_PAGE = 20;
 
-type StatusFilter = "all" | "pending" | "posted" | "failed" | "canceled";
+type StatusFilter = "all" | "awaiting_approval" | "pending" | "posted" | "failed" | "canceled";
 
 export default function PostHistory() {
   const [, setLocation] = useLocation();
@@ -28,7 +36,7 @@ export default function PostHistory() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
     try {
       const s = new URLSearchParams(window.location.search).get('status');
-      if (s === 'pending' || s === 'posted' || s === 'failed' || s === 'canceled') return s;
+      if (s === 'awaiting_approval' || s === 'pending' || s === 'posted' || s === 'failed' || s === 'canceled') return s;
     } catch { /* ignore */ }
     return "all";
   });
@@ -36,6 +44,8 @@ export default function PostHistory() {
   const [bulkCanceling, setBulkCanceling] = useState(false);
   // ID of the post pending delete confirmation. null = no dialog shown.
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  // 承認待ち投稿の編集用（id と編集中の本文）
+  const [editTarget, setEditTarget] = useState<{ id: number; content: string } | null>(null);
 
   const { data: scheduledPosts, isLoading, refetch } = trpc.scheduledPost.list.useQuery();
   const cancelPost = trpc.scheduledPost.cancel.useMutation({
@@ -67,9 +77,33 @@ export default function PostHistory() {
       setDeleteTargetId(null);
     },
   });
+  const approvePost = trpc.scheduledPost.approve.useMutation({
+    onSuccess: () => {
+      toast.success('承認しました。まもなく投稿されます');
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+  const editPost = trpc.scheduledPost.editContent.useMutation({
+    onSuccess: () => {
+      toast.success('内容を更新しました');
+      setEditTarget(null);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'awaiting_approval':
+        return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+          <Clock className="w-3 h-3 mr-1" />
+          承認待ち
+        </Badge>;
       case 'pending':
         return <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200">
           <Clock className="w-3 h-3 mr-1" />
@@ -179,6 +213,7 @@ export default function PostHistory() {
 
   const statusFilters: { value: StatusFilter; label: string; count: number }[] = [
     { value: "all", label: "すべて", count: scheduledPosts?.length || 0 },
+    { value: "awaiting_approval", label: "承認待ち", count: scheduledPosts?.filter((p) => p.status === "awaiting_approval").length || 0 },
     { value: "pending", label: "予約中", count: scheduledPosts?.filter((p) => p.status === "pending").length || 0 },
     { value: "posted", label: "投稿済み", count: scheduledPosts?.filter((p) => p.status === "posted").length || 0 },
     { value: "failed", label: "失敗", count: scheduledPosts?.filter((p) => p.status === "failed").length || 0 },
@@ -316,6 +351,27 @@ export default function PostHistory() {
                           </div>
 
                           <div className="flex flex-col gap-1">
+                          {post.status === 'awaiting_approval' && (
+                            <>
+                              <Button
+                                size="sm"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                onClick={() => approvePost.mutate({ postId: post.id })}
+                                disabled={approvePost.isPending}
+                              >
+                                <CheckCircle2 className="w-3 h-3 mr-1" />
+                                承認して投稿
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="glass hover-lift"
+                                onClick={() => setEditTarget({ id: post.id, content: post.postContent || '' })}
+                              >
+                                編集
+                              </Button>
+                            </>
+                          )}
                           {post.status === 'pending' && (
                             <Button
                               variant="outline"
@@ -468,6 +524,39 @@ export default function PostHistory() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 承認待ち投稿の内容編集ダイアログ */}
+      <Dialog open={editTarget !== null} onOpenChange={(open) => !open && setEditTarget(null)}>
+        <DialogContent className="bg-background border border-border">
+          <DialogHeader>
+            <DialogTitle>投稿内容を編集</DialogTitle>
+            <DialogDescription>
+              承認前に内容を修正できます。修正後、「承認して投稿」で公開されます。
+            </DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={editTarget?.content ?? ''}
+            onChange={(e) => setEditTarget((prev) => prev && { ...prev, content: e.target.value })}
+            rows={8}
+            className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground text-sm whitespace-pre-wrap"
+          />
+          <p className="text-xs text-muted-foreground text-right">
+            {Array.from(editTarget?.content ?? '').length} 文字
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditTarget(null)}>キャンセル</Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={editPost.isPending || !editTarget?.content?.trim()}
+              onClick={() => {
+                if (editTarget) editPost.mutate({ postId: editTarget.id, postContent: editTarget.content });
+              }}
+            >
+              {editPost.isPending ? '保存中...' : '保存'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

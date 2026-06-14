@@ -232,6 +232,31 @@ export default function Dashboard() {
           />
         )}
 
+        {/* 承認待ちの自動投稿があれば通知（承認モードON時） */}
+        {(() => {
+          const awaitingCount = scheduledPosts?.filter((p) => p.status === 'awaiting_approval').length || 0;
+          if (awaitingCount === 0) return null;
+          return (
+            <div className="mb-6 flex items-center justify-between gap-3 bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-amber-800">
+                  ✋ 承認待ちの自動投稿が {awaitingCount} 件あります
+                </p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  内容を確認して承認すると公開されます
+                </p>
+              </div>
+              <Button
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
+                onClick={() => setLocation('/post-history?status=awaiting_approval')}
+              >
+                確認する
+              </Button>
+            </div>
+          );
+        })()}
+
         {/* Pinned post recommendation (auto-hides once user creates one) */}
         <PinnedPostRecommendation />
 

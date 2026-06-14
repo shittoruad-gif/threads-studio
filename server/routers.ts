@@ -1812,6 +1812,44 @@ ${input.commentText}
         return { success: true };
       }),
 
+    // Approve an auto-generated post that is awaiting approval.
+    // 承認すると status を pending にし、次回の投稿実行で公開される。
+    // 公開時刻が既に過ぎていれば直近の実行タイミングで投稿される。
+    approve: protectedProcedure
+      .input(z.object({ postId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const post = await db.getScheduledPostById(input.postId);
+        if (!post || post.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Post not found' });
+        }
+        if (post.status !== 'awaiting_approval') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'この投稿は承認待ちではありません。' });
+        }
+        // 予約時刻が過去なら、すぐ投稿対象になるよう現在時刻に寄せる
+        const now = new Date();
+        const scheduledAt = post.scheduledAt && new Date(post.scheduledAt) > now ? undefined : now;
+        await db.updateScheduledPost(input.postId, {
+          status: 'pending',
+          ...(scheduledAt ? { scheduledAt } : {}),
+        });
+        return { success: true };
+      }),
+
+    // Edit the content of a post that is awaiting approval (then it can be approved).
+    editContent: protectedProcedure
+      .input(z.object({ postId: z.number(), postContent: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        const post = await db.getScheduledPostById(input.postId);
+        if (!post || post.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Post not found' });
+        }
+        if (post.status !== 'awaiting_approval' && post.status !== 'pending') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'この投稿は編集できません。' });
+        }
+        await db.updateScheduledPost(input.postId, { postContent: input.postContent });
+        return { success: true };
+      }),
+
     // Retry failed post - reschedule it for 5 minutes from now
     retry: protectedProcedure
       .input(z.object({ postId: z.number() }))
@@ -2855,13 +2893,14 @@ ${input.commentText}
   autoPost: router({
     getSettings: protectedProcedure.query(async ({ ctx }) => {
       const settings = await db.getAutoPostSettings(ctx.user.id);
-      return settings || { autoPostEnabled: true, autoPostFrequency: 'daily' };
+      return settings || { autoPostEnabled: true, autoPostFrequency: 'daily', autoPostRequireApproval: false };
     }),
 
     updateSettings: protectedProcedure
       .input(z.object({
         autoPostEnabled: z.boolean().optional(),
         autoPostFrequency: z.enum(['daily', 'twice_daily', 'three_daily']).optional(),
+        autoPostRequireApproval: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         await db.updateAutoPostSettings(ctx.user.id, input);

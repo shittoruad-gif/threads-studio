@@ -29,6 +29,8 @@ export const users = mysqlTable("users", {
   // Auto-post settings
   autoPostEnabled: boolean("autoPostEnabled").default(true).notNull(),
   autoPostFrequency: mysqlEnum("autoPostFrequency", ["daily", "twice_daily", "three_daily"]).default("daily").notNull(),
+  // 自動投稿を「公開前承認」にする（ON: awaiting_approval で作成し、ユーザー承認後に投稿）
+  autoPostRequireApproval: boolean("autoPostRequireApproval").default(false).notNull(),
   // Last auto-post type index (for rotation)
   lastAutoPostTypeIndex: int("lastAutoPostTypeIndex").default(0).notNull(),
   lastAutoPurposeIndex: int("lastAutoPurposeIndex").default(0).notNull(),
@@ -178,7 +180,7 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   projectId: varchar("projectId", { length: 50 }).notNull().references(() => projects.id, { onDelete: "cascade" }),
   threadsAccountId: int("threadsAccountId").notNull().references(() => threadsAccounts.id, { onDelete: "cascade" }),
   scheduledAt: timestamp("scheduledAt").notNull(),
-  status: mysqlEnum("status", ["pending", "processing", "posted", "failed", "canceled"]).default("pending").notNull(),
+  status: mysqlEnum("status", ["pending", "processing", "posted", "failed", "canceled", "awaiting_approval"]).default("pending").notNull(),
   postedAt: timestamp("postedAt"),
   errorMessage: text("errorMessage"),
   // Store the post content snapshot at scheduling time

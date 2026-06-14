@@ -82,6 +82,7 @@ async function generateAutoPost(
   purposeIndex: number,
   threadsAccountId: number,
   postingTimeIndex: number,
+  requireApproval: boolean = false,
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
   const purpose = PURPOSES[purposeIndex % PURPOSES.length];
@@ -194,6 +195,8 @@ async function generateAutoPost(
       threadsAccountId,
       scheduledAt,
       postContent: fullContent,
+      // ★承認モードON時は awaiting_approval で作成し、ユーザーが承認するまで投稿しない
+      status: requireApproval ? 'awaiting_approval' : 'pending',
     });
 
     // Increment AI generation usage
@@ -309,6 +312,7 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
               purposeIdx,
               account.id,
               i,
+              user.autoPostRequireApproval ?? false,
             );
 
             if (success) {

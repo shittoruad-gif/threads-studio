@@ -2089,6 +2089,7 @@ export async function getAutoPostEligibleUsers() {
     .select({
       id: users.id,
       autoPostFrequency: users.autoPostFrequency,
+      autoPostRequireApproval: users.autoPostRequireApproval,
       lastAutoPostTypeIndex: users.lastAutoPostTypeIndex,
       lastAutoPurposeIndex: users.lastAutoPurposeIndex,
     })
@@ -2164,6 +2165,7 @@ export async function getAutoPostSettings(userId: number) {
     .select({
       autoPostEnabled: users.autoPostEnabled,
       autoPostFrequency: users.autoPostFrequency,
+      autoPostRequireApproval: users.autoPostRequireApproval,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -2175,7 +2177,7 @@ export async function getAutoPostSettings(userId: number) {
 /**
  * Update user's auto-post settings
  */
-export async function updateAutoPostSettings(userId: number, settings: { autoPostEnabled?: boolean; autoPostFrequency?: "daily" | "twice_daily" | "three_daily" }) {
+export async function updateAutoPostSettings(userId: number, settings: { autoPostEnabled?: boolean; autoPostFrequency?: "daily" | "twice_daily" | "three_daily"; autoPostRequireApproval?: boolean }) {
   const database = await getDb();
   if (!database) return;
 

@@ -164,6 +164,22 @@ export default function Settings() {
                 />
               </div>
 
+              {/* 公開前の承認モード */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium text-foreground">公開前に承認する</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    ONにすると、自動生成された投稿は「承認待ち」として保存され、<br className="hidden sm:inline" />
+                    あなたが内容を確認・承認するまで公開されません
+                  </p>
+                </div>
+                <Switch
+                  checked={autoPostSettings?.autoPostRequireApproval ?? false}
+                  onCheckedChange={(v) => updateAutoPost.mutate({ autoPostRequireApproval: v })}
+                  disabled={updateAutoPost.isPending}
+                />
+              </div>
+
               {/* Frequency selection */}
               <div>
                 <Label className="text-sm font-medium text-foreground mb-2 block">
