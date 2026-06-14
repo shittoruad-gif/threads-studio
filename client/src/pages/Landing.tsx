@@ -10,7 +10,6 @@ import {
   Users, 
   CheckCircle2,
   ArrowRight,
-  MessageSquare,
   Calendar,
   BarChart3,
   FileText,
@@ -27,7 +26,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
-import { useCountUp } from "@/hooks/useCountUp";
 import { useState, useEffect, useCallback } from "react";
 
 /* ─── Demo Steps Data ─── */
@@ -297,43 +295,6 @@ function VideoDemoSection() {
 }
 
 /* ─── Stats Section ─── */
-function StatsSection() {
-  const { ref, isVisible } = useScrollAnimation({ threshold: 0.3 });
-  const stats = [
-    { icon: <Users className="w-7 h-7" />, value: 1200, suffix: "+", label: "利用店舗数" },
-    { icon: <MessageSquare className="w-7 h-7" />, value: 50000, suffix: "+", label: "月間投稿数" },
-    { icon: <TrendingUp className="w-7 h-7" />, value: 98, suffix: "%", label: "満足度" },
-    { icon: <Clock className="w-7 h-7" />, value: 90, suffix: "%", label: "時間削減" }
-  ];
-
-  return (
-    <section ref={ref} className="py-16 px-4 bg-white border-y border-border">
-      <div className="container mx-auto">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          {stats.map((stat, index) => (
-            <StatCard key={index} stat={stat} isVisible={isVisible} delay={index * 100} />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function StatCard({ stat, isVisible, delay }: { stat: any; isVisible: boolean; delay: number }) {
-  const count = useCountUp({ end: stat.value, isVisible, duration: 2000 });
-  return (
-    <div className={`text-center fade-in-up`} style={{ transitionDelay: `${delay}ms` }}>
-      <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 text-primary mb-3">
-        {stat.icon}
-      </div>
-      <div className="text-3xl md:text-4xl font-bold text-primary mb-1">
-        {isVisible ? count.toLocaleString() : 0}{stat.suffix}
-      </div>
-      <div className="text-muted-foreground text-sm">{stat.label}</div>
-    </div>
-  );
-}
-
 /* ─── FAQ Item ─── */
 function FAQItem({ question, answer }: { question: string; answer: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -449,6 +410,11 @@ export default function Landing() {
             <Link href="/pricing">
               <Button variant="outline" size="sm">料金プラン</Button>
             </Link>
+            {!isAuthenticated && (
+              <Link href="/login">
+                <Button variant="ghost" size="sm">ログイン</Button>
+              </Link>
+            )}
             <Button size="sm" onClick={handleSignupClick} disabled={loading}>
               <Sparkles className="w-4 h-4 mr-1" />
               {loading ? "読み込み中..." : isAuthenticated ? "ダッシュボードへ" : "無料で始める"}
@@ -466,7 +432,14 @@ export default function Landing() {
               <a href="#reasons" onClick={() => setMobileMenuOpen(false)} className="text-sm py-2 hover:text-primary transition-colors">選ばれる理由</a>
               <Link href="/guide"><span onClick={() => setMobileMenuOpen(false)} className="text-sm py-2 block hover:text-primary transition-colors">使い方</span></Link>
               <Link href="/pricing"><span onClick={() => setMobileMenuOpen(false)} className="text-sm py-2 block hover:text-primary transition-colors">料金プラン</span></Link>
-              <div className="pt-2 border-t border-border">
+              <div className="pt-2 border-t border-border space-y-2">
+                {!isAuthenticated && (
+                  <Link href="/login">
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => setMobileMenuOpen(false)}>
+                      ログイン
+                    </Button>
+                  </Link>
+                )}
                 <Button size="sm" className="w-full" onClick={() => { setMobileMenuOpen(false); handleSignupClick(); }} disabled={loading}>
                   <Sparkles className="w-4 h-4 mr-1" />
                   {loading ? "読み込み中..." : isAuthenticated ? "ダッシュボードへ" : "無料で始める"}
@@ -513,9 +486,6 @@ export default function Landing() {
         </div>
 
       </section>
-
-      {/* ─── Stats ─── */}
-      <StatsSection />
 
       {/* ─── PROBLEM Section ─── */}
       <section className="py-24 px-4 bg-muted/30">
