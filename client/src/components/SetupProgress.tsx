@@ -28,10 +28,26 @@ export function SetupProgress() {
     { limit: 1, offset: 0 },
     { enabled: isAuthenticated }
   );
+  // 教科書の流れ：集客の入口である「固定投稿」を最初に作る
+  const { data: pinnedData } = trpc.project.hasPinnedPost.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
 
   const hasProjects = (projects?.length ?? 0) > 0;
   const hasThreadsAccounts = (threadsAccounts?.length ?? 0) > 0;
   const hasGenerated = (aiHistory?.total ?? 0) > 0;
+  const hasPinnedPost = pinnedData?.hasPinnedPost ?? false;
+  void hasGenerated;
+
+  // 固定投稿の生成画面へ。プロジェクト未登録なら先に店舗情報登録へ誘導。
+  const goCreatePinned = () => {
+    const firstProject = projects?.[0];
+    if (firstProject) {
+      window.location.href = `/ai-generate?project=${firstProject.id}&postType=pinned`;
+    } else {
+      setLocation("/ai-project-create");
+    }
+  };
   const isAutoPostEnabled = autoPostSettings?.autoPostEnabled ?? false;
   const isDemoMode = demoModeData?.isDemoMode ?? true;
 
@@ -44,7 +60,7 @@ export function SetupProgress() {
     }, 200);
   };
 
-  // 正しい順番：連携 → 店舗情報 → 生成 → 自動投稿
+  // 正しい順番：連携 → 店舗情報 → 固定投稿 → 自動投稿
   const statusItems: StatusItem[] = [
     {
       id: "account",
@@ -66,11 +82,11 @@ export function SetupProgress() {
       action: () => setLocation("/ai-project-create"),
     },
     {
-      id: "generate",
-      label: "最初の投稿をAIで作成",
-      completed: hasGenerated,
+      id: "pinned",
+      label: "固定投稿をAIで作成（集客の入口）",
+      completed: hasPinnedPost,
       actionLabel: "作成する",
-      action: () => setLocation("/ai-generate"),
+      action: goCreatePinned,
     },
     {
       id: "autopost",
