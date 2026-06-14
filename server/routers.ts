@@ -1273,7 +1273,13 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
   threads: router({
     // List connected accounts
     list: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getThreadsAccountsByUserId(ctx.user.id);
+      const accounts = await db.getThreadsAccountsByUserId(ctx.user.id);
+      // ★アクセストークンはクライアントに渡さない（トークン露出対策 / 欠点#6）。
+      //   投稿等はサーバー側でトークンを取得して使うため、フロントには不要。
+      return accounts.map(({ accessToken, ...safe }) => {
+        void accessToken;
+        return safe;
+      });
     }),
 
     // Get OAuth authorization URL
@@ -2126,6 +2132,29 @@ ${input.commentText}
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'キャンペーンプランからの変更・キャンペーンプランへの変更は、現在のプランを解約のうえ、料金プランから希望プランに新規お申し込みください。',
+          });
+        }
+
+        // ★#3 ダウングレードで現在の利用量が新プラン上限を超える場合は、
+        //   データを壊さずに「先に整理してください」とブロックする（grandfatheredによる
+        //   「作れないのに残っている」混乱や、上限超過での運用を防ぐ）。
+        const overLimits: string[] = [];
+        if (newPlan.features.maxProjects !== -1) {
+          const projectCount = await db.countUserProjects(ctx.user.id);
+          if (projectCount > newPlan.features.maxProjects) {
+            overLimits.push(`プロジェクトを ${projectCount} → ${newPlan.features.maxProjects} 件以下に`);
+          }
+        }
+        if (newPlan.features.maxThreadsAccounts !== -1) {
+          const activeAccounts = await db.getThreadsAccountsByUserId(ctx.user.id);
+          if (activeAccounts.length > newPlan.features.maxThreadsAccounts) {
+            overLimits.push(`連携アカウントを ${activeAccounts.length} → ${newPlan.features.maxThreadsAccounts} 件以下に`);
+          }
+        }
+        if (overLimits.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `このプランに変更するには、先に${overLimits.join('、')}減らしてください。`,
           });
         }
 

@@ -153,6 +153,24 @@ export function splitThreadSegments(content: string): string[] {
  * 先頭=ルート投稿、以降=直前の投稿への返信、という本物のスレッドを作る。
  * segments が1件なら単一投稿と同じ。
  */
+/**
+ * 連続投稿(ツリー)の途中で失敗したことを表すエラー。
+ * ルート投稿は公開済みなので、呼び出し側はこれを見て「投稿済み（一部欠け）」と扱い、
+ * 再試行でルートを二重投稿しないようにする（冪等性の確保 / 欠点#5対策）。
+ */
+export class PartialThreadError extends Error {
+  rootId: string;
+  publishedReplyIds: string[];
+  failedAtIndex: number;
+  constructor(message: string, rootId: string, publishedReplyIds: string[], failedAtIndex: number) {
+    super(message);
+    this.name = 'PartialThreadError';
+    this.rootId = rootId;
+    this.publishedReplyIds = publishedReplyIds;
+    this.failedAtIndex = failedAtIndex;
+  }
+}
+
 export async function createAndPublishThread(
   base: { accessToken: string; threadsUserId: string },
   segments: string[],
@@ -160,7 +178,7 @@ export async function createAndPublishThread(
   const clean = segments.map((s) => (s || '').trim()).filter(Boolean);
   if (clean.length === 0) throw new Error('No content to post');
 
-  // ルート投稿
+  // ルート投稿（失敗時は何も公開されていないので通常エラー＝再試行可能）
   const root = await createAndPublishPost({
     accessToken: base.accessToken,
     threadsUserId: base.threadsUserId,
@@ -168,21 +186,31 @@ export async function createAndPublishThread(
     mediaType: 'TEXT',
   });
 
+  // ルート投稿後に失敗した場合は PartialThreadError を投げる（再試行で二重投稿しない）
   const replyIds: string[] = [];
   let prevId = root.id;
   for (let i = 1; i < clean.length; i++) {
-    // 直前の公開が反映されるまで少し待つ（順序保証・レート回避）
-    await new Promise((r) => setTimeout(r, 1500));
-    const container = await createMediaContainer({
-      accessToken: base.accessToken,
-      threadsUserId: base.threadsUserId,
-      text: clean[i],
-      mediaType: 'TEXT',
-      replyToId: prevId,
-    });
-    const published = await publishMediaContainer(base.threadsUserId, container.id, base.accessToken);
-    replyIds.push(published.id);
-    prevId = published.id;
+    try {
+      // 直前の公開が反映されるまで少し待つ（順序保証・レート回避）
+      await new Promise((r) => setTimeout(r, 1500));
+      const container = await createMediaContainer({
+        accessToken: base.accessToken,
+        threadsUserId: base.threadsUserId,
+        text: clean[i],
+        mediaType: 'TEXT',
+        replyToId: prevId,
+      });
+      const published = await publishMediaContainer(base.threadsUserId, container.id, base.accessToken);
+      replyIds.push(published.id);
+      prevId = published.id;
+    } catch (err: any) {
+      throw new PartialThreadError(
+        `連続投稿の${i + 1}件目で失敗: ${err?.message || err}`,
+        root.id,
+        replyIds,
+        i,
+      );
+    }
   }
 
   return { id: root.id, replyIds };

@@ -213,6 +213,7 @@ async function generateAutoPost(
       postContent: fullContent,
       // ★承認モードON時は awaiting_approval で作成し、ユーザーが承認するまで投稿しない
       status: requireApproval ? 'awaiting_approval' : 'pending',
+      source: 'auto',
     });
 
     // ★#3 自動投稿は手動AI生成の月間枠(maxAiGenerations)を消費しない。

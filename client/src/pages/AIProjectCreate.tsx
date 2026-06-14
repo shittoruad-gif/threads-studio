@@ -24,7 +24,7 @@ export default function AIProjectCreate() {
   const [mode, setMode] = useState<Mode>('chat');
 
   const [form, setForm] = useState(() => {
-    const saved = sessionStorage.getItem('aiProjectCreateForm');
+    const saved = localStorage.getItem('aiProjectCreateForm');
     if (saved) {
       try { return JSON.parse(saved); } catch { /* ignore */ }
     }
@@ -47,7 +47,7 @@ export default function AIProjectCreate() {
 
   // Persist form state to sessionStorage
   useEffect(() => {
-    sessionStorage.setItem('aiProjectCreateForm', JSON.stringify(form));
+    localStorage.setItem('aiProjectCreateForm', JSON.stringify(form));
   }, [form]);
 
   // Sync data from chat mode back to form state
@@ -57,7 +57,7 @@ export default function AIProjectCreate() {
 
   const createProjectMutation = trpc.project.create.useMutation({
     onSuccess: () => {
-      sessionStorage.removeItem('aiProjectCreateForm');
+      localStorage.removeItem('aiProjectCreateForm');
       toast.success('プロジェクトを作成しました');
       setLocation(`/ai-generate?project=${projectId}`);
     },

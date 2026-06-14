@@ -328,6 +328,14 @@ export default function PostHistory() {
                           <div className="flex-1 min-w-0 space-y-2">
                             <div className="flex items-center gap-2 flex-wrap">
                               {getStatusBadge(post.status)}
+                              <Badge
+                                variant="outline"
+                                className={(post as any).source === 'auto'
+                                  ? 'bg-violet-50 text-violet-600 border-violet-200'
+                                  : 'bg-muted/40 text-muted-foreground border-border'}
+                              >
+                                {(post as any).source === 'auto' ? '自動' : '手動'}
+                              </Badge>
                               <span className="text-sm text-muted-foreground">
                                 {formatDate(post.scheduledAt)}
                               </span>

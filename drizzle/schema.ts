@@ -87,6 +87,9 @@ export const subscriptions = mysqlTable("subscriptions", {
   // Current billing period end (cached for quick access checks)
   currentPeriodEnd: timestamp("currentPeriodEnd"),
   cancelAtPeriodEnd: boolean("cancelAtPeriodEnd").notNull().default(false),
+  // キャンペーンプランの実課金回数。規定回数(campaignCharges)に達したらアプリ側で
+  // 自動解約する（Univapay側が自動停止しない場合の過剰課金防止）。
+  campaignChargeCount: int("campaignChargeCount").notNull().default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [
@@ -185,6 +188,9 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   threadsAccountId: int("threadsAccountId").notNull().references(() => threadsAccounts.id, { onDelete: "cascade" }),
   scheduledAt: timestamp("scheduledAt").notNull(),
   status: mysqlEnum("status", ["pending", "processing", "posted", "failed", "canceled", "awaiting_approval"]).default("pending").notNull(),
+  // 投稿の生成元：manual=ユーザーが手動で予約 / auto=自動投稿エンジンが生成。
+  // 「予約中」が手動か自動か区別がつかない混乱を解消するため。
+  source: mysqlEnum("source", ["manual", "auto"]).default("manual").notNull(),
   postedAt: timestamp("postedAt"),
   errorMessage: text("errorMessage"),
   // Store the post content snapshot at scheduling time

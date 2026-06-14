@@ -18,6 +18,31 @@ import * as db from "../db";
 import { initTrialReminderScheduler } from "../trialReminder";
 import { startTokenRefreshJob } from "../tokenRefreshJob";
 
+/**
+ * Univapay Webhookでプランを特定できず手続きが宙に浮いたとき、ユーザーへ案内する。
+ * これがないと、ユーザーは「登録したのに有料機能が使えない」状態に無音で放置される（欠点#1）。
+ * ベストエフォート（送信失敗は握りつぶす）。
+ */
+async function notifyPlanResolutionIssueToUser(email: string | null | undefined): Promise<void> {
+  try {
+    if (!email) return;
+    const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
+    const { sendEmail } = await import('./notification');
+    await sendEmail({
+      to: email,
+      subject: '【Threads Studio】ご登録手続きの確認のお願い',
+      html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+        <h2>ご登録手続きの確認のお願い</h2>
+        <p>お支払い手続きは受け付けましたが、プランの自動判定に問題が発生しました。</p>
+        <p>恐れ入りますが、ダッシュボードからプランのご状態をご確認いただくか、サポートまでご連絡ください。担当者が確認し、すぐに有料機能を有効化いたします。</p>
+        <a href="${base}/dashboard" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0;">ダッシュボードを開く</a>
+      </div>`,
+    });
+  } catch (e) {
+    console.error('[Univapay Webhook] notifyPlanResolutionIssueToUser error:', e);
+  }
+}
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -272,9 +297,16 @@ async function startServer() {
                 title: 'Univapay webhook: 課金成功だがプラン特定不可',
                 content: `email=${email} chargeAmount=${chargeAmount} subAmount=${subscriptionAmount}\n手動でプラン割当が必要。生: ${JSON.stringify(event).slice(0, 1200)}`,
               });
+              // ★#1 ユーザーも放置しない：手続きに問題が起きたことを案内
+              await notifyPlanResolutionIssueToUser(user.email);
             } catch {}
           } else {
             const currentPeriodEnd = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000);
+            // ★#2 キャンペーンプランの課金回数を数える（規定回数で自動解約）
+            const chargedPlan = getPlan(planId);
+            const newChargeCount = chargedPlan?.isCampaign
+              ? (existing?.campaignChargeCount ?? 0) + 1
+              : (existing?.campaignChargeCount ?? 0);
             if (existing) {
               await db.updateSubscription(existing.id, {
                 planId,
@@ -283,6 +315,7 @@ async function startServer() {
                 univapaySubscriptionId: univapaySubId ?? existing.univapaySubscriptionId ?? undefined,
                 currentPeriodEnd,
                 cancelAtPeriodEnd: false,
+                campaignChargeCount: newChargeCount,
               });
               console.log(`[Univapay Webhook] サブスク更新→active: user=${user.id} plan=${planId}`);
             } else {
@@ -293,8 +326,31 @@ async function startServer() {
                 status: 'active',
                 trialEndsAt: null,
                 currentPeriodEnd,
+                campaignChargeCount: newChargeCount,
               } as any);
               console.log(`[Univapay Webhook] サブスク新規作成→active: user=${user.id} plan=${planId}`);
+            }
+
+            // ★#2 キャンペーン規定回数に達したらアプリ側から自動解約（過剰課金防止）
+            if (chargedPlan?.isCampaign && chargedPlan.campaignCharges
+                && newChargeCount >= chargedPlan.campaignCharges) {
+              const subId = univapaySubId ?? existing?.univapaySubscriptionId;
+              console.log(`[Univapay Webhook] キャンペーン規定回数到達(${newChargeCount}/${chargedPlan.campaignCharges})→自動解約: user=${user.id}`);
+              try {
+                if (subId) {
+                  const univapay = await import('../univapay');
+                  await univapay.cancelSubscription(subId);
+                }
+              } catch (e) {
+                console.error('[Univapay Webhook] campaign auto-cancel error:', e);
+                try {
+                  const { notifyOwner } = await import('./notification');
+                  await notifyOwner({
+                    title: 'Univapay: キャンペーン自動解約に失敗',
+                    content: `user=${user.id} subId=${subId} 手動での解約確認が必要です。`,
+                  });
+                } catch {}
+              }
             }
           }
         } else if (isSubscriptionStart) {
@@ -309,6 +365,8 @@ async function startServer() {
                 title: 'Univapay webhook: トライアル開始だがプラン特定不可',
                 content: `email=${email} subAmount=${subscriptionAmount} chargeAmount=${chargeAmount}\n手動対応が必要。生: ${JSON.stringify(event).slice(0, 1200)}`,
               });
+              // ★#1 ユーザーも放置しない：手続きに問題が起きたことを案内
+              await notifyPlanResolutionIssueToUser(user.email);
             } catch {}
           } else if (existing && existing.status === 'active') {
             // 既に課金済み(active)のユーザーには何もしない（トライアルへ巻き戻さない）

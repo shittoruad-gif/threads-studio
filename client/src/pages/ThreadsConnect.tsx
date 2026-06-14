@@ -330,7 +330,8 @@ export default function ThreadsConnect() {
                   <p className="text-muted-foreground/60 text-sm truncate">ID: {account.threadsUserId}</p>
                 </div>
               </div>
-              <div className="flex gap-2 flex-wrap sm:justify-end shrink-0">
+              {/* モバイルは2列グリッドで整列、sm以上は横並び（折返し・はみ出し防止） */}
+              <div className="grid grid-cols-2 sm:flex gap-2 sm:flex-wrap sm:justify-end shrink-0 [&>button]:w-full sm:[&>button]:w-auto">
                 <Button
                   variant="outline"
                   size="sm"

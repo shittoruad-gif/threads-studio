@@ -5,7 +5,7 @@
  */
 
 import * as db from "./db";
-import { createAndPublishThread, splitThreadSegments } from "./threadsPost";
+import { createAndPublishThread, splitThreadSegments, PartialThreadError } from "./threadsPost";
 import { notifyOwner, sendEmail } from "./_core/notification";
 import { refreshAccessToken } from "./threadsAuth";
 
@@ -173,6 +173,21 @@ export async function executePendingPosts() {
 
       } catch (error) {
         console.error(`[Scheduled Post] Failed to publish post ${post.id}:`, error);
+
+        // ★連続投稿の途中失敗：メイン投稿は公開済みなので「投稿済み(一部欠け)」として扱い、
+        //   再試行でメインを二重投稿しないようにする（冪等性 / 欠点#5対策）。
+        if (error instanceof PartialThreadError) {
+          await db.updateScheduledPost(post.id, {
+            status: 'posted',
+            postedAt: now,
+            errorMessage: `メイン投稿は公開済みですが、続きの投稿が一部失敗しました（${error.message}）。重複投稿を避けるため再試行は行いません。`,
+          });
+          executed++;
+          console.warn(`[Scheduled Post] Post ${post.id} partially published (root=${error.rootId}).`);
+          // ユーザーには「一部失敗」を通知
+          await notifyUserPostFailure(post.userId, error.message);
+          continue;
+        }
 
         await db.updateScheduledPost(post.id, {
           status: 'failed',
