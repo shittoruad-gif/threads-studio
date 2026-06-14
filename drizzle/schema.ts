@@ -144,6 +144,9 @@ export const projects = mysqlTable("projects", {
   links: text("links"),
   usp: text("usp"), // USP（第13回：独自の強み）
   n1Customer: text("n1Customer"), // N1分析：実在の1人の顧客像（第11回）
+  belief: text("belief"), // 主張・信念（業界常識への自分の立場。一度登録すれば毎回利用）
+  catchphrase: text("catchphrase"), // 口癖・方言・決めゼリフ（キャラ付け。一度登録すれば毎回利用）
+  customerWords: text("customerWords"), // お客さんが実際に使った言葉ストック（最優先で投稿に使う）
   // AIカウンセリング結果（JSON）。事実ベース投稿のためにユーザから取得した
   // 「使ってよい実績」「実在の顧客エピソード」「絶対に書きたくないこと」など。
   // null の場合は未カウンセリング状態。フォーマット: shared/counseling.ts CounselingResult。

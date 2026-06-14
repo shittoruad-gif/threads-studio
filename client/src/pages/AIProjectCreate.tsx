@@ -38,6 +38,9 @@ export default function AIProjectCreate() {
       strength: '',
       proof: '',
       ctaLink: '',
+      belief: '',
+      catchphrase: '',
+      customerWords: '',
       ngWords: '',
     };
   });
@@ -77,6 +80,9 @@ export default function AIProjectCreate() {
         strength: template.strength,
         proof: template.proof,
         ctaLink: form.ctaLink,
+        belief: form.belief,
+        catchphrase: form.catchphrase,
+        customerWords: form.customerWords,
         ngWords: form.ngWords,
       });
     }
@@ -109,6 +115,9 @@ export default function AIProjectCreate() {
       strength: form.strength,
       proof: form.proof || undefined,
       ctaLink: form.ctaLink || undefined,
+      belief: form.belief || undefined,
+      catchphrase: form.catchphrase || undefined,
+      customerWords: form.customerWords || undefined,
       ngWords: form.ngWords || undefined,
     });
   };
@@ -310,6 +319,35 @@ export default function AIProjectCreate() {
                       rows={2}
                       placeholder="例：月間100名の来院実績、Google口コミ4.8"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>主張・信念（任意）</Label>
+                    <Textarea
+                      value={form.belief}
+                      onChange={(e) => setForm({...form, belief: e.target.value})}
+                      rows={2}
+                      placeholder="例：腰痛は薬で抑えるのではなく、根本から整えるべき"
+                    />
+                    <p className="text-xs text-muted-foreground">投稿に一貫してにじませる立場。一度登録すれば毎回使われます。</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>口癖・方言・決めゼリフ（任意）</Label>
+                    <Input
+                      value={form.catchphrase}
+                      onChange={(e) => setForm({...form, catchphrase: e.target.value})}
+                      placeholder="例：〜じゃけぇ／今日もあなたの体、諦めんといて"
+                    />
+                    <p className="text-xs text-muted-foreground">文体に自然に混ぜてキャラ付けに使います。</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>お客さんが実際に使った言葉（任意）</Label>
+                    <Textarea
+                      value={form.customerWords}
+                      onChange={(e) => setForm({...form, customerWords: e.target.value})}
+                      rows={2}
+                      placeholder="例：朝起きた瞬間から腰が重い／夕方になると首がバキバキ"
+                    />
+                    <p className="text-xs text-muted-foreground">実在のお客さんの口ぐせ。最優先で投稿に使われます（一度登録すれば毎回利用）。</p>
                   </div>
                   <div className="space-y-2">
                     <Label>CTA URL（任意）</Label>

@@ -468,6 +468,9 @@ export const appRouter = router({
         links: z.string().optional(), // JSON string of ProjectLink[]
         usp: z.string().optional(),
         n1Customer: z.string().optional(),
+        belief: z.string().optional(), // 主張・信念
+        catchphrase: z.string().optional(), // 口癖・方言・決めゼリフ
+        customerWords: z.string().optional(), // お客さんが実際に使った言葉ストック
         ngWords: z.string().optional(), // 投稿に入れたくないワード（改行/カンマ区切り）
       }))
       .mutation(async ({ ctx, input }) => {
@@ -514,6 +517,9 @@ export const appRouter = router({
         links: z.string().optional(), // JSON string of ProjectLink[]
         usp: z.string().optional(),
         n1Customer: z.string().optional(),
+        belief: z.string().optional(), // 主張・信念
+        catchphrase: z.string().optional(), // 口癖・方言・決めゼリフ
+        customerWords: z.string().optional(), // お客さんが実際に使った言葉ストック
         useThreadsKnowhow: z.boolean().optional(),
         ngWords: z.string().optional(), // 投稿に入れたくないワード（改行/カンマ区切り）
       }))
@@ -824,6 +830,9 @@ export const appRouter = router({
           treeCount: input.treeCount,
           usp: (project as any).usp || undefined,
           n1Customer: (project as any).n1Customer || undefined,
+          belief: (project as any).belief || undefined,
+          catchphrase: (project as any).catchphrase || undefined,
+          customerWords: (project as any).customerWords || undefined,
           trendWord: input.trendWord || undefined,
           purpose: input.purpose,
           tone: input.tone,

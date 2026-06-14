@@ -126,6 +126,9 @@ export default function AIGenerate() {
     proof: '',
     usp: '',
     n1Customer: '',
+    belief: '',
+    catchphrase: '',
+    customerWords: '',
     ngWords: '',
   });
 
@@ -931,6 +934,9 @@ export default function AIGenerate() {
                           proof: project.proof || '',
                           usp: (project as any).usp || '',
                           n1Customer: (project as any).n1Customer || '',
+                          belief: (project as any).belief || '',
+                          catchphrase: (project as any).catchphrase || '',
+                          customerWords: (project as any).customerWords || '',
                           ngWords: (project as any).ngWords || '',
                         });
                         setEditingProject(true);
@@ -1071,6 +1077,36 @@ export default function AIGenerate() {
                           rows={3}
                           className="text-sm"
                         />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">主張・信念</Label>
+                        <Textarea
+                          value={editForm.belief}
+                          onChange={(e) => setEditForm({ ...editForm, belief: e.target.value })}
+                          placeholder="例：腰痛は薬で抑えるのではなく、根本から整えるべき"
+                          rows={2}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">口癖・方言・決めゼリフ</Label>
+                        <Input
+                          value={editForm.catchphrase}
+                          onChange={(e) => setEditForm({ ...editForm, catchphrase: e.target.value })}
+                          placeholder="例：〜じゃけぇ／今日もあなたの体、諦めんといて"
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">お客さんが実際に使った言葉</Label>
+                        <Textarea
+                          value={editForm.customerWords}
+                          onChange={(e) => setEditForm({ ...editForm, customerWords: e.target.value })}
+                          placeholder="例：朝起きた瞬間から腰が重い／夕方になると首がバキバキ"
+                          rows={2}
+                          className="text-sm"
+                        />
+                        <p className="text-[11px] text-muted-foreground">最優先で投稿に使われます（一度登録すれば毎回利用）。</p>
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">投稿に入れたくないワード</Label>

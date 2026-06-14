@@ -128,6 +128,9 @@ export interface ThreadsPromptInput {
   treeCount?: number; // 0 = 本文のみ, 1〜5 = ツリー投稿数
   usp?: string;       // USP（独自の強み）← 第13回追加
   n1Customer?: string; // N1分析：実在の1人の顧客像
+  belief?: string;     // 主張・信念（業界常識への立場。一貫させる）
+  catchphrase?: string; // 口癖・方言・決めゼリフ（キャラ付け）
+  customerWords?: string; // お客さんが実際に使った言葉（最優先で使う）
   trendWord?: string;  // トレンドワード
   purpose?: PostPurpose; // 投稿の目的（cv/awareness/authority/fan）
   tone?: PostTone;      // 投稿の口調
@@ -990,6 +993,9 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
     proof: sanitizeForPrompt(input.proof, 500),
     usp: sanitizeForPrompt(input.usp, 300),
     n1Customer: sanitizeForPrompt(input.n1Customer, 500),
+    belief: sanitizeForPrompt(input.belief, 300),
+    catchphrase: sanitizeForPrompt(input.catchphrase, 200),
+    customerWords: sanitizeForPrompt(input.customerWords, 500),
     trendWord: sanitizeForPrompt(input.trendWord, 60),
     link: sanitizeForPrompt(input.link, 200),
   };
@@ -1038,6 +1044,9 @@ ${safe.storeName ? `- 店名：${safe.storeName}（自己紹介・実績・固�
 - 強み/特徴：${safe.strength}
 ${safe.usp ? `- USP（独自の強み）：${safe.usp}` : ''}
 ${safe.n1Customer ? `- N1顧客像：${safe.n1Customer}` : ''}
+${safe.belief ? `- 主張・信念：${safe.belief}（投稿に一貫してにじませる。これと矛盾する内容は書かない。仮想敵型と相性が良い）` : ''}
+${safe.catchphrase ? `- 口癖・方言・決めゼリフ：${safe.catchphrase}（文体に自然に混ぜてキャラ付けする。毎回・不自然に多用はしない）` : ''}
+${safe.customerWords ? `- お客さんが実際に使った言葉：${safe.customerWords}（★最優先。この生の言葉をそのまま投稿に1〜2個使う。専門用語より優先）` : ''}
 ${safe.proof ? `- 実績/証拠：${safe.proof}` : ''}
 ${safe.link ? `- 誘導先：${safe.link}` : ''}
 ${safe.trendWord ? `- トレンドワード：${safe.trendWord}` : ''}
