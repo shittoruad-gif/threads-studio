@@ -33,7 +33,9 @@ export default function Login() {
         try {
           const res = await applyCoupon.mutateAsync({ code });
           if (res?.success) {
-            toast.success(res.message || 'コードを適用しました');
+            toast.success(res.message || 'コードを適用しました', {
+              description: res.code ? `適用コード：${res.code}` : `適用コード：${code.toUpperCase()}`,
+            });
           } else {
             toast.error(res?.message || 'コードの適用に失敗しました（コードをご確認ください）');
           }

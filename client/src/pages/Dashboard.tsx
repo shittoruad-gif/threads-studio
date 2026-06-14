@@ -1062,8 +1062,10 @@ export default function Dashboard() {
       <CouponModal
         open={couponModalOpen}
         onClose={() => setCouponModalOpen(false)}
-        onSuccess={() => {
-          toast.success('クーポンが適用されました！');
+        onSuccess={(code) => {
+          toast.success('クーポンが適用されました！', {
+            description: code ? `適用コード：${code}` : undefined,
+          });
         }}
       />
 

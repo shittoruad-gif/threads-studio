@@ -65,7 +65,7 @@ export async function hasUserUsedCoupon(userId: number, couponId: number): Promi
 export async function applyCoupon(
   userId: number,
   couponCode: string
-): Promise<{ success: boolean; message: string; trialEndsAt?: Date }> {
+): Promise<{ success: boolean; message: string; trialEndsAt?: Date; code?: string }> {
   const db = await getDb();
   if (!db) {
     return { success: false, message: "Database not available" };
@@ -94,7 +94,7 @@ export async function applyCoupon(
       } catch (e) {
         console.error("[Coupon] monitor re-apply isMonitor set failed:", e);
       }
-      return { success: true, message: "モニター登録は既に有効です。ダッシュボード右下のボタンからフィードバックを送信いただけます。" };
+      return { success: true, message: "モニター登録は既に有効です。ダッシュボード右下のボタンからフィードバックを送信いただけます。", code: coupon.code };
     }
     return { success: false, message: "このクーポンは既に使用されています" };
   }
@@ -230,7 +230,7 @@ export async function applyCoupon(
       break;
   }
 
-  return { success: true, message, trialEndsAt: trialEndsAt || undefined };
+  return { success: true, message, trialEndsAt: trialEndsAt || undefined, code: coupon.code };
 }
 
 /**

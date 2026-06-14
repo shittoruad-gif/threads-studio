@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Sparkles, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 
 export default function Register() {
@@ -14,6 +15,7 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [couponCode, setCouponCode] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [error, setError] = useState('');
 
   // #28 紹介コード（?ref=XXX）を URL から取得
@@ -69,6 +71,11 @@ export default function Register() {
 
     if (!passwordValid) {
       setError('パスワードの要件を満たしてください');
+      return;
+    }
+
+    if (!agreedToTerms) {
+      setError('利用規約とプライバシーポリシーへの同意が必要です');
       return;
     }
 
@@ -211,24 +218,34 @@ export default function Register() {
               </p>
             </div>
 
+            {/* 規約・プライバシーへの明示的な同意（クリックラップ） */}
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="agree"
+                checked={agreedToTerms}
+                onCheckedChange={(v) => setAgreedToTerms(v === true)}
+                disabled={registerMutation.isPending}
+                className="mt-0.5"
+              />
+              <Label htmlFor="agree" className="text-xs font-normal leading-relaxed text-muted-foreground cursor-pointer">
+                <Link href="/terms" className="text-primary hover:underline">利用規約</Link>
+                、
+                <Link href="/privacy" className="text-primary hover:underline">プライバシーポリシー</Link>
+                、
+                <Link href="/commercial-transaction" className="text-primary hover:underline">特定商取引法に基づく表記</Link>
+                を確認し、同意します。
+              </Label>
+            </div>
+
             <Button
               type="submit"
               className="w-full"
-              disabled={registerMutation.isPending}
+              disabled={registerMutation.isPending || !agreedToTerms}
             >
               {registerMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               アカウント作成
             </Button>
           </form>
-
-          {/* Terms of Service */}
-          <p className="text-xs text-center text-muted-foreground">
-            アカウントを作成することで、
-            <Link href="/terms" className="text-primary hover:underline">利用規約</Link>
-            および
-            <Link href="/privacy" className="text-primary hover:underline">プライバシーポリシー</Link>
-            に同意したものとみなされます。
-          </p>
         </CardContent>
         <CardFooter className="flex flex-col space-y-2">
           <div className="text-sm text-center text-muted-foreground">

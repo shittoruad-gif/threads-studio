@@ -10,7 +10,7 @@ import { trpc } from "@/lib/trpc";
 interface CouponModalProps {
   open: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (code?: string) => void;
 }
 
 export default function CouponModal({ open, onClose, onSuccess }: CouponModalProps) {
@@ -64,7 +64,7 @@ export default function CouponModal({ open, onClose, onSuccess }: CouponModalPro
         utils.subscription.getStatus.invalidate();
         
         if (onSuccess) {
-          onSuccess();
+          onSuccess(data.code || couponCode.trim().toUpperCase());
         }
         
         // Close modal after short delay
@@ -186,7 +186,12 @@ export default function CouponModal({ open, onClose, onSuccess }: CouponModalPro
             <Alert className="border-green-500 bg-green-500/10">
               <CheckCircle2 className="h-4 w-4 text-green-500" />
               <AlertDescription className="text-green-500">
-                クーポンが正常に適用されました！
+                <span className="font-semibold">
+                  クーポン「{applyMutation.data.code || couponCode.trim().toUpperCase()}」を適用しました！
+                </span>
+                {applyMutation.data.message && (
+                  <span className="block mt-1 text-foreground/80">{applyMutation.data.message}</span>
+                )}
               </AlertDescription>
             </Alert>
           )}

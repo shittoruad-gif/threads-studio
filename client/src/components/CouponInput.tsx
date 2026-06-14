@@ -15,7 +15,10 @@ export function CouponInput({ onSuccess }: CouponInputProps) {
 
   const applyCouponMutation = trpc.coupon.applyCode.useMutation({
     onSuccess: (data) => {
-      toast.success(data.message);
+      // 適用したクーポンコードを分かりやすく見出しに出す
+      toast.success(data.message, {
+        description: data.code ? `適用コード：${data.code}` : undefined,
+      });
       setCode('');
       onSuccess?.();
     },
