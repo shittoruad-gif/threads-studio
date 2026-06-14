@@ -452,18 +452,18 @@ export default function Dashboard() {
           </div>
 
           {/* Stats Column */}
-          <div className="space-y-4 min-w-0">
-            <div className="bg-background rounded-xl p-4 border border-border">
+          <div className="flex flex-col gap-4 min-w-0">
+            <div className="flex-1 flex flex-col justify-center bg-background rounded-xl p-4 border border-border">
               <p className="text-muted-foreground text-xs mb-1">総投稿数</p>
               <p className="text-2xl font-bold text-foreground">{stats?.totalPosts || 0}</p>
             </div>
-            <div className="bg-background rounded-xl p-4 border border-border">
+            <div className="flex-1 flex flex-col justify-center bg-background rounded-xl p-4 border border-border">
               <p className="text-muted-foreground text-xs mb-1">予約中</p>
               <p className="text-2xl font-bold text-foreground">
                 {stats?.postsByStatus?.find((s: any) => s.status === 'pending')?.count || 0}
               </p>
             </div>
-            <div className="bg-background rounded-xl p-4 border border-border">
+            <div className="flex-1 flex flex-col justify-center bg-background rounded-xl p-4 border border-border">
               <p className="text-muted-foreground text-xs mb-1">今月のAI生成</p>
               <p className="text-2xl font-bold text-foreground">
                 {aiUsage?.count || 0}
@@ -656,8 +656,8 @@ export default function Dashboard() {
           </div>
 
           {/* Quick Stats */}
-          <div className="space-y-4">
-            <div className="bg-background rounded-xl p-4 border border-border">
+          <div className="flex flex-col gap-4">
+            <div className="flex-1 flex items-center bg-background rounded-xl p-4 border border-border">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-emerald-50">
                   <FileText className="w-5 h-5 text-emerald-600" />
@@ -676,7 +676,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="bg-background rounded-xl p-4 border border-border">
+            <div className="flex-1 flex items-center bg-background rounded-xl p-4 border border-border">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-blue-50">
                   <Link2 className="w-5 h-5 text-blue-600" />
@@ -695,7 +695,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="bg-background rounded-xl p-4 border border-border">
+            <div className="flex-1 flex items-center bg-background rounded-xl p-4 border border-border">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-orange-50">
                   <Calendar className="w-5 h-5 text-orange-600" />

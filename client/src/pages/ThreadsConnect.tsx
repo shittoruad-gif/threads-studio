@@ -472,8 +472,8 @@ export default function ThreadsConnect() {
         </div>
       )}
 
-      {/* Connect Button */}
-      {maxAccounts > 0 && (
+      {/* Connect Button（未連携時は空状態カード内のボタンに集約し、ここでは追加連携のみ表示） */}
+      {maxAccounts > 0 && (accounts?.length || 0) > 0 && (
         <div className="space-y-3">
           <Button
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-6 text-base"

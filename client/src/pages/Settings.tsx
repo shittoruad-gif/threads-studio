@@ -309,19 +309,21 @@ export default function Settings() {
           <div className="flex items-center gap-2 mb-5">
             <Bell className="w-5 h-5 text-amber-600" />
             <h2 className="text-lg font-semibold text-foreground">通知設定</h2>
+            <span className="ml-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-muted text-muted-foreground">準備中</span>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4 opacity-60">
             <div className="flex items-center justify-between">
               <div>
                 <Label className="text-sm font-medium text-foreground">週次レポートメール</Label>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  毎週月曜日に1週間の投稿実績をお届けします
+                  毎週月曜日に1週間の投稿実績をお届けします（近日対応）
                 </p>
               </div>
               <Switch
                 checked={weeklyReport}
                 onCheckedChange={setWeeklyReport}
+                disabled
               />
             </div>
 
@@ -329,12 +331,13 @@ export default function Settings() {
               <div>
                 <Label className="text-sm font-medium text-foreground">コメント通知</Label>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Threadsの投稿にコメントがあったら通知します
+                  Threadsの投稿にコメントがあったら通知します（近日対応）
                 </p>
               </div>
               <Switch
                 checked={commentNotification}
                 onCheckedChange={setCommentNotification}
+                disabled
               />
             </div>
           </div>

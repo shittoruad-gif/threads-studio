@@ -125,7 +125,7 @@ export default function AIProjectCreate() {
   const isValid = form.businessType && form.area && form.target && form.mainProblem && form.strength;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="container max-w-2xl py-8">
         <Button
           variant="ghost"
@@ -392,14 +392,28 @@ export default function AIProjectCreate() {
                 <ChevronRight className="w-4 h-4 ml-2" />
               </Button>
 
-              {!selectedTemplate && (
-                <p className="text-center text-sm text-muted-foreground">
-                  業種を選択するか、
-                  <button onClick={() => setShowDetails(true)} className="text-primary hover:underline">
-                    手動で入力
-                  </button>
-                  してください
-                </p>
+              {!isValid && (
+                <div className="text-center text-sm text-muted-foreground space-y-1">
+                  <p>
+                    作成するには次の項目が必要です：
+                    <span className="text-foreground font-medium">
+                      {[
+                        !form.businessType && '業種',
+                        !form.area && '地域',
+                        !form.target && 'ターゲット',
+                        !form.mainProblem && '主な悩み',
+                        !form.strength && '強み',
+                      ].filter(Boolean).join('・')}
+                    </span>
+                  </p>
+                  <p>
+                    上で業種を選ぶか、
+                    <button onClick={() => setShowDetails(true)} className="text-primary hover:underline">
+                      手動で入力
+                    </button>
+                    してください。
+                  </p>
+                </div>
               )}
             </CardContent>
           </Card>

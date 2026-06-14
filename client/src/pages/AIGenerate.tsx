@@ -491,14 +491,14 @@ export default function AIGenerate() {
 
   if (projectLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-[60vh] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="container max-w-6xl py-4 sm:py-8 px-4">
         <PageBreadcrumb items={breadcrumbItems} />
         <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
@@ -1564,16 +1564,16 @@ export default function AIGenerate() {
                 </Button>
               </div>
             ) : (isGeneratingOptions || isGeneratingSingle) ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+              <Card className="lg:h-full lg:min-h-[420px]">
+                <CardContent className="flex flex-col items-center justify-center h-full py-12 text-center">
                   <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
                   <p className="text-foreground font-medium mb-1">{isGeneratingOptions ? '3案を生成しています…' : '投稿を生成しています…'}</p>
                   <p className="text-sm text-muted-foreground">少しお待ちください（10〜30秒ほど）</p>
                 </CardContent>
               </Card>
             ) : (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+              <Card className="lg:h-full lg:min-h-[420px] border-dashed">
+                <CardContent className="flex flex-col items-center justify-center h-full py-12 text-center">
                   <Sparkles className="h-12 w-12 text-primary/40 mb-4" />
                   <p className="text-foreground font-medium mb-1">ここに投稿の下書きが表示されます</p>
                   <p className="text-sm text-muted-foreground max-w-xs">
