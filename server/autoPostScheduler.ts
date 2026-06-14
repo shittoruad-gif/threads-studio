@@ -264,11 +264,9 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
           continue;
         }
 
-        // Get user's active Threads account
+        // ★複数店舗対応：連携している「すべての有効アカウント」に自動投稿する
         const accounts = await db.getActiveThreadsAccounts(user.id);
         if (!accounts || accounts.length === 0) continue;
-
-        const account = accounts[0];
 
         // ★プラン別の「1日あたり自動投稿上限」を適用（料金表示と実態を一致させる）。
         //   フリー等 maxAutoPostsPerDay=0 のプランは自動投稿しない。
@@ -279,6 +277,7 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
           console.log(`[AutoPost] Skipping user ${user.id} - plan does not allow auto-posting`);
           continue;
         }
+        const monthlyCap = plan?.features.maxScheduledPosts ?? -1;
 
         // Determine how many posts to generate（ユーザー設定の頻度をプラン上限で頭打ち）
         const postCount = Math.min(getPostCount(user.autoPostFrequency), maxPerDay);
@@ -288,31 +287,39 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
         let purposeIdx = user.lastAutoPurposeIndex;
 
         // 日替わりでプロジェクトを巡回するためのオフセット
-        // 当日処理する postCount 本のうち i 本目は eligibleProjects[(dayOffset + i) % N]
         const dayOffset = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
 
-        for (let i = 0; i < postCount; i++) {
-          const project = eligibleProjects[(dayOffset + i) % eligibleProjects.length];
-
-          const success = await generateAutoPost(
-            user.id,
-            project,
-            typeIdx,
-            purposeIdx,
-            account.id,
-            i,
-          );
-
-          if (success) {
-            generated++;
-            typeIdx = (typeIdx + 1) % POST_TYPES.length;
-            purposeIdx = (purposeIdx + 1) % PURPOSES.length;
-          } else {
-            failed++;
+        // 各アカウントごとに postCount 本ずつ自動投稿（月間上限はアカウント単位で判定）
+        for (const account of accounts) {
+          if (monthlyCap !== -1) {
+            const used = await db.countAccountMonthlyPosts(account.id);
+            if (used >= monthlyCap) {
+              console.log(`[AutoPost] account ${account.id} reached monthly cap (${used}/${monthlyCap}) - skip`);
+              continue;
+            }
           }
 
-          // Small delay between generations to avoid API rate limits
-          if (i < postCount - 1) {
+          for (let i = 0; i < postCount; i++) {
+            const project = eligibleProjects[(dayOffset + i) % eligibleProjects.length];
+
+            const success = await generateAutoPost(
+              user.id,
+              project,
+              typeIdx,
+              purposeIdx,
+              account.id,
+              i,
+            );
+
+            if (success) {
+              generated++;
+              typeIdx = (typeIdx + 1) % POST_TYPES.length;
+              purposeIdx = (purposeIdx + 1) % PURPOSES.length;
+            } else {
+              failed++;
+            }
+
+            // Small delay between generations to avoid API rate limits
             await new Promise(r => setTimeout(r, 2000));
           }
         }

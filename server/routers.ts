@@ -1400,16 +1400,17 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         const planId = subscription?.planId || 'free';
         const plan = getPlan(planId);
         
+        // 月間上限は「連携アカウント単位」で適用（複数アカウントで枠を共有しない）
         if (plan && plan.features.maxScheduledPosts !== -1) {
-          const monthlyCount = await db.countUserMonthlyPosts(ctx.user.id);
+          const monthlyCount = await db.countAccountMonthlyPosts(input.accountId);
           if (monthlyCount >= plan.features.maxScheduledPosts) {
-            throw new TRPCError({ 
-              code: 'FORBIDDEN', 
-              message: `月間投稿数の上限（${plan.features.maxScheduledPosts}件）に達しています。来月1日にリセットされます。` 
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: `このアカウントの月間投稿数の上限（${plan.features.maxScheduledPosts}件）に達しています。来月1日にリセットされます。`
             });
           }
         }
-        
+
         const account = await db.getThreadsAccountById(input.accountId);
         if (!account || account.userId !== ctx.user.id) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found' });
@@ -1774,24 +1775,20 @@ ${input.commentText}
         const planId = subscription?.planId || 'free';
         const plan = getPlan(planId);
         
-        // Check pending scheduled posts limit
+        // 予約中の件数・月間投稿数の上限は「連携アカウント単位」で適用
         if (plan && plan.features.maxScheduledPosts !== -1) {
-          const count = await db.countUserScheduledPosts(ctx.user.id);
+          const count = await db.countAccountScheduledPosts(input.threadsAccountId);
           if (count >= plan.features.maxScheduledPosts) {
-            throw new TRPCError({ 
-              code: 'FORBIDDEN', 
-              message: `予約投稿数の上限（${plan.features.maxScheduledPosts}件）に達しています。` 
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: `このアカウントの予約投稿数の上限（${plan.features.maxScheduledPosts}件）に達しています。`
             });
           }
-        }
-        
-        // Check monthly post limit
-        if (plan && plan.features.maxScheduledPosts !== -1) {
-          const monthlyCount = await db.countUserMonthlyPosts(ctx.user.id);
+          const monthlyCount = await db.countAccountMonthlyPosts(input.threadsAccountId);
           if (monthlyCount >= plan.features.maxScheduledPosts) {
-            throw new TRPCError({ 
-              code: 'FORBIDDEN', 
-              message: `月間投稿数の上限（${plan.features.maxScheduledPosts}件）に達しています。来月1日にリセットされます。` 
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: `このアカウントの月間投稿数の上限（${plan.features.maxScheduledPosts}件）に達しています。来月1日にリセットされます。`
             });
           }
         }

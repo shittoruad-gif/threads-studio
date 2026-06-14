@@ -623,6 +623,34 @@ export async function countUserMonthlyPosts(userId: number): Promise<number> {
   return result[0]?.count ?? 0;
 }
 
+/** 当月、その「連携アカウント」で公開された投稿数（上限はアカウント単位で適用）。 */
+export async function countAccountMonthlyPosts(threadsAccountId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select({ count: sql<number>`count(*)` })
+    .from(scheduledPosts)
+    .where(and(
+      eq(scheduledPosts.threadsAccountId, threadsAccountId),
+      eq(scheduledPosts.status, 'posted'),
+      sql`YEAR(${scheduledPosts.postedAt}) = YEAR(NOW())`,
+      sql`MONTH(${scheduledPosts.postedAt}) = MONTH(NOW())`
+    ));
+  return result[0]?.count ?? 0;
+}
+
+/** その「連携アカウント」で予約中（pending）の投稿数。 */
+export async function countAccountScheduledPosts(threadsAccountId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select({ count: sql<number>`count(*)` })
+    .from(scheduledPosts)
+    .where(and(
+      eq(scheduledPosts.threadsAccountId, threadsAccountId),
+      eq(scheduledPosts.status, 'pending')
+    ));
+  return result[0]?.count ?? 0;
+}
+
 // ============ Template Functions ============
 
 export async function getAllTemplates(): Promise<Template[]> {
