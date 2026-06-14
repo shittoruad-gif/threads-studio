@@ -6,8 +6,35 @@
 
 import * as db from "./db";
 import { createAndPublishThread, splitThreadSegments } from "./threadsPost";
-import { notifyOwner } from "./_core/notification";
+import { notifyOwner, sendEmail } from "./_core/notification";
 import { refreshAccessToken } from "./threadsAuth";
+
+const APP_BASE_URL = process.env.APP_BASE_URL || "https://threads-studio.com";
+
+/**
+ * 投稿失敗をユーザーへメール通知（欠点#5の解消）。
+ * これがないと自動投稿が静かに失敗し、ユーザーは履歴を見ない限り気づけない。
+ * ベストエフォート（送信失敗は握りつぶす）。
+ */
+async function notifyUserPostFailure(userId: number, errorMessage: string): Promise<void> {
+  try {
+    const user = await db.getUserById(userId);
+    if (!user?.email) return;
+    await sendEmail({
+      to: user.email,
+      subject: "【Threads Studio】投稿の公開に失敗しました",
+      html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+        <h2>投稿の公開に失敗しました</h2>
+        <p>予約・自動投稿のThreadsへの公開に失敗しました。</p>
+        <p style="color:#666;font-size:13px;">理由: ${errorMessage}</p>
+        <p>Threads連携の有効期限切れや一時的なエラーが原因のことが多いです。ダッシュボードからご確認ください。</p>
+        <a href="${APP_BASE_URL}/post-history?status=failed" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0;">投稿履歴を確認</a>
+      </div>`,
+    });
+  } catch (err: any) {
+    console.error(`[Scheduled Post] Failed to notify user ${userId}:`, err?.message);
+  }
+}
 
 const PROCESSING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -154,11 +181,14 @@ export async function executePendingPosts() {
 
         failed++;
 
+        const errMsg = error instanceof Error ? error.message : 'Unknown error';
         // Notify owner about failed post
         await notifyOwner({
           title: '予約投稿の実行に失敗しました',
-          content: `投稿ID: ${post.id}\nエラー: ${error instanceof Error ? error.message : 'Unknown error'}`
+          content: `投稿ID: ${post.id}\nエラー: ${errMsg}`
         });
+        // ★ユーザー本人にも通知（無音失敗を防ぐ）
+        await notifyUserPostFailure(post.userId, errMsg);
       }
     }
 

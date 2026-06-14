@@ -63,7 +63,7 @@ const COMPARISON_FEATURES: ComparisonFeature[] = [
   {
     category: 'AI機能',
     features: [
-      { name: 'AI投稿生成', free: '3回/月', light: '10回/月', pro: '無制限', business: '無制限', agency: '無制限' },
+      { name: 'AI投稿生成（手動）', free: '3回/月', light: '10回/月', pro: '無制限', business: '無制限', agency: '無制限' },
       { name: 'フック生成', free: false, light: true, pro: true, business: true, agency: true },
     ],
   },
@@ -100,11 +100,11 @@ const FAQ_ITEMS = [
   },
   {
     question: 'AI生成回数などの月間上限はいつリセットされますか？',
-    answer: 'AI生成回数などの月間の利用上限は、毎月1日の0時（日本時間）にリセットされます。未使用分の繰り越しはできません。',
+    answer: 'AI生成回数などの月間の利用上限は、毎月1日にリセットされます。未使用分の繰り越しはできません。',
   },
   {
     question: '複数のThreadsアカウントを管理できますか？',
-    answer: 'はい、プラン別に設定されたアカウント数まで連携可能です。ビジネスプランは10件、代理店プランは20件まで管理できます。',
+    answer: 'はい、プラン別に設定されたアカウント数まで連携可能です。ライトは1件、プロは3件、ビジネスは10件、代理店プランは無制限に管理できます。',
   },
   {
     question: '代理店プランのAPIアクセスとは何ですか？',

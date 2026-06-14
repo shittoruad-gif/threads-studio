@@ -246,3 +246,18 @@ export function getCampaignCounterpart(normalPlanId: string): PlanConfig | undef
     (p) => p.isCampaign && p.normalCounterpartId === normalPlanId,
   );
 }
+
+/**
+ * サブスクの status を考慮した「実効プランID」を返す。
+ * active / trialing 以外（canceled / past_due / unpaid / incomplete）は
+ * 有料機能を使わせないため 'free' 扱いにする。
+ * （解約・決済失敗後も planId が残って有料機能が使えてしまう課金漏れを防ぐ）
+ */
+export function resolveEffectivePlanId(
+  planId: string | null | undefined,
+  status: string | null | undefined,
+): string {
+  if (!planId) return 'free';
+  if (status === 'active' || status === 'trialing') return planId;
+  return 'free';
+}

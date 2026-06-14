@@ -8,7 +8,7 @@ import * as db from "./db";
 import { ENV } from "./_core/env";
 import bcrypt from "bcryptjs";
 import * as couponService from "./coupon";
-import { PLANS, TRIAL_DAYS, getPlan } from "../shared/plans";
+import { PLANS, TRIAL_DAYS, getPlan, resolveEffectivePlanId } from "../shared/plans";
 import { TRPCError } from "@trpc/server";
 
 // Global rate limit store for tryGenerate
@@ -364,8 +364,12 @@ export const appRouter = router({
         };
       }
 
-      const plan = getPlan(subscription.planId);
-      
+      // ★機能ゲートは実効プラン（active/trialing以外はfree）で判定する。
+      //   表示用の planId は実際の契約プランを返すが、plan.features は実効プランに合わせる
+      //   ことで、解約/決済失敗後に有料機能が使える課金漏れを防ぐ。
+      const effPlanId = resolveEffectivePlanId(subscription.planId, subscription.status);
+      const plan = getPlan(effPlanId);
+
       return {
         planId: subscription.planId,
         plan: plan || PLANS.free,
@@ -476,7 +480,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         // Check project limit
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
-        const planId = subscription?.planId || 'free';
+        const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
         const plan = getPlan(planId);
         
         if (plan && plan.features.maxProjects !== -1) {
@@ -749,9 +753,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         // Check AI generation feature
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
-        const planId = subscription?.planId || 'free';
+        const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
         const plan = getPlan(planId);
-        
+
         // デモモードではAI生成を許可
         // ★#2 デモモードの場合は 10 回までで打ち切り → 自動的に通常判定へ。
         //   バイパス不能の収益保護ルール。
@@ -969,7 +973,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         // Check AI generation feature (same as generatePost)
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
-        const planId = subscription?.planId || 'free';
+        const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
         const plan = getPlan(planId);
 
         if (!ctx.user.isDemoMode && (!plan || plan.features.maxAiGenerations === 0)) {
@@ -1339,9 +1343,9 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         // Check account limit only for truly new accounts (not re-connections or re-activations)
         if (!isReconnection && !isReactivation) {
           const subscription = await db.getSubscriptionByUserId(ctx.user.id);
-          const planId = subscription?.planId || 'free';
+          const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
           const plan = getPlan(planId);
-          
+
           if (plan && plan.features.maxThreadsAccounts !== -1) {
             if (existingAccounts.length >= plan.features.maxThreadsAccounts) {
               throw new TRPCError({ 
@@ -1383,6 +1387,25 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         return { success: true };
       }),
 
+    // ★複数店舗対応：このアカウントの自動投稿に使う「店舗(プロジェクト)」を設定する。
+    //   projectId=null で「全店舗を日替わりローテーション」（従来挙動）に戻す。
+    setDefaultProject: protectedProcedure
+      .input(z.object({ accountId: z.number(), projectId: z.string().nullable() }))
+      .mutation(async ({ ctx, input }) => {
+        const account = await db.getThreadsAccountById(input.accountId);
+        if (!account || account.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found' });
+        }
+        if (input.projectId) {
+          const project = await db.getProjectById(input.projectId);
+          if (!project || project.userId !== ctx.user.id) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'プロジェクトが見つかりません。' });
+          }
+        }
+        await db.updateThreadsAccount(input.accountId, { defaultProjectId: input.projectId });
+        return { success: true };
+      }),
+
     // Post to Threads
     post: protectedProcedure
       .input(z.object({
@@ -1397,7 +1420,7 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         
         // Check monthly post limit
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
-        const planId = subscription?.planId || 'free';
+        const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
         const plan = getPlan(planId);
         
         // 月間上限は「連携アカウント単位」で適用（複数アカウントで枠を共有しない）
@@ -1647,7 +1670,7 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
       .mutation(async ({ ctx, input }) => {
         // Check AI generation feature
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
-        const planId = subscription?.planId || 'free';
+        const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
         const plan = getPlan(planId);
 
         if (!ctx.user.isDemoMode && (!plan || plan.features.maxAiGenerations === 0)) {
@@ -1767,14 +1790,24 @@ ${input.commentText}
         projectId: z.string(),
         threadsAccountId: z.number(),
         scheduledAt: z.string(), // ISO date string
-        postContent: z.string(),
+        postContent: z.string().min(1).max(5000),
       }))
       .mutation(async ({ ctx, input }) => {
+        // ★所有権チェック（他人の projectId / threadsAccountId を指定した不正投稿を防ぐ / IDOR対策）
+        const project = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'プロジェクトが見つかりません。' });
+        }
+        const account = await db.getThreadsAccountById(input.threadsAccountId);
+        if (!account || account.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'アカウントが見つかりません。' });
+        }
+
         // Check scheduled post limit
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
-        const planId = subscription?.planId || 'free';
+        const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
         const plan = getPlan(planId);
-        
+
         // 予約中の件数・月間投稿数の上限は「連携アカウント単位」で適用
         if (plan && plan.features.maxScheduledPosts !== -1) {
           const count = await db.countAccountScheduledPosts(input.threadsAccountId);
@@ -1808,6 +1841,11 @@ ${input.commentText}
     cancel: protectedProcedure
       .input(z.object({ postId: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        // ★所有権チェック（他人の予約投稿を操作させない / IDOR対策）
+        const post = await db.getScheduledPostById(input.postId);
+        if (!post || post.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Post not found' });
+        }
         await db.updateScheduledPost(input.postId, { status: 'canceled' });
         return { success: true };
       }),
@@ -1837,7 +1875,7 @@ ${input.commentText}
 
     // Edit the content of a post that is awaiting approval (then it can be approved).
     editContent: protectedProcedure
-      .input(z.object({ postId: z.number(), postContent: z.string().min(1) }))
+      .input(z.object({ postId: z.number(), postContent: z.string().min(1).max(5000) }))
       .mutation(async ({ ctx, input }) => {
         const post = await db.getScheduledPostById(input.postId);
         if (!post || post.userId !== ctx.user.id) {
@@ -1854,6 +1892,11 @@ ${input.commentText}
     retry: protectedProcedure
       .input(z.object({ postId: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        // ★所有権チェック（他人の失敗投稿を再実行させない / IDOR対策）
+        const post = await db.getScheduledPostById(input.postId);
+        if (!post || post.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Post not found' });
+        }
         const fiveMinLater = new Date(Date.now() + 5 * 60 * 1000);
         await db.updateScheduledPost(input.postId, {
           status: 'pending',

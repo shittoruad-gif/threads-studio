@@ -55,18 +55,34 @@ const JSON_SCHEMA = {
   },
 };
 
+// 日本標準時(JST)はUTC+9固定（サマータイムなし）。
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
 /**
- * Get the next posting time for today
+ * Get the next posting time for today (JST基準)
+ *
+ * ★重要: 本番コンテナのタイムゾーンは UTC（TZ未設定）。以前は postTime.setHours(hour)
+ *   をサーバーローカル(=UTC)で行っていたため、「JST最適時間」のつもりが実際には
+ *   9時間ズレて深夜に投稿されていた（例: 21時指定→翌6時JST、17時指定→翌2時JST）。
+ *   サーバーのTZに依存せず、必ず「その日のJSTの hour 時」を表す絶対時刻(UTC instant)を返す。
  */
 function getNextPostingTime(index: number): Date {
   const now = new Date();
   const hour = POSTING_HOURS[index % POSTING_HOURS.length];
-  const postTime = new Date(now);
-  postTime.setHours(hour, Math.floor(Math.random() * 30), 0, 0); // Add random minutes for natural feel
+  const randMinute = Math.floor(Math.random() * 30); // 自然さのためのランダム分
 
-  // If the time has passed today, schedule for tomorrow
+  // 現在時刻を「JSTの壁時計」に変換し、UTCゲッターで年月日を取り出す
+  const nowJst = new Date(now.getTime() + JST_OFFSET_MS);
+  const y = nowJst.getUTCFullYear();
+  const m = nowJst.getUTCMonth();
+  const d = nowJst.getUTCDate();
+
+  // 「その日のJST hour:randMinute」を表す絶対時刻(UTC instant)を作る
+  let postTime = new Date(Date.UTC(y, m, d, hour, randMinute, 0) - JST_OFFSET_MS);
+
+  // 既に過ぎていれば翌日に
   if (postTime <= now) {
-    postTime.setDate(postTime.getDate() + 1);
+    postTime = new Date(postTime.getTime() + 24 * 60 * 60 * 1000);
   }
 
   return postTime;
@@ -199,8 +215,12 @@ async function generateAutoPost(
       status: requireApproval ? 'awaiting_approval' : 'pending',
     });
 
-    // Increment AI generation usage
-    await db.incrementAiGenerationUsage(userId);
+    // ★#3 自動投稿は手動AI生成の月間枠(maxAiGenerations)を消費しない。
+    //   料金表記「AI投稿生成 ◯回/月」は手動生成の回数を指す。自動投稿でこれを
+    //   消費すると、(a)手動生成が月途中で枠切れになり、(b)自動投稿は枠を超えても
+    //   止まらず表記と矛盾する（=以前指摘の「プロ100件」と同種の問題）。
+    //   自動投稿の本数は maxAutoPostsPerDay とアカウント別の月間上限で別途制限済み。
+    //   そのため incrementAiGenerationUsage はここでは呼ばない。
 
     // Save to history
     await db.saveAiGenerationHistory({
@@ -302,8 +322,19 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
             }
           }
 
+          // ★#2 このアカウントに「店舗(プロジェクト)」が紐付いていれば、その店舗の
+          //   内容だけを投稿する（複数店舗で「店舗Aのアカウントに店舗Bの内容」を防ぐ）。
+          //   紐付けが無い／対象外なら従来どおり全店舗を日替わりローテーション。
+          const pinnedProject = (account as any).defaultProjectId
+            ? eligibleProjects.find((p) => p.id === (account as any).defaultProjectId)
+            : undefined;
+          if ((account as any).defaultProjectId && !pinnedProject) {
+            console.log(`[AutoPost] account ${account.id} の紐付け店舗が対象外のためスキップ`);
+            continue;
+          }
+
           for (let i = 0; i < postCount; i++) {
-            const project = eligibleProjects[(dayOffset + i) % eligibleProjects.length];
+            const project = pinnedProject || eligibleProjects[(dayOffset + i) % eligibleProjects.length];
 
             const success = await generateAutoPost(
               user.id,

@@ -169,6 +169,20 @@ export default function ThreadsConnect() {
     },
   });
 
+  // ★複数店舗対応：アカウントごとに「自動投稿する店舗(プロジェクト)」を割り当てる
+  const { data: projectList } = trpc.project.list.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+  const setDefaultProject = trpc.threads.setDefaultProject.useMutation({
+    onSuccess: () => {
+      toast.success('このアカウントの自動投稿の店舗を設定しました');
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
   // Internal: actually start the OAuth redirect.
   //  - mode 'reconnect': reuse current Threads session (token refresh / first connect)
   //  - mode 'switch':    force re-authentication so the user can pick a different
@@ -361,6 +375,36 @@ export default function ThreadsConnect() {
                 </Button>
               </div>
             </div>
+
+            {/* ★複数店舗対応：このアカウントで自動投稿する店舗 */}
+            {projectList && projectList.length > 0 && (
+              <div className="mb-4 p-3 rounded-lg bg-muted/30 border border-border/60">
+                <label className="block text-xs font-medium text-foreground/80 mb-1.5">
+                  このアカウントで自動投稿する店舗
+                </label>
+                <select
+                  value={(account as any).defaultProjectId ?? ''}
+                  onChange={(e) =>
+                    setDefaultProject.mutate({
+                      accountId: account.id,
+                      projectId: e.target.value || null,
+                    })
+                  }
+                  disabled={setDefaultProject.isPending}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground text-sm"
+                >
+                  <option value="">全店舗を日替わりで投稿（指定なし）</option>
+                  {projectList.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {(p as any).storeName || p.title}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  複数店舗を運用する場合、このアカウント＝この店舗、と指定すると内容の取り違えを防げます。
+                </p>
+              </div>
+            )}
 
             {/* Biography */}
             {account.biography && (

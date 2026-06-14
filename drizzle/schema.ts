@@ -113,6 +113,10 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   accessToken: text("accessToken").notNull(),
   tokenExpiresAt: timestamp("tokenExpiresAt"),
   isActive: boolean("isActive").notNull().default(true),
+  // どの店舗(プロジェクト)の内容を自動投稿するか。複数店舗運用時に
+  // 「店舗Aのアカウントに店舗Bの内容」を防ぐための紐付け。
+  // null の場合は全プロジェクトを日替わりローテーション（従来挙動）。
+  defaultProjectId: varchar("defaultProjectId", { length: 50 }).references(() => projects.id, { onDelete: "set null" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
