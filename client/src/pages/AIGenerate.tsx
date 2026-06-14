@@ -76,6 +76,9 @@ export default function AIGenerate() {
     setIntroDismissed(true);
     try { localStorage.setItem('aigen_intro_dismissed', '1'); } catch { /* ignore */ }
   };
+  // 3案生成：候補と生成中フラグ
+  const [candidates, setCandidates] = useState<(GeneratedPost & { _postType?: PostType })[] | null>(null);
+  const [isGeneratingOptions, setIsGeneratingOptions] = useState(false);
   const { selectedAccount, selectedAccountId, accounts: connectedAccounts } = useThreadsAccount();
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const publishNow = trpc.threads.post.useMutation({
@@ -339,20 +342,8 @@ export default function AIGenerate() {
     },
   });
 
-  const generateMutation = trpc.project.generatePost.useMutation({
-    onSuccess: (data) => {
-      setGeneratedPost(data as GeneratedPost);
-      setEditedPost(data as GeneratedPost);
-      // Invalidate AI usage query to update the counter
-      utils.subscription.getAiUsage.invalidate();
-      // Celebration for first generation
-      triggerCelebration('first-generation');
-    },
-    onError: (error) => {
-      setGenerationError(error.message);
-      toast.error('AI生成に失敗しました。下のエラーガイドをご確認ください。');
-    },
-  });
+  // 3案を並列生成するため、副作用は handleGenerate 側で一括管理する（バインドは素のまま）
+  const generateMutation = trpc.project.generatePost.useMutation();
 
   const handleSaveAsTemplate = () => {
     if (!templateName.trim()) {
@@ -384,18 +375,64 @@ export default function AIGenerate() {
     });
   };
 
-  const handleGenerate = () => {
-    if (!projectId) return;
-    generateMutation.mutate({
-      projectId,
-      postType,
-      // 固定投稿はツリーなしで本文1つに完結させる前提なので
-      // ユーザーが treeCount を選んでいても 0 に強制する。
-      treeCount: postType === 'pinned' ? 0 : treeCount,
-      trendWord: postType === 'trend' ? trendWord : undefined,
-      purpose: purpose || undefined,
-      tone: tone || undefined,
-    });
+  // 3案の切り口（投稿タイプ）を決める。目的があれば推奨タイプから、なければ選択中タイプ＋定番で多様化。
+  const pickThreeTypes = (): PostType[] => {
+    const pool: PostType[] = [];
+    if (purpose) pool.push(...POST_PURPOSES[purpose].recommendedTypes);
+    pool.push(postType, 'empathy', 'local', 'hook_tree', 'proof');
+    const uniq: PostType[] = [];
+    for (const t of pool) {
+      if (!uniq.includes(t)) uniq.push(t);
+      if (uniq.length === 3) break;
+    }
+    while (uniq.length < 3) uniq.push('hook_tree');
+    return uniq.slice(0, 3);
+  };
+
+  const handleGenerate = async () => {
+    if (!projectId || isGeneratingOptions) return;
+    setGenerationError(null);
+    setCandidates(null);
+    setGeneratedPost(null);
+    setEditedPost(null);
+    setIsGeneratingOptions(true);
+    try {
+      const types = pickThreeTypes();
+      const results = await Promise.all(
+        types.map((pt) =>
+          generateMutation
+            .mutateAsync({
+              projectId,
+              postType: pt,
+              treeCount: pt === 'pinned' ? 0 : treeCount,
+              trendWord: pt === 'trend' ? trendWord : undefined,
+              purpose: purpose || undefined,
+              tone: tone || undefined,
+            })
+            .then((d) => ({ ...(d as GeneratedPost), _postType: pt }))
+            .catch(() => null),
+        ),
+      );
+      const ok = results.filter(Boolean) as (GeneratedPost & { _postType?: PostType })[];
+      utils.subscription.getAiUsage.invalidate();
+      if (ok.length === 0) {
+        setGenerationError('AI生成に失敗しました。時間をおいて再度お試しください。');
+        toast.error('AI生成に失敗しました');
+      } else {
+        setCandidates(ok);
+        triggerCelebration('first-generation');
+      }
+    } finally {
+      setIsGeneratingOptions(false);
+    }
+  };
+
+  // 候補から1案を選んで、従来の編集・投稿フローへ
+  const selectCandidate = (c: GeneratedPost) => {
+    setGeneratedPost(c);
+    setEditedPost(c);
+    setCandidates(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleCopy = async (text: string, index: number) => {
@@ -792,21 +829,24 @@ export default function AIGenerate() {
 
                 <Button
                   onClick={handleGenerate}
-                  disabled={generateMutation.isPending || (aiUsage?.limit !== null && aiUsage?.limit !== undefined && aiUsage?.limit !== -1 && (aiUsage?.count ?? 0) >= aiUsage.limit)}
+                  disabled={isGeneratingOptions || (aiUsage?.limit !== null && aiUsage?.limit !== undefined && aiUsage?.limit !== -1 && (aiUsage?.count ?? 0) >= aiUsage.limit)}
                   className="w-full h-12 text-base"
                 >
-                  {generateMutation.isPending ? (
+                  {isGeneratingOptions ? (
                     <>
                       <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                      生成中...
+                      3案を生成中...
                     </>
                   ) : (
                     <>
                       <Sparkles className="h-5 w-5 mr-2" />
-                      AI投稿を生成
+                      AI投稿を生成（3案）
                     </>
                   )}
                 </Button>
+                <p className="text-xs text-muted-foreground text-center">
+                  切り口の違う3案を作ります。気に入った1案を選んで投稿できます（AI生成3回分を使用）。
+                </p>
 
                 {/* AI Generation Error Guide */}
                 {generationError && (
@@ -1387,6 +1427,59 @@ export default function AIGenerate() {
                   </div>
                 </div>
               </>
+            ) : candidates ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  <h3 className="font-semibold text-foreground">3案できました。使いたい案を選んでください</h3>
+                </div>
+                {candidates.map((c, i) => (
+                  <Card
+                    key={i}
+                    className="cursor-pointer hover:border-primary transition-colors"
+                    onClick={() => selectCandidate(c)}
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <CardTitle className="text-sm flex items-center gap-2 min-w-0">
+                          <span className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">{i + 1}</span>
+                          <span className="truncate">{(c._postType && POST_TYPES[c._postType]?.name) || '案'}</span>
+                        </CardTitle>
+                        <Button
+                          size="sm"
+                          className="shrink-0"
+                          onClick={(e) => { e.stopPropagation(); selectCandidate(c); }}
+                        >
+                          この案を使う
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm whitespace-pre-line line-clamp-4 text-foreground">{c.mainPost}</p>
+                      {c.treePosts && c.treePosts.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-2">＋続きの投稿 {c.treePosts.length}本</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleGenerate}
+                  disabled={isGeneratingOptions}
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  別の3案を作り直す
+                </Button>
+              </div>
+            ) : isGeneratingOptions ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+                  <p className="text-foreground font-medium mb-1">3案を生成しています…</p>
+                  <p className="text-sm text-muted-foreground">少しお待ちください（10〜30秒ほど）</p>
+                </CardContent>
+              </Card>
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12 text-center">
@@ -1394,7 +1487,7 @@ export default function AIGenerate() {
                   <p className="text-foreground font-medium mb-1">ここに投稿の下書きが表示されます</p>
                   <p className="text-sm text-muted-foreground max-w-xs">
                     左の「投稿の目的を選ぶ」から目的を選んで、<br />
-                    「AI投稿を生成」を押すとAIが下書きを作ります。
+                    「AI投稿を生成（3案）」を押すとAIが3案つくります。
                   </p>
                 </CardContent>
               </Card>
