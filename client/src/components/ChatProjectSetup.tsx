@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { nanoid } from 'nanoid';
-import { Send, Sparkles, ChevronRight, Check, RotateCcw } from 'lucide-react';
+import { Send, Sparkles, ChevronRight, Check, RotateCcw, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { industryTemplates, INDUSTRY_CATEGORIES } from '@/data/industry-templates';
 import { trpc } from '@/lib/trpc';
@@ -27,6 +30,10 @@ interface FormData {
   strength: string;
   proof: string;
   ctaLink: string;
+  storeName?: string;
+  belief?: string;
+  catchphrase?: string;
+  customerWords?: string;
 }
 
 type StepKey = 'businessType' | 'area' | 'target' | 'mainProblem' | 'strength';
@@ -127,8 +134,13 @@ export default function ChatProjectSetup({
     strength: '',
     proof: '',
     ctaLink: '',
+    storeName: '',
+    belief: '',
+    catchphrase: '',
+    customerWords: '',
     ...initialData,
   });
+  const [showExtra, setShowExtra] = useState(false);
 
   // Determine the starting step based on initialData
   const getInitialStep = useCallback(() => {
@@ -312,6 +324,10 @@ export default function ChatProjectSetup({
       strength: form.strength,
       proof: form.proof || undefined,
       ctaLink: form.ctaLink || undefined,
+      storeName: form.storeName || undefined,
+      belief: form.belief || undefined,
+      catchphrase: form.catchphrase || undefined,
+      customerWords: form.customerWords || undefined,
     });
   };
 
@@ -325,7 +341,12 @@ export default function ChatProjectSetup({
       strength: '',
       proof: '',
       ctaLink: '',
+      storeName: '',
+      belief: '',
+      catchphrase: '',
+      customerWords: '',
     });
+    setShowExtra(false);
     setCurrentStep(0);
     setShowSummary(false);
     setInputValue('');
@@ -461,6 +482,42 @@ export default function ChatProjectSetup({
                 <SummaryRow label="お客様の悩み" value={form.mainProblem} />
                 <SummaryRow label="お店の強み" value={form.strength} />
               </div>
+
+              {/* 任意で追加（一度登録すれば毎回使われる） */}
+              <div className="border-t px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => setShowExtra(!showExtra)}
+                  className="flex items-center justify-between w-full text-sm font-medium text-foreground"
+                >
+                  <span>もっと"らしさ"を出す（任意）</span>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showExtra ? 'rotate-180' : ''}`} />
+                </button>
+                {!showExtra && (
+                  <p className="text-xs text-muted-foreground mt-1">店名・主張・口癖・お客さんの言葉を入れると、より自店らしい投稿になります（あとから編集も可）。</p>
+                )}
+                {showExtra && (
+                  <div className="mt-3 space-y-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">店名</Label>
+                      <Input value={form.storeName || ''} onChange={(e) => setForm({ ...form, storeName: e.target.value })} placeholder="例：○○整体院" className="h-9 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">主張・信念</Label>
+                      <Textarea value={form.belief || ''} onChange={(e) => setForm({ ...form, belief: e.target.value })} placeholder="例：腰痛は薬で抑えず、根本から整えるべき" rows={2} className="text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">口癖・方言・決めゼリフ</Label>
+                      <Input value={form.catchphrase || ''} onChange={(e) => setForm({ ...form, catchphrase: e.target.value })} placeholder="例：〜じゃけぇ／諦めんといて" className="h-9 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">お客さんが実際に使った言葉</Label>
+                      <Textarea value={form.customerWords || ''} onChange={(e) => setForm({ ...form, customerWords: e.target.value })} placeholder="例：夕方になると首がバキバキで集中できへん" rows={2} className="text-sm" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="border-t px-4 py-3">
                 <Button
                   onClick={handleSubmit}
