@@ -54,16 +54,16 @@ const COMPARISON_FEATURES: ComparisonFeature[] = [
   {
     category: '基本機能',
     features: [
-      { name: 'プロジェクト数', free: '3件', light: '50件', pro: '無制限', business: '無制限', agency: '無制限' },
-      { name: 'Threadsアカウント連携', free: '0件', light: '1件', pro: '3件', business: '10件', agency: '20件' },
-      { name: '月間投稿数', free: '0件', light: '30件', pro: '100件', business: '無制限', agency: '無制限' },
+      { name: 'プロジェクト数（お店の登録）', free: '1件', light: '3件', pro: '10件', business: '50件', agency: '無制限' },
+      { name: 'Threadsアカウント連携', free: '1件', light: '1件', pro: '3件', business: '10件', agency: '無制限' },
+      { name: '自動投稿', free: 'なし（手動でお試し）', light: '1日1回まで', pro: '1日3回まで', business: '1日3回まで', agency: '1日3回まで' },
       { name: 'テンプレート利用', free: true, light: true, pro: true, business: true, agency: true },
     ],
   },
   {
     category: 'AI機能',
     features: [
-      { name: 'AI生成機能', free: false, light: true, pro: true, business: true, agency: true },
+      { name: 'AI投稿生成', free: '3回/月', light: '10回/月', pro: '無制限', business: '無制限', agency: '無制限' },
       { name: 'フック生成', free: false, light: true, pro: true, business: true, agency: true },
     ],
   },
@@ -99,8 +99,8 @@ const FAQ_ITEMS = [
     answer: 'クレジットカード（Visa, Mastercard, JCB, American Express）に対応しています。安全な決済処理を行っています。',
   },
   {
-    question: '月間投稿数の制限はいつリセットされますか？',
-    answer: '月間投稿数は毎月1日の0時（日本時間）にリセットされます。未使用分の繰り越しはできません。',
+    question: 'AI生成回数などの月間上限はいつリセットされますか？',
+    answer: 'AI生成回数などの月間の利用上限は、毎月1日の0時（日本時間）にリセットされます。未使用分の繰り越しはできません。',
   },
   {
     question: '複数のThreadsアカウントを管理できますか？',

@@ -270,8 +270,18 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
 
         const account = accounts[0];
 
-        // Determine how many posts to generate
-        const postCount = getPostCount(user.autoPostFrequency);
+        // ★プラン別の「1日あたり自動投稿上限」を適用（料金表示と実態を一致させる）。
+        //   フリー等 maxAutoPostsPerDay=0 のプランは自動投稿しない。
+        const subscription = await db.getSubscriptionByUserId(user.id);
+        const plan = getPlan(subscription?.planId || 'free');
+        const maxPerDay = plan?.features.maxAutoPostsPerDay ?? 0;
+        if (maxPerDay <= 0) {
+          console.log(`[AutoPost] Skipping user ${user.id} - plan does not allow auto-posting`);
+          continue;
+        }
+
+        // Determine how many posts to generate（ユーザー設定の頻度をプラン上限で頭打ち）
+        const postCount = Math.min(getPostCount(user.autoPostFrequency), maxPerDay);
 
         // Generate posts with rotation
         let typeIdx = user.lastAutoPostTypeIndex;

@@ -340,9 +340,16 @@ export default function Dashboard() {
                     className="text-sm border border-emerald-300 rounded-lg px-3 py-1.5 bg-white"
                     disabled={!autoPostSettings?.autoPostEnabled}
                   >
-                    <option value="daily">1日1回</option>
-                    <option value="twice_daily">1日2回</option>
-                    <option value="three_daily">1日3回</option>
+                    {(() => {
+                      const maxPerDay = subscription?.plan?.features?.maxAutoPostsPerDay ?? 0;
+                      return (
+                        <>
+                          <option value="daily">1日1回</option>
+                          <option value="twice_daily" disabled={maxPerDay < 2}>1日2回{maxPerDay < 2 ? '（上位プラン）' : ''}</option>
+                          <option value="three_daily" disabled={maxPerDay < 3}>1日3回{maxPerDay < 3 ? '（上位プラン）' : ''}</option>
+                        </>
+                      );
+                    })()}
                   </select>
                 </div>
                 <button

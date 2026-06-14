@@ -178,25 +178,31 @@ export default function Settings() {
                   className="space-y-2"
                 >
                   {[
-                    { value: "daily", label: "1日1回", desc: "着実に認知を広げたい方に" },
-                    { value: "twice_daily", label: "1日2回", desc: "朝と夕方に投稿で露出UP" },
-                    { value: "three_daily", label: "1日3回", desc: "最大露出で一気に認知を拡大" },
-                  ].map((freq) => (
+                    { value: "daily", label: "1日1回", desc: "着実に認知を広げたい方に", min: 1 },
+                    { value: "twice_daily", label: "1日2回", desc: "朝と夕方に投稿で露出UP", min: 2 },
+                    { value: "three_daily", label: "1日3回", desc: "最大露出で一気に認知を拡大", min: 3 },
+                  ].map((freq) => {
+                    const maxPerDay = (subscription as any)?.plan?.features?.maxAutoPostsPerDay ?? 0;
+                    const locked = maxPerDay < freq.min;
+                    return (
                     <label
                       key={freq.value}
-                      className={`flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors ${
-                        postFrequency === freq.value
-                          ? "border-emerald-300 bg-emerald-50"
-                          : "border-border hover:bg-muted/50"
+                      className={`flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors ${
+                        locked
+                          ? "border-border opacity-50 cursor-not-allowed"
+                          : postFrequency === freq.value
+                            ? "border-emerald-300 bg-emerald-50 cursor-pointer"
+                            : "border-border hover:bg-muted/50 cursor-pointer"
                       }`}
                     >
-                      <RadioGroupItem value={freq.value} className="mt-0.5" />
+                      <RadioGroupItem value={freq.value} className="mt-0.5" disabled={locked} />
                       <div>
-                        <span className="text-sm font-medium text-foreground">{freq.label}</span>
+                        <span className="text-sm font-medium text-foreground">{freq.label}{locked ? "（上位プラン）" : ""}</span>
                         <p className="text-xs text-muted-foreground">{freq.desc}</p>
                       </div>
                     </label>
-                  ))}
+                    );
+                  })}
                 </RadioGroup>
               </div>
 

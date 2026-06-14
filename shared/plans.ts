@@ -8,6 +8,12 @@ export interface PlanFeatures {
   maxThreadsAccounts: number;
   maxScheduledPosts: number;
   maxAiGenerations: number; // -1 for unlimited, 0 for none
+  /**
+   * 自動投稿の「1日あたり最大回数」。0 = 自動投稿なし。
+   * 料金表ではこの値を「1日◯回」として表示し、実態（autoPostScheduler）でも上限にする。
+   * maxScheduledPosts（月間総数）は、この日次回数×31＋手動分を上回る安全弁として設定する。
+   */
+  maxAutoPostsPerDay: number;
   hasPrioritySupport: boolean;
   hasApiAccess?: boolean;
 }
@@ -33,7 +39,8 @@ export interface PlanConfig {
 const FEATURES_LIGHT: PlanFeatures = {
   maxProjects: 3,
   maxThreadsAccounts: 1,
-  maxScheduledPosts: 10,
+  maxAutoPostsPerDay: 1,        // 1日1回
+  maxScheduledPosts: 40,        // 1日1回×31日＋手動分の安全弁
   maxAiGenerations: 10,
   hasPrioritySupport: false,
   hasApiAccess: false,
@@ -41,7 +48,8 @@ const FEATURES_LIGHT: PlanFeatures = {
 const FEATURES_PRO: PlanFeatures = {
   maxProjects: 10,
   maxThreadsAccounts: 3,
-  maxScheduledPosts: 100,
+  maxAutoPostsPerDay: 3,        // 1日3回
+  maxScheduledPosts: 120,       // 1日3回×31日（93）＋手動分の安全弁
   maxAiGenerations: -1,
   hasPrioritySupport: false,
   hasApiAccess: false,
@@ -49,6 +57,7 @@ const FEATURES_PRO: PlanFeatures = {
 const FEATURES_BUSINESS: PlanFeatures = {
   maxProjects: 50,
   maxThreadsAccounts: 10,
+  maxAutoPostsPerDay: 3,        // 1日3回（連携アカウントを切替えて運用）
   maxScheduledPosts: 500,
   maxAiGenerations: -1,
   hasPrioritySupport: true,
@@ -64,6 +73,7 @@ export const PLANS: Record<string, PlanConfig> = {
     features: {
       maxProjects: 1,
       maxThreadsAccounts: 1,
+      maxAutoPostsPerDay: 0,     // フリーは自動投稿なし（手動でお試し）
       maxScheduledPosts: 3,
       maxAiGenerations: 3,
       hasPrioritySupport: false,
@@ -142,6 +152,7 @@ export const PLANS: Record<string, PlanConfig> = {
     features: {
       maxProjects: -1,
       maxThreadsAccounts: -1,
+      maxAutoPostsPerDay: 3,     // 自動投稿は1日最大3回（手動は無制限）
       maxScheduledPosts: -1,
       maxAiGenerations: -1,
       hasPrioritySupport: true,
