@@ -418,14 +418,32 @@ export default function Dashboard() {
             {autoPostHistory && autoPostHistory.length > 0 && (
               <div className="mt-4 space-y-1.5">
                 {autoPostHistory.slice(0, 2).map((post: any) => (
-                  <div key={post.id} className="flex items-center justify-between text-sm bg-white/70 rounded-lg px-3 py-2">
+                  <button
+                    key={post.id}
+                    onClick={() => setLocation('/post-history')}
+                    className="w-full flex items-center justify-between text-sm bg-white/70 rounded-lg px-3 py-2 hover:bg-white transition-colors text-left"
+                  >
                     <span className="truncate flex-1 min-w-0 mr-2 text-muted-foreground">{post.postContent?.substring(0, 40)}...</span>
-                    <Badge variant={post.status === 'posted' ? 'default' : post.status === 'pending' ? 'secondary' : 'destructive'} className="text-xs">
+                    <Badge variant={post.status === 'posted' ? 'default' : post.status === 'pending' ? 'secondary' : 'destructive'} className="text-xs shrink-0">
                       {post.status === 'posted' ? '投稿済' : post.status === 'pending' ? '予約中' : '失敗'}
                     </Badge>
-                  </div>
+                  </button>
                 ))}
               </div>
+            )}
+
+            {/* 予約投稿の個別管理への導線 */}
+            {autoPostHistory && autoPostHistory.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 w-full bg-white/70"
+                onClick={() => setLocation('/post-history?status=pending')}
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                予約投稿を管理（個別に停止・削除）
+                <ChevronRight className="w-4 h-4 ml-auto" />
+              </Button>
             )}
 
             {/* Error guide for failed posts */}

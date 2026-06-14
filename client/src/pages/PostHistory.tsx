@@ -24,7 +24,14 @@ type StatusFilter = "all" | "pending" | "posted" | "failed" | "canceled";
 export default function PostHistory() {
   const [, setLocation] = useLocation();
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  // URL の ?status=pending 等で初期フィルタを受ける（ダッシュボードの「予約投稿を管理」から予約中を直接開く）
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
+    try {
+      const s = new URLSearchParams(window.location.search).get('status');
+      if (s === 'pending' || s === 'posted' || s === 'failed' || s === 'canceled') return s;
+    } catch { /* ignore */ }
+    return "all";
+  });
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkCanceling, setBulkCanceling] = useState(false);
   // ID of the post pending delete confirmation. null = no dialog shown.
