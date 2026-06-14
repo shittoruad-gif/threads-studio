@@ -4,7 +4,12 @@
  * Handles posting to Threads via Graph API
  */
 
+import { THREAD_SEGMENT_DELIMITER } from "../shared/const";
+
 const THREADS_GRAPH_URL = "https://graph.threads.net/v1.0";
+
+/** Threads 1投稿の文字数上限（安全側）。各セグメントはこれを超えないよう切り詰める。 */
+const PER_POST_SAFETY_LIMIT = 480;
 
 export interface CreatePostParams {
   accessToken: string;
@@ -14,6 +19,7 @@ export interface CreatePostParams {
   imageUrl?: string;
   videoUrl?: string;
   children?: string[]; // For carousel posts
+  replyToId?: string; // 返信チェーン（ツリー）用：この投稿IDへの返信として作成
 }
 
 export interface MediaContainer {
@@ -30,7 +36,7 @@ export interface PublishResponse {
 export async function createMediaContainer(
   params: CreatePostParams
 ): Promise<MediaContainer> {
-  const { accessToken, threadsUserId, text, mediaType = "TEXT", imageUrl, videoUrl, children } = params;
+  const { accessToken, threadsUserId, text, mediaType = "TEXT", imageUrl, videoUrl, children, replyToId } = params;
 
   const body: Record<string, string> = {
     media_type: mediaType,
@@ -40,6 +46,11 @@ export async function createMediaContainer(
   // Add text content
   if (text) {
     body.text = text;
+  }
+
+  // 返信チェーン（ツリー）: 親投稿への返信として作成
+  if (replyToId) {
+    body.reply_to_id = replyToId;
   }
 
   // Add media URLs
@@ -119,6 +130,62 @@ export async function createAndPublishPost(
   );
 
   return result;
+}
+
+/**
+ * 投稿本文を「連続投稿（ツリー）」のセグメント配列に分解する。
+ * THREAD_SEGMENT_DELIMITER で区切られていれば各セグメントに分割。
+ * 区切りが無ければ単一要素。各セグメントは安全側で480字に切り詰める。
+ */
+export function splitThreadSegments(content: string): string[] {
+  const raw = (content || '').split(THREAD_SEGMENT_DELIMITER);
+  const segments = raw
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map((s) => (Array.from(s).length > PER_POST_SAFETY_LIMIT
+      ? Array.from(s).slice(0, PER_POST_SAFETY_LIMIT - 1).join('') + '…'
+      : s));
+  return segments.length > 0 ? segments : [''];
+}
+
+/**
+ * 連続投稿（ツリー）を返信チェーンとして投稿する。
+ * 先頭=ルート投稿、以降=直前の投稿への返信、という本物のスレッドを作る。
+ * segments が1件なら単一投稿と同じ。
+ */
+export async function createAndPublishThread(
+  base: { accessToken: string; threadsUserId: string },
+  segments: string[],
+): Promise<{ id: string; replyIds: string[] }> {
+  const clean = segments.map((s) => (s || '').trim()).filter(Boolean);
+  if (clean.length === 0) throw new Error('No content to post');
+
+  // ルート投稿
+  const root = await createAndPublishPost({
+    accessToken: base.accessToken,
+    threadsUserId: base.threadsUserId,
+    text: clean[0],
+    mediaType: 'TEXT',
+  });
+
+  const replyIds: string[] = [];
+  let prevId = root.id;
+  for (let i = 1; i < clean.length; i++) {
+    // 直前の公開が反映されるまで少し待つ（順序保証・レート回避）
+    await new Promise((r) => setTimeout(r, 1500));
+    const container = await createMediaContainer({
+      accessToken: base.accessToken,
+      threadsUserId: base.threadsUserId,
+      text: clean[i],
+      mediaType: 'TEXT',
+      replyToId: prevId,
+    });
+    const published = await publishMediaContainer(base.threadsUserId, container.id, base.accessToken);
+    replyIds.push(published.id);
+    prevId = published.id;
+  }
+
+  return { id: root.id, replyIds };
 }
 
 /**

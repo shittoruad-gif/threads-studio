@@ -5,7 +5,7 @@
  */
 
 import * as db from "./db";
-import { createAndPublishPost } from "./threadsPost";
+import { createAndPublishThread, splitThreadSegments } from "./threadsPost";
 import { notifyOwner } from "./_core/notification";
 import { refreshAccessToken } from "./threadsAuth";
 
@@ -126,24 +126,14 @@ export async function executePendingPosts() {
         }
 
         // Post to Threads
-        // ★Threads API は1投稿500文字制限。手動スケジュールでもツリー連結で
-        //  この制限を超えるケースがあるので、送信前に安全側で切り詰める。
-        const SAFETY_LIMIT = 480;
-        let textToSend = post.postContent || '';
-        if (Array.from(textToSend).length > SAFETY_LIMIT) {
-          console.warn(
-            `[Scheduled Post] Post ${post.id} exceeds safety limit ` +
-            `(${Array.from(textToSend).length} chars > ${SAFETY_LIMIT}). Truncating before send.`,
-          );
-          textToSend = Array.from(textToSend).slice(0, SAFETY_LIMIT - 1).join('') + '…';
-        }
-
-        const result = await createAndPublishPost({
-          accessToken,
-          threadsUserId: account.threadsUserId,
-          text: textToSend,
-          mediaType: "TEXT",
-        });
+        // ★ツリー（続きの投稿）は本物の返信チェーンとして連続投稿する。
+        //   postContent が区切りを含めば複数投稿に分割、無ければ単一投稿。
+        //   各セグメントは個別投稿なので500字制限による切り捨ては起きない。
+        const segments = splitThreadSegments(post.postContent || '');
+        const result = await createAndPublishThread(
+          { accessToken, threadsUserId: account.threadsUserId },
+          segments,
+        );
 
         // Update status to posted
         await db.updateScheduledPost(post.id, {

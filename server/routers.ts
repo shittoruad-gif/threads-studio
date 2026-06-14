@@ -1393,7 +1393,7 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         videoUrl: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { createAndPublishPost } = await import("./threadsPost");
+        const { createAndPublishPost, createAndPublishThread, splitThreadSegments } = await import("./threadsPost");
         
         // Check monthly post limit
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
@@ -1425,14 +1425,23 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
 
         try {
           // Post to Threads
-          const result = await createAndPublishPost({
-            accessToken: account.accessToken,
-            threadsUserId: account.threadsUserId,
-            text: input.text,
-            mediaType: input.mediaType,
-            imageUrl: input.imageUrl,
-            videoUrl: input.videoUrl,
-          });
+          // テキストは区切りがあれば返信チェーン（ツリー）として連続投稿。
+          // 画像/動画は単一投稿で扱う。
+          const isMedia = input.mediaType && input.mediaType !== 'TEXT';
+          const segments = isMedia ? [] : splitThreadSegments(input.text);
+          const result = (!isMedia && segments.length > 1)
+            ? await createAndPublishThread(
+                { accessToken: account.accessToken, threadsUserId: account.threadsUserId },
+                segments,
+              )
+            : await createAndPublishPost({
+                accessToken: account.accessToken,
+                threadsUserId: account.threadsUserId,
+                text: isMedia ? input.text : (segments[0] ?? input.text),
+                mediaType: input.mediaType,
+                imageUrl: input.imageUrl,
+                videoUrl: input.videoUrl,
+              });
 
           return { 
             success: true, 

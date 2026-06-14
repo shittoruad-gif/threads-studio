@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useThreadsAccount } from '@/components/ThreadsAccountSwitcher';
 import { triggerCelebration } from '@/components/Celebration';
+import { THREAD_SEGMENT_DELIMITER } from '@shared/const';
 
 interface SchedulePostDialogProps {
   open: boolean;
@@ -185,29 +186,36 @@ export function SchedulePostDialog({ open, onOpenChange, projectId, postContent 
 
           {/* プレビュー */}
           <div className="p-3 rounded-lg bg-muted/50 border border-border">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-muted-foreground text-sm">投稿内容プレビュー</p>
-              {(() => {
-                // Threads API は1投稿500文字制限。
-                // ツリー連結で長くなりがちなので、ここで明示的に文字数を出して
-                // 「予約してから初めて長すぎることに気付く」のを防ぐ。
-                const len = Array.from(postContent).length;
-                const isWarn = len > 350;
-                const isOver = len > 480;
-                return (
-                  <span
-                    className={`text-xs font-medium ${
-                      isOver ? 'text-destructive' : isWarn ? 'text-orange-600 dark:text-orange-400' : 'text-muted-foreground'
-                    }`}
-                  >
-                    {len} / 500文字
-                    {isOver && ' ⚠ 上限超過・送信時に切り詰められます'}
-                    {!isOver && isWarn && ' ⚠ 長め'}
-                  </span>
-                );
-              })()}
-            </div>
-            <p className="text-foreground text-sm line-clamp-3 whitespace-pre-line">{postContent}</p>
+            {(() => {
+              // 連続投稿（ツリー）は各セグメント=1投稿。500字制限はセグメント単位。
+              const segments = postContent.split(THREAD_SEGMENT_DELIMITER).map((s) => s.trim()).filter(Boolean);
+              const maxLen = segments.reduce((m, s) => Math.max(m, Array.from(s).length), 0);
+              const isOver = maxLen > 480; // 1投稿が長すぎる場合のみ警告
+              return (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-muted-foreground text-sm">
+                      投稿内容プレビュー{segments.length > 1 ? `（${segments.length}件の連続投稿）` : ''}
+                    </p>
+                    <span className={`text-xs font-medium ${isOver ? 'text-destructive' : 'text-muted-foreground'}`}>
+                      最長 {maxLen} / 500文字{isOver && ' ⚠ 1投稿が長すぎます'}
+                    </span>
+                  </div>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {segments.map((seg, i) => (
+                      <div key={i} className="text-foreground text-sm whitespace-pre-line">
+                        {segments.length > 1 && (
+                          <span className="text-[11px] text-muted-foreground/70 mr-1">
+                            {i === 0 ? '①メイン' : `${'②③④⑤⑥'[i - 1] || `${i + 1}`}続き`}：
+                          </span>
+                        )}
+                        <span className="line-clamp-2">{seg}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
 

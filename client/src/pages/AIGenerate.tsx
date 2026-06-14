@@ -12,6 +12,16 @@ import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/lib/trpc';
 import { POST_TYPES, POST_PURPOSES, POST_PURPOSES_LIST, POST_TONES, POST_TONES_LIST } from '@shared/threadsPrompts';
 import type { PostPurpose, PostTone } from '@shared/threadsPrompts';
+import { THREAD_SEGMENT_DELIMITER } from '@shared/const';
+
+// 投稿を「連続投稿（ツリー）」のセグメント区切りで連結する。
+// メイン・続きの投稿・最後のひと押し をそれぞれ独立した投稿（返信チェーン）として送るため。
+function buildThreadContent(p: { mainPost?: string; treePosts?: string[]; cta?: string }): string {
+  return [p.mainPost, ...(p.treePosts || []), p.cta]
+    .map((s) => (s || '').trim())
+    .filter(Boolean)
+    .join(THREAD_SEGMENT_DELIMITER);
+}
 import { SchedulePostDialog } from '@/components/SchedulePostDialog';
 import ThreadsPostPreview from '@/components/ThreadsPostPreview';
 import ThreadsPhonePreview from '@/components/ThreadsPhonePreview';
@@ -1593,7 +1603,7 @@ export default function AIGenerate() {
           open={scheduleDialogOpen}
           onOpenChange={setScheduleDialogOpen}
           projectId={projectId!}
-          postContent={`${editedPost.mainPost}\n\n${editedPost.treePosts.join('\n\n')}\n\n${editedPost.cta}`}
+          postContent={buildThreadContent(editedPost)}
         />
       )}
 
@@ -1623,7 +1633,7 @@ export default function AIGenerate() {
               disabled={publishNow.isPending || !selectedAccountId || !editedPost}
               onClick={() => {
                 if (!selectedAccountId || !editedPost) return;
-                const text = `${editedPost.mainPost}\n\n${editedPost.treePosts.join('\n\n')}\n\n${editedPost.cta}`.trim();
+                const text = buildThreadContent(editedPost);
                 publishNow.mutate({ accountId: selectedAccountId, text });
               }}
             >
