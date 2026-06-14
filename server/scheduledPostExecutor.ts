@@ -36,7 +36,11 @@ async function notifyUserPostFailure(userId: number, errorMessage: string): Prom
   }
 }
 
-const PROCESSING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+// 「処理中」のまま放置された投稿を pending に戻すまでの猶予。
+// 連続投稿(ツリー)はセグメント間に遅延＋トークン更新で時間がかかるため、
+// 実際の処理時間より十分長く取り、処理中の投稿を誤って再投入して二重投稿になる
+// レースを避ける。
+const PROCESSING_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
  * Reset stuck processing posts back to pending

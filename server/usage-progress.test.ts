@@ -23,7 +23,7 @@ describe('Usage Progress Logic', () => {
     });
 
     it('should return true when limit is exceeded', () => {
-      expect(isLimitExceeded('light', 'maxScheduledPosts', 11)).toBe(true);
+      expect(isLimitExceeded('light', 'maxScheduledPosts', 41)).toBe(true);
     });
 
     it('should return false when under limit', () => {
@@ -31,7 +31,7 @@ describe('Usage Progress Logic', () => {
     });
 
     it('should return true when at limit', () => {
-      expect(isLimitExceeded('light', 'maxScheduledPosts', 10)).toBe(true);
+      expect(isLimitExceeded('light', 'maxScheduledPosts', 40)).toBe(true);
     });
 
     it('should return true for invalid plan', () => {
@@ -99,14 +99,14 @@ describe('Usage Progress Logic', () => {
       expect(isLimitExceeded('light', 'maxProjects', 3)).toBe(true);
       expect(isLimitExceeded('light', 'maxProjects', 2)).toBe(false);
       expect(isLimitExceeded('light', 'maxThreadsAccounts', 1)).toBe(true);
-      expect(isLimitExceeded('light', 'maxScheduledPosts', 10)).toBe(true);
+      expect(isLimitExceeded('light', 'maxScheduledPosts', 40)).toBe(true);
     });
 
     it('should have correct limits for pro plan', () => {
       expect(isLimitExceeded('pro', 'maxProjects', 10)).toBe(true);
       expect(isLimitExceeded('pro', 'maxProjects', 9)).toBe(false);
       expect(isLimitExceeded('pro', 'maxThreadsAccounts', 3)).toBe(true);
-      expect(isLimitExceeded('pro', 'maxScheduledPosts', 100)).toBe(true);
+      expect(isLimitExceeded('pro', 'maxScheduledPosts', 120)).toBe(true);
     });
 
     it('should have correct limits for business plan', () => {

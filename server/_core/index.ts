@@ -185,6 +185,10 @@ async function startServer() {
         const univapaySubId: string | null =
           data?.subscription_id ?? data?.subscription?.id ?? data?.id ?? event?.id ?? null;
 
+        // 課金イベントの一意ID（Webhook再送の二重カウント防止に使う）
+        const chargeEventId: string | null =
+          data?.charge?.id ?? data?.charge_id ?? (/charge/.test(eventType) ? (data?.id ?? event?.id) : null) ?? null;
+
         // ── プラン特定（金額 ⇄ PLANS.priceMonthly）──────────────
         const { PLANS, TRIAL_DAYS, getPlan } = await import('../../shared/plans');
         let matchedPlanId: string | null = null;
@@ -302,9 +306,11 @@ async function startServer() {
             } catch {}
           } else {
             const currentPeriodEnd = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000);
-            // ★#2 キャンペーンプランの課金回数を数える（規定回数で自動解約）
+            // ★#2 キャンペーンプランの課金回数を数える（規定回数で自動解約）。
+            //   ★Webhook再送対策：同じ課金イベントIDなら回数を増やさない（二重カウント防止）。
             const chargedPlan = getPlan(planId);
-            const newChargeCount = chargedPlan?.isCampaign
+            const isDuplicateCharge = !!chargeEventId && existing?.lastChargeEventId === chargeEventId;
+            const newChargeCount = (chargedPlan?.isCampaign && !isDuplicateCharge)
               ? (existing?.campaignChargeCount ?? 0) + 1
               : (existing?.campaignChargeCount ?? 0);
             if (existing) {
@@ -316,8 +322,9 @@ async function startServer() {
                 currentPeriodEnd,
                 cancelAtPeriodEnd: false,
                 campaignChargeCount: newChargeCount,
+                lastChargeEventId: chargeEventId ?? existing.lastChargeEventId ?? undefined,
               });
-              console.log(`[Univapay Webhook] サブスク更新→active: user=${user.id} plan=${planId}`);
+              console.log(`[Univapay Webhook] サブスク更新→active: user=${user.id} plan=${planId}${isDuplicateCharge ? '（再送イベント・回数据え置き）' : ''}`);
             } else {
               await db.createSubscription({
                 userId: user.id,
@@ -327,12 +334,14 @@ async function startServer() {
                 trialEndsAt: null,
                 currentPeriodEnd,
                 campaignChargeCount: newChargeCount,
+                lastChargeEventId: chargeEventId ?? undefined,
               } as any);
               console.log(`[Univapay Webhook] サブスク新規作成→active: user=${user.id} plan=${planId}`);
             }
 
-            // ★#2 キャンペーン規定回数に達したらアプリ側から自動解約（過剰課金防止）
-            if (chargedPlan?.isCampaign && chargedPlan.campaignCharges
+            // ★#2 キャンペーン規定回数に達したらアプリ側から自動解約（過剰課金防止）。
+            //   再送イベントでは発火させない（!isDuplicateCharge）。
+            if (chargedPlan?.isCampaign && chargedPlan.campaignCharges && !isDuplicateCharge
                 && newChargeCount >= chargedPlan.campaignCharges) {
               const subId = univapaySubId ?? existing?.univapaySubscriptionId;
               console.log(`[Univapay Webhook] キャンペーン規定回数到達(${newChargeCount}/${chargedPlan.campaignCharges})→自動解約: user=${user.id}`);

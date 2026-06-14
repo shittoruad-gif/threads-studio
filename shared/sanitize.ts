@@ -56,10 +56,29 @@ export function sanitizeForPrompt(input: string | null | undefined, maxLen = 500
   }
 
   // 4. 長さ上限（プロンプト全体を圧迫させない）
-  if (s.length > maxLen) {
-    s = s.slice(0, maxLen) + '…';
+  //    コードポイント単位で切る（絵文字・サロゲートペアを壊さない）
+  const cps = Array.from(s);
+  if (cps.length > maxLen) {
+    s = cps.slice(0, maxLen).join('') + '…';
   }
 
+  return s.trim();
+}
+
+/**
+ * 生成された投稿本文から「生の外部URL」を除去する。
+ * 方針A（教科書準拠）では本文に http(s):// のURLを貼らず、プロフィール/固定投稿へ誘導する。
+ * AIが指示を無視してURLを混入した場合の最終的な機械担保。
+ * URL除去後に生じる余分な空白・記号も軽く整える。
+ */
+export function stripRawUrls(input: string | null | undefined): string {
+  if (input == null) return '';
+  let s = String(input);
+  // http(s):// で始まるURL（末尾の句読点は残す）
+  s = s.replace(/https?:\/\/[^\s　]+/g, '');
+  // 「→ 」「（）」など、URLが消えて残った誘導記号まわりの空白を軽く整える
+  s = s.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n');
+  s = s.replace(/[（(]\s*[）)]/g, ''); // 空になった括弧
   return s.trim();
 }
 

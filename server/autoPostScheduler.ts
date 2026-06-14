@@ -10,6 +10,7 @@ import cron from "node-cron";
 import * as db from "./db";
 import { getPlan } from "../shared/plans";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
+import { stripRawUrls } from "../shared/sanitize";
 import { invokeLLM } from "./_core/llm";
 import { nanoid } from "nanoid";
 
@@ -179,10 +180,11 @@ async function generateAutoPost(
     // Combine main post + tree posts + CTA into full post content。
     // treeCount=0 を指定しているので通常 treePosts は空配列。
     // ハッシュタグ（#）は使わない方針のため、AIが誤って返しても本文には連結しない。
+    // ★treeCount=0 固定なので treePosts は使わない（AIが誤って返しても本文に混ぜない）。
+    //   本文に生URLが混入していたら除去（方針A）。
     const rawContent = [
-      result.mainPost,
-      ...(result.treePosts || []),
-      result.cta || '',
+      stripRawUrls(result.mainPost),
+      stripRawUrls(result.cta || ''),
     ].filter(Boolean).join('\n\n');
 
     // Threads API は1投稿500文字制限。長すぎると API 側で拒否されるか

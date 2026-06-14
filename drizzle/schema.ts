@@ -90,6 +90,8 @@ export const subscriptions = mysqlTable("subscriptions", {
   // キャンペーンプランの実課金回数。規定回数(campaignCharges)に達したらアプリ側で
   // 自動解約する（Univapay側が自動停止しない場合の過剰課金防止）。
   campaignChargeCount: int("campaignChargeCount").notNull().default(0),
+  // 最後に処理した課金イベントID。Webhook再送時の二重カウントを防ぐ（冪等性）。
+  lastChargeEventId: varchar("lastChargeEventId", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [

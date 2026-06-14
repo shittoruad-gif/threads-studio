@@ -2,7 +2,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
-import { toPublicErrorMessage } from "../shared/sanitize";
+import { toPublicErrorMessage, stripRawUrls } from "../shared/sanitize";
 import { z } from "zod";
 import * as db from "./db";
 import { ENV } from "./_core/env";
@@ -893,10 +893,19 @@ export const appRouter = router({
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI応答が空です。' });
         }
 
-        const rawResult = JSON.parse(content);
+        let rawResult: any;
+        try {
+          rawResult = JSON.parse(content);
+        } catch {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '生成結果の解析に失敗しました。もう一度お試しください。' });
+        }
         // ★NGワードを「自然な文章のまま」除外（違反時のみAI書き換え→最終手段で確定削除）
         const { enforceNgWords } = await import('./ngwordGuard');
         const result = await enforceNgWords(rawResult, ngWords);
+        // ★方針A：本文に生URLを混入させない（AIが無視した場合の機械担保）
+        if (result.mainPost) result.mainPost = stripRawUrls(result.mainPost);
+        if (Array.isArray(result.treePosts)) result.treePosts = result.treePosts.map((t: string) => stripRawUrls(t));
+        if (result.cta) result.cta = stripRawUrls(result.cta);
 
         // Increment AI generation usage count
         await db.incrementAiGenerationUsage(ctx.user.id);
@@ -1120,7 +1129,12 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI応答が空です。' });
         }
 
-        const result = JSON.parse(content);
+        let result: any;
+        try {
+          result = JSON.parse(content);
+        } catch {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '生成結果の解析に失敗しました。もう一度お試しください。' });
+        }
 
         // ★NGワードを各バリエーションから自然な形で除外（違反時のみ書き換え→最終手段で削除）
         const { enforceNgWords } = await import('./ngwordGuard');
@@ -1255,7 +1269,16 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI応答が空です。' });
         }
 
-        const result = JSON.parse(content);
+        let result: any;
+        try {
+          result = JSON.parse(content);
+        } catch {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '生成結果の解析に失敗しました。もう一度お試しください。' });
+        }
+
+        // ★方針A：本文に生URLを混入させない
+        if (result.mainPost) result.mainPost = stripRawUrls(result.mainPost);
+        if (result.cta) result.cta = stripRawUrls(result.cta);
 
         // Return only the main post and metadata (no saving to DB)
         return {
@@ -3010,6 +3033,11 @@ ${input.commentText}
     toggle: protectedProcedure
       .input(z.object({ historyId: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        // ★所有権チェック：自分の生成履歴のみお気に入りにできる
+        const history = await db.getAiGenerationHistoryById(input.historyId, ctx.user.id);
+        if (!history) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '履歴が見つかりません。' });
+        }
         const favorited = await db.toggleHistoryFavorite(ctx.user.id, input.historyId);
         return { favorited };
       }),

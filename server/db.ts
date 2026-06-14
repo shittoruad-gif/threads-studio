@@ -616,8 +616,9 @@ export async function countUserMonthlyPosts(userId: number): Promise<number> {
     .where(and(
       eq(scheduledPosts.userId, userId),
       eq(scheduledPosts.status, 'posted'),
-      sql`YEAR(${scheduledPosts.postedAt}) = YEAR(NOW())`,
-      sql`MONTH(${scheduledPosts.postedAt}) = MONTH(NOW())`
+      // 月境界はJST(UTC+9)で判定（コンテナ/DBがUTCのため+9時間して比較）
+      sql`YEAR(DATE_ADD(${scheduledPosts.postedAt}, INTERVAL 9 HOUR)) = YEAR(DATE_ADD(NOW(), INTERVAL 9 HOUR))`,
+      sql`MONTH(DATE_ADD(${scheduledPosts.postedAt}, INTERVAL 9 HOUR)) = MONTH(DATE_ADD(NOW(), INTERVAL 9 HOUR))`
     ));
 
   return result[0]?.count ?? 0;
@@ -632,8 +633,9 @@ export async function countAccountMonthlyPosts(threadsAccountId: number): Promis
     .where(and(
       eq(scheduledPosts.threadsAccountId, threadsAccountId),
       eq(scheduledPosts.status, 'posted'),
-      sql`YEAR(${scheduledPosts.postedAt}) = YEAR(NOW())`,
-      sql`MONTH(${scheduledPosts.postedAt}) = MONTH(NOW())`
+      // 月境界はJST(UTC+9)で判定（コンテナ/DBがUTCのため+9時間して比較）
+      sql`YEAR(DATE_ADD(${scheduledPosts.postedAt}, INTERVAL 9 HOUR)) = YEAR(DATE_ADD(NOW(), INTERVAL 9 HOUR))`,
+      sql`MONTH(DATE_ADD(${scheduledPosts.postedAt}, INTERVAL 9 HOUR)) = MONTH(DATE_ADD(NOW(), INTERVAL 9 HOUR))`
     ));
   return result[0]?.count ?? 0;
 }
@@ -825,7 +827,7 @@ export async function incrementAiGenerationUsage(userId: number): Promise<void> 
   const db = await getDb();
   if (!db) return;
 
-  const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+  const currentMonth = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7); // YYYY-MM (JST基準)
 
   // Try to increment existing record
   const existing = await db.select()
@@ -855,7 +857,7 @@ export async function getAiGenerationUsage(userId: number): Promise<{ count: num
   const db = await getDb();
   if (!db) return { count: 0, limit: null };
 
-  const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+  const currentMonth = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7); // YYYY-MM (JST基準)
 
   // Get current month usage
   const usage = await db.select()

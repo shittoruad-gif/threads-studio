@@ -7,7 +7,7 @@ describe('Plan Limits', () => {
       const lightPlan = getPlan('light');
       expect(lightPlan).toBeDefined();
       expect(lightPlan?.id).toBe('light');
-      expect(lightPlan?.priceMonthly).toBe(2980);
+      expect(lightPlan?.priceMonthly).toBe(4980);
     });
 
     it('should return undefined for invalid plan ID', () => {
@@ -19,10 +19,10 @@ describe('Plan Limits', () => {
   describe('Plan Features', () => {
     it('light plan should have correct limits', () => {
       const plan = PLANS.light;
-      expect(plan.priceMonthly).toBe(2980);
+      expect(plan.priceMonthly).toBe(4980);
       expect(plan.features.maxProjects).toBe(3);
       expect(plan.features.maxThreadsAccounts).toBe(1);
-      expect(plan.features.maxScheduledPosts).toBe(10);
+      expect(plan.features.maxScheduledPosts).toBe(40);
       expect(plan.features.maxAiGenerations).toBe(10);
       expect(plan.features.hasPrioritySupport).toBe(false);
     });
@@ -32,7 +32,7 @@ describe('Plan Limits', () => {
       expect(plan.priceMonthly).toBe(9800);
       expect(plan.features.maxProjects).toBe(10);
       expect(plan.features.maxThreadsAccounts).toBe(3);
-      expect(plan.features.maxScheduledPosts).toBe(100);
+      expect(plan.features.maxScheduledPosts).toBe(120);
       expect(plan.features.maxAiGenerations).toBe(-1); // Unlimited
       expect(plan.popular).toBe(true);
     });
@@ -48,7 +48,7 @@ describe('Plan Limits', () => {
 
     it('agency plan should have correct limits', () => {
       const plan = PLANS.agency;
-      expect(plan.priceMonthly).toBe(50000);
+      expect(plan.priceMonthly).toBe(55000);
       expect(plan.features.maxProjects).toBe(-1); // Unlimited
       expect(plan.features.maxThreadsAccounts).toBe(-1); // Unlimited
       expect(plan.features.maxScheduledPosts).toBe(-1); // Unlimited
@@ -111,14 +111,14 @@ describe('Plan Limits', () => {
   });
 
   describe('Monthly Post Limits', () => {
-    it('light plan should have 10 posts per month', () => {
+    it('light plan should have 40 posts per month', () => {
       const plan = PLANS.light;
-      expect(plan.features.maxScheduledPosts).toBe(10);
+      expect(plan.features.maxScheduledPosts).toBe(40);
     });
 
-    it('pro plan should have 100 posts per month', () => {
+    it('pro plan should have 120 posts per month', () => {
       const plan = PLANS.pro;
-      expect(plan.features.maxScheduledPosts).toBe(100);
+      expect(plan.features.maxScheduledPosts).toBe(120);
     });
 
     it('business plan should have 500 posts per month', () => {
