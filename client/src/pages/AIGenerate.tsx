@@ -117,6 +117,7 @@ export default function AIGenerate() {
     proof: '',
   });
   const [editForm, setEditForm] = useState({
+    storeName: '',
     businessType: '',
     area: '',
     target: '',
@@ -921,6 +922,7 @@ export default function AIGenerate() {
                       aria-label="プロジェクト情報を編集"
                       onClick={() => {
                         setEditForm({
+                          storeName: (project as any).storeName || '',
                           businessType: project.businessType || '',
                           area: project.area || '',
                           target: project.target || '',
@@ -983,6 +985,15 @@ export default function AIGenerate() {
                 <CardContent className="space-y-3 text-sm">
                   {editingProject ? (
                     <>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">店名（任意・一度入れれば毎回使われます）</Label>
+                        <Input
+                          value={editForm.storeName}
+                          onChange={(e) => setEditForm({ ...editForm, storeName: e.target.value })}
+                          placeholder="例：○○整体院"
+                          className="h-8 text-sm"
+                        />
+                      </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">業種</Label>
                         <Input

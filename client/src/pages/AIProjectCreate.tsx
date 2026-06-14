@@ -30,6 +30,7 @@ export default function AIProjectCreate() {
     }
     return {
       title: '',
+      storeName: '',
       businessType: '',
       area: '',
       target: '',
@@ -68,6 +69,7 @@ export default function AIProjectCreate() {
       setSelectedTemplate(templateId);
       setForm({
         title: `${template.name} Threads集客`,
+        storeName: form.storeName,
         businessType: template.businessType,
         area: template.area,
         target: template.target,
@@ -99,6 +101,7 @@ export default function AIProjectCreate() {
     await createProjectMutation.mutateAsync({
       id: projectId,
       title: form.title || `${form.businessType} Threads集客`,
+      storeName: form.storeName || undefined,
       businessType: form.businessType,
       area: form.area,
       target: form.target,
@@ -249,6 +252,15 @@ export default function AIProjectCreate() {
                       onChange={(e) => setForm({...form, title: e.target.value})}
                       placeholder="例：渋谷整体院 Threads集客"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>店名（任意）</Label>
+                    <Input
+                      value={form.storeName}
+                      onChange={(e) => setForm({...form, storeName: e.target.value})}
+                      placeholder="例：○○整体院"
+                    />
+                    <p className="text-xs text-muted-foreground">一度登録すれば、毎回の投稿生成で自動的に使われます（再入力不要）。</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">

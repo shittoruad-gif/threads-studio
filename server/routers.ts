@@ -457,6 +457,7 @@ export const appRouter = router({
         posts: z.string().optional(),
         tags: z.string().optional(),
         // 店舗情報フィールド
+        storeName: z.string().optional(), // 店名（一度登録すれば毎回再入力不要）
         businessType: z.string().optional(),
         area: z.string().optional(),
         target: z.string().optional(),
@@ -502,6 +503,7 @@ export const appRouter = router({
         posts: z.string().optional(),
         tags: z.string().optional(),
         // 店舗情報フィールド
+        storeName: z.string().optional(), // 店名（一度登録すれば毎回再入力不要）
         businessType: z.string().optional(),
         area: z.string().optional(),
         target: z.string().optional(),
@@ -809,6 +811,7 @@ export const appRouter = router({
         }
 
         const prompt = generateThreadsPrompt({
+          storeName: (project as any).storeName || undefined,
           businessType: project.businessType,
           area: project.area,
           target: project.target,

@@ -130,6 +130,7 @@ export const projects = mysqlTable("projects", {
   posts: text("posts"), // JSON string of posts array
   tags: text("tags"), // JSON string of tags array
   // 店舗情報フィールド
+  storeName: varchar("storeName", { length: 100 }), // 店名（一度登録すれば毎回再入力不要）
   businessType: varchar("businessType", { length: 100 }), // 業種
   area: varchar("area", { length: 100 }), // 地域
   target: text("target"), // ターゲット

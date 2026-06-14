@@ -122,6 +122,7 @@ async function generateAutoPost(
     //   ここを treeCount=0 に固定する。ツリーで深く語りたいときは
     //   AIGenerate の手動生成で treeCount を選んでもらう。
     const prompt = generateThreadsPrompt({
+      storeName: (project as any).storeName || undefined,
       businessType: project.businessType,
       area: project.area,
       target: project.target,
