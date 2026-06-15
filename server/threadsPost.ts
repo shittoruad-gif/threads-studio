@@ -114,6 +114,100 @@ export async function publishMediaContainer(
 }
 
 /**
+ * メディアコンテナの処理状態を取得する。
+ * status: EXPIRED | ERROR | FINISHED | IN_PROGRESS | PUBLISHED
+ */
+async function getContainerStatus(
+  containerId: string,
+  accessToken: string,
+): Promise<{ status: string; error_message?: string }> {
+  const params = new URLSearchParams({
+    fields: "status,error_message",
+    access_token: accessToken,
+  });
+  const response = await fetch(`${THREADS_GRAPH_URL}/${containerId}?${params.toString()}`, {
+    method: "GET",
+  });
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to get container status: ${error}`);
+  }
+  return response.json();
+}
+
+/**
+ * コンテナが公開可能（status=FINISHED）になるまで待つ。
+ *
+ * Threads はコンテナ作成直後はまだ処理中（IN_PROGRESS）のことがあり、
+ * その状態で publish すると「The requested resource does not exist (code:24)」で
+ * 失敗する。テキストでも連続投稿が増えると顕在化するため、FINISHED を待ってから公開する。
+ *
+ * - FINISHED:     公開可能 → return
+ * - IN_PROGRESS:  待って再確認
+ * - ERROR/EXPIRED: 復旧不能 → throw
+ */
+async function waitForContainerReady(
+  containerId: string,
+  accessToken: string,
+  opts: { maxWaitMs?: number; intervalMs?: number } = {},
+): Promise<void> {
+  const maxWaitMs = opts.maxWaitMs ?? 45000; // テキストは通常数秒。安全側で45秒上限
+  const intervalMs = opts.intervalMs ?? 1500;
+  const start = Date.now();
+  // 直後は処理中のことが多いので、まず少し待ってから確認する
+  await new Promise((r) => setTimeout(r, 800));
+  while (true) {
+    let info: { status: string; error_message?: string };
+    try {
+      info = await getContainerStatus(containerId, accessToken);
+    } catch {
+      // ステータス取得が一時的に失敗しても、上限内ならリトライ
+      if (Date.now() - start > maxWaitMs) return; // 取得不能でも publish 側のリトライに委ねる
+      await new Promise((r) => setTimeout(r, intervalMs));
+      continue;
+    }
+    const status = (info.status || "").toUpperCase();
+    if (status === "FINISHED" || status === "PUBLISHED") return;
+    if (status === "ERROR" || status === "EXPIRED") {
+      throw new Error(`コンテナの処理に失敗しました (status=${status}${info.error_message ? `: ${info.error_message}` : ""})`);
+    }
+    if (Date.now() - start > maxWaitMs) {
+      // タイムアウト：FINISHED にならなくても publish を試す（直後に通ることがある）
+      return;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+}
+
+/**
+ * メディアコンテナを公開する。Threads が「まだ存在しない（code:24）」等の
+ * 一時的エラーを返すことがあるため、指数バックオフで数回リトライする。
+ */
+async function publishWithRetry(
+  threadsUserId: string,
+  creationId: string,
+  accessToken: string,
+  attempts = 4,
+): Promise<PublishResponse> {
+  let lastErr: any;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await publishMediaContainer(threadsUserId, creationId, accessToken);
+    } catch (err: any) {
+      lastErr = err;
+      const msg = String(err?.message || err);
+      // 「存在しない(code:24)」や transient は、コンテナ処理完了待ちでリトライ
+      const isTransient = /does not exist|code\D*24|is_transient\D*true|処理中|temporarily|timeout/i.test(msg);
+      if (!isTransient || i === attempts - 1) throw err;
+      // 公開前にもう一度 FINISHED を待ってから再試行
+      await waitForContainerReady(creationId, accessToken, { maxWaitMs: 15000, intervalMs: 2000 });
+      await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * Combined function: Create and publish post
  */
 export async function createAndPublishPost(
@@ -122,8 +216,11 @@ export async function createAndPublishPost(
   // Step 1: Create media container
   const container = await createMediaContainer(params);
 
-  // Step 2: Publish media container
-  const result = await publishMediaContainer(
+  // Step 2: コンテナの処理完了を待つ（IN_PROGRESS のまま publish して code:24 になるのを防ぐ）
+  await waitForContainerReady(container.id, params.accessToken);
+
+  // Step 3: Publish media container（一時エラーはリトライ）
+  const result = await publishWithRetry(
     params.threadsUserId,
     container.id,
     params.accessToken
@@ -200,7 +297,9 @@ export async function createAndPublishThread(
         mediaType: 'TEXT',
         replyToId: prevId,
       });
-      const published = await publishMediaContainer(base.threadsUserId, container.id, base.accessToken);
+      // 返信コンテナの処理完了を待ってから公開（code:24「メディアが見つかりません」対策）
+      await waitForContainerReady(container.id, base.accessToken);
+      const published = await publishWithRetry(base.threadsUserId, container.id, base.accessToken);
       replyIds.push(published.id);
       prevId = published.id;
     } catch (err: any) {

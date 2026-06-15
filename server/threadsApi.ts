@@ -290,28 +290,73 @@ export async function postThreadsReply(
   const createData = await createResponse.json();
   const containerId = createData.id;
 
-  // Step 2: Publish the reply
-  const publishParams = new URLSearchParams({
-    creation_id: containerId,
-    access_token: accessToken,
-  });
+  // Step 2: コンテナの処理完了を待ってから公開する。
+  // 作成直後に publish すると「The requested resource does not exist (code:24)」で
+  // 失敗することがあるため、status=FINISHED を待ち、一時エラーはリトライする。
+  await waitForReplyContainerReady(containerId, accessToken);
+  const publishData = await publishReplyWithRetry(userId, containerId, accessToken);
+  return { id: publishData.id };
+}
 
-  const publishResponse = await fetch(
-    `${THREADS_API_BASE_URL}/v1.0/${userId}/threads_publish`,
-    {
+/** 返信コンテナの処理状態を取得 */
+async function getReplyContainerStatus(
+  containerId: string,
+  accessToken: string,
+): Promise<{ status: string; error_message?: string }> {
+  const params = new URLSearchParams({ fields: "status,error_message", access_token: accessToken });
+  const res = await fetch(`${THREADS_API_BASE_URL}/v1.0/${containerId}?${params.toString()}`);
+  if (!res.ok) throw new Error(`status fetch failed: ${res.status}`);
+  return res.json();
+}
+
+/** 返信コンテナが FINISHED になるまで待つ（最大45秒） */
+async function waitForReplyContainerReady(containerId: string, accessToken: string): Promise<void> {
+  const maxWaitMs = 45000;
+  const intervalMs = 1500;
+  const start = Date.now();
+  await new Promise((r) => setTimeout(r, 800));
+  while (true) {
+    let info: { status: string; error_message?: string };
+    try {
+      info = await getReplyContainerStatus(containerId, accessToken);
+    } catch {
+      if (Date.now() - start > maxWaitMs) return;
+      await new Promise((r) => setTimeout(r, intervalMs));
+      continue;
+    }
+    const status = (info.status || "").toUpperCase();
+    if (status === "FINISHED" || status === "PUBLISHED") return;
+    if (status === "ERROR" || status === "EXPIRED") {
+      throw new Error(`返信コンテナの処理に失敗 (status=${status}${info.error_message ? `: ${info.error_message}` : ""})`);
+    }
+    if (Date.now() - start > maxWaitMs) return;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+}
+
+/** 返信の公開（一時エラーは指数バックオフでリトライ） */
+async function publishReplyWithRetry(
+  userId: string,
+  containerId: string,
+  accessToken: string,
+  attempts = 4,
+): Promise<{ id: string }> {
+  let lastErr: any;
+  for (let i = 0; i < attempts; i++) {
+    const publishParams = new URLSearchParams({ creation_id: containerId, access_token: accessToken });
+    const res = await fetch(`${THREADS_API_BASE_URL}/v1.0/${userId}/threads_publish`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: publishParams.toString(),
-    }
-  );
-
-  if (!publishResponse.ok) {
-    const errorData = await publishResponse.json().catch(() => ({}));
-    throw new Error(
-      `Failed to publish reply: ${publishResponse.status} ${JSON.stringify(errorData)}`
-    );
+    });
+    if (res.ok) return res.json();
+    const errorData = await res.json().catch(() => ({}));
+    const msg = JSON.stringify(errorData);
+    lastErr = new Error(`Failed to publish reply: ${res.status} ${msg}`);
+    const isTransient = /does not exist|code\D*24|is_transient\D*true|temporarily|timeout/i.test(msg);
+    if (!isTransient || i === attempts - 1) throw lastErr;
+    await waitForReplyContainerReady(containerId, accessToken);
+    await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
   }
-
-  const publishData = await publishResponse.json();
-  return { id: publishData.id };
+  throw lastErr;
 }
