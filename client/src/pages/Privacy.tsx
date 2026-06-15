@@ -81,6 +81,14 @@ export default function Privacy() {
                   サービスの利用状況、投稿履歴、機能の使用頻度など、サービス改善のために収集する匿名化されたデータ。
                 </p>
               </div>
+              <div className="pl-4 border-l-2 border-primary/30">
+                <h3 className="font-medium text-foreground mb-1">2.7 エラー・診断情報</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  不具合の検知・修正のため、エラー発生時のエラー内容や発生状況などの診断情報を収集します
+                  （エラー監視サービス Sentry を利用）。サービスの品質・安定性向上のため、
+                  このような情報を収集することにご理解をお願いいたします。
+                </p>
+              </div>
             </div>
           </section>
 
@@ -145,7 +153,7 @@ export default function Privacy() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
-                <span>ユーザーがThreads連携を解除した場合、関連するThreadsデータを速やかに削除します</span>
+                <span>ユーザーがThreads連携を解除した場合、保存しているアクセストークンを速やかに削除します（投稿履歴等の関連データは、アカウント削除またはデータ削除のご請求により削除されます）</span>
               </li>
             </ul>
           </section>
@@ -204,7 +212,7 @@ export default function Privacy() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
-                <span>サービス提供に必要な業務委託先（決済処理のUnivapay／株式会社ユニヴァ・ペイキャスト、AI生成サービス等）に対して、必要最小限の情報を提供する場合</span>
+                <span>サービス提供に必要な業務委託先（決済処理のUnivapay／株式会社ユニヴァ・ペイキャスト、AI生成のGoogle LLC、メール配信のResend、エラー監視のSentry 等）に対して、必要最小限の情報を提供する場合</span>
               </li>
             </ul>
           </section>
@@ -246,9 +254,10 @@ export default function Privacy() {
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-3">10. データ削除</h2>
             <p className="text-muted-foreground leading-relaxed">
-              ユーザーがアカウントの削除を希望する場合、またはThreads連携を解除する場合、
-              関連する個人情報およびThreads APIデータは速やかに削除されます。
-              データ削除のリクエストは、アプリ内の設定画面から行うことができます。
+              ユーザーがアカウントを削除した場合、関連する個人情報およびThreads APIデータは速やかに削除されます。
+              アカウント削除は、アプリ内の設定画面から行うことができます。
+              また、Threads連携の解除を行うと、保存しているアクセストークンを速やかに削除します
+              （投稿履歴などの関連データはアカウント削除またはデータ削除のご請求時に削除されます）。
             </p>
           </section>
 

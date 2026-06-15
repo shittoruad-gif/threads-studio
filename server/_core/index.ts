@@ -505,7 +505,8 @@ async function startServer() {
         if (database) {
           const accounts = await database.select().from(threadsAccounts).where(eq(threadsAccounts.threadsUserId, threadsUserId));
           for (const account of accounts) {
-            await db.deleteThreadsAccount(account.id);
+            // データ削除リクエストなので完全削除（トークン消去ではなく物理削除）
+            await db.hardDeleteThreadsAccount(account.id);
           }
         }
         console.log(`[Data Deletion] Deleted data for Threads user: ${threadsUserId}`);

@@ -433,13 +433,25 @@ export async function updateThreadsAccount(
     .where(eq(threadsAccounts.id, accountId));
 }
 
+// 連携解除：アクセスを停止し、保存しているアクセストークンを消去する。
+// （プライバシー記載の「アクセストークンを削除」を実態と一致させるため。
+//   投稿履歴などはアカウント削除／データ削除請求で消える。）
 export async function deleteThreadsAccount(accountId: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
   await db.update(threadsAccounts)
-    .set({ isActive: false })
+    .set({ isActive: false, accessToken: "" })
     .where(eq(threadsAccounts.id, accountId));
+}
+
+// データ削除リクエスト（Meta）用：該当アカウントを完全に物理削除する。
+// 関連する予約・投稿履歴は外部キーのカスケードで一緒に削除される。
+export async function hardDeleteThreadsAccount(accountId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.delete(threadsAccounts).where(eq(threadsAccounts.id, accountId));
 }
 
 // ============ Project Functions ============

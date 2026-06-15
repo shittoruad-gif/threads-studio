@@ -34,7 +34,7 @@ export default function CommercialTransaction() {
               <tr>
                 <td className="py-4 px-4 font-semibold text-foreground bg-muted/50 w-1/3 align-top">販売業者</td>
                 <td className="py-4 px-4 text-muted-foreground">
-                  株式会社 しっとる
+                  株式会社しっとる
                 </td>
               </tr>
               <tr>
