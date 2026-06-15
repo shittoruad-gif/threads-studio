@@ -71,7 +71,7 @@ export default function Privacy() {
               <div className="pl-4 border-l-2 border-primary/30">
                 <h3 className="font-medium text-foreground mb-1">2.5 決済情報</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  有料プランの決済に必要な情報はUnivapay（株式会社ジャパン・ペイメント・サービス）を通じて安全に処理されます。
+                  有料プランの決済に必要な情報はUnivapay（株式会社ユニヴァ・ペイキャスト）を通じて安全に処理されます。
                   当社はクレジットカード番号等の機密情報を直接保存しません。
                 </p>
               </div>
@@ -174,7 +174,7 @@ export default function Privacy() {
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-3">6. 決済処理</h2>
             <p className="text-muted-foreground leading-relaxed">
-              有料プランの決済はUnivapay（株式会社ジャパン・ペイメント・サービス）の安全な決済インフラを通じて処理されます。
+              有料プランの決済はUnivapay（株式会社ユニヴァ・ペイキャスト）の安全な決済インフラを通じて処理されます。
               クレジットカード情報は当社サーバーを経由せず、Univapayが直接処理・保管します。
               Univapayのプライバシーポリシーについては同社のウェブサイトをご参照ください。
             </p>
@@ -196,7 +196,7 @@ export default function Privacy() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
-                <span>サービス提供に必要な業務委託先（決済処理のUnivapay／株式会社ジャパン・ペイメント・サービス、AI生成サービス等）に対して、必要最小限の情報を提供する場合</span>
+                <span>サービス提供に必要な業務委託先（決済処理のUnivapay／株式会社ユニヴァ・ペイキャスト、AI生成サービス等）に対して、必要最小限の情報を提供する場合</span>
               </li>
             </ul>
           </section>

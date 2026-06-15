@@ -87,7 +87,7 @@ export default function CommercialTransaction() {
                 <td className="py-4 px-4 font-semibold text-foreground bg-muted/50 align-top">支払い方法</td>
                 <td className="py-4 px-4 text-muted-foreground">
                   クレジットカード決済（Visa、Mastercard、American Express、JCB）<br />
-                  決済代行：Univapay（株式会社ジャパン・ペイメント・サービス）
+                  決済代行：Univapay（株式会社ユニヴァ・ペイキャスト）
                 </td>
               </tr>
               <tr>
