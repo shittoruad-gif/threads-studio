@@ -1761,7 +1761,15 @@ ${input.commentText}
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI応答が空です。' });
         }
 
-        const result = JSON.parse(content);
+        let result: any;
+        try {
+          result = JSON.parse(content);
+        } catch {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI返信の解析に失敗しました。もう一度お試しください。' });
+        }
+        if (!result || !Array.isArray(result.replies)) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI返信を生成できませんでした。もう一度お試しください。' });
+        }
         await db.incrementAiGenerationUsage(ctx.user.id);
 
         return { replies: result.replies };

@@ -396,5 +396,19 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     throw lastError ?? new Error('LLM invoke failed (no response)');
   }
 
-  return (await response.json()) as InvokeResult;
+  // 応答ボディのパースと構造検証。
+  // これがないと呼び出し側の `response.choices[0].message.content` が
+  // choices 空配列のときに TypeError でクラッシュする（=「生成に失敗」）。
+  let parsed: any;
+  try {
+    parsed = await response.json();
+  } catch (e: any) {
+    throw new Error(`LLM invoke failed: could not parse response body (${e?.message ?? e})`);
+  }
+  if (!parsed || !Array.isArray(parsed.choices) || parsed.choices.length === 0) {
+    // Gemini がコンテンツブロック等で choices を返さないケース。finish_reason も拾う。
+    const fr = parsed?.choices?.[0]?.finish_reason ?? parsed?.promptFeedback?.blockReason;
+    throw new Error(`LLM invoke failed: no choices in response${fr ? ` (reason: ${fr})` : ""}`);
+  }
+  return parsed as InvokeResult;
 }
