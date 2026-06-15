@@ -140,6 +140,12 @@ function Router() {
       <Route path="/ai-generate">
         {() => <DashboardRoutes />}
       </Route>
+      <Route path="/ai-counseling">
+        {() => <DashboardRoutes />}
+      </Route>
+      <Route path="/ai-style-calibration">
+        {() => <DashboardRoutes />}
+      </Route>
       <Route path="/ai-history">
         {() => <DashboardRoutes />}
       </Route>
@@ -150,6 +156,9 @@ function Router() {
         {() => <DashboardRoutes />}
       </Route>
       <Route path="/admin/presets">
+        {() => <DashboardRoutes />}
+      </Route>
+      <Route path="/admin/feedback">
         {() => <DashboardRoutes />}
       </Route>
       <Route path="/ai-templates">
