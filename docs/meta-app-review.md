@@ -4,6 +4,11 @@ App: **Threads Studio** / App ID `1250891946948510`
 URL: https://threads-studio.com
 申請: Threads API ユースケースの **Advanced Access**（テスター以外も連携できるようにする）
 
+> 📝 2026-06-15 更新：`threads_manage_replies` は申請から除外しました。
+> アプリ内のコメント返信・ツリー（連続）投稿は `threads_content_publish`（`reply_to_id` 付き）で
+> 実装しており、`threads_manage_replies` エンドポイントを呼ばないため。
+> **申請する権限は basic / content_publish / read_replies / manage_insights の4つ。**
+
 > ⚠️ セキュリティ注意：以前このファイルにレビュー用アカウントのパスワードを直書きし、
 > Git（GitHub）にpushされました。**そのパスワードは必ず変更（ローテーション）してください。**
 > 以後、パスワード等の秘密情報はこのファイルに書かず、Metaの申請フォームに直接入力してください。
@@ -18,12 +23,11 @@ URL: https://threads-studio.com
 | 権限 | 用途（アプリ内のどこで使うか） |
 |---|---|
 | `threads_basic` | 連携ユーザーのプロフィール（ユーザー名・画像）取得。投稿先アカウントの表示・連携確認に使用。 |
-| `threads_content_publish` | 中核機能。AIで作成した投稿を本人のThreadsへ公開（今すぐ／予約／自動投稿）。 |
-| `threads_manage_replies` | 「コメント管理」画面で、本人の投稿へのコメントに返信。連続投稿（ツリー）の作成にも使用。 |
+| `threads_content_publish` | 中核機能。AIで作成した投稿を本人のThreadsへ公開（今すぐ／予約／自動投稿）。コメント返信・ツリー投稿（`reply_to_id`）もこの権限で実装。 |
 | `threads_read_replies` | 「コメント管理」画面で、本人の投稿のコメントを取得・表示。 |
 | `threads_manage_insights` | 「投稿分析」画面で、本人の投稿の閲覧数・いいね・返信・リポストを表示。 |
 
-※ OAuth要求スコープ（`server/threadsAuth.ts`）と一致しています。
+※ `threads_manage_replies` は申請対象外（コメント返信は content_publish で実装）。OAuth要求スコープ（`server/threadsAuth.ts`）と一致しています。
 
 ---
 
@@ -45,7 +49,7 @@ URL: https://threads-studio.com
 | 8 | 「今すぐThreadsに投稿」→ 確認 → 投稿 | **content_publish の実演** |
 | 9 | **実際のThreadsでその投稿が出ている** | 公開された証拠を映す（最重要） |
 | 10 | 「投稿分析」画面 | 自分の投稿の閲覧数・いいね等を表示（**insights**） |
-| 11 | 「コメント管理」画面 | 自分の投稿のコメント閲覧・返信を実演（**read/manage replies**） |
+| 11 | 「コメント管理」画面 | 自分の投稿のコメント閲覧を実演（**read_replies**）※返信はcontent_publishで動作 |
 
 撮影のコツ：
 - 4番の許可画面と9番の「Threadsに実際に出た」場面は **必ず** 入れる（前回欠けていた部分）。
@@ -81,15 +85,15 @@ Step-by-step:
 8. Click "今すぐThreadsに投稿" (Post now), then confirm. (threads_content_publish)
 9. The post is published to the connected Threads account (visible on Threads).
 10. Open "投稿分析" (Post Analytics) to see views/likes/replies of your posts. (threads_manage_insights)
-11. Open "コメント管理" (Comment Manager) to read and reply to comments. (threads_read_replies / threads_manage_replies)
+11. Open "コメント管理" (Comment Manager) to read comments on your posts. (threads_read_replies)
+    (Replying to comments is implemented via threads_content_publish with reply_to_id.)
 
 Permission justification:
 - threads_basic: Read the connected user's profile (username, avatar) to show which
   account posts will be published to and confirm the connection.
 - threads_content_publish: Core feature — publish the user's AI-generated posts to
-  their own Threads account (immediately, scheduled, or automatically).
-- threads_manage_replies: Let the user reply to comments on their own posts, and
-  create connected reply threads, from the comment-management screen.
+  their own Threads account (immediately, scheduled, or automatically). Also used to
+  reply to comments and create connected reply threads (via reply_to_id).
 - threads_read_replies: Read comments on the user's own posts to display them in the
   comment-management screen.
 - threads_manage_insights: Show the user the performance (views, likes, replies,
@@ -122,7 +126,7 @@ publish → post visible on Threads → analytics → comments) is attached.
 - [x] データ削除コールバック：`signed_request` をHMAC-SHA256で**署名検証**し、本人の連携データを物理削除
 - [x] deauthorizeコールバック：署名検証のうえ連携停止・アクセストークン消去
 - [x] アクセストークンは暗号化保存／60日トークンは自動更新
-- [x] OAuthスコープ＝申請権限と一致（basic / content_publish / manage_replies / read_replies / manage_insights）
+- [x] OAuthスコープ＝申請権限と一致（basic / content_publish / read_replies / manage_insights）
 
 ## 提出前チェックリスト（オーナー作業）
 - [ ] **ビジネス認証**が完了している
