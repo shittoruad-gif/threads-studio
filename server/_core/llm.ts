@@ -346,21 +346,26 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       });
       clearTimeout(timer);
 
-      // 4xx は即時失敗（リトライしても直らない）
-      if (!response.ok && response.status >= 400 && response.status < 500) {
+      // 4xx は即時失敗（リトライしても直らない）。ただし 429（レート制限）は
+      // 一時的なので例外的にリトライ対象にする（自動投稿の同時実行で発生しうる）。
+      if (!response.ok && response.status >= 400 && response.status < 500 && response.status !== 429) {
         const errorText = await response.text();
         throw new Error(
           `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
         );
       }
-      // 5xx はリトライ
+      // 429 / 5xx はリトライ
       if (!response.ok) {
         const errorText = await response.text();
         lastError = new Error(
           `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
         );
         if (attempt < MAX_ATTEMPTS) {
-          const backoff = attempt === 1 ? 1000 : 3000;
+          // 429 は Retry-After ヘッダを尊重（なければやや長めのバックオフ）。
+          const retryAfterSec = Number(response.headers.get("retry-after"));
+          const backoff = response.status === 429
+            ? (retryAfterSec > 0 ? retryAfterSec * 1000 : (attempt === 1 ? 2000 : 5000))
+            : (attempt === 1 ? 1000 : 3000);
           console.warn(`[LLM] ${response.status} on attempt ${attempt}, retrying in ${backoff}ms`);
           await new Promise((r) => setTimeout(r, backoff));
           continue;
