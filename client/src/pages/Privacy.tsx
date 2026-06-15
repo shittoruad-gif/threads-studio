@@ -151,9 +151,13 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">5. AI生成機能におけるデータの取り扱い</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">5. AI生成機能におけるデータの取り扱い（外国にある第三者への提供を含む）</h2>
             <p className="text-muted-foreground leading-relaxed mb-3">
               本サービスのAI投稿生成機能では、外部のAIサービスを利用しています。
+              ユーザーが入力した内容（店舗・サービスに関する情報等）は、投稿生成のために
+              <strong className="text-foreground">米国に所在するGoogle LLCの生成AIサービス「Gemini」</strong>へ送信されます
+              （送信はAPIゲートウェイ事業者を経由する場合があります）。
+              本機能をご利用いただくことで、これら外国にある第三者への個人情報の提供（越境移転）に同意したものとみなします。
             </p>
             <ul className="space-y-2 text-muted-foreground text-sm">
               <li className="flex items-start gap-2">
@@ -162,11 +166,15 @@ export default function Privacy() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
+                <span>送信先は米国であり、提供先（Google LLC）における個人情報の取扱いは同社のプライバシーポリシーに従います</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary mt-1">•</span>
                 <span>生成されたコンテンツはユーザーが確認・編集した上で投稿されます</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
-                <span>AI生成データを第三者のモデル学習に提供することはありません</span>
+                <span>AI生成のための入力データを第三者のモデル学習に提供することはありません</span>
               </li>
             </ul>
           </section>
