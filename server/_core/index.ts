@@ -2,7 +2,27 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
-import { createHash } from "crypto";
+import { createHash, createHmac, timingSafeEqual } from "crypto";
+
+/**
+ * Meta/Threads の signed_request を検証してペイロードを返す（不正なら null）。
+ * 署名 = HMAC-SHA256(payload, appSecret)。検証なしだと偽造リクエストで
+ * 任意ユーザーのデータ削除/解除ができてしまうため必須。
+ */
+function parseSignedRequest(signed: any, appSecret: string): any | null {
+  if (!signed || typeof signed !== "string" || !signed.includes(".")) return null;
+  if (!appSecret) { console.error("[SignedRequest] THREADS_APP_SECRET 未設定のため検証不可"); return null; }
+  const [encSig, encPayload] = signed.split(".");
+  const toStd = (s: string) => s.replace(/-/g, "+").replace(/_/g, "/");
+  let sig: Buffer, payloadJson: string;
+  try {
+    sig = Buffer.from(toStd(encSig), "base64");
+    payloadJson = Buffer.from(toStd(encPayload), "base64").toString("utf8");
+  } catch { return null; }
+  const expected = createHmac("sha256", appSecret).update(encPayload).digest();
+  if (sig.length !== expected.length || !timingSafeEqual(sig, expected)) return null;
+  try { return JSON.parse(payloadJson); } catch { return null; }
+}
 
 declare global {
   // Univapay Webhook の重複イベント排除用（生ボディのハッシュを一定時間記憶）
@@ -491,9 +511,11 @@ async function startServer() {
         return res.status(400).json({ error: 'Missing signed_request' });
       }
 
-      // Parse the signed request to get user_id
-      const [, payload] = signedRequest.split('.');
-      const data = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8'));
+      // ★署名を検証（偽造リクエストによる不正削除を防止）
+      const data = parseSignedRequest(signedRequest, process.env.THREADS_APP_SECRET || "");
+      if (!data) {
+        return res.status(400).json({ error: 'Invalid signed_request' });
+      }
       const threadsUserId = data.user_id?.toString();
 
       if (threadsUserId) {
@@ -544,8 +566,11 @@ async function startServer() {
         return res.status(400).json({ error: 'Missing signed_request' });
       }
 
-      const [, payload] = signedRequest.split('.');
-      const data = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8'));
+      // ★署名を検証（偽造リクエスト対策）
+      const data = parseSignedRequest(signedRequest, process.env.THREADS_APP_SECRET || "");
+      if (!data) {
+        return res.status(400).json({ error: 'Invalid signed_request' });
+      }
       const threadsUserId = data.user_id?.toString();
 
       if (threadsUserId) {
