@@ -1002,6 +1002,20 @@ export const appRouter = router({
           });
         }
 
+        // 量産は「1本＝AI生成1回」で課金カウントする（B-4）。残り枠が要求本数に満たない
+        // 場合は、作れる本数だけ生成する（不足分は弾く）。canGenerate を通過しているので
+        // 残り枠は最低1ある。
+        const { count: aiUsed, limit: aiLimit } = await db.getAiGenerationUsage(ctx.user.id);
+        let aiRemaining: number;
+        if (ctx.user.isDemoMode) {
+          aiRemaining = Math.max(0, db.DEMO_AI_GEN_CAP - aiUsed);
+        } else if (aiLimit === null || aiLimit === -1) {
+          aiRemaining = Math.max(0, db.HARD_AI_GEN_CAP_PER_MONTH - aiUsed);
+        } else {
+          aiRemaining = Math.max(0, Math.min(aiLimit, db.HARD_AI_GEN_CAP_PER_MONTH) - aiUsed);
+        }
+        const allowedCount = Math.max(1, Math.min(input.count, aiRemaining || 1));
+
         // Get original history entry
         const history = await db.getAiGenerationHistoryById(input.historyId, ctx.user.id);
         if (!history) {
@@ -1034,7 +1048,7 @@ export const appRouter = router({
         const cloneCtaAssets = (counselingForClone?.ctaAssets ?? []) as string[];
 
         // Build clone prompt
-        const clonePrompt = `以下の投稿が高いエンゲージメントを獲得しました。同じ構成・トーン・長さで、内容を変えた${input.count}本のバリエーションを生成してください。
+        const clonePrompt = `以下の投稿が高いエンゲージメントを獲得しました。同じ構成・トーン・長さで、内容を変えた${allowedCount}本のバリエーションを生成してください。
 
 【元の投稿】
 タイトル: ${originalContent.title}
@@ -1076,7 +1090,7 @@ ${cloneNgWords.length > 0 ? `
 次の語句は全バリエーションのタイトル・本文・ツリー・CTAのどこにも絶対に使わないこと：
 ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
 ` : ''}
-元の投稿の構成（段落構成、トーン、長さ、絵文字の使い方）を維持しつつ、具体的な内容・エピソード・表現を変えて${input.count}本のバリエーションを生成してください。各バリエーションは独立した投稿として使えるようにしてください。`;
+元の投稿の構成（段落構成、トーン、長さ、絵文字の使い方）を維持しつつ、具体的な内容・エピソード・表現を変えて${allowedCount}本のバリエーションを生成してください。各バリエーションは独立した投稿として使えるようにしてください。`;
 
         // Call LLM
         const { invokeLLM } = await import('./_core/llm');
@@ -1137,15 +1151,25 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         }
 
         // ★NGワードを各バリエーションから自然な形で除外（違反時のみ書き換え→最終手段で削除）
+        // 許可本数（allowedCount）を超えるぶんは破棄してカウントの整合を保つ。
         const { enforceNgWords } = await import('./ngwordGuard');
-        const filteredVariations = Array.isArray(result.variations)
-          ? await Promise.all(result.variations.map((v: any) => enforceNgWords(v, cloneNgWords)))
-          : result.variations;
+        const rawVariations = Array.isArray(result.variations)
+          ? result.variations.slice(0, allowedCount)
+          : [];
+        const filteredVariations = await Promise.all(
+          rawVariations.map((v: any) => enforceNgWords(v, cloneNgWords))
+        );
 
-        // Increment AI generation usage count
-        await db.incrementAiGenerationUsage(ctx.user.id);
+        // ★B-4: 量産は「生成1本＝AI生成1回」でカウント（実際に生成できた本数ぶん加算）。
+        const producedCount = Math.max(1, filteredVariations.length);
+        await db.incrementAiGenerationUsage(ctx.user.id, producedCount);
 
-        return { variations: filteredVariations, originalTitle: originalContent.title };
+        return {
+          variations: filteredVariations,
+          originalTitle: originalContent.title,
+          requestedCount: input.count,
+          generatedCount: filteredVariations.length,
+        };
       }),
 
     // Regenerate from history
@@ -1452,9 +1476,10 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
         const plan = getPlan(planId);
         
-        // 月間上限は「連携アカウント単位」で適用（複数アカウントで枠を共有しない）
+        // 月間上限は「連携アカウント単位」で適用（複数アカウントで枠を共有しない）。
+        // B-5: 当月公開済み＋当月予約済みの合計で判定し、予約だけで枠を超過するのを防ぐ。
         if (plan && plan.features.maxScheduledPosts !== -1) {
-          const monthlyCount = await db.countAccountMonthlyPosts(input.accountId);
+          const monthlyCount = await db.countAccountMonthlyUsage(input.accountId);
           if (monthlyCount >= plan.features.maxScheduledPosts) {
             throw new TRPCError({
               code: 'FORBIDDEN',
@@ -1854,7 +1879,8 @@ ${input.commentText}
               message: `このアカウントの予約投稿数の上限（${plan.features.maxScheduledPosts}件）に達しています。`
             });
           }
-          const monthlyCount = await db.countAccountMonthlyPosts(input.threadsAccountId);
+          // B-5: 当月公開済み＋当月予約済みの合計で判定（予約だけで枠超過するのを防ぐ）。
+          const monthlyCount = await db.countAccountMonthlyUsage(input.threadsAccountId);
           if (monthlyCount >= plan.features.maxScheduledPosts) {
             throw new TRPCError({
               code: 'FORBIDDEN',

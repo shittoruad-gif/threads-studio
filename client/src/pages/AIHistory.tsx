@@ -94,7 +94,13 @@ export default function AIHistory() {
     onSuccess: (data) => {
       setCloneResults(data.variations);
       setCloneOriginalTitle(data.originalTitle);
-      toast.success(`${data.variations.length}件のバリエーションを生成しました`);
+      const req = (data as any).requestedCount;
+      const gen = data.variations.length;
+      if (typeof req === 'number' && gen < req) {
+        toast.success(`今月のAI生成残り枠の都合で、${gen}件だけ生成しました（${req}件中）`);
+      } else {
+        toast.success(`${gen}件のバリエーションを生成しました`);
+      }
     },
     onError: (error) => {
       toast.error(error.message);

@@ -318,7 +318,8 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
         // 各アカウントごとに postCount 本ずつ自動投稿（月間上限はアカウント単位で判定）
         for (const account of accounts) {
           if (monthlyCap !== -1) {
-            const used = await db.countAccountMonthlyPosts(account.id);
+            // B-5: 当月公開済み＋当月予約済みの合計で判定（自動投稿の予約で枠超過を防ぐ）。
+            const used = await db.countAccountMonthlyUsage(account.id);
             if (used >= monthlyCap) {
               console.log(`[AutoPost] account ${account.id} reached monthly cap (${used}/${monthlyCap}) - skip`);
               continue;

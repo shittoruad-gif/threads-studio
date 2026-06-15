@@ -665,6 +665,30 @@ export async function countAccountScheduledPosts(threadsAccountId: number): Prom
   return result[0]?.count ?? 0;
 }
 
+/**
+ * 当月の「使用枠」＝当月公開済み(posted) ＋ 当月に予約済み(pending, scheduledAt が当月) の合計。
+ * 月間上限の判定に使う（予約だけで当月枠を超過するのを防ぐ / B-5）。月境界はJST。
+ */
+export async function countAccountMonthlyUsage(threadsAccountId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select({ count: sql<number>`count(*)` })
+    .from(scheduledPosts)
+    .where(and(
+      eq(scheduledPosts.threadsAccountId, threadsAccountId),
+      sql`(
+        (${scheduledPosts.status} = 'posted'
+          AND YEAR(DATE_ADD(${scheduledPosts.postedAt}, INTERVAL 9 HOUR)) = YEAR(DATE_ADD(NOW(), INTERVAL 9 HOUR))
+          AND MONTH(DATE_ADD(${scheduledPosts.postedAt}, INTERVAL 9 HOUR)) = MONTH(DATE_ADD(NOW(), INTERVAL 9 HOUR)))
+        OR
+        (${scheduledPosts.status} = 'pending'
+          AND YEAR(DATE_ADD(${scheduledPosts.scheduledAt}, INTERVAL 9 HOUR)) = YEAR(DATE_ADD(NOW(), INTERVAL 9 HOUR))
+          AND MONTH(DATE_ADD(${scheduledPosts.scheduledAt}, INTERVAL 9 HOUR)) = MONTH(DATE_ADD(NOW(), INTERVAL 9 HOUR)))
+      )`
+    ));
+  return result[0]?.count ?? 0;
+}
+
 // ============ Template Functions ============
 
 export async function getAllTemplates(): Promise<Template[]> {
@@ -835,9 +859,12 @@ export async function getPopularTemplates(limit: number = 5): Promise<Template[]
 
 // ============ AI Generation Usage Functions ============
 
-export async function incrementAiGenerationUsage(userId: number): Promise<void> {
+export async function incrementAiGenerationUsage(userId: number, inc: number = 1): Promise<void> {
   const db = await getDb();
   if (!db) return;
+
+  // 量産（複数本一括生成）では生成本数ぶん加算する。最低1。
+  const amount = Math.max(1, Math.floor(inc));
 
   const currentMonth = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7); // YYYY-MM (JST基準)
 
@@ -853,14 +880,14 @@ export async function incrementAiGenerationUsage(userId: number): Promise<void> 
   if (existing.length > 0) {
     // Increment count
     await db.update(aiGenerationUsage)
-      .set({ count: sql`${aiGenerationUsage.count} + 1` })
+      .set({ count: sql`${aiGenerationUsage.count} + ${amount}` })
       .where(eq(aiGenerationUsage.id, existing[0].id));
   } else {
     // Create new record
     await db.insert(aiGenerationUsage).values({
       userId,
       month: currentMonth,
-      count: 1,
+      count: amount,
     });
   }
 }
