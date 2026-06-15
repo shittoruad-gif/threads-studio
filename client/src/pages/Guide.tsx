@@ -207,6 +207,90 @@ export default function Guide() {
     { title: '週1で振り返る', body: '「投稿分析」で当たり外れの傾向を見て、次週のスタイル校正に反映。', icon: <Lightbulb className="w-5 h-5 text-purple-500" /> },
   ];
 
+  // 第2部 運用ガイド（勉強会16回＋運用メモの統合）を反映
+  const growthPlaybook = [
+    {
+      title: '頻度と配分：60点で数を出す',
+      points: [
+        '完璧を待たず60点で投稿。打席数を増やすほど「当たり」が見つかる。',
+        'オファー投稿は5回に1回。残り4本は認知投稿（共感・方法論・ストーリー）。',
+        '集中して続けるのが前提。手が止まるとすぐ反応が落ちる。',
+      ],
+    },
+    {
+      title: '数字を入れると人は動く（最重要）',
+      points: [
+        '抽象を具体数字に。「ラクになる」→「朝の支度が10分早く終わる」。',
+        '読者に自分の数字を意識させてから利益を数字で示す（「今の体重を測って」→効果を数字で）。',
+        '反応が出ないときは、まず「内容が薄くないか」「具体的な数字が入っているか」を疑う。',
+      ],
+    },
+    {
+      title: '伸びるテーマ：お金・地域・時事',
+      points: [
+        'お金の話（料金・補助金・お得情報）は最も伸びる。',
+        '地域・地元ネタは店舗ビジネスの最強カード。地域ワードは擦り倒す。',
+        'ジャンル外のバズは集客に繋がりにくい。狙うのは「自分のターゲットに刺さって伸びた投稿」。',
+      ],
+    },
+    {
+      title: 'コメント・絡みで伸ばす（活動量がすべて）',
+      points: [
+        '表示回数は質より活動量。投稿後、同ジャンルにいいね15〜20件＋共感コメント2〜3件。',
+        '自分の投稿のコメントには必ず返信する（会話が伸びるほど露出が増える）。',
+        '見込み客の「困っている風」投稿への営業コメントは業者っぽく逆効果になりやすい。',
+      ],
+    },
+    {
+      title: '強い1行目の作り方',
+      points: [
+        '「こんにちは」「お知らせです」「〇〇院です」「〜ではありませんか？」で始めない。',
+        'お客さんが心の中で呟いている言葉をそのまま置く。「腰痛の方へ」より「靴下を履くのもひと苦労」。',
+        '型を決めてワードだけ差し替えて量産（悩み直球／数字手順／質問／逆張り／未来不安／会話／地域）。',
+      ],
+    },
+    {
+      title: '伸びない投稿はリライトする',
+      points: [
+        '仮説→投稿→結果を見て「続ける/やめる/擦り続ける」。滑った投稿にこそヒントがある。',
+        '数字・比較・体験談・問いかけを足して再投稿。意図を持って試して積み重ねる。',
+        'ネガティブワードは強い（「肝臓が悪い」＞「肝臓が喜ぶこと」）。音読して読みにくさを直す。',
+      ],
+    },
+    {
+      title: 'CV（LINE登録・予約）を最優先に',
+      points: [
+        'インプ・いいねはそれ自体では集客に直結しない。追うべきはCV。',
+        '「インプを伸ばす投稿」と「CVさせる投稿」は別物。意図的に織り交ぜる。',
+        'オファー投稿では遠慮せず「予約を受け付けています」と言う（押し売り口調は避ける）。',
+      ],
+    },
+    {
+      title: '誘導は「迷わせない」',
+      points: [
+        '本文にURLは貼らない。個別対応はGoogleフォームをツリーのコメントに置く。',
+        '日程は「いつ空いてますか?」ではなく「◯日と◯日どちらが?」の2択。',
+        'コメント誘導は「『青』と送ってね」のように考えず行動できる形に。',
+      ],
+    },
+    {
+      title: 'BAN・シャドウバンを避ける',
+      points: [
+        'AIで文章を作ること自体ではBANされない。危険なのは規約違反（コピペ）とボット判定。',
+        '初期ほど交流（いいね・コメント）を必ず行う。自動化はMeta正規APIで（本アプリは正規API）。',
+        'インプが急落したらシャドウバンの可能性。投稿が消えていなければ続けると回復することが多い。',
+      ],
+    },
+    {
+      title: 'スレッズ以外の入口も整える',
+      points: [
+        '検索（SEO・MEO）・Googleビジネスプロフィール口コミ・広告・チラシを1個ずつ全部埋める。',
+        '複数の接点が重なって成約する。「お店のことは誰も知らない」前提で認知の入口を増やす。',
+        '紹介はどんなビジネスでも最も強い。紹介が生まれる仕組みを最優先で考える。',
+      ],
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -264,6 +348,7 @@ export default function Guide() {
               <a href="#trouble" className="hover:text-primary">⑤ よくあるつまずきと解決策</a>
               <a href="#faq" className="hover:text-primary">⑥ FAQ</a>
               <a href="#glossary" className="hover:text-primary">⑦ 用語集</a>
+              <a href="#playbook" className="hover:text-primary">⑧ 集客ノウハウ（勉強会ダイジェスト）</a>
             </div>
           </Card>
         </div>
@@ -432,6 +517,34 @@ export default function Guide() {
               <Card key={i} className="glass-card p-4">
                 <p className="font-semibold text-primary mb-1">{g.term}</p>
                 <p className="text-sm text-muted-foreground leading-relaxed">{g.def}</p>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ⑧ 集客ノウハウ（勉強会ダイジェスト） */}
+      <section id="playbook" className="py-12 px-4 bg-muted/30">
+        <div className="container mx-auto max-w-5xl">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-2">⑧ 集客ノウハウ（勉強会ダイジェスト）</h2>
+          <p className="text-sm text-muted-foreground mb-8">
+            スレッズ集客の勉強会（全16回）と運用の現場で出た知見をまとめました。AIに任せきりにせず、ここを押さえると伸び方が変わります。
+          </p>
+          <div className="grid md:grid-cols-2 gap-4">
+            {growthPlaybook.map((g, i) => (
+              <Card key={i} className="glass-card p-5">
+                <h3 className="font-semibold mb-3 flex items-start gap-2">
+                  <Lightbulb className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  {g.title}
+                </h3>
+                <ul className="space-y-1.5">
+                  {g.points.map((p, j) => (
+                    <li key={j} className="flex items-start gap-2 text-sm">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                      <span className="text-muted-foreground leading-relaxed">{p}</span>
+                    </li>
+                  ))}
+                </ul>
               </Card>
             ))}
           </div>
