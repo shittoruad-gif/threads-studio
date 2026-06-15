@@ -46,8 +46,10 @@ export function getThreadsAuthUrl(config: ThreadsAuthConfig, options: ThreadsAut
   const defaultScopes = [
     "threads_basic",
     "threads_content_publish",
-    // コメント返信・ツリー投稿は content_publish の reply_to_id で実装しているため
-    // threads_manage_replies は要求しない（App Review でも申請対象外）。
+    // 連続投稿（ツリー）の2件目以降とコメント返信は reply_to_id で作成するが、
+    // この「返信を作成する」操作には threads_manage_replies 権限が必須
+    // （エンドポイントが content_publish と同じでも、返信アクションは別権限）。
+    "threads_manage_replies",
     "threads_read_replies",
     // 投稿分析（PostAnalytics）でインサイトAPIを使うため必須
     "threads_manage_insights",

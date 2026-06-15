@@ -4,10 +4,12 @@ App: **Threads Studio** / App ID `1250891946948510`
 URL: https://threads-studio.com
 申請: Threads API ユースケースの **Advanced Access**（テスター以外も連携できるようにする）
 
-> 📝 2026-06-15 更新：`threads_manage_replies` は申請から除外しました。
-> アプリ内のコメント返信・ツリー（連続）投稿は `threads_content_publish`（`reply_to_id` 付き）で
-> 実装しており、`threads_manage_replies` エンドポイントを呼ばないため。
-> **申請する権限は basic / content_publish / read_replies / manage_insights の4つ。**
+> 📝 2026-06-15 訂正：いったん `threads_manage_replies` を除外したが、**復活させた**。
+> 連続投稿（ツリー）の2件目以降とコメント返信は `reply_to_id` で作成するが、本番で
+> 「Application does not have permission for this action（code:10）」となり失敗した。
+> エンドポイントが content_publish と同じでも、**返信を作成するアクション自体に
+> `threads_manage_replies` 権限が必要**と判明したため。
+> **申請する権限は basic / content_publish / manage_replies / read_replies / manage_insights の5つ。**
 
 > ⚠️ セキュリティ注意：以前このファイルにレビュー用アカウントのパスワードを直書きし、
 > Git（GitHub）にpushされました。**そのパスワードは必ず変更（ローテーション）してください。**
@@ -23,11 +25,12 @@ URL: https://threads-studio.com
 | 権限 | 用途（アプリ内のどこで使うか） |
 |---|---|
 | `threads_basic` | 連携ユーザーのプロフィール（ユーザー名・画像）取得。投稿先アカウントの表示・連携確認に使用。 |
-| `threads_content_publish` | 中核機能。AIで作成した投稿を本人のThreadsへ公開（今すぐ／予約／自動投稿）。コメント返信・ツリー投稿（`reply_to_id`）もこの権限で実装。 |
+| `threads_content_publish` | 中核機能。AIで作成した投稿を本人のThreadsへ公開（今すぐ／予約／自動投稿）。 |
+| `threads_manage_replies` | 連続投稿（ツリー）の2件目以降（`reply_to_id`）と「コメント管理」での返信に必須。返信の作成アクションがこの権限を要求する。 |
 | `threads_read_replies` | 「コメント管理」画面で、本人の投稿のコメントを取得・表示。 |
 | `threads_manage_insights` | 「投稿分析」画面で、本人の投稿の閲覧数・いいね・返信・リポストを表示。 |
 
-※ `threads_manage_replies` は申請対象外（コメント返信は content_publish で実装）。OAuth要求スコープ（`server/threadsAuth.ts`）と一致しています。
+※ OAuth要求スコープ（`server/threadsAuth.ts`）と一致しています（5権限）。
 
 ---
 
