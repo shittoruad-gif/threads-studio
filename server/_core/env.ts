@@ -8,6 +8,12 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  // ★Google Gemini 直接接続。GEMINI_API_KEY が設定されていれば、
+  //   Manus(Forge)ゲートウェイを経由せず Google の OpenAI 互換エンドポイントを使う。
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
+  // 既定は Google の OpenAI 互換エンドポイント（必要なら上書き可）
+  geminiBaseUrl: process.env.GEMINI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai",
+  geminiModel: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
   threadsAppId: process.env.THREADS_APP_ID ?? "",
   threadsAppSecret: process.env.THREADS_APP_SECRET ?? "",
   threadsRedirectBaseUrl: process.env.THREADS_REDIRECT_BASE_URL ?? "",
