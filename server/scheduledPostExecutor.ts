@@ -16,19 +16,49 @@ const APP_BASE_URL = process.env.APP_BASE_URL || "https://threads-studio.com";
  * これがないと自動投稿が静かに失敗し、ユーザーは履歴を見ない限り気づけない。
  * ベストエフォート（送信失敗は握りつぶす）。
  */
-async function notifyUserPostFailure(userId: number, errorMessage: string): Promise<void> {
+type FailureKind = 'failed' | 'reauth' | 'partial';
+
+async function notifyUserPostFailure(
+  userId: number,
+  errorMessage: string,
+  kind: FailureKind = 'failed',
+): Promise<void> {
   try {
     const user = await db.getUserById(userId);
     if (!user?.email) return;
+
+    let subject: string;
+    let heading: string;
+    let body: string;
+    let cta: { label: string; href: string };
+
+    if (kind === 'reauth') {
+      // トークン失効・更新失敗：再連携しないと自動投稿が止まり続ける
+      subject = "【Threads Studio】Threads連携が切れ、投稿が公開できませんでした（再連携のお願い）";
+      heading = "Threads連携が切れています";
+      body = `予約・自動投稿をThreadsに公開できませんでした。Threads連携の有効期限切れ、またはThreads側で連携が解除された可能性があります。<br>このままだと<strong>以降の自動投稿も停止</strong>します。お手数ですが再連携をお願いします。`;
+      cta = { label: "再連携する", href: `${APP_BASE_URL}/threads-connect` };
+    } else if (kind === 'partial') {
+      // 連続投稿の部分成功：メインは公開済み。再投稿は不要（二重投稿防止）
+      subject = "【Threads Studio】連続投稿の一部が公開されませんでした";
+      heading = "連続投稿の続きが一部公開されませんでした";
+      body = `メイン（1件目）の投稿は<strong>正常に公開されています</strong>が、続き（2件目以降）の一部が公開できませんでした。<br><strong>同じ投稿を作り直して再投稿しないでください</strong>（メインが二重に投稿されます）。続きを足したい場合は、Threads上で該当投稿に手動で返信する形をおすすめします。`;
+      cta = { label: "投稿履歴を確認", href: `${APP_BASE_URL}/post-history` };
+    } else {
+      subject = "【Threads Studio】投稿の公開に失敗しました";
+      heading = "投稿の公開に失敗しました";
+      body = `予約・自動投稿のThreadsへの公開に失敗しました。一時的なエラーのことが多いです。ダッシュボードからご確認ください。`;
+      cta = { label: "投稿履歴を確認", href: `${APP_BASE_URL}/post-history?status=failed` };
+    }
+
     await sendEmail({
       to: user.email,
-      subject: "【Threads Studio】投稿の公開に失敗しました",
+      subject,
       html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
-        <h2>投稿の公開に失敗しました</h2>
-        <p>予約・自動投稿のThreadsへの公開に失敗しました。</p>
-        <p style="color:#666;font-size:13px;">理由: ${errorMessage}</p>
-        <p>Threads連携の有効期限切れや一時的なエラーが原因のことが多いです。ダッシュボードからご確認ください。</p>
-        <a href="${APP_BASE_URL}/post-history?status=failed" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0;">投稿履歴を確認</a>
+        <h2>${heading}</h2>
+        <p>${body}</p>
+        <p style="color:#666;font-size:13px;">詳細: ${errorMessage}</p>
+        <a href="${cta.href}" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0;">${cta.label}</a>
       </div>`,
     });
   } catch (err: any) {
@@ -96,6 +126,8 @@ export async function executePendingPosts() {
             errorMessage: 'Threads account not found'
           });
           failed++;
+          // 連携アカウントが見つからない＝連携が外れている。再連携を促す。
+          await notifyUserPostFailure(post.userId, 'Threads連携が見つかりませんでした', 'reauth');
           continue;
         }
 
@@ -126,6 +158,8 @@ export async function executePendingPosts() {
                   errorMessage: 'Access token expired and refresh failed'
                 });
                 failed++;
+                // ★無音失敗を防ぐ：トークン失効＋更新失敗は再連携が必要
+                await notifyUserPostFailure(post.userId, 'アクセストークンが失効し、自動更新にも失敗しました', 'reauth');
                 continue;
               }
             } catch {
@@ -134,6 +168,8 @@ export async function executePendingPosts() {
                 errorMessage: 'Access token expired and refresh failed'
               });
               failed++;
+              // ★無音失敗を防ぐ：トークン失効＋更新失敗は再連携が必要
+              await notifyUserPostFailure(post.userId, 'アクセストークンが失効し、自動更新にも失敗しました', 'reauth');
               continue;
             }
           } else if (hoursUntilExpiry <= 24) {
@@ -188,8 +224,8 @@ export async function executePendingPosts() {
           });
           executed++;
           console.warn(`[Scheduled Post] Post ${post.id} partially published (root=${error.rootId}).`);
-          // ユーザーには「一部失敗」を通知
-          await notifyUserPostFailure(post.userId, error.message);
+          // ユーザーには「メインは公開済み・続きが一部失敗（再投稿しないで）」を正確に通知
+          await notifyUserPostFailure(post.userId, error.message, 'partial');
           continue;
         }
 

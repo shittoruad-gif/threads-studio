@@ -30,10 +30,12 @@ const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserI
 
 class OAuthService {
   constructor(private client: ReturnType<typeof axios.create>) {
-    console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
+    // OAUTH_SERVER_URL は外部プラットフォーム連携ログイン用。本アプリは
+    // email/password 認証で動作しており未設定でも問題ない。誤解を招く ERROR では
+    // なく info に留める（ログ汚染・誤報を防ぐ）。
     if (!ENV.oAuthServerUrl) {
-      console.error(
-        "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
+      console.info(
+        "[OAuth] OAUTH_SERVER_URL is not set — external platform OAuth login is disabled (email/password auth is used)."
       );
     }
   }

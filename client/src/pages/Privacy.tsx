@@ -84,8 +84,8 @@ export default function Privacy() {
               <div className="pl-4 border-l-2 border-primary/30">
                 <h3 className="font-medium text-foreground mb-1">2.7 エラー・診断情報</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  不具合の検知・修正のため、エラー発生時のエラー内容や発生状況などの診断情報を収集します
-                  （エラー監視サービス Sentry を利用）。サービスの品質・安定性向上のため、
+                  不具合の検知・修正のため、エラー発生時のエラー内容や発生状況などの診断情報を収集する場合があります
+                  （エラー監視サービス（例：Sentry）を利用することがあります）。サービスの品質・安定性向上のため、
                   このような情報を収集することにご理解をお願いいたします。
                 </p>
               </div>
@@ -212,7 +212,7 @@ export default function Privacy() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
-                <span>サービス提供に必要な業務委託先（決済処理のUnivapay／株式会社ユニヴァ・ペイキャスト、AI生成のGoogle LLC、メール配信のResend、エラー監視のSentry 等）に対して、必要最小限の情報を提供する場合</span>
+                <span>サービス提供に必要な業務委託先（決済処理のUnivapay／株式会社ユニヴァ・ペイキャスト、AI生成のGoogle LLC、メール配信のResend、エラー監視サービス（例：Sentry。利用する場合）等）に対して、必要最小限の情報を提供する場合</span>
               </li>
             </ul>
           </section>

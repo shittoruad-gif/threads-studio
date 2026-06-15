@@ -91,6 +91,26 @@ async function startServer() {
   const { initSentry } = await import("../sentry");
   initSentry();
 
+  // プロセス全体の保険：未処理の例外/Promise拒否でプロセスが落ちないようにする。
+  // 自動投稿cronなどバックグラウンド処理の想定外エラーでサーバが停止すると、
+  // 全ユーザーの投稿・ログインが止まるため、ログ＋オーナー通知して継続する。
+  // （多重登録を避けるためフラグでガード）
+  if (!(globalThis as any).__processGuardsInstalled) {
+    (globalThis as any).__processGuardsInstalled = true;
+    const reportFatal = async (label: string, err: unknown) => {
+      const msg = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err);
+      console.error(`[Process] ${label}:`, msg);
+      try {
+        const { notifyOwner } = await import("./notification");
+        await notifyOwner({ title: `サーバ未処理エラー: ${label}`, content: msg.slice(0, 1500) });
+      } catch (e) {
+        console.error('[Process] failed to notify owner about fatal:', e);
+      }
+    };
+    process.on('unhandledRejection', (reason) => { void reportFatal('unhandledRejection', reason); });
+    process.on('uncaughtException', (err) => { void reportFatal('uncaughtException', err); });
+  }
+
   const app = express();
   app.set('trust proxy', 1);
   const server = createServer(app);
