@@ -197,7 +197,7 @@ export default function FAQ() {
       {/* Footer */}
       <footer className="border-t border-border/40 py-6 px-4">
         <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-          <p>&copy; 2025 Threads Studio. All rights reserved.</p>
+          <p>&copy; 2026 Threads Studio. All rights reserved.</p>
           <div className="flex gap-4">
             <Link href="/privacy">
               <span className="hover:text-foreground transition-colors cursor-pointer">

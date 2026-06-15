@@ -707,7 +707,7 @@ export default function Landing() {
               <Link href="/faq"><span className="hover:text-white/80 transition-colors cursor-pointer">よくある質問</span></Link>
               <Link href="/commercial-transaction"><span className="hover:text-white/80 transition-colors cursor-pointer">特定商取引法</span></Link>
             </div>
-            <p className="text-white/40 text-sm">&copy; 2025 Threads Studio. All rights reserved.</p>
+            <p className="text-white/40 text-sm">&copy; 2026 Threads Studio. All rights reserved.</p>
           </div>
         </div>
       </footer>

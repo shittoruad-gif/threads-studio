@@ -25,7 +25,7 @@ export default function Privacy() {
           <h1 className="text-3xl font-bold text-foreground">プライバシーポリシー</h1>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-8">最終更新日：2025年6月1日</p>
+        <p className="text-sm text-muted-foreground mb-8">最終更新日：2026年6月15日</p>
 
         <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
           <section>
@@ -291,7 +291,7 @@ export default function Privacy() {
       {/* Footer */}
       <footer className="border-t border-border/40 py-6 px-4">
         <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-          <p>&copy; 2025 Threads Studio. All rights reserved.</p>
+          <p>&copy; 2026 Threads Studio. All rights reserved.</p>
           <div className="flex gap-4">
             <Link href="/terms"><span className="hover:text-foreground transition-colors cursor-pointer">利用規約</span></Link>
             <Link href="/faq"><span className="hover:text-foreground transition-colors cursor-pointer">よくある質問</span></Link>

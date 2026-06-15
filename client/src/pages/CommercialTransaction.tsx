@@ -25,7 +25,7 @@ export default function CommercialTransaction() {
           <h1 className="text-3xl font-bold text-foreground">特定商取引法に基づく表記</h1>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-8">最終更新日：2026年3月27日</p>
+        <p className="text-sm text-muted-foreground mb-8">最終更新日：2026年6月15日</p>
 
         <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
           <div className="overflow-x-auto">
