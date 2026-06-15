@@ -263,14 +263,19 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">13. お問い合わせ</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">13. お問い合わせ・開示等の請求窓口</h2>
             <p className="text-muted-foreground leading-relaxed">
-              プライバシーに関するご質問やご要望がございましたら、
-              アプリ内のお問い合わせ機能またはサポートまでご連絡ください。
+              本ポリシーに関するご質問、または個人情報の開示・訂正・利用停止・削除等のご請求は、
+              下記の窓口までご連絡ください。
             </p>
-            <p className="text-muted-foreground leading-relaxed mt-2">
-              運営：株式会社しっとる
-            </p>
+            <div className="text-muted-foreground leading-relaxed mt-3">
+              <p>事業者：株式会社しっとる</p>
+              <p>所在地：〒700-0901 岡山県岡山市北区本町6-36 第一セントラルビル4階</p>
+              <p>
+                連絡先：
+                <a href="mailto:shittoru@s-toru.com" className="text-primary hover:underline">shittoru@s-toru.com</a>
+              </p>
+            </div>
           </section>
         </div>
       </main>

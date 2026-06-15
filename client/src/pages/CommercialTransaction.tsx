@@ -60,12 +60,10 @@ export default function CommercialTransaction() {
                 <td className="py-4 px-4 font-semibold text-foreground bg-muted/50 align-top">お問い合わせ</td>
                 <td className="py-4 px-4 text-muted-foreground">
                   <a
-                    href="https://www.shittoru-seo-app.com/%E8%A4%87%E8%A3%BD-%E8%B2%A9%E5%A3%B2%E3%83%91%E3%83%BC%E3%83%88%E3%83%8A%E3%83%BC"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href="mailto:shittoru@s-toru.com"
                     className="text-primary hover:underline"
                   >
-                    お問い合わせフォームはこちら
+                    shittoru@s-toru.com
                   </a>
                 </td>
               </tr>
