@@ -48,6 +48,8 @@ export function getThreadsAuthUrl(config: ThreadsAuthConfig, options: ThreadsAut
     "threads_content_publish",
     "threads_manage_replies",
     "threads_read_replies",
+    // 投稿分析（PostAnalytics）でインサイトAPIを使うため必須
+    "threads_manage_insights",
   ];
 
   const scopes = config.scope || defaultScopes;
