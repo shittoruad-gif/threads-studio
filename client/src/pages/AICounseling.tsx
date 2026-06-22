@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import {
   ArrowLeft, ArrowRight, Sparkles, Loader2, Check,
-  PartyPopper, Plus,
+  PartyPopper, Plus, Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,6 +17,35 @@ import {
   type CounselingAnswers,
   type CounselingQuestion,
 } from '../../../shared/counseling';
+
+/** レビュー画面で使う、各設問の短いラベル */
+const QUESTION_LABELS: Record<string, string> = {
+  brandVoiceRaw: '口調・話し方',
+  uspRaw: '選ばれる理由（USP）',
+  menuRaw: '主なメニュー・コース',
+  realProofsRaw: '実績の数字',
+  realEpisodesRaw: 'お客様のエピソード',
+  benefitsDailyRaw: '来店後の変化',
+  ctaAssetsRaw: '特典・無料オファー',
+  faqRaw: 'よくある質問',
+  industryMythsRaw: '業界の常識・失敗',
+  originStoryRaw: '原体験・想い',
+  ngListRaw: '絶対NG項目',
+  preferredTypesRaw: 'よく作りたい投稿タイプ',
+  useThreadsKnowhow: 'Threadsノウハウの使用',
+};
+
+/** 回答を人が読める表示に整形（選択肢はラベルに変換） */
+function formatAnswerForReview(q: CounselingQuestion, value: string): string {
+  const raw = (value ?? '').trim();
+  if (!raw) return '（未入力）';
+  if (q.choices && (q.ui === 'choice' || q.ui === 'multi-choice')) {
+    const vals = raw.split(/[,\s]+/).filter(Boolean);
+    const labels = vals.map((v) => q.choices!.find((c) => c.value === v)?.label || v);
+    return labels.join(' / ') || '（未入力）';
+  }
+  return raw;
+}
 
 /**
  * AIカウンセリング画面
@@ -37,6 +66,11 @@ export default function AICounseling() {
 
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<Partial<CounselingAnswers>>({});
+  // 'questions' = 1問ずつ回答 / 'review' = 全回答の一覧（修正可）
+  const [view, setView] = useState<'questions' | 'review'>('questions');
+  // レビューから1問だけ修正中か（修正後はレビューへ戻す）
+  const [editingOne, setEditingOne] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   const utils = trpc.useUtils();
 
@@ -45,15 +79,36 @@ export default function AICounseling() {
     { enabled: !!projectId },
   );
 
+  // 既存のカウンセリング結果を取得して、回答欄に事前入力する（＝あとから修正できる）。
+  const { data: counselingData, isLoading: counselingLoading } =
+    trpc.project.getCounseling.useQuery(
+      { projectId },
+      { enabled: !!projectId },
+    );
+
+  // 取得できたら一度だけ回答に流し込む。既にカウンセリング済みならレビュー画面から開始。
+  useEffect(() => {
+    if (hydrated || counselingLoading) return;
+    const result = counselingData?.result as any;
+    if (result && result.rawAnswers && Object.keys(result.rawAnswers).length > 0) {
+      setAnswers(result.rawAnswers as Partial<CounselingAnswers>);
+      setView('review');
+    }
+    setHydrated(true);
+  }, [counselingData, counselingLoading, hydrated]);
+
   const saveMutation = trpc.project.saveCounseling.useMutation({
     onSuccess: () => {
       // バナーが残らないように getCounseling と project.get の両方を invalidate。
       utils.project.getCounseling.invalidate({ projectId });
       utils.project.get.invalidate({ id: projectId });
       toast.success('カウンセリング結果を保存しました');
-      // カウンセリング完了後はスタイル校正へ自動誘導
-      // （スタイル校正でスキップ or 完了どちらも /ai-generate に戻る）
-      setLocation(`/ai-style-calibration?project=${projectId}`);
+      // 初回はスタイル校正へ誘導。修正（既にカウンセリング済み）の場合は生成画面へ戻す。
+      if (counselingData?.counseledAt) {
+        setLocation(`/ai-generate?project=${projectId}`);
+      } else {
+        setLocation(`/ai-style-calibration?project=${projectId}`);
+      }
     },
     onError: (e) => toast.error(e.message),
   });
@@ -81,6 +136,26 @@ export default function AICounseling() {
     setAnswers((prev) => ({ ...prev, [id]: value }));
   };
 
+  const buildAnswersPayload = (merged: Partial<CounselingAnswers>) => ({
+    brandVoiceRaw: merged.brandVoiceRaw ?? '',
+    uspRaw: merged.uspRaw ?? '',
+    menuRaw: merged.menuRaw ?? '',
+    realProofsRaw: merged.realProofsRaw ?? '',
+    realEpisodesRaw: merged.realEpisodesRaw ?? '',
+    benefitsDailyRaw: merged.benefitsDailyRaw ?? '',
+    ctaAssetsRaw: merged.ctaAssetsRaw ?? '',
+    faqRaw: merged.faqRaw ?? '',
+    industryMythsRaw: merged.industryMythsRaw ?? '',
+    originStoryRaw: merged.originStoryRaw ?? '',
+    ngListRaw: merged.ngListRaw ?? '',
+    preferredTypesRaw: merged.preferredTypesRaw ?? '',
+    useThreadsKnowhow: (merged.useThreadsKnowhow as 'on' | 'off') ?? 'on',
+  });
+
+  const handleSave = () => {
+    saveMutation.mutate({ projectId, answers: buildAnswersPayload(answers) });
+  };
+
   // canProceed は現在のレンダーで描画されるボタンの enable/disable 用。
   // 実際の進行判定は handleNext 内でも独立に行うこと（state更新タイミングの
   // 競合を避けるため）。
@@ -104,25 +179,16 @@ export default function AICounseling() {
       if (!v || (v as string).length === 0) return;
     }
 
+    // レビューから1問だけ修正していた場合は、修正を反映してレビューへ戻る。
+    if (editingOne) {
+      setEditingOne(false);
+      setView('review');
+      return;
+    }
+
     if (isLast) {
-      saveMutation.mutate({
-        projectId,
-        answers: {
-          brandVoiceRaw: merged.brandVoiceRaw ?? '',
-          uspRaw: merged.uspRaw ?? '',
-          menuRaw: merged.menuRaw ?? '',
-          realProofsRaw: merged.realProofsRaw ?? '',
-          realEpisodesRaw: merged.realEpisodesRaw ?? '',
-          benefitsDailyRaw: merged.benefitsDailyRaw ?? '',
-          ctaAssetsRaw: merged.ctaAssetsRaw ?? '',
-          faqRaw: merged.faqRaw ?? '',
-          industryMythsRaw: merged.industryMythsRaw ?? '',
-          originStoryRaw: merged.originStoryRaw ?? '',
-          ngListRaw: merged.ngListRaw ?? '',
-          preferredTypesRaw: merged.preferredTypesRaw ?? '',
-          useThreadsKnowhow: (merged.useThreadsKnowhow as 'on' | 'off') ?? 'on',
-        },
-      });
+      // 最後まで来たら、保存前に「内容の確認・修正」画面へ。
+      setView('review');
     } else {
       setStepIndex((i) => i + 1);
     }
@@ -131,6 +197,12 @@ export default function AICounseling() {
   const handleNext = () => advance();
 
   const handleBack = () => {
+    if (editingOne) {
+      // 修正中はレビューへ戻る（変更は保持）。
+      setEditingOne(false);
+      setView('review');
+      return;
+    }
     if (!isFirst) setStepIndex((i) => i - 1);
   };
 
@@ -140,6 +212,22 @@ export default function AICounseling() {
     setAnswer(currentQuestion.id, 'なし');
     advance({ [currentQuestion.id]: 'なし' } as Partial<CounselingAnswers>);
   };
+
+  /** レビューから特定の設問だけ修正する */
+  const editQuestion = (index: number) => {
+    setStepIndex(index);
+    setEditingOne(true);
+    setView('questions');
+  };
+
+  // 取得中はローディング（事前入力の有無を確定させてから描画）
+  if (counselingLoading && !hydrated) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="container max-w-2xl py-6 px-4 space-y-4">
@@ -169,52 +257,132 @@ export default function AICounseling() {
         </p>
       </div>
 
-      {/* 進捗 */}
-      <div className="space-y-1">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>質問 {stepIndex + 1} / {totalSteps}</span>
-          <span>{Math.round(((stepIndex + 1) / totalSteps) * 100)}%</span>
-        </div>
-        <Progress value={((stepIndex + 1) / totalSteps) * 100} className="h-1.5" />
-      </div>
+      {view === 'review' ? (
+        /* ───────── 確認・修正画面 ───────── */
+        <>
+          <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+            <p className="text-sm font-medium text-emerald-800">入力内容の確認・修正</p>
+            <p className="text-xs text-emerald-700 mt-0.5">
+              間違いがあれば各項目の「修正」から直せます。問題なければ下の「保存する」を押してください。
+            </p>
+          </div>
 
-      {/* 質問本体 */}
-      <QuestionCard
-        question={currentQuestion}
-        value={(currentAnswer as string) ?? ''}
-        onChange={(v) => setAnswer(currentQuestion.id, v)}
-      />
+          <div className="space-y-2">
+            {COUNSELING_QUESTIONS.map((q, i) => {
+              const display = formatAnswerForReview(q, (answers[q.id] as string) ?? '');
+              const isEmpty = display === '（未入力）';
+              return (
+                <Card key={q.id}>
+                  <CardContent className="py-3 flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        {QUESTION_LABELS[q.id] || `質問${i + 1}`}
+                        {q.required && <span className="text-destructive ml-1">*</span>}
+                      </p>
+                      <p className={cn(
+                        'text-sm mt-0.5 whitespace-pre-line break-words',
+                        isEmpty ? 'text-muted-foreground/60 italic' : 'text-foreground',
+                      )}>
+                        {display}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0"
+                      aria-label={`${QUESTION_LABELS[q.id] || '項目'}を修正`}
+                      onClick={() => editQuestion(i)}
+                    >
+                      <Pencil className="h-3.5 w-3.5 mr-1" />
+                      修正
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
 
-      {/* ナビ */}
-      <div className="flex items-center gap-2 sticky bottom-2 bg-background/80 backdrop-blur-sm py-2 -mx-4 px-4">
-        <Button variant="outline" disabled={isFirst} onClick={handleBack}>
-          戻る
-        </Button>
-        <div className="flex-1" />
-        {currentQuestion.allowEmptyShortcut && (
-          <Button variant="ghost" onClick={handleSkipEmpty}>
-            「なし」で進む
-          </Button>
-        )}
-        <Button
-          onClick={handleNext}
-          disabled={!canProceed || saveMutation.isPending}
-        >
-          {saveMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : isLast ? (
-            <>
-              <PartyPopper className="h-4 w-4 mr-1" />
-              完了して保存
-            </>
-          ) : (
-            <>
-              次へ
-              <ArrowRight className="h-4 w-4 ml-1" />
-            </>
+          <div className="flex items-center gap-2 sticky bottom-2 bg-background/80 backdrop-blur-sm py-2 -mx-4 px-4">
+            <Button
+              variant="outline"
+              onClick={() => { setEditingOne(false); setStepIndex(0); setView('questions'); }}
+            >
+              最初から見直す
+            </Button>
+            <div className="flex-1" />
+            <Button onClick={handleSave} disabled={saveMutation.isPending}>
+              {saveMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <PartyPopper className="h-4 w-4 mr-1" />
+                  保存する
+                </>
+              )}
+            </Button>
+          </div>
+        </>
+      ) : (
+        /* ───────── 1問ずつの回答画面 ───────── */
+        <>
+          {/* 進捗（単発修正中は非表示） */}
+          {!editingOne && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>質問 {stepIndex + 1} / {totalSteps}</span>
+                <span>{Math.round(((stepIndex + 1) / totalSteps) * 100)}%</span>
+              </div>
+              <Progress value={((stepIndex + 1) / totalSteps) * 100} className="h-1.5" />
+            </div>
           )}
-        </Button>
-      </div>
+          {editingOne && (
+            <p className="text-xs text-muted-foreground">
+              この項目を修正しています。変更後「変更を反映」を押すと一覧に戻ります。
+            </p>
+          )}
+
+          {/* 質問本体 */}
+          <QuestionCard
+            question={currentQuestion}
+            value={(currentAnswer as string) ?? ''}
+            onChange={(v) => setAnswer(currentQuestion.id, v)}
+          />
+
+          {/* ナビ */}
+          <div className="flex items-center gap-2 sticky bottom-2 bg-background/80 backdrop-blur-sm py-2 -mx-4 px-4">
+            <Button variant="outline" disabled={!editingOne && isFirst} onClick={handleBack}>
+              {editingOne ? '一覧に戻る' : '戻る'}
+            </Button>
+            <div className="flex-1" />
+            {currentQuestion.allowEmptyShortcut && (
+              <Button variant="ghost" onClick={handleSkipEmpty}>
+                「なし」{editingOne ? 'にする' : 'で進む'}
+              </Button>
+            )}
+            <Button
+              onClick={handleNext}
+              disabled={!canProceed || saveMutation.isPending}
+            >
+              {editingOne ? (
+                <>
+                  <Check className="h-4 w-4 mr-1" />
+                  変更を反映
+                </>
+              ) : isLast ? (
+                <>
+                  内容を確認する
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </>
+              ) : (
+                <>
+                  次へ
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </>
+              )}
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -548,6 +548,25 @@ export default function AIGenerate() {
           </Card>
         )}
 
+        {/* カウンセリング済みのとき：内容の確認・修正導線 */}
+        {projectId && counselingState && counselingState.counseledAt && (
+          <div className="mb-6 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5">
+            <p className="text-sm text-emerald-800 flex items-center gap-2 min-w-0">
+              <Check className="h-4 w-4 shrink-0" />
+              <span className="truncate">カウンセリング済み — 入力内容はいつでも修正できます</span>
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+              onClick={() => setLocation(`/ai-counseling?project=${projectId}`)}
+            >
+              <Pencil className="h-3.5 w-3.5 mr-1" />
+              確認・修正する
+            </Button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* 左側：設定エリア */}
           <div className="space-y-6 min-w-0">
