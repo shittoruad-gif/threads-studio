@@ -178,6 +178,27 @@ async function generateAutoPost(
 
     const result = await enforceNgWords(JSON.parse(content), ngWords);
 
+    // ★事実ガード：裏付けの無い捏造（先着/受賞/メディア掲載/満足度◯%等）を機械的に除去。
+    //   自動投稿は人の確認を挟まず公開されるため特に重要。
+    try {
+      const { scrubPost, buildSupportedFacts } = await import('../shared/factGuard');
+      const supportedFacts = buildSupportedFacts(
+        project.businessType, project.area, (project as any).localTerms,
+        project.strength, project.proof, (project as any).usp,
+        (project as any).n1Customer, (project as any).belief, (project as any).customerWords,
+        counselingResult?.realProofs, counselingResult?.menu, counselingResult?.realEpisodes,
+        counselingResult?.benefitsDaily, counselingResult?.ctaAssets, counselingResult?.faq,
+        counselingResult?.industryMyths, counselingResult?.originStory,
+      );
+      const g = scrubPost(result, supportedFacts);
+      if (g.removed.length > 0) {
+        console.warn(`[AutoPost] factGuard removed ${g.removed.length} unsupported claim(s) userId=${userId} projectId=${project.id}: ${g.removed.join(' / ')}`);
+      }
+      Object.assign(result, g.post);
+    } catch (e) {
+      console.warn('[AutoPost] factGuard skipped:', (e as Error).message);
+    }
+
     // Combine main post + tree posts + CTA into full post content。
     // treeCount=0 を指定しているので通常 treePosts は空配列。
     // ハッシュタグ（#）は使わない方針のため、AIが誤って返しても本文には連結しない。

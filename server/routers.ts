@@ -573,62 +573,21 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    // ── 地元の呼び方をAIが提案（最寄り駅・通称・ランドマーク）──────────
-    // ユーザーが入力した住所/エリアから、地元の人に伝わる呼び方の「候補」を返す。
-    // ※ AIの推測には誤りが混じりうるため、必ずユーザー本人が選択・修正して確定する前提。
+    // ── 地元の呼び方の候補を「実在の地図データ」から取得（最寄り駅・町名・ランドマーク）──
+    // OpenStreetMap（Nominatim+Overpass）の実データのみを返す。LLMの推測は使わない
+    // （存在しない施設の捏造＝ハルシネーションを防ぐため）。
+    // 取得した候補は最終的にユーザー本人が選択・編集して確定する前提。
     suggestLocalTerms: protectedProcedure
       .input(z.object({
         area: z.string().min(1).max(120),
         businessType: z.string().max(100).optional(),
       }))
       .mutation(async ({ input }) => {
-        const { invokeLLM } = await import('./_core/llm');
-        const prompt = `あなたは日本の地理に詳しいローカル集客の専門家です。
-次の所在地について、その地域に住む人が「ピンとくる呼び方」の候補を挙げてください。
-
-所在地: ${input.area}
-${input.businessType ? `業種: ${input.businessType}` : ''}
-
-以下の3カテゴリで、確信が持てるものだけを挙げてください（曖昧・不確実なものは挙げない。少数でよい）。
-- stations: 最寄り駅・近隣駅（路線名がわかれば併記。例「大元駅（JR宇野線）」）
-- nicknames: その地域の通称・町名・エリア名（例「下中野」「奉還町」）
-- landmarks: 地元で「あそこ」と言えば伝わる目印・ランドマーク（例「イオンモール岡山の近く」「国道2号沿い」）
-
-重要：
-- 実在が確実なものだけ。少しでも不確かなら含めない（誤った駅名・地名は地元の人の信頼を損なうため）。
-- 各カテゴリ最大5件。該当が無ければ空配列。`;
         try {
-          const res = await invokeLLM({
-            messages: [{ role: 'user', content: prompt }],
-            response_format: {
-              type: 'json_schema',
-              json_schema: {
-                name: 'local_terms',
-                strict: true,
-                schema: {
-                  type: 'object',
-                  additionalProperties: false,
-                  properties: {
-                    stations: { type: 'array', items: { type: 'string' } },
-                    nicknames: { type: 'array', items: { type: 'string' } },
-                    landmarks: { type: 'array', items: { type: 'string' } },
-                  },
-                  required: ['stations', 'nicknames', 'landmarks'],
-                },
-              },
-            },
-          });
-          const content = res?.choices?.[0]?.message?.content;
-          const parsed = JSON.parse(typeof content === 'string' ? content : '{}');
-          const clip = (a: unknown): string[] =>
-            Array.isArray(a) ? a.filter((s) => typeof s === 'string' && s.trim()).slice(0, 5) : [];
-          return {
-            stations: clip(parsed.stations),
-            nicknames: clip(parsed.nicknames),
-            landmarks: clip(parsed.landmarks),
-          };
+          const { fetchLocalTerms } = await import('./localGeo');
+          return await fetchLocalTerms(input.area.trim());
         } catch (e) {
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '候補の取得に失敗しました。少し時間をおいてお試しください。' });
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '地図データの取得に失敗しました。少し時間をおいてお試しください。' });
         }
       }),
 
@@ -1010,6 +969,17 @@ ${input.businessType ? `業種: ${input.businessType}` : ''}
         if (Array.isArray(result.treePosts)) result.treePosts = result.treePosts.map((t: string) => stripRawUrls(t));
         if (result.cta) result.cta = stripRawUrls(result.cta);
 
+        // ★事実ガード：裏付けの無い捏造（先着/受賞/メディア掲載/満足度◯%/No.1等）を機械的に除去。
+        //   裏付け＝店舗情報・カウンセリング由来の事実（proof/strength等に自動転記済み）。
+        const { scrubPost, buildSupportedFacts } = await import('../shared/factGuard');
+        const supportedFacts = buildSupportedFacts(
+          project.businessType, project.area, (project as any).localTerms,
+          project.strength, project.proof, (project as any).usp,
+          (project as any).n1Customer, (project as any).belief, (project as any).customerWords,
+        );
+        const guarded = scrubPost(result, supportedFacts);
+        const cleanResult = guarded.post;
+
         // Increment AI generation usage count
         await db.incrementAiGenerationUsage(ctx.user.id);
 
@@ -1018,7 +988,7 @@ ${input.businessType ? `業種: ${input.businessType}` : ''}
           userId: ctx.user.id,
           projectId: input.projectId,
           postType: input.postType || 'hook_tree',
-          content: JSON.stringify(result),
+          content: JSON.stringify(cleanResult),
           metadata: JSON.stringify({
             businessType: project.businessType,
             area: project.area,
@@ -1031,7 +1001,7 @@ ${input.businessType ? `業種: ${input.businessType}` : ''}
           }),
         });
 
-        return result;
+        return { ...cleanResult, factGuardRemoved: guarded.removed };
       }),
 
     // Get AI generation history
@@ -1265,9 +1235,17 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         const rawVariations = Array.isArray(result.variations)
           ? result.variations.slice(0, allowedCount)
           : [];
-        const filteredVariations = await Promise.all(
+        const ngFiltered = await Promise.all(
           rawVariations.map((v: any) => enforceNgWords(v, cloneNgWords))
         );
+        // ★事実ガード：元投稿＋店舗事実に裏付けの無い捏造（先着/受賞/メディア掲載/満足度◯%等）を除去。
+        const { scrubPost: scrubClone, buildSupportedFacts: buildCloneFacts } = await import('../shared/factGuard');
+        const cloneFacts = buildCloneFacts(
+          originalContent.title, originalContent.mainPost, originalContent.cta,
+          originalContent.treePosts, metadata.area, metadata.localTerms, metadata.strength, metadata.proof,
+          cloneMenu, cloneRealProofs, cloneRealEpisodes, cloneCtaAssets,
+        );
+        const filteredVariations = ngFiltered.map((v: any) => scrubClone(v, cloneFacts).post);
 
         // ★B-4: 量産は「生成1本＝AI生成1回」でカウント（実際に生成できた本数ぶん加算）。
         const producedCount = Math.max(1, filteredVariations.length);
@@ -1862,10 +1840,17 @@ ${input.commentText}
 - 絵文字は1-2個まで
 - 丁寧だけど堅くならない、親しみやすいトーンで
 - コメントの内容に具体的に触れる
-- 3パターン生成してください`;
+- 3パターン生成してください
+
+【★最重要・事実厳守（守らないと法令違反・信用失墜になる）】
+- 事実かどうか分からない数字・期間・料金・実績・効果を**絶対に作らない**。「平均◯回で改善」「必ず治る」「◯日で解消」のような**未確認の約束・効果保証はしない**（薬機法・景品表示法）。
+- 受賞歴・メディア掲載・ランキング・有名人対応など、確証のない権威付けを書かない。
+- 具体的な回数・料金・効果を聞かれたら、断定せず「人によって異なるので、詳しくはDM／ご来院時にご案内します」のように誠実に返す。
+- 誇張・煽り（「予約殺到」「今だけ」等の未確認表現）を使わない。`;
 
         const { invokeLLM } = await import('./_core/llm');
         const response = await invokeLLM({
+          temperature: 0.5,
           messages: [
             { role: 'user', content: replyPrompt },
           ],

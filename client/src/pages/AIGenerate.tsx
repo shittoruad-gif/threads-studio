@@ -442,6 +442,11 @@ export default function AIGenerate() {
       setGeneratedPost(data as GeneratedPost);
       setEditedPost(data as GeneratedPost);
       utils.subscription.getAiUsage.invalidate();
+      // ★事実ガードが裏付けの無い表現を除去した場合は知らせる（透明性）
+      const removed = (data as any)?.factGuardRemoved as string[] | undefined;
+      if (removed && removed.length > 0) {
+        toast.info(`事実確認のため、裏付けのない表現を${removed.length}件除きました（例：${removed[0]}）`);
+      }
       triggerCelebration('first-generation');
     } catch (e: any) {
       setGenerationError(e?.message || 'AI生成に失敗しました。時間をおいて再度お試しください。');
@@ -1091,13 +1096,13 @@ export default function AIGenerate() {
                             onClick={() => suggestLocalTerms.mutate({ area: editForm.area.trim(), businessType: editForm.businessType.trim() || undefined })}
                           >
                             {suggestLocalTerms.isPending
-                              ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" />提案中...</>
-                              : <><Sparkles className="h-3 w-3 mr-1" />AIで候補を提案</>}
+                              ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" />検索中...</>
+                              : <><Search className="h-3 w-3 mr-1" />地図から候補を取得</>}
                           </Button>
                         </div>
                         <p className="text-[11px] text-emerald-700">
-                          地元の人が「ここ」と言って伝わる呼び方を入れると、AIが投稿に自然に織り込みます。
-                          <strong>AI候補は必ず内容を確認してから採用</strong>してください（誤りはタップで消せます）。
+                          地図データから、近くの<strong>実在する駅・町名</strong>を候補表示します（AIの推測は使わないので地名の捏造はありません）。
+                          目印（お店・施設など）は、ご自身が知っている<strong>実在のもの</strong>を1行ずつ追記してください。
                         </p>
 
                         {/* AI候補（タップで下の欄に追加） */}

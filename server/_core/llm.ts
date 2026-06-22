@@ -60,6 +60,11 @@ export type InvokeParams = {
   tools?: Tool[];
   toolChoice?: ToolChoice;
   tool_choice?: ToolChoice;
+  /**
+   * サンプリング温度。未指定時はハルシネーション抑制のため低め(0.6)を既定にする。
+   * 事実厳守が重要な生成（投稿・返信）は呼び出し側でさらに低く(0.4〜0.5)指定する。
+   */
+  temperature?: number;
   maxTokens?: number;
   max_tokens?: number;
   outputSchema?: OutputSchema;
@@ -307,6 +312,8 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   }
 
   payload.max_tokens = 32768;
+  // ハルシネーション抑制：温度は既定で低め。呼び出し側指定があれば優先。
+  payload.temperature = typeof params.temperature === 'number' ? params.temperature : 0.6;
 
   const normalizedResponseFormat = normalizeResponseFormat({
     responseFormat,
