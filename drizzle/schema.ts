@@ -143,7 +143,10 @@ export const projects = mysqlTable("projects", {
   // 店舗情報フィールド
   storeName: varchar("storeName", { length: 100 }), // 店名（一度登録すれば毎回再入力不要）
   businessType: varchar("businessType", { length: 100 }), // 業種
-  area: varchar("area", { length: 100 }), // 地域
+  area: varchar("area", { length: 100 }), // 地域（市区町村レベル）
+  // 地元の人に伝わる呼び方（最寄り駅・通称/町名・ランドマーク等）を改行区切りで保持。
+  // AIが投稿ごとに使い分け、ローカル集客の精度を上げる。事実のみ（AI提案→本人確認で確定）。
+  localTerms: text("localTerms"),
   target: text("target"), // ターゲット
   mainProblem: text("mainProblem"), // 主な悩み
   strength: text("strength"), // 強み/特徴

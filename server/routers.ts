@@ -496,6 +496,7 @@ export const appRouter = router({
         storeName: z.string().optional(), // 店名（一度登録すれば毎回再入力不要）
         businessType: z.string().optional(),
         area: z.string().optional(),
+        localTerms: z.string().optional(), // 地元の呼び方（最寄り駅・通称・ランドマーク）改行区切り
         target: z.string().optional(),
         mainProblem: z.string().optional(),
         strength: z.string().optional(),
@@ -545,6 +546,7 @@ export const appRouter = router({
         storeName: z.string().optional(), // 店名（一度登録すれば毎回再入力不要）
         businessType: z.string().optional(),
         area: z.string().optional(),
+        localTerms: z.string().optional(), // 地元の呼び方（最寄り駅・通称・ランドマーク）改行区切り
         target: z.string().optional(),
         mainProblem: z.string().optional(),
         strength: z.string().optional(),
@@ -569,6 +571,65 @@ export const appRouter = router({
         await db.updateProject(id, updateData);
 
         return { success: true };
+      }),
+
+    // ── 地元の呼び方をAIが提案（最寄り駅・通称・ランドマーク）──────────
+    // ユーザーが入力した住所/エリアから、地元の人に伝わる呼び方の「候補」を返す。
+    // ※ AIの推測には誤りが混じりうるため、必ずユーザー本人が選択・修正して確定する前提。
+    suggestLocalTerms: protectedProcedure
+      .input(z.object({
+        area: z.string().min(1).max(120),
+        businessType: z.string().max(100).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { invokeLLM } = await import('./_core/llm');
+        const prompt = `あなたは日本の地理に詳しいローカル集客の専門家です。
+次の所在地について、その地域に住む人が「ピンとくる呼び方」の候補を挙げてください。
+
+所在地: ${input.area}
+${input.businessType ? `業種: ${input.businessType}` : ''}
+
+以下の3カテゴリで、確信が持てるものだけを挙げてください（曖昧・不確実なものは挙げない。少数でよい）。
+- stations: 最寄り駅・近隣駅（路線名がわかれば併記。例「大元駅（JR宇野線）」）
+- nicknames: その地域の通称・町名・エリア名（例「下中野」「奉還町」）
+- landmarks: 地元で「あそこ」と言えば伝わる目印・ランドマーク（例「イオンモール岡山の近く」「国道2号沿い」）
+
+重要：
+- 実在が確実なものだけ。少しでも不確かなら含めない（誤った駅名・地名は地元の人の信頼を損なうため）。
+- 各カテゴリ最大5件。該当が無ければ空配列。`;
+        try {
+          const res = await invokeLLM({
+            messages: [{ role: 'user', content: prompt }],
+            response_format: {
+              type: 'json_schema',
+              json_schema: {
+                name: 'local_terms',
+                strict: true,
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    stations: { type: 'array', items: { type: 'string' } },
+                    nicknames: { type: 'array', items: { type: 'string' } },
+                    landmarks: { type: 'array', items: { type: 'string' } },
+                  },
+                  required: ['stations', 'nicknames', 'landmarks'],
+                },
+              },
+            },
+          });
+          const content = res?.choices?.[0]?.message?.content;
+          const parsed = JSON.parse(typeof content === 'string' ? content : '{}');
+          const clip = (a: unknown): string[] =>
+            Array.isArray(a) ? a.filter((s) => typeof s === 'string' && s.trim()).slice(0, 5) : [];
+          return {
+            stations: clip(parsed.stations),
+            nicknames: clip(parsed.nicknames),
+            landmarks: clip(parsed.landmarks),
+          };
+        } catch (e) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '候補の取得に失敗しました。少し時間をおいてお試しください。' });
+        }
       }),
 
     // Delete project
@@ -865,6 +926,7 @@ export const appRouter = router({
           storeName: (project as any).storeName || undefined,
           businessType: project.businessType,
           area: project.area,
+          localTerms: (project as any).localTerms || undefined,
           target: project.target,
           mainProblem: project.mainProblem,
           strength: project.strength,
@@ -960,6 +1022,7 @@ export const appRouter = router({
           metadata: JSON.stringify({
             businessType: project.businessType,
             area: project.area,
+            localTerms: (project as any).localTerms,
             target: project.target,
             mainProblem: project.mainProblem,
             strength: project.strength,
@@ -1104,6 +1167,7 @@ CTA: ${originalContent.cta}
 【店舗情報】
 業種: ${metadata.businessType || '不明'}
 地域: ${metadata.area || '不明'}
+${metadata.localTerms ? `地元での呼び方（事実確認済み・推測で増やさない）: ${String(metadata.localTerms).replace(/\r?\n/g, ' / ')}` : ''}
 ターゲット: ${metadata.target || '不明'}
 主な悩み: ${metadata.mainProblem || '不明'}
 強み: ${metadata.strength || '不明'}

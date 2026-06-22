@@ -130,6 +130,7 @@ export default function AIGenerate() {
     storeName: '',
     businessType: '',
     area: '',
+    localTerms: '',
     target: '',
     mainProblem: '',
     strength: '',
@@ -141,6 +142,23 @@ export default function AIGenerate() {
     customerWords: '',
     ngWords: '',
   });
+  // 地元の呼び方：AI提案の候補
+  const [localSuggestions, setLocalSuggestions] = useState<{ stations: string[]; nicknames: string[]; landmarks: string[] } | null>(null);
+  const suggestLocalTerms = trpc.project.suggestLocalTerms.useMutation({
+    onSuccess: (data) => {
+      setLocalSuggestions(data);
+      const total = data.stations.length + data.nicknames.length + data.landmarks.length;
+      if (total === 0) toast.info('候補が見つかりませんでした。お手数ですが手入力してください。');
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const appendLocalTerm = (term: string) => {
+    setEditForm((prev) => {
+      const lines = prev.localTerms.split('\n').map((l) => l.trim()).filter(Boolean);
+      if (lines.includes(term.trim())) return prev;
+      return { ...prev, localTerms: [...lines, term.trim()].join('\n') };
+    });
+  };
 
   const { data: project, isLoading: projectLoading } = trpc.project.get.useQuery(
     { id: projectId! },
@@ -966,6 +984,7 @@ export default function AIGenerate() {
                           storeName: (project as any).storeName || '',
                           businessType: project.businessType || '',
                           area: project.area || '',
+                          localTerms: (project as any).localTerms || '',
                           target: project.target || '',
                           mainProblem: project.mainProblem || '',
                           strength: project.strength || '',
@@ -977,6 +996,7 @@ export default function AIGenerate() {
                           customerWords: (project as any).customerWords || '',
                           ngWords: (project as any).ngWords || '',
                         });
+                        setLocalSuggestions(null);
                         setEditingProject(true);
                       }}
                     >
@@ -1052,10 +1072,72 @@ export default function AIGenerate() {
                         <Input
                           value={editForm.area}
                           onChange={(e) => setEditForm({ ...editForm, area: e.target.value })}
-                          placeholder="例：東京都渋谷区"
+                          placeholder="例：岡山県岡山市北区下中野（できるだけ詳しく）"
                           className="h-8 text-sm"
                         />
+                        <p className="text-[11px] text-muted-foreground">市区町村だけでなく町名まで入れると、地元の呼び方の精度が上がります。</p>
                       </div>
+
+                      {/* 地元での呼び方（地域集客の精度を上げる） */}
+                      <div className="space-y-1.5 rounded-lg border border-emerald-200 bg-emerald-50/60 p-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <Label className="text-xs font-medium text-emerald-800">地元での呼び方（最寄り駅・通称・ランドマーク）</Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 shrink-0 border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                            disabled={!editForm.area.trim() || suggestLocalTerms.isPending}
+                            onClick={() => suggestLocalTerms.mutate({ area: editForm.area.trim(), businessType: editForm.businessType.trim() || undefined })}
+                          >
+                            {suggestLocalTerms.isPending
+                              ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" />提案中...</>
+                              : <><Sparkles className="h-3 w-3 mr-1" />AIで候補を提案</>}
+                          </Button>
+                        </div>
+                        <p className="text-[11px] text-emerald-700">
+                          地元の人が「ここ」と言って伝わる呼び方を入れると、AIが投稿に自然に織り込みます。
+                          <strong>AI候補は必ず内容を確認してから採用</strong>してください（誤りはタップで消せます）。
+                        </p>
+
+                        {/* AI候補（タップで下の欄に追加） */}
+                        {localSuggestions && (() => {
+                          const groups: { label: string; items: string[] }[] = [
+                            { label: '駅', items: localSuggestions.stations },
+                            { label: '通称・町名', items: localSuggestions.nicknames },
+                            { label: '目印', items: localSuggestions.landmarks },
+                          ].filter((g) => g.items.length > 0);
+                          if (groups.length === 0) return null;
+                          return (
+                            <div className="space-y-1.5">
+                              {groups.map((g) => (
+                                <div key={g.label} className="flex flex-wrap items-center gap-1.5">
+                                  <span className="text-[11px] text-muted-foreground w-14 shrink-0">{g.label}</span>
+                                  {g.items.map((it, i) => (
+                                    <button
+                                      key={i}
+                                      type="button"
+                                      onClick={() => appendLocalTerm(it)}
+                                      className="text-xs bg-white border border-emerald-300 hover:bg-emerald-100 rounded-full px-2.5 py-1 inline-flex items-center gap-1 transition-colors"
+                                    >
+                                      <Plus className="h-3 w-3" />{it}
+                                    </button>
+                                  ))}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+
+                        <Textarea
+                          value={editForm.localTerms}
+                          onChange={(e) => setEditForm({ ...editForm, localTerms: e.target.value })}
+                          placeholder={'1行に1つ。例：\n大元駅（JR宇野線）\n下中野エリア\n国道2号沿い'}
+                          rows={3}
+                          className="text-sm bg-white"
+                        />
+                      </div>
+
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">ターゲット</Label>
                         <Textarea

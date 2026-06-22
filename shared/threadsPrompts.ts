@@ -112,6 +112,7 @@ export interface ThreadsPromptInput {
   storeName?: string; // 店名（任意）。登録済みなら毎回渡される。
   businessType: string;
   area: string;
+  localTerms?: string; // 地元の呼び方（最寄り駅・通称・ランドマーク）改行区切り。地域集客の精度向上に使う。
   target: string;
   mainProblem: string;
   strength: string;
@@ -1021,6 +1022,7 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
     storeName: sanitizeForPrompt(input.storeName, 100),
     businessType: sanitizeForPrompt(input.businessType, 100),
     area: sanitizeForPrompt(input.area, 100),
+    localTerms: sanitizeForPrompt(input.localTerms, 400),
     target: sanitizeForPrompt(input.target, 300),
     mainProblem: sanitizeForPrompt(input.mainProblem, 300),
     strength: sanitizeForPrompt(input.strength, 500),
@@ -1050,8 +1052,15 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
   );
   
   // 地域性タイプの場合、エリア名を本文に入れるよう明示
+  const localTermsList = safe.localTerms
+    ? safe.localTerms.split(/\r?\n|、|・|;|；/).map((s) => s.trim()).filter(Boolean)
+    : [];
   const localNote = input.postType === 'local'
-    ? `\n\n【地域性の追加指示】\n- メイン投稿の本文中に必ず「${safe.area}」のエリア名を自然に含めること。\n- 地域に住んでいる人が「あ、自分のことだ」と感じるような書き方にする。\n- 例：「${safe.area}で〜」「${safe.area}にお住まいの方」のように具体的に。`
+    ? `\n\n【地域性の追加指示】\n- メイン投稿の本文中に、地元の人が自分事として感じる地域ワードを自然に含めること。\n${
+        localTermsList.length > 0
+          ? `- ★地元で実際に使われている呼び方（このリストの中から選んで使う。1投稿に1〜2個。毎回違うものをローテーションし、長い住所「${safe.area}」をそのまま並べない）：\n${localTermsList.map((t) => `    ・${t}`).join('\n')}\n- これらは事実確認済みの呼び方。リストに無い駅名・地名・ランドマークを推測で作らないこと（誤った地名は地元の信頼を損なう）。\n- 例：「大元駅すぐの〜」「下中野エリアで〜にお悩みの方へ」のように、地元の人がピンとくる表現にする。`
+          : `- 「${safe.area}」のエリア名を自然に含める。例：「${safe.area}で〜」「${safe.area}にお住まいの方」。`
+      }\n- 地域に住んでいる人が「あ、自分のことだ」と感じるような書き方にする。`
     : '';
 
   // トレンド型の場合、トレンドワードを明示
@@ -1073,6 +1082,7 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
 ${safe.storeName ? `- 店名：${safe.storeName}（自己紹介・実績・固定投稿などで自然に出してよい。毎回・1行目に無理に入れない）` : ''}
 - 業種：${safe.businessType}
 - 地域：${safe.area}
+${safe.localTerms ? `- 地元での呼び方（事実確認済み。最寄り駅・通称・ランドマーク。地域集客で自然に使う。リストに無い地名は推測で作らない）：${safe.localTerms.replace(/\r?\n/g, ' / ')}` : ''}
 - ターゲット：${safe.target}
 - 主な悩み：${safe.mainProblem}
 - 強み/特徴：${safe.strength}

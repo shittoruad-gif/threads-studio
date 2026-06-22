@@ -143,6 +143,7 @@ async function generateAutoPost(
       storeName: (project as any).storeName || undefined,
       businessType: project.businessType,
       area: project.area,
+      localTerms: (project as any).localTerms || undefined,
       target: project.target,
       mainProblem: project.mainProblem,
       strength: project.strength,
