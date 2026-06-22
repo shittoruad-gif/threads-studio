@@ -271,12 +271,13 @@ export default function AIProjectCreate() {
                     />
                     <p className="text-xs text-muted-foreground">一度登録すれば、毎回の投稿生成で自動的に使われます（再入力不要）。</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>業種 *</Label>
                       <Input
                         value={form.businessType}
                         onChange={(e) => setForm({...form, businessType: e.target.value})}
+                        placeholder="例：整体院／整骨院／美容サロン"
                       />
                     </div>
                     <div className="space-y-2">
@@ -284,7 +285,9 @@ export default function AIProjectCreate() {
                       <Input
                         value={form.area}
                         onChange={(e) => setForm({...form, area: e.target.value})}
+                        placeholder="例：大阪市天王寺区／渋谷駅周辺"
                       />
+                      <p className="text-xs text-muted-foreground">地域名は「地元ネタ投稿」で集客に直結します。</p>
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -293,7 +296,9 @@ export default function AIProjectCreate() {
                       value={form.target}
                       onChange={(e) => setForm({...form, target: e.target.value})}
                       rows={2}
+                      placeholder="例：30〜50代の女性。デスクワークや家事で慢性的な肩こり・腰痛に悩む人"
                     />
+                    <p className="text-xs text-muted-foreground">「一番来てほしいお客さん」を年代・性別・状況で。1人を思い浮かべると刺さる投稿になります。</p>
                   </div>
                   <div className="space-y-2">
                     <Label>主な悩み *</Label>
@@ -301,7 +306,9 @@ export default function AIProjectCreate() {
                       value={form.mainProblem}
                       onChange={(e) => setForm({...form, mainProblem: e.target.value})}
                       rows={2}
+                      placeholder="例：何度マッサージしてもすぐ戻る肩こり、朝起きた時の腰の痛み、産後の骨盤の歪み"
                     />
+                    <p className="text-xs text-muted-foreground">そのお客さんが普段どんなことで困っているか。具体的なほどAIが共感投稿を作れます。</p>
                   </div>
                   <div className="space-y-2">
                     <Label>強み・特徴 *</Label>
@@ -309,7 +316,9 @@ export default function AIProjectCreate() {
                       value={form.strength}
                       onChange={(e) => setForm({...form, strength: e.target.value})}
                       rows={2}
+                      placeholder="例：国家資格者による根本改善施術。完全予約制でゆったり。夜20時まで営業"
                     />
+                    <p className="text-xs text-muted-foreground">他院ではなく「あなた」を選ぶ理由。技術・人柄・立地・営業時間など何でもOK。</p>
                   </div>
                   <div className="space-y-2">
                     <Label>実績（任意）</Label>

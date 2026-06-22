@@ -257,6 +257,81 @@ export default function Dashboard() {
           );
         })()}
 
+        {/* ★連携失効の警告（自動投稿が止まる前に気づけるように） */}
+        {(() => {
+          if (!threadsAccounts || threadsAccounts.length === 0) return null;
+          const now = Date.now();
+          const DAY = 1000 * 60 * 60 * 24;
+          const expired = threadsAccounts.filter((a: any) => a.tokenExpiresAt && new Date(a.tokenExpiresAt).getTime() <= now);
+          const expiringSoon = threadsAccounts.filter((a: any) => {
+            if (!a.tokenExpiresAt) return false;
+            const d = (new Date(a.tokenExpiresAt).getTime() - now) / DAY;
+            return d > 0 && d <= 7;
+          });
+          if (expired.length === 0 && expiringSoon.length === 0) return null;
+          const isExpired = expired.length > 0;
+          return (
+            <div className={`mb-6 flex items-center justify-between gap-3 rounded-xl p-4 border-2 ${isExpired ? 'bg-red-50 border-red-300' : 'bg-yellow-50 border-yellow-300'}`}>
+              <div className="flex items-start gap-2 min-w-0">
+                <AlertCircle className={`w-5 h-5 shrink-0 mt-0.5 ${isExpired ? 'text-red-500' : 'text-yellow-600'}`} />
+                <div className="min-w-0">
+                  <p className={`text-sm font-bold ${isExpired ? 'text-red-800' : 'text-yellow-800'}`}>
+                    {isExpired
+                      ? `⚠️ Threads連携が切れています（${expired.length}件）— 自動投稿が停止しています`
+                      : `Threads連携の期限が近づいています（${expiringSoon.length}件）`}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${isExpired ? 'text-red-700' : 'text-yellow-700'}`}>
+                    {isExpired
+                      ? '連携を更新すると自動投稿が再開します。'
+                      : '期限が切れると自動投稿が止まります。早めの更新がおすすめです。'}
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className={`shrink-0 text-white ${isExpired ? 'bg-red-600 hover:bg-red-700' : 'bg-yellow-600 hover:bg-yellow-700'}`}
+                onClick={() => setLocation('/threads-connect')}
+              >
+                連携を更新する
+              </Button>
+            </div>
+          );
+        })()}
+
+        {/* ★投稿失敗の警告（メール通知だけでなくアプリ内でも気づけるように・直近14日） */}
+        {(() => {
+          const now = Date.now();
+          const DAY = 1000 * 60 * 60 * 24;
+          const recentFailed = (scheduledPosts || []).filter((p: any) => {
+            if (p.status !== 'failed') return false;
+            const ts = p.scheduledAt ? new Date(p.scheduledAt).getTime() : now;
+            return now - ts <= 14 * DAY;
+          });
+          if (recentFailed.length === 0) return null;
+          return (
+            <div className="mb-6 flex items-center justify-between gap-3 bg-red-50 border-2 border-red-200 rounded-xl p-4">
+              <div className="flex items-start gap-2 min-w-0">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-500" />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-red-800">
+                    投稿に失敗した予約が {recentFailed.length} 件あります
+                  </p>
+                  <p className="text-xs text-red-700 mt-0.5">
+                    原因と対処方法を確認して、再投稿または連携の更新を行えます。
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white shrink-0"
+                onClick={() => setLocation('/post-history?status=failed')}
+              >
+                確認する
+              </Button>
+            </div>
+          );
+        })()}
+
         {/* Pinned post recommendation (auto-hides once user creates one) */}
         <PinnedPostRecommendation />
 

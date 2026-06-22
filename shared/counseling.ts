@@ -4,7 +4,7 @@
  *
  * フロー:
  *   1. プロジェクト作成後、/ai-counseling/:projectId へ誘導
- *   2. 8つの質問にチャット形式で答える（選択肢・例文・候補チップで答えやすく）
+ *   2. 全13問にチャット形式で答える（選択肢・例文・候補チップで答えやすく）
  *   3. 結果がprojects.counselingResult (JSON) に保存される
  *   4. AI生成時、必ずこのカウンセリング結果を最優先プロンプトに差し込む
  */
@@ -40,9 +40,14 @@ export interface CounselingQuestion {
 export interface CounselingAnswers {
   brandVoiceRaw: string;
   uspRaw: string;
+  menuRaw: string;                 // 主なメニュー・コース（実在のサービスだけ投稿に使う）
   realProofsRaw: string;
   realEpisodesRaw: string;
+  benefitsDailyRaw: string;        // 来店後の「日常の変化」（ベネフィット変換の素材）
   ctaAssetsRaw: string;
+  faqRaw: string;                  // よく聞かれる質問・来店前の不安（Q&A型の素材）
+  industryMythsRaw: string;        // 業界で「これは違う」/昔の自分の失敗（仮想敵・常識を覆す型の素材）
+  originStoryRaw: string;          // 原体験・なぜこの仕事を始めたか（理念/Why me型の素材）
   ngListRaw: string;
   preferredTypesRaw: string;       // CSV ("local,proof,empathy")
   useThreadsKnowhow: 'on' | 'off';
@@ -53,9 +58,14 @@ export interface CounselingAnswers {
  */
 export interface CounselingResult {
   brandVoice: string;
+  menu: string[];
   realProofs: string[];
   realEpisodes: string[];
+  benefitsDaily: string[];
   ctaAssets: string[];
+  faq: string[];
+  industryMyths: string[];
+  originStory: string;
   ngList: string[];
   preferredTypes: PostType[];
   useThreadsKnowhow: boolean;
@@ -120,7 +130,33 @@ export const COUNSELING_QUESTIONS: CounselingQuestion[] = [
     ],
   },
 
-  // ────────────────── Q3. 実績(realProofs) ──────────────────
+  // ────────────────── Q3. 主なメニュー(menu) ──────────────────
+  {
+    id: 'menuRaw',
+    prompt:
+      '実際に提供している「主なメニュー・コース」を教えてください。\n\nここで挙げたものだけを AI は施術内容として投稿に使います（やっていないメニューを勝手に作りません）。',
+    helper: '近いものをタップ→自院の呼び方に直してください。なければ「なし」でOK。',
+    required: true,
+    ui: 'multiline-list',
+    suggestions: [
+      '骨盤矯正',
+      '猫背・姿勢改善',
+      '産後骨盤矯正',
+      '肩こり/頭痛専門コース',
+      '腰痛集中ケア',
+      '小顔矯正',
+      'スポーツ整体・コンディショニング',
+      '自律神経・睡眠ケア',
+      '鍼灸',
+      'もみほぐし/リラクゼーション',
+    ],
+    examples: [
+      '例：「産後骨盤矯正コース」「猫背改善プログラム（全8回）」「肩こり頭痛専門コース」',
+    ],
+    allowEmptyShortcut: true,
+  },
+
+  // ────────────────── Q4. 実績(realProofs) ──────────────────
   {
     id: 'realProofsRaw',
     prompt:
@@ -147,7 +183,7 @@ export const COUNSELING_QUESTIONS: CounselingQuestion[] = [
     allowEmptyShortcut: true,
   },
 
-  // ──────────────── Q4. 顧客エピソード(realEpisodes) ────────────────
+  // ──────────────── Q5. 顧客エピソード(realEpisodes) ────────────────
   {
     id: 'realEpisodesRaw',
     prompt:
@@ -169,7 +205,31 @@ export const COUNSELING_QUESTIONS: CounselingQuestion[] = [
     allowEmptyShortcut: true,
   },
 
-  // ──────────────── Q5. CTA特典(ctaAssets) ────────────────
+  // ──────────────── Q6. 来店後の変化(benefitsDaily) ────────────────
+  {
+    id: 'benefitsDailyRaw',
+    prompt:
+      '施術・サービスのあと、お客さんの「毎日の生活」はどう変わりますか？\n\nできるだけ具体的な“場面”で書いてください（症状名より、生活シーンの方が刺さります）。',
+    helper: '近いものをタップ→自院のお客さん像に合わせて直してください。なければ「なし」でOK。',
+    required: false,
+    ui: 'multiline-list',
+    suggestions: [
+      '朝、痛みでこわばらずスッと起き上がれる',
+      '子どもを抱っこ／一緒に走れる',
+      '長時間のデスクワークが楽になる',
+      '趣味（ゴルフ・登山など）を再開できた',
+      '靴下を立ったまま履ける',
+      '夜ぐっすり眠れて朝スッキリ',
+      '旅行や外出が怖くなくなる',
+      '猫背が直って写真うつりが良くなる',
+    ],
+    examples: [
+      '例：「朝起きた瞬間の腰の痛みがなくなって、二度寝しなくなった」「子どもと公園で全力で走れるようになった」',
+    ],
+    allowEmptyShortcut: true,
+  },
+
+  // ──────────────── Q7. CTA特典(ctaAssets) ────────────────
   {
     id: 'ctaAssetsRaw',
     prompt:
@@ -192,7 +252,77 @@ export const COUNSELING_QUESTIONS: CounselingQuestion[] = [
     allowEmptyShortcut: true,
   },
 
-  // ──────────────── Q6. NGリスト(ngList) ────────────────
+  // ──────────────── Q8. よくある質問(faq) ────────────────
+  {
+    id: 'faqRaw',
+    prompt:
+      'お客さんから「よく聞かれる質問」や「来店前に不安に思われること」を、思いつくだけ挙げてください。\n\nここで挙げた質問を AI が Q&A型・不安解消の投稿ネタにします。',
+    helper: '近いものをタップ→自院でよく聞かれる内容に直してください。なければ「なし」でOK。',
+    required: false,
+    ui: 'multiline-list',
+    suggestions: [
+      '痛い施術ですか？',
+      '何回くらい通えば良くなりますか？',
+      '保険は使えますか？',
+      '服装・着替えは必要ですか？',
+      '子ども連れでも大丈夫ですか？',
+      '予約は必要ですか？当日でもOK？',
+      '妊娠中／産後すぐでも受けられますか？',
+      'どんな支払い方法がありますか？',
+      '他院と何が違うんですか？',
+    ],
+    examples: [
+      '例：「ボキボキされるか不安」「何回で良くなる？」「子連れOK？」「保険きく？」',
+    ],
+    allowEmptyShortcut: true,
+  },
+
+  // ──────────────── Q9. 業界の常識・失敗(industryMyths) ────────────────
+  {
+    id: 'industryMythsRaw',
+    prompt:
+      'この業界で「これは違う」と感じていること、または昔のあなた自身がやっていた失敗・遠回りがあれば教えてください。\n\n「常識を覆す型」「仮想敵型」の強いネタになります。',
+    helper: '近いものをタップ→自分の考えに直してください。なければ「なし」でOK。',
+    required: false,
+    ui: 'multiline-list',
+    suggestions: [
+      '回数券をたくさん売るだけのお店が多い',
+      'その場だけ気持ちいい“揉みほぐし”では根本改善しない',
+      '「とりあえず安静」はかえって長引くことがある',
+      '湿布や痛み止めで“ごまかす”だけになりがち',
+      '痛い施術ほど効く、は誤解だと思う',
+      '昔は技術さえあれば人は来ると思っていた（来なかった）',
+      '昔は何でも「とりあえず様子見」と言ってしまっていた',
+    ],
+    examples: [
+      '例：「回数券を売るだけの整体が多いと思う」「昔の自分は“揉めば治る”と思っていた」',
+    ],
+    allowEmptyShortcut: true,
+  },
+
+  // ──────────────── Q10. 原体験・理念(originStory) ────────────────
+  {
+    id: 'originStoryRaw',
+    prompt:
+      'なぜこの仕事を始めたのですか？ きっかけになった出来事や、大切にしている想いを教えてください。\n\n「理念・Why me型」の投稿で、あなたにしか書けないストーリーになります。',
+    helper: '近いものをタップ→あなたの言葉に直してください。なければ「なし」でOK。',
+    required: false,
+    ui: 'textarea',
+    suggestions: [
+      '自分や家族のケガ・不調がきっかけ',
+      '前職（病院/サロン等）で「もっとこうしたい」と感じた',
+      '恩師・師匠との出会い',
+      'お客さんの「人生が変わった」の一言が忘れられない',
+      '地元に貢献したい気持ちから',
+      'スポーツでの経験を活かしたい',
+    ],
+    examples: [
+      '例：「自分が腰を痛めて何院も回って治らず、最後に救われた経験から、同じ人を助けたくて開業しました」',
+    ],
+    allowEmptyShortcut: true,
+  },
+
+  // ──────────────── Q11. NGリスト(ngList) ────────────────
   {
     id: 'ngListRaw',
     prompt:
@@ -216,7 +346,7 @@ export const COUNSELING_QUESTIONS: CounselingQuestion[] = [
     allowEmptyShortcut: true,
   },
 
-  // ──────────────── Q7. 好み投稿タイプ ────────────────
+  // ──────────────── Q12. 好み投稿タイプ ────────────────
   {
     id: 'preferredTypesRaw',
     prompt:
@@ -238,7 +368,7 @@ export const COUNSELING_QUESTIONS: CounselingQuestion[] = [
     ],
   },
 
-  // ──────────────── Q8. Threadsノウハウ使用 ────────────────
+  // ──────────────── Q13. Threadsノウハウ使用 ────────────────
   {
     id: 'useThreadsKnowhow',
     prompt:
@@ -308,9 +438,14 @@ export function buildCounselingResult(
 
   return {
     brandVoice: (answers.brandVoiceRaw ?? '').trim(),
+    menu: splitToList(answers.menuRaw ?? ''),
     realProofs: splitToList(answers.realProofsRaw ?? ''),
     realEpisodes: splitToList(answers.realEpisodesRaw ?? ''),
+    benefitsDaily: splitToList(answers.benefitsDailyRaw ?? ''),
     ctaAssets: splitToList(answers.ctaAssetsRaw ?? ''),
+    faq: splitToList(answers.faqRaw ?? ''),
+    industryMyths: splitToList(answers.industryMythsRaw ?? ''),
+    originStory: isEmptyAnswer(answers.originStoryRaw ?? '') ? '' : (answers.originStoryRaw ?? '').trim(),
     ngList: splitToList(answers.ngListRaw ?? ''),
     preferredTypes,
     useThreadsKnowhow: answers.useThreadsKnowhow !== 'off',

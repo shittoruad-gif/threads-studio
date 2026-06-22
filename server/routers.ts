@@ -343,6 +343,38 @@ export const appRouter = router({
 
         return { success: true };
       }),
+
+    // 認証メールの再送（メール未着・紛失時の救済）。
+    // メアド列挙を防ぐため、存在有無に関わらず常に同じ成功レスポンスを返す。
+    resendVerification: publicProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input }) => {
+        const GENERIC = { success: true } as const;
+        try {
+          const user = await db.getUserByEmail(input.email);
+          // 対象外（未登録／メール認証以外／既に認証済み）は黙って成功扱い。
+          if (!user || user.authProvider !== 'email' || user.emailVerified) {
+            return GENERIC;
+          }
+          // 作成から7日を超えていると検証リンク自体が期限切れになるため再送しない。
+          const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+          if (user.createdAt && Date.now() - new Date(user.createdAt).getTime() > TOKEN_TTL_MS) {
+            return GENERIC;
+          }
+          const { generateToken } = await import('./auth-helpers');
+          const verificationToken = generateToken(32);
+          await db.updateEmailVerificationToken(user.id, verificationToken);
+          const { sendVerificationEmail } = await import('./_core/notification');
+          const baseUrl =
+            process.env.APP_BASE_URL || process.env.VITE_APP_URL || 'https://threads-studio.com';
+          if (user.email) {
+            await sendVerificationEmail(user.email, verificationToken, baseUrl);
+          }
+        } catch (e) {
+          console.warn('[resendVerification] failed:', e);
+        }
+        return GENERIC;
+      }),
   }),
 
   // ============ Subscription Management ============
@@ -627,9 +659,14 @@ export const appRouter = router({
         answers: z.object({
           brandVoiceRaw: z.string().default(''),
           uspRaw: z.string().default(''),
+          menuRaw: z.string().default(''),
           realProofsRaw: z.string().default(''),
           realEpisodesRaw: z.string().default(''),
+          benefitsDailyRaw: z.string().default(''),
           ctaAssetsRaw: z.string().default(''),
+          faqRaw: z.string().default(''),
+          industryMythsRaw: z.string().default(''),
+          originStoryRaw: z.string().default(''),
           ngListRaw: z.string().default(''),
           preferredTypesRaw: z.string().default(''),
           useThreadsKnowhow: z.enum(['on', 'off']).default('on'),
@@ -656,6 +693,10 @@ export const appRouter = router({
         }
         if (!project.proof && result.realProofs.length > 0) {
           updatePatch.proof = result.realProofs.join('\n');
+        }
+        // 業界の常識・失敗 → 主張/信念(belief) が未設定なら補完（仮想敵・常識を覆す型で一貫させる）。
+        if (!(project as any).belief && result.industryMyths.length > 0) {
+          updatePatch.belief = result.industryMyths.join('\n');
         }
 
         await db.updateProject(input.projectId, updatePatch);
@@ -1046,6 +1087,7 @@ export const appRouter = router({
         const cloneRealProofs = (counselingForClone?.realProofs ?? []) as string[];
         const cloneRealEpisodes = (counselingForClone?.realEpisodes ?? []) as string[];
         const cloneCtaAssets = (counselingForClone?.ctaAssets ?? []) as string[];
+        const cloneMenu = (counselingForClone?.menu ?? []) as string[];
 
         // Build clone prompt
         const clonePrompt = `以下の投稿が高いエンゲージメントを獲得しました。同じ構成・トーン・長さで、内容を変えた${allowedCount}本のバリエーションを生成してください。
@@ -1067,6 +1109,9 @@ CTA: ${originalContent.cta}
 強み: ${metadata.strength || '不明'}
 ${counselingForClone ? `
 【★このユーザーのカウンセリング結果★（最優先）】
+${cloneMenu.length > 0
+  ? `- 実際に提供しているメニュー（このリスト以外の施術を作らない）:\n${cloneMenu.map(m => `    ・${m}`).join('\n')}`
+  : ''}
 ${cloneRealProofs.length > 0
   ? `- 使ってよい実績数字（このリスト以外は捏造禁止）:\n${cloneRealProofs.map(p => `    ・${p}`).join('\n')}`
   : '- 実績数字: ユーザー本人から「数字なし」と回答あり → 数字は出さない'}

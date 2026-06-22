@@ -21,9 +21,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Calendar, CheckCircle2, CheckSquare, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, Square, Trash2 } from "lucide-react";
+import { ArrowLeft, Calendar, CheckCircle2, CheckSquare, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, Square, Trash2, AlertTriangle, Link2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { translatePostError } from "@/lib/postErrors";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -351,10 +352,23 @@ export default function PostHistory() {
                               </p>
                             )}
 
-                            {post.errorMessage && (
-                              <p className="text-xs text-red-600 break-words">
-                                エラー: {post.errorMessage}
-                              </p>
+                            {post.errorMessage && post.status === 'failed' && (() => {
+                              const t = translatePostError(post.errorMessage);
+                              const isErr = t.severity === 'error';
+                              return (
+                                <div className={`mt-1 rounded-md border p-2 text-xs ${isErr ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+                                  <div className={`flex items-start gap-1.5 font-semibold ${isErr ? 'text-red-700' : 'text-amber-700'}`}>
+                                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                    <span>{t.title}</span>
+                                  </div>
+                                  {t.detail && (
+                                    <p className={`mt-1 ${isErr ? 'text-red-600' : 'text-amber-600'}`}>{t.detail}</p>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                            {post.errorMessage && post.status !== 'failed' && (
+                              <p className="text-xs text-amber-600 break-words">{translatePostError(post.errorMessage).title}</p>
                             )}
                           </div>
 
@@ -391,18 +405,34 @@ export default function PostHistory() {
                               キャンセル
                             </Button>
                           )}
-                          {post.status === 'failed' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-amber-600 border-amber-200 hover:bg-amber-50"
-                              onClick={() => retryPost.mutate({ postId: post.id })}
-                              disabled={retryPost.isPending}
-                            >
-                              <RotateCcw className="w-3 h-3 mr-1" />
-                              再試行
-                            </Button>
-                          )}
+                          {post.status === 'failed' && (() => {
+                            const t = translatePostError(post.errorMessage);
+                            if (t.action === 'reauth') {
+                              return (
+                                <Button
+                                  size="sm"
+                                  className="bg-red-600 hover:bg-red-700 text-white"
+                                  onClick={() => setLocation('/threads-connect')}
+                                >
+                                  <Link2 className="w-3 h-3 mr-1" />
+                                  Threads連携を確認
+                                </Button>
+                              );
+                            }
+                            if (t.action === 'none') return null;
+                            return (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-amber-600 border-amber-200 hover:bg-amber-50"
+                                onClick={() => retryPost.mutate({ postId: post.id })}
+                                disabled={retryPost.isPending}
+                              >
+                                <RotateCcw className="w-3 h-3 mr-1" />
+                                再試行
+                              </Button>
+                            );
+                          })()}
                           {/* Delete: available for any status. For pending posts
                               this prevents the cron from posting them. For
                               failed/canceled posts it cleans up history. */}

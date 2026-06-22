@@ -165,9 +165,14 @@ export interface ThreadsPromptInput {
  */
 export interface CounselingLike {
   brandVoice?: string;
+  menu?: string[];
   realProofs?: string[];
   realEpisodes?: string[];
+  benefitsDaily?: string[];
   ctaAssets?: string[];
+  faq?: string[];
+  industryMyths?: string[];
+  originStory?: string;
   ngList?: string[];
   preferredTypes?: PostType[];
   useThreadsKnowhow?: boolean;
@@ -512,6 +517,10 @@ function buildSystemPrompt(
       lines.push(`- 口調・話し方: ${counseling.brandVoice.trim()}`);
       lines.push('  → この口調を投稿全体で再現すること。下の「口調指定」と矛盾する場合はこちらを優先。');
     }
+    if (counseling.menu && counseling.menu.length > 0) {
+      lines.push(`- ★実際に提供しているメニュー・コース（このリストにあるものだけ施術内容として使用可・存在しないメニューを作らない）:`);
+      counseling.menu.forEach((m) => lines.push(`    ・${m}`));
+    }
     if (counseling.realProofs && counseling.realProofs.length > 0) {
       lines.push(`- ★使ってよい実績数字（このリストにあるものだけ使用可・捏造禁止）:`);
       counseling.realProofs.forEach((p) => lines.push(`    ・${p}`));
@@ -526,6 +535,10 @@ function buildSystemPrompt(
       lines.push(`- ★顧客エピソード: ユーザーから「実例なし／書きたくない」と回答あり。`);
       lines.push('  → 「半年前あるお客さんが…」のような物語型エピソードを作らない。「同じ悩みの方がよく来られます」のような一般表現にとどめる。');
     }
+    if (counseling.benefitsDaily && counseling.benefitsDaily.length > 0) {
+      lines.push(`- ★来店後の「日常の変化」（ベネフィット。症状名で終わらせず、こうした生活シーンに変換して書く）:`);
+      counseling.benefitsDaily.forEach((b) => lines.push(`    ・${b}`));
+    }
     if (counseling.ctaAssets && counseling.ctaAssets.length > 0) {
       lines.push(`- ★CTAで約束してよい特典・サービス（このリストにあるものだけ）:`);
       counseling.ctaAssets.forEach((c) => lines.push(`    ・${c}`));
@@ -536,6 +549,19 @@ function buildSystemPrompt(
     if (counseling.ngList && counseling.ngList.length > 0) {
       lines.push(`- ★絶対NGリスト（ユーザー本人が「絶対書きたくない」と明言・例外なく禁止）:`);
       counseling.ngList.forEach((n) => lines.push(`    ・${n}`));
+    }
+    if (counseling.faq && counseling.faq.length > 0) {
+      lines.push(`- ★お客様からよく聞かれる質問・来店前の不安（Q&A型・不安解消型のネタ。実際に聞かれる質問なので最優先で投稿化してよい）:`);
+      counseling.faq.forEach((q) => lines.push(`    ・${q}`));
+    }
+    if (counseling.industryMyths && counseling.industryMyths.length > 0) {
+      lines.push(`- ★ユーザー本人が「業界でこれは違う」と考えていること／昔の自分の失敗（常識を覆す型・仮想敵型の弾。ここに書かれた立場と矛盾する主張は書かない）:`);
+      counseling.industryMyths.forEach((m) => lines.push(`    ・${m}`));
+      lines.push('  → 仮想敵は「業界の悪習・誤解・昔の自分」に向ける。実在の同業他店・個人を名指しで攻撃しないこと。');
+    }
+    if (counseling.originStory && counseling.originStory.trim()) {
+      lines.push(`- ★この人の原体験・なぜこの仕事を始めたか（理念/Why me型のネタ。ここに書かれた事実だけを使い、創作で美談を盛らない）:`);
+      lines.push(`    ${counseling.originStory.trim()}`);
     }
     if (counseling.preferredTypes && counseling.preferredTypes.length > 0) {
       lines.push(`- ユーザーが好む投稿タイプ: ${counseling.preferredTypes.join(', ')}`);

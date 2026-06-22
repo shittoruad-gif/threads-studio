@@ -112,7 +112,7 @@ export default function ThreadsConnect() {
         if (userIntentRef.current === 'add-different') {
           setShowSameAccountGuide(true);
         } else {
-          toast.success('Threadsアカウントを再連携しました（トークンを更新）');
+          toast.success('Threadsとの接続をやり直しました（有効期限を更新）');
         }
       } else {
         toast.success('Threadsアカウントを連携しました');
@@ -338,10 +338,10 @@ export default function ThreadsConnect() {
                   className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
                   onClick={() => refreshToken.mutate({ accountId: account.id })}
                   disabled={refreshToken.isPending}
-                  title="トークンを自動更新（60日延長）"
+                  title="同じアカウントのまま、接続の有効期限を60日延長します"
                 >
                   <ShieldCheck className={`w-4 h-4 mr-1.5 ${refreshToken.isPending ? 'animate-spin' : ''}`} />
-                  トークン更新
+                  接続を更新（期限を延長）
                 </Button>
                 <Button
                   variant="outline"
@@ -349,10 +349,10 @@ export default function ThreadsConnect() {
                   className="text-blue-600 border-blue-200 hover:bg-blue-50"
                   onClick={handleReconnect}
                   disabled={handleCallback.isPending}
-                  title="トークンを更新して再連携"
+                  title="Threadsのログイン画面でやり直して接続を作り直します（別のアカウントへの切り替えもこちら）"
                 >
                   <Link2 className="w-4 h-4 mr-1.5" />
-                  再連携
+                  接続をやり直す
                 </Button>
                 <Button
                   variant="outline"
@@ -426,8 +426,8 @@ export default function ThreadsConnect() {
                   <AlertCircle className={`w-4 h-4 flex-shrink-0 ${isExpired ? 'text-red-500' : 'text-yellow-600'}`} />
                   <p className={`text-sm flex-1 ${isExpired ? 'text-red-700' : 'text-yellow-700'}`}>
                     {isExpired
-                      ? 'トークンの有効期限が切れています。自動投稿が停止しています。「トークン更新」をクリックして復旧してください。'
-                      : `トークンの有効期限が残り${daysLeft}日です。期限切れになると自動投稿が停止します。早めに更新してください。`
+                      ? 'Threadsとの接続の有効期限が切れています。自動投稿が停止しています。「接続を更新」を押すと復旧します。'
+                      : `Threadsとの接続の有効期限が残り${daysLeft}日です。期限が切れると自動投稿が停止します。早めの更新がおすすめです。`
                     }
                   </p>
                   <Button
@@ -438,7 +438,7 @@ export default function ThreadsConnect() {
                     disabled={refreshToken.isPending}
                   >
                     <ShieldCheck className={`w-4 h-4 mr-1 ${refreshToken.isPending ? 'animate-spin' : ''}`} />
-                    トークン更新
+                    接続を更新
                   </Button>
                 </div>
               ) : null;
@@ -461,7 +461,7 @@ export default function ThreadsConnect() {
               {account.tokenExpiresAt && (
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground/60 text-xs">
-                    トークン期限: {new Date(account.tokenExpiresAt).toLocaleDateString('ja-JP')}
+                    接続の有効期限: {new Date(account.tokenExpiresAt).toLocaleDateString('ja-JP')}
                   </span>
                 </div>
               )}
@@ -512,7 +512,7 @@ export default function ThreadsConnect() {
             disabled={refreshAllTokens.isPending}
           >
             <ShieldCheck className={`w-5 h-5 mr-2 ${refreshAllTokens.isPending ? 'animate-spin' : ''}`} />
-            全アカウントのトークンを一括更新
+            全アカウントの接続をまとめて更新（期限を延長）
           </Button>
         </div>
       )}
@@ -536,7 +536,7 @@ export default function ThreadsConnect() {
           )}
           {!canAddMore && (
             <p className="text-center text-muted-foreground/60 text-sm">
-              ※ 新しいアカウントの追加は上限に達していますが、既存アカウントの再連携（トークン更新）は可能です
+              ※ 新しいアカウントの追加は上限に達していますが、既存アカウントの接続更新・やり直しは可能です
             </p>
           )}
         </div>
@@ -578,7 +578,7 @@ export default function ThreadsConnect() {
               同じアカウントが連携されました
             </DialogTitle>
             <DialogDescription className="pt-2 text-foreground/80">
-              認証画面で同じアカウントを選んだため、既存連携のトークンが更新されました。
+              認証画面で同じアカウントを選んだため、既存の接続の有効期限が更新されました。
               <br /><br />
               <strong>別のアカウントを追加</strong>するには、もう一度
               「別のThreadsアカウントを連携」をクリックして、Threadsのログイン画面で

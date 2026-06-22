@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { ArrowLeft, ArrowRight, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, FileEdit, Smartphone, Send, Link2, ChevronDown, Settings2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, FileEdit, Smartphone, Send, Link2, ChevronDown, Settings2, AlertCircle } from 'lucide-react';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -534,7 +534,7 @@ export default function AIGenerate() {
                   AIが「事実だけ」で書けるように、最初にカウンセリングを受けませんか？
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  使ってよい数字・実例・NG項目を最初に教えると、AIが勝手な数字や架空エピソードを作らなくなります。8問・3〜5分。
+                  使ってよい数字・実例・メニュー・よくある質問・原体験・NG項目を最初に教えると、AIが勝手な数字や架空エピソードを作らず、全ジャンルのネタを正確に量産できます。全13問・約5分（「なし」ワンタップでスキップ可）。
                 </p>
               </div>
               <Button
@@ -854,20 +854,29 @@ export default function AIGenerate() {
                         />
                       </div>
                     )}
-                    {aiUsage.limit !== null && aiUsage.limit !== -1 && aiUsage.count >= aiUsage.limit && (
-                      <div className="flex items-center justify-between mt-2 bg-yellow-50 border border-yellow-200 rounded-lg p-2">
-                        <p className="text-xs text-yellow-700">
-                          今月の上限に達しました
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setLocation('/pricing')}
-                          className="text-xs text-yellow-700 font-medium underline hover:text-yellow-900"
-                        >
-                          プランをアップグレード →
-                        </button>
-                      </div>
-                    )}
+                    {aiUsage.limit !== null && aiUsage.limit !== -1 && aiUsage.count >= aiUsage.limit && (() => {
+                      const now = new Date();
+                      const reset = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+                      const resetStr = `${reset.getMonth() + 1}月1日`;
+                      return (
+                        <div className="mt-3 bg-red-50 border-2 border-red-200 rounded-lg p-3">
+                          <p className="text-sm font-bold text-red-700 flex items-center gap-1.5">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            今月のAI生成回数（{aiUsage.limit}回）を使い切りました
+                          </p>
+                          <p className="text-xs text-red-600 mt-1">
+                            回数は <strong>{resetStr}</strong> に自動でリセットされます。今すぐ続けたい場合はプランのアップグレードで上限が増えます。
+                          </p>
+                          <Button
+                            size="sm"
+                            className="mt-2 w-full bg-red-600 hover:bg-red-700 text-white"
+                            onClick={() => setLocation('/pricing')}
+                          >
+                            プランをアップグレードして続ける
+                          </Button>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -1616,14 +1625,33 @@ export default function AIGenerate() {
               今すぐ投稿しますか？
             </DialogTitle>
             <DialogDescription>
-              {selectedAccount ? <><span className="font-medium text-foreground">@{selectedAccount.threadsUsername}</span> に今すぐ公開されます。公開後は取り消せません。</> : 'Threadsに今すぐ公開されます。'}
+              内容と投稿先のアカウントを、もう一度ご確認ください。
             </DialogDescription>
           </DialogHeader>
-          {editedPost && (
-            <div className="rounded-lg bg-muted/50 border border-border p-3 text-sm text-foreground whitespace-pre-line max-h-48 overflow-y-auto">
-              {`${editedPost.mainPost}\n\n${editedPost.treePosts.join('\n\n')}\n\n${editedPost.cta}`.trim()}
-            </div>
-          )}
+          {/* 投稿先アカウントを明示（誤投稿防止） */}
+          <div className="flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm">
+            <Send className="h-4 w-4 text-blue-600 shrink-0" />
+            <span className="text-blue-800">投稿先：</span>
+            <span className="font-bold text-blue-900 truncate">{selectedAccount ? `@${selectedAccount.threadsUsername}` : '（アカウント未選択）'}</span>
+          </div>
+          {/* 取り消し不可の警告 */}
+          <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2">
+            <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+            <span className="text-sm font-semibold text-red-700">公開後は取り消せません</span>
+          </div>
+          {editedPost && (() => {
+            const full = `${editedPost.mainPost}\n\n${editedPost.treePosts.join('\n\n')}\n\n${editedPost.cta}`.trim();
+            return (
+              <div>
+                <div className="rounded-lg bg-muted/50 border border-border p-3 text-sm text-foreground whitespace-pre-line max-h-64 overflow-y-auto">
+                  {full}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 text-right">
+                  合計 {full.length} 文字{editedPost.treePosts.length > 0 ? ` ・ ツリー${editedPost.treePosts.length + 1}投稿` : ''}
+                </p>
+              </div>
+            );
+          })()}
           <DialogFooter>
             <Button variant="ghost" onClick={() => setPublishConfirmOpen(false)} disabled={publishNow.isPending}>
               キャンセル

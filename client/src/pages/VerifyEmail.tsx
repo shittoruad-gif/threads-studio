@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
-import { Sparkles, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Sparkles, CheckCircle, XCircle, Loader2, MailCheck } from "lucide-react";
 
 export default function VerifyEmail() {
   const navigate = (path: string) => window.location.href = path;
@@ -11,6 +12,13 @@ export default function VerifyEmail() {
   const [verifying, setVerifying] = useState(true);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [resendEmail, setResendEmail] = useState("");
+  const [resent, setResent] = useState(false);
+
+  const resendMutation = trpc.auth.resendVerification.useMutation({
+    onSuccess: () => setResent(true),
+    onError: () => setResent(true), // メアド列挙防止のため失敗でも同じ表示
+  });
 
   const verifyEmailMutation = trpc.auth.verifyEmail.useMutation({
     onSuccess: () => {
@@ -106,15 +114,44 @@ export default function VerifyEmail() {
               <p className="text-muted-foreground">
                 {error}
               </p>
-              <div className="mt-8 space-y-4">
-                <Link href="/register">
-                  <Button className="w-full neon-border">
-                    新規登録
+
+              {/* 認証メールの再送（メールが届かない／リンクが古い場合） */}
+              {resent ? (
+                <div className="mt-6 rounded-lg bg-green-50 border border-green-200 p-4 text-left flex items-start gap-2">
+                  <MailCheck className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+                  <p className="text-sm text-green-700">
+                    ご登録のメールアドレス宛に認証メールを送信しました。メールが届かない場合は迷惑メールフォルダもご確認ください。
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-6 rounded-lg bg-muted/40 border border-border p-4 text-left space-y-2">
+                  <p className="text-sm font-medium text-foreground">認証メールを再送する</p>
+                  <p className="text-xs text-muted-foreground">メールが届かない、リンクが古い場合はこちらから再送できます。</p>
+                  <Input
+                    type="email"
+                    placeholder="登録したメールアドレス"
+                    value={resendEmail}
+                    onChange={(e) => setResendEmail(e.target.value)}
+                  />
+                  <Button
+                    className="w-full"
+                    disabled={resendMutation.isPending || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(resendEmail)}
+                    onClick={() => resendMutation.mutate({ email: resendEmail.trim() })}
+                  >
+                    {resendMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />送信中...</> : '認証メールを再送'}
                   </Button>
-                </Link>
+                </div>
+              )}
+
+              <div className="mt-8 space-y-4">
                 <Link href="/login">
                   <Button variant="outline" className="w-full">
                     ログイン
+                  </Button>
+                </Link>
+                <Link href="/register">
+                  <Button variant="ghost" className="w-full">
+                    新規登録はこちら
                   </Button>
                 </Link>
               </div>
