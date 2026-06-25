@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'wouter';
+import { nanoid } from 'nanoid';
 import {
   ArrowLeft, ArrowRight, Sparkles, Loader2, Check,
   PartyPopper, Plus, Pencil,
@@ -59,9 +60,11 @@ function formatAnswerForReview(q: CounselingQuestion, value: string): string {
  */
 export default function AICounseling() {
   const [, setLocation] = useLocation();
+  // ?project= があれば既存プロジェクトの修正。無ければ新規（IDを発行し、保存時に作成）。
+  const isNew = useMemo(() => !new URL(window.location.href).searchParams.get('project'), []);
   const projectId = useMemo(() => {
     const url = new URL(window.location.href);
-    return url.searchParams.get('project') || '';
+    return url.searchParams.get('project') || nanoid();
   }, []);
 
   const [stepIndex, setStepIndex] = useState(0);
@@ -76,14 +79,14 @@ export default function AICounseling() {
 
   const { data: project } = trpc.project.get.useQuery(
     { id: projectId },
-    { enabled: !!projectId },
+    { enabled: !!projectId && !isNew },
   );
 
   // 既存のカウンセリング結果を取得して、回答欄に事前入力する（＝あとから修正できる）。
   const { data: counselingData, isLoading: counselingLoading } =
     trpc.project.getCounseling.useQuery(
       { projectId },
-      { enabled: !!projectId },
+      { enabled: !!projectId && !isNew },
     );
 
   // 取得できたら一度だけ回答に流し込む。既にカウンセリング済みならレビュー画面から開始。
@@ -102,7 +105,9 @@ export default function AICounseling() {
       // バナーが残らないように getCounseling と project.get の両方を invalidate。
       utils.project.getCounseling.invalidate({ projectId });
       utils.project.get.invalidate({ id: projectId });
-      toast.success('カウンセリング結果を保存しました');
+      utils.project.count.invalidate();
+      utils.project.list.invalidate();
+      toast.success(isNew ? 'お店の情報を登録しました' : 'カウンセリング結果を保存しました');
       // 初回はスタイル校正へ誘導。修正（既にカウンセリング済み）の場合は生成画面へ戻す。
       if (counselingData?.counseledAt) {
         setLocation(`/ai-generate?project=${projectId}`);
@@ -137,6 +142,12 @@ export default function AICounseling() {
   };
 
   const buildAnswersPayload = (merged: Partial<CounselingAnswers>) => ({
+    storeNameRaw: merged.storeNameRaw ?? '',
+    businessTypeRaw: merged.businessTypeRaw ?? '',
+    areaRaw: merged.areaRaw ?? '',
+    targetRaw: merged.targetRaw ?? '',
+    mainProblemRaw: merged.mainProblemRaw ?? '',
+    strengthRaw: merged.strengthRaw ?? '',
     brandVoiceRaw: merged.brandVoiceRaw ?? '',
     uspRaw: merged.uspRaw ?? '',
     menuRaw: merged.menuRaw ?? '',
@@ -236,7 +247,7 @@ export default function AICounseling() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setLocation(`/ai-generate?project=${projectId}`)}
+          onClick={() => setLocation(isNew ? '/dashboard' : `/ai-generate?project=${projectId}`)}
         >
           <ArrowLeft className="h-4 w-4 mr-1" />
           戻る
@@ -250,10 +261,12 @@ export default function AICounseling() {
       {/* タイトル */}
       <div>
         <h1 className="text-xl font-bold">
-          {project?.title || 'プロジェクト'} のAIカウンセリング
+          {isNew ? 'はじめの設定（AIカウンセリング）' : `${project?.title || 'プロジェクト'} のAIカウンセリング`}
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          ここで答えてもらった内容だけをAIは「事実」として使います。書かれていない数字・エピソードを勝手に作ることはありません。
+          {isNew
+            ? 'いくつかの質問に答えるだけで、お店の情報が登録され、すぐに投稿を作れるようになります。答えた内容だけをAIは「事実」として使います。'
+            : 'ここで答えてもらった内容だけをAIは「事実」として使います。書かれていない数字・エピソードを勝手に作ることはありません。'}
         </p>
       </div>
 

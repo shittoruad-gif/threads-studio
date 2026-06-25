@@ -677,6 +677,14 @@ export const appRouter = router({
       .input(z.object({
         projectId: z.string(),
         answers: z.object({
+          // 基本情報（プロジェクト作成/更新に使う）
+          storeNameRaw: z.string().default(''),
+          businessTypeRaw: z.string().default(''),
+          areaRaw: z.string().default(''),
+          targetRaw: z.string().default(''),
+          mainProblemRaw: z.string().default(''),
+          strengthRaw: z.string().default(''),
+          // 深掘り
           brandVoiceRaw: z.string().default(''),
           uspRaw: z.string().default(''),
           menuRaw: z.string().default(''),
@@ -693,18 +701,52 @@ export const appRouter = router({
         }),
       }))
       .mutation(async ({ ctx, input }) => {
-        const project = await db.getProjectById(input.projectId);
-        if (!project || project.userId !== ctx.user.id) {
+        const a = input.answers;
+        const trimmed = (s: string) => (s ?? '').trim();
+        // タイトル自動生成（店名＞業種＋地域＞既定）。
+        const deriveTitle = () => {
+          const store = trimmed(a.storeNameRaw);
+          if (store && !/^(なし|無し|特になし)$/i.test(store)) return store.slice(0, 60);
+          const bt = trimmed(a.businessTypeRaw);
+          const ar = trimmed(a.areaRaw);
+          if (bt || ar) return `${bt}${ar ? `（${ar}）` : ''}`.slice(0, 60);
+          return 'マイプロジェクト';
+        };
+
+        let project = await db.getProjectById(input.projectId);
+        // ★カウンセリング起点フロー：プロジェクトが無ければここで作成する。
+        if (!project) {
+          await db.createProject({
+            id: input.projectId,
+            userId: ctx.user.id,
+            title: deriveTitle(),
+          } as any);
+          project = await db.getProjectById(input.projectId);
+          if (!project) {
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'プロジェクトの作成に失敗しました。' });
+          }
+        } else if (project.userId !== ctx.user.id) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
         }
+
         const { buildCounselingResult } = await import('../shared/counseling');
         const result = buildCounselingResult(input.answers);
 
-        // USP / N1 が未設定なら、カウンセリングの内容で埋める（ユーザの手間削減）。
         const updatePatch: any = {
           counselingResult: JSON.stringify(result),
           useThreadsKnowhow: result.useThreadsKnowhow,
         };
+        // 基本情報をプロジェクトへ反映（未設定 or 今回入力があれば上書き）。
+        if (trimmed(a.businessTypeRaw)) updatePatch.businessType = trimmed(a.businessTypeRaw);
+        if (trimmed(a.areaRaw)) updatePatch.area = trimmed(a.areaRaw);
+        if (trimmed(a.targetRaw)) updatePatch.target = trimmed(a.targetRaw);
+        if (trimmed(a.mainProblemRaw)) updatePatch.mainProblem = trimmed(a.mainProblemRaw);
+        if (trimmed(a.strengthRaw)) updatePatch.strength = trimmed(a.strengthRaw);
+        const storeName = trimmed(a.storeNameRaw);
+        if (storeName && !/^(なし|無し|特になし)$/i.test(storeName)) updatePatch.storeName = storeName;
+        if ((!project.title || project.title === 'マイプロジェクト') ) updatePatch.title = deriveTitle();
+
+        // USP / N1 / 実績 / 主張 が未設定なら、カウンセリングの内容で埋める（手間削減）。
         if (!project.usp && input.answers.uspRaw.trim()) {
           updatePatch.usp = input.answers.uspRaw.trim();
         }
@@ -714,13 +756,12 @@ export const appRouter = router({
         if (!project.proof && result.realProofs.length > 0) {
           updatePatch.proof = result.realProofs.join('\n');
         }
-        // 業界の常識・失敗 → 主張/信念(belief) が未設定なら補完（仮想敵・常識を覆す型で一貫させる）。
         if (!(project as any).belief && result.industryMyths.length > 0) {
           updatePatch.belief = result.industryMyths.join('\n');
         }
 
         await db.updateProject(input.projectId, updatePatch);
-        return { success: true, result };
+        return { success: true, result, projectId: input.projectId };
       }),
 
     // ── AIカウンセリング: ノウハウ使用フラグだけ後から切り替える ────────

@@ -65,7 +65,7 @@ export function AIChatWidget() {
       <Button
         onClick={() => setIsOpen(true)}
         size="lg"
-        className="fixed bottom-6 right-6 rounded-full w-14 h-14 shadow-lg z-50"
+        className="fixed bottom-24 right-6 rounded-full w-14 h-14 shadow-lg z-50"
       >
         <MessageCircle className="w-6 h-6" />
       </Button>
@@ -74,7 +74,7 @@ export function AIChatWidget() {
 
   if (isMinimized) {
     return (
-      <Card className="fixed bottom-6 right-6 w-80 shadow-lg z-50">
+      <Card className="fixed bottom-24 right-6 w-[min(20rem,calc(100vw-2rem))] shadow-lg z-50">
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
             <MessageCircle className="w-5 h-5 text-primary" />
@@ -102,7 +102,7 @@ export function AIChatWidget() {
   }
 
   return (
-    <Card className="fixed bottom-6 right-6 w-96 h-[600px] shadow-lg z-50 flex flex-col">
+    <Card className="fixed bottom-24 right-6 w-[min(24rem,calc(100vw-2rem))] h-[min(600px,calc(100vh-8rem))] shadow-lg z-50 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">

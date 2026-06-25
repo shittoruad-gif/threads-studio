@@ -107,6 +107,19 @@ export default function Dashboard() {
     { enabled: isAuthenticated }
   );
 
+  // ★登録後の最初の一歩はカウンセリング。プロジェクトが1つも無ければ自動誘導する。
+  //   一度だけ実行（ユーザーが手動で /dashboard に戻った時に毎回飛ばさないよう sessionStorage で抑制）。
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (projectCount === 0) {
+      const already = sessionStorage.getItem('counseling-redirected') === 'true';
+      if (!already) {
+        sessionStorage.setItem('counseling-redirected', 'true');
+        setLocation('/ai-counseling');
+      }
+    }
+  }, [isAuthenticated, projectCount, setLocation]);
+
   const { data: threadsAccounts } = trpc.threads.list.useQuery(
     undefined,
     { enabled: isAuthenticated }

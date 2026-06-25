@@ -68,7 +68,8 @@ function DashboardRoutes() {
         <Route path="/post-history" component={PostHistory} />
         <Route path="/comment-manager" component={CommentManager} />
         <Route path="/post-analytics" component={PostAnalytics} />
-        <Route path="/ai-project-create" component={AIProjectCreate} />
+        {/* 旧プロジェクト作成は廃止。カウンセリング起点の新規作成フローに統合。 */}
+        <Route path="/ai-project-create" component={AICounseling} />
         <Route path="/ai-generate" component={AIGenerate} />
         <Route path="/ai-counseling" component={AICounseling} />
         <Route path="/ai-style-calibration" component={AIStyleCalibration} />

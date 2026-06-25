@@ -38,6 +38,14 @@ export interface CounselingQuestion {
  * 回答収集の生データ（自由記入文字列 or 選択値）
  */
 export interface CounselingAnswers {
+  // ── 基本情報（最初に聞く。プロジェクト作成に使う）──
+  storeNameRaw: string;       // 店名・屋号（任意）
+  businessTypeRaw: string;    // 業種
+  areaRaw: string;            // 地域（市区町村・町名）
+  targetRaw: string;          // ターゲット
+  mainProblemRaw: string;     // 主な悩み
+  strengthRaw: string;        // 強み・特徴
+  // ── 深掘り ──
   brandVoiceRaw: string;
   uspRaw: string;
   menuRaw: string;                 // 主なメニュー・コース（実在のサービスだけ投稿に使う）
@@ -83,6 +91,80 @@ export interface CounselingResult {
  *  - 「なし」を1タップで返せる allowEmptyShortcut を捏造防止に活用
  */
 export const COUNSELING_QUESTIONS: CounselingQuestion[] = [
+  // ══════════════ 基本情報（最初に聞く。これでプロジェクトを作成）══════════════
+  {
+    id: 'businessTypeRaw',
+    prompt:
+      'はじめに、お店のことを少し教えてください。\n\nどんな業種ですか？',
+    helper: '近いものをタップ。違う場合は自由に入力してOK。',
+    required: true,
+    ui: 'textarea',
+    suggestions: [
+      '整体院', '整骨院・接骨院', '鍼灸院', 'カイロプラクティック',
+      '美容サロン（エステ）', 'リラクゼーション・もみほぐし',
+      '小顔・美容矯正', 'パーソナルジム', 'ヨガ・ピラティス',
+    ],
+    examples: ['例：「産後ケア専門の整体院」「女性専用の小顔矯正サロン」'],
+  },
+  {
+    id: 'areaRaw',
+    prompt:
+      'お店がある場所を、できるだけ詳しく教えてください。\n（市区町村だけでなく町名まで入れると、地元の人に届きやすくなります）',
+    helper: '例のように町名まで入れるのがおすすめ。後から地図で最寄り駅も追加できます。',
+    required: true,
+    ui: 'textarea',
+    examples: ['例：「岡山県岡山市北区下中野」「東京都渋谷区道玄坂」'],
+  },
+  {
+    id: 'storeNameRaw',
+    prompt:
+      'お店の名前（屋号）を教えてください。\n※ 後から変更できます。決まっていなければ「なし」でOK。',
+    helper: '自己紹介・固定投稿などで使います。',
+    required: false,
+    ui: 'textarea',
+    examples: ['例：「○○整体院」「サロン○○」'],
+    allowEmptyShortcut: true,
+  },
+  {
+    id: 'targetRaw',
+    prompt:
+      '一番来てほしいのは、どんなお客さんですか？\n（年代・性別・状況など、思い浮かぶ1人を具体的に）',
+    helper: '近いものをタップ→具体的に足してください。',
+    required: true,
+    ui: 'textarea',
+    suggestions: [
+      '30〜50代の女性', '40〜60代の男性', '産後のママ', 'デスクワークの会社員',
+      '高齢で体の不調がある方', 'スポーツをする学生・社会人', '美容・見た目を気にする女性',
+    ],
+    examples: ['例：「デスクワークで慢性的な肩こり・腰痛に悩む30〜50代の女性」'],
+  },
+  {
+    id: 'mainProblemRaw',
+    prompt:
+      'そのお客さんは、どんなことで困っていますか？（主な悩み）',
+    helper: '具体的なほどAIが刺さる投稿を作れます。',
+    required: true,
+    ui: 'textarea',
+    suggestions: [
+      '慢性的な肩こり', '繰り返す腰痛', '頭痛', '産後の骨盤の歪み',
+      '猫背・姿勢', '膝の痛み', '自律神経の乱れ・不眠', '冷え・むくみ',
+    ],
+    examples: ['例：「何度マッサージしてもすぐ戻る肩こり、朝起きた時の腰の痛み」'],
+  },
+  {
+    id: 'strengthRaw',
+    prompt:
+      '他のお店ではなく「あなたのお店」を選ぶ理由・強みは何ですか？',
+    helper: '技術・人柄・立地・営業時間・設備など何でもOK。',
+    required: true,
+    ui: 'textarea',
+    suggestions: [
+      '国家資格者による施術', '根本改善にこだわる', '完全予約制でゆったり',
+      '駅近・通いやすい', '女性専用で安心', '夜遅くまで営業', '専門特化（〇〇専門）',
+    ],
+    examples: ['例：「国家資格者による根本改善施術。完全予約制で夜20時まで営業」'],
+  },
+
   // ────────────────────── Q1. 口調 ──────────────────────
   {
     id: 'brandVoiceRaw',
