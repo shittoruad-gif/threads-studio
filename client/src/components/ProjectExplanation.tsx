@@ -38,7 +38,7 @@ export default function ProjectExplanation() {
             </div>
           </div>
           
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="text-center p-3 bg-muted/50 rounded-lg">
               <p className="text-muted-foreground text-xs mb-1">無料</p>
               <p className="text-2xl font-bold text-muted-foreground/60">0<span className="text-sm font-normal text-muted-foreground/60">件</span></p>

@@ -315,7 +315,7 @@ export default function AICounseling() {
             })}
           </div>
 
-          <div className="flex items-center gap-2 sticky bottom-2 bg-background/80 backdrop-blur-sm py-2 -mx-4 px-4">
+          <div className="flex items-center gap-2 sticky bottom-2 z-40 bg-background/95 backdrop-blur-sm py-2 -mx-4 px-4 rounded-t-lg">
             <Button
               variant="outline"
               onClick={() => { setEditingOne(false); setStepIndex(0); setView('questions'); }}
@@ -362,7 +362,7 @@ export default function AICounseling() {
           />
 
           {/* ナビ */}
-          <div className="flex items-center gap-2 sticky bottom-2 bg-background/80 backdrop-blur-sm py-2 -mx-4 px-4">
+          <div className="flex items-center gap-2 sticky bottom-2 z-40 bg-background/95 backdrop-blur-sm py-2 -mx-4 px-4 rounded-t-lg">
             <Button variant="outline" disabled={!editingOne && isFirst} onClick={handleBack}>
               {editingOne ? '一覧に戻る' : '戻る'}
             </Button>

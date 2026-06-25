@@ -153,7 +153,7 @@ export default function AIStyleCalibration() {
       )}
 
       {/* アクション */}
-      <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 sticky bottom-2 bg-background/80 backdrop-blur-sm py-3 -mx-4 px-4 border-t">
+      <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 sticky bottom-2 z-40 bg-background/95 backdrop-blur-sm py-3 -mx-4 px-4 border-t rounded-t-lg">
         <Button
           variant="ghost"
           onClick={() => refetch()}
