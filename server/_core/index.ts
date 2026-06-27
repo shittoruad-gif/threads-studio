@@ -379,26 +379,77 @@ async function startServer() {
               console.log(`[Univapay Webhook] サブスク新規作成→active: user=${user.id} plan=${planId}`);
             }
 
-            // ★#2 キャンペーン規定回数に達したらアプリ側から自動解約（過剰課金防止）。
+            // ★#2 キャンペーン規定回数に達したときの処理。
             //   再送イベントでは発火させない（!isDuplicateCharge）。
+            //   ・既定: アプリ側から自動解約（過剰課金防止／従来動作）。
+            //   ・CAMPAIGN_AUTO_REVERT_ENABLED=true: 解約せず「通常価格へ自動切替」。
+            //     ※有効化の前提（Univapay側）: キャンペーン契約が「回数無制限」かつ
+            //       「課金金額上限≧通常価格」で作成されていること。テスト環境で検証必須。
             if (chargedPlan?.isCampaign && chargedPlan.campaignCharges && !isDuplicateCharge
                 && newChargeCount >= chargedPlan.campaignCharges) {
               const subId = univapaySubId ?? existing?.univapaySubscriptionId;
-              console.log(`[Univapay Webhook] キャンペーン規定回数到達(${newChargeCount}/${chargedPlan.campaignCharges})→自動解約: user=${user.id}`);
-              try {
-                if (subId) {
-                  const univapay = await import('../univapay');
-                  await univapay.cancelSubscription(subId);
-                }
-              } catch (e) {
-                console.error('[Univapay Webhook] campaign auto-cancel error:', e);
+              const autoRevert = process.env.CAMPAIGN_AUTO_REVERT_ENABLED === 'true';
+              const regularPlan = chargedPlan.normalCounterpartId ? getPlan(chargedPlan.normalCounterpartId) : null;
+
+              if (autoRevert && regularPlan && regularPlan.priceMonthly > 0) {
+                // ── 通常価格へ自動切替（解約しない）──
+                console.log(`[Univapay Webhook] キャンペーン規定回数到達(${newChargeCount}/${chargedPlan.campaignCharges})→通常価格へ切替: user=${user.id} ${chargedPlan.id}→${regularPlan.id} ¥${regularPlan.priceMonthly}`);
                 try {
-                  const { notifyOwner } = await import('./notification');
-                  await notifyOwner({
-                    title: 'Univapay: キャンペーン自動解約に失敗',
-                    content: `user=${user.id} subId=${subId} 手動での解約確認が必要です。`,
-                  });
-                } catch {}
+                  if (subId) {
+                    const univapay = await import('../univapay');
+                    await univapay.updateSubscriptionNextAmount(subId, regularPlan.priceMonthly);
+                  }
+                  // アプリ側のプラン記録も通常プランへ。再発火しないよう回数はリセット。
+                  if (existing) {
+                    await db.updateSubscription(existing.id, {
+                      planId: regularPlan.id,
+                      campaignChargeCount: 0,
+                    });
+                  }
+                  // ユーザーへ通常価格移行を通知（事前告知の念押し）。
+                  try {
+                    const { sendEmail } = await import('./notification');
+                    if (user.email) {
+                      await sendEmail({
+                        to: user.email,
+                        subject: '【ThreadsStudio】キャンペーン価格期間が終了しました',
+                        html: `<p>いつもご利用ありがとうございます。</p><p>お申し込み時にご案内のとおり、キャンペーン価格（${chargedPlan.campaignCharges}回分）の期間が終了し、次回ご請求分から<strong>通常価格 月額¥${regularPlan.priceMonthly.toLocaleString()}（${regularPlan.name}）</strong>に切り替わります。</p><p>プランの機能はこれまでと変わらずご利用いただけます。停止をご希望の場合は次回請求日までに解約手続きをお願いします。</p>`,
+                      });
+                    }
+                  } catch (e) { console.error('[Univapay Webhook] revert mail error:', e); }
+                } catch (e) {
+                  console.error('[Univapay Webhook] campaign auto-revert error:', e);
+                  // 失敗時は過剰課金を防ぐため安全側＝解約にフォールバック。
+                  try {
+                    if (subId) {
+                      const univapay = await import('../univapay');
+                      await univapay.cancelSubscription(subId);
+                    }
+                    const { notifyOwner } = await import('./notification');
+                    await notifyOwner({
+                      title: 'Univapay: 通常価格への自動切替に失敗（解約にフォールバック）',
+                      content: `user=${user.id} subId=${subId} ${chargedPlan.id}→${regularPlan.id}。手動確認が必要です。`,
+                    });
+                  } catch {}
+                }
+              } else {
+                // ── 従来動作: 自動解約（過剰課金防止）──
+                console.log(`[Univapay Webhook] キャンペーン規定回数到達(${newChargeCount}/${chargedPlan.campaignCharges})→自動解約: user=${user.id}`);
+                try {
+                  if (subId) {
+                    const univapay = await import('../univapay');
+                    await univapay.cancelSubscription(subId);
+                  }
+                } catch (e) {
+                  console.error('[Univapay Webhook] campaign auto-cancel error:', e);
+                  try {
+                    const { notifyOwner } = await import('./notification');
+                    await notifyOwner({
+                      title: 'Univapay: キャンペーン自動解約に失敗',
+                      content: `user=${user.id} subId=${subId} 手動での解約確認が必要です。`,
+                    });
+                  } catch {}
+                }
               }
             }
           }

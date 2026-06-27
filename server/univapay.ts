@@ -125,6 +125,40 @@ export async function updateSubscription(
 }
 
 /**
+ * 既存サブスクリプションの「次回以降の課金金額」を変更する（PATCH）。
+ *
+ * 用途：キャンペーン価格で3回課金 → 4回目から通常価格へ自動切替（解約せず金額だけ上げる）。
+ *
+ * 重要な前提（Univapay仕様）：
+ *  - 「回数制限付き定期課金」では次回課金額を変更できない → キャンペーン契約は回数無制限で作成すること。
+ *  - サブスク作成時の「課金金額上限(max amount)」までしか引き上げられない → リンクの上限を通常価格に設定すること。
+ *  - ★PATCHのボディ項目名（amount / next_payment.amount 等）は環境差があるため、
+ *    本番有効化前に必ずUnivapayサポート/テスト環境で正しい項目を確定すること。
+ *    ここでは代表的な項目を両方送って防御的に対応する。
+ */
+export async function updateSubscriptionNextAmount(
+  subscriptionId: string,
+  nextAmount: number,
+) {
+  if (!subscriptionId) throw new Error('subscriptionId is required');
+  if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
+    throw new Error(`invalid nextAmount: ${nextAmount}`);
+  }
+  const result = await univapayRequest(
+    `/stores/${UNIVAPAY_STORE_ID}/subscriptions/${subscriptionId}`,
+    'PATCH',
+    {
+      // 継続金額そのものを更新（次回以降に適用）
+      amount: nextAmount,
+      // 環境によっては next_payment 配下で受ける実装があるため併送（無害なら無視される）
+      next_payment: { amount: nextAmount },
+    },
+  );
+  console.log(`[Univapay] Subscription next amount updated: ${subscriptionId} -> ${nextAmount}`);
+  return result;
+}
+
+/**
  * Get subscription details
  */
 export async function getSubscription(subscriptionId: string) {
