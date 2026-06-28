@@ -89,6 +89,11 @@ export default function AIGenerate() {
   // 生成：候補（3案）と生成中フラグ（1案 / 3案）
   const [candidates, setCandidates] = useState<(GeneratedPost & { _postType?: PostType })[] | null>(null);
   const [isGeneratingOptions, setIsGeneratingOptions] = useState(false);
+  // ③自動採点：各案のスコアと推薦index
+  const [evaluations, setEvaluations] = useState<{ empathy: number; readability: number; topicality: number; total: number; reason: string }[] | null>(null);
+  const [recommendedIndex, setRecommendedIndex] = useState<number | null>(null);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const evaluateMutation = trpc.project.evaluateOptions.useMutation();
   const [isGeneratingSingle, setIsGeneratingSingle] = useState(false);
   const { selectedAccount, selectedAccountId, accounts: connectedAccounts } = useThreadsAccount();
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
@@ -140,6 +145,7 @@ export default function AIGenerate() {
     belief: '',
     catchphrase: '',
     customerWords: '',
+    styleSamples: '',
     ngWords: '',
   });
   // 地元の呼び方：AI提案の候補
@@ -488,6 +494,27 @@ export default function AIGenerate() {
       } else {
         setCandidates(ok);
         triggerCelebration('first-generation');
+        // ③ AIが3案を採点して最優秀を推薦（補助・非ブロッキング）
+        setEvaluations(null);
+        setRecommendedIndex(null);
+        if (ok.length >= 2) {
+          setIsEvaluating(true);
+          evaluateMutation
+            .mutateAsync({
+              options: ok.map((c) => ({
+                title: c.title || '',
+                mainPost: c.mainPost || '',
+                treePosts: c.treePosts || [],
+                cta: c.cta || '',
+              })),
+            })
+            .then((r) => {
+              setEvaluations(r.evaluations as any);
+              setRecommendedIndex(typeof r.recommendedIndex === 'number' ? r.recommendedIndex : null);
+            })
+            .catch(() => { /* 採点失敗は無視（候補選択は手動でも可能） */ })
+            .finally(() => setIsEvaluating(false));
+        }
       }
     } finally {
       setIsGeneratingOptions(false);
@@ -499,6 +526,8 @@ export default function AIGenerate() {
     setGeneratedPost(c);
     setEditedPost(c);
     setCandidates(null);
+    setEvaluations(null);
+    setRecommendedIndex(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -999,6 +1028,7 @@ export default function AIGenerate() {
                           belief: (project as any).belief || '',
                           catchphrase: (project as any).catchphrase || '',
                           customerWords: (project as any).customerWords || '',
+                          styleSamples: (project as any).styleSamples || '',
                           ngWords: (project as any).ngWords || '',
                         });
                         setLocalSuggestions(null);
@@ -1232,6 +1262,17 @@ export default function AIGenerate() {
                           className="text-sm"
                         />
                         <p className="text-[11px] text-muted-foreground">最優先で投稿に使われます（一度登録すれば毎回利用）。</p>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">過去の良かった投稿（文体のお手本）</Label>
+                        <Textarea
+                          value={editForm.styleSamples}
+                          onChange={(e) => setEditForm({ ...editForm, styleSamples: e.target.value })}
+                          placeholder={'反応が良かった過去の投稿を、1〜3本そのまま貼り付け（投稿ごとに空行で区切る）。\nAIが口調・絵文字・改行・文の長さを真似ます（内容ではなく“文体”だけ模倣）。'}
+                          rows={5}
+                          className="text-sm"
+                        />
+                        <p className="text-[11px] text-muted-foreground">貼り付けた投稿の「文体」だけを再現します。事実は店舗情報から使うので、お手本の内容はコピーされません。</p>
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">投稿に入れたくないワード</Label>
@@ -1645,14 +1686,20 @@ export default function AIGenerate() {
               </>
             ) : candidates ? (
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Sparkles className="h-5 w-5 text-primary" />
                   <h3 className="font-semibold text-foreground">3案できました。使いたい案を選んでください</h3>
+                  {isEvaluating && (
+                    <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />AIが採点中…</span>
+                  )}
                 </div>
-                {candidates.map((c, i) => (
+                {candidates.map((c, i) => {
+                  const ev = evaluations?.[i];
+                  const isRecommended = recommendedIndex === i;
+                  return (
                   <Card
                     key={i}
-                    className="cursor-pointer hover:border-primary transition-colors"
+                    className={`cursor-pointer transition-colors ${isRecommended ? 'border-2 border-amber-400 bg-amber-50/40' : 'hover:border-primary'}`}
                     onClick={() => selectCandidate(c)}
                   >
                     <CardHeader className="pb-2">
@@ -1660,6 +1707,9 @@ export default function AIGenerate() {
                         <CardTitle className="text-sm flex items-center gap-2 min-w-0">
                           <span className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">{i + 1}</span>
                           <span className="truncate">{(c._postType && POST_TYPES[c._postType]?.name) || '案'}</span>
+                          {isRecommended && (
+                            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-amber-400 text-amber-950 text-[10px] font-bold px-2 py-0.5">⭐AIのおすすめ</span>
+                          )}
                         </CardTitle>
                         <Button
                           size="sm"
@@ -1675,9 +1725,21 @@ export default function AIGenerate() {
                       {c.treePosts && c.treePosts.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-2">＋続きの投稿 {c.treePosts.length}本</p>
                       )}
+                      {ev && (
+                        <div className="mt-2 pt-2 border-t border-border/60">
+                          <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground">
+                            <span className="font-bold text-foreground">AI採点 {Math.round(ev.total)}点</span>
+                            <span>共感{Math.round(ev.empathy)}</span>
+                            <span>読みやすさ{Math.round(ev.readability)}</span>
+                            <span>話題性{Math.round(ev.topicality)}</span>
+                          </div>
+                          {ev.reason && <p className="text-[11px] text-muted-foreground mt-1">{ev.reason}</p>}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
-                ))}
+                  );
+                })}
                 <Button
                   variant="outline"
                   className="w-full"

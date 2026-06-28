@@ -144,6 +144,7 @@ async function generateAutoPost(
       businessType: project.businessType,
       area: project.area,
       localTerms: (project as any).localTerms || undefined,
+      styleSamples: (project as any).styleSamples || undefined,
       target: project.target,
       mainProblem: project.mainProblem,
       strength: project.strength,

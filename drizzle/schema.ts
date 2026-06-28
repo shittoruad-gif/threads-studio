@@ -161,6 +161,8 @@ export const projects = mysqlTable("projects", {
   belief: text("belief"), // 主張・信念（業界常識への自分の立場。一度登録すれば毎回利用）
   catchphrase: text("catchphrase"), // 口癖・方言・決めゼリフ（キャラ付け。一度登録すれば毎回利用）
   customerWords: text("customerWords"), // お客さんが実際に使った言葉ストック（最優先で投稿に使う）
+  // 過去の良かった/バズった投稿（お手本）。文体（口調・絵文字・改行・1文の長さ）の模倣に使う。
+  styleSamples: text("styleSamples"),
   // AIカウンセリング結果（JSON）。事実ベース投稿のためにユーザから取得した
   // 「使ってよい実績」「実在の顧客エピソード」「絶対に書きたくないこと」など。
   // null の場合は未カウンセリング状態。フォーマット: shared/counseling.ts CounselingResult。

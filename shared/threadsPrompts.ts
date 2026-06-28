@@ -132,6 +132,7 @@ export interface ThreadsPromptInput {
   belief?: string;     // 主張・信念（業界常識への立場。一貫させる）
   catchphrase?: string; // 口癖・方言・決めゼリフ（キャラ付け）
   customerWords?: string; // お客さんが実際に使った言葉（最優先で使う）
+  styleSamples?: string; // 過去の良かった投稿（文体＝口調/絵文字/改行/1文の長さ を模倣するお手本）
   trendWord?: string;  // トレンドワード
   purpose?: PostPurpose; // 投稿の目的（cv/awareness/authority/fan）
   tone?: PostTone;      // 投稿の口調
@@ -1032,6 +1033,7 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
     belief: sanitizeForPrompt(input.belief, 300),
     catchphrase: sanitizeForPrompt(input.catchphrase, 200),
     customerWords: sanitizeForPrompt(input.customerWords, 500),
+    styleSamples: sanitizeForPrompt(input.styleSamples, 2000),
     trendWord: sanitizeForPrompt(input.trendWord, 60),
     link: sanitizeForPrompt(input.link, 200),
   };
@@ -1061,6 +1063,11 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
           ? `- ★地元で実際に使われている呼び方（このリストの中から選んで使う。1投稿に1〜2個。毎回違うものをローテーションし、長い住所「${safe.area}」をそのまま並べない）：\n${localTermsList.map((t) => `    ・${t}`).join('\n')}\n- これらは事実確認済みの呼び方。リストに無い駅名・地名・ランドマークを推測で作らないこと（誤った地名は地元の信頼を損なう）。\n- 例：「大元駅すぐの〜」「下中野エリアで〜にお悩みの方へ」のように、地元の人がピンとくる表現にする。`
           : `- 「${safe.area}」のエリア名を自然に含める。例：「${safe.area}で〜」「${safe.area}にお住まいの方」。`
       }\n- 地域に住んでいる人が「あ、自分のことだ」と感じるような書き方にする。`
+    : '';
+
+  // 文体模倣：過去の良かった投稿を「お手本」として読み込ませ、文体を再現させる。
+  const styleSamplesNote = safe.styleSamples
+    ? `\n\n【★文体のお手本（このユーザーの過去の良かった投稿。最優先で文体を再現）】\n以下の投稿群を分析し、「言葉遣い（だ・である調／です・ます調）」「絵文字の使い方の癖」「改行のタイミング」「1文の長さ」を深く読み取り、新しい投稿でもその文体を自然に再現すること。内容（事実）は入力情報に従い、文体だけを真似る（お手本の事実をそのまま流用しない）。\n---\n${safe.styleSamples}\n---`
     : '';
 
   // トレンド型の場合、トレンドワードを明示
@@ -1097,7 +1104,15 @@ ${safe.trendWord ? `- トレンドワード：${safe.trendWord}` : ''}
 ${formatLinksForPrompt(input.links, input.postType)}
 
 【投稿タイプ】
-${postTypeDescription}${localNote}${trendNote}${ngWordsNote}
+${postTypeDescription}${localNote}${trendNote}${ngWordsNote}${styleSamplesNote}
+
+【★安全基準（炎上・ブランド毀損・法令対策。例外なく厳守。満たせない内容は出力しない）】
+- 攻撃的・差別的、または政治的・宗教的に偏った発言を一切含めない。
+- 他のユーザー・企業・店舗・サービスを名指しで比較・批判・否定しない（仮想敵は「業界の悪習・誤解・過去の自分」に限定）。
+- 「絶対」「必ず」「100%」「確実に」などの断定・誇大表現は避け、「〜しやすい」「〜が期待できる」等のマイルドな表現にする。
+- 事実確認の取れない噂・伝聞・不確かな情報、入力に無い数字や実績は書かない（捏造禁止）。
+- 業界規制（薬機法・あはき法・医療法・景品表示法等）に触れる効果・効能の断定をしない。
+- もし指定テーマ（トレンドワード等）が上記に違反する／炎上リスクが高いと判断した場合は、無理に作らず、安全な切り口に言い換えて作成する（言い換え不能なら当たり障りのない内容にとどめる）。
 
 上記ルールをすべて守り、その業種・地域・悩み・ターゲットに合わせたThreads投稿を1セット生成してください。
 特に「自然な文章のルール」と「禁止表現リスト」を厳守してください。

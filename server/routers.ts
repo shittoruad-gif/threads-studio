@@ -508,6 +508,7 @@ export const appRouter = router({
         belief: z.string().optional(), // 主張・信念
         catchphrase: z.string().optional(), // 口癖・方言・決めゼリフ
         customerWords: z.string().optional(), // お客さんが実際に使った言葉ストック
+        styleSamples: z.string().optional(), // 過去の良かった投稿（文体模倣のお手本）
         ngWords: z.string().optional(), // 投稿に入れたくないワード（改行/カンマ区切り）
       }))
       .mutation(async ({ ctx, input }) => {
@@ -558,6 +559,7 @@ export const appRouter = router({
         belief: z.string().optional(), // 主張・信念
         catchphrase: z.string().optional(), // 口癖・方言・決めゼリフ
         customerWords: z.string().optional(), // お客さんが実際に使った言葉ストック
+        styleSamples: z.string().optional(), // 過去の良かった投稿（文体模倣のお手本）
         useThreadsKnowhow: z.boolean().optional(),
         ngWords: z.string().optional(), // 投稿に入れたくないワード（改行/カンマ区切り）
       }))
@@ -931,6 +933,7 @@ export const appRouter = router({
           mainProblem: project.mainProblem,
           strength: project.strength,
           proof: project.proof || undefined,
+          styleSamples: (project as any).styleSamples || undefined,
           link: project.ctaLink || undefined,
           links: projectLinks.map(l => ({ type: l.type, label: l.label, url: l.url })),
           postType: input.postType,
@@ -1043,6 +1046,82 @@ export const appRouter = router({
         });
 
         return { ...cleanResult, factGuardRemoved: guarded.removed };
+      }),
+
+    // ── 3案の自動採点・最優秀の推薦 ───────────────────────────────
+    // 生成した複数案を「共感性／読みやすさ／話題性」で100点採点し、最も良い案を推薦する。
+    // 生成枠（maxAiGenerations）は消費しない補助機能。
+    evaluateOptions: protectedProcedure
+      .input(z.object({
+        options: z.array(z.object({
+          title: z.string().optional().default(''),
+          mainPost: z.string().default(''),
+          treePosts: z.array(z.string()).optional().default([]),
+          cta: z.string().optional().default(''),
+        })).min(2).max(5),
+      }))
+      .mutation(async ({ input }) => {
+        const optionsText = input.options.map((o, i) => {
+          const body = [o.mainPost, ...(o.treePosts ?? []), o.cta].filter(Boolean).join('\n');
+          return `案${i + 1}:\n${body}`;
+        }).join('\n\n----\n\n');
+        const prompt = `あなたはThreadsのエンゲージメント分析の専門家です。
+以下の投稿案を、次の3観点でそれぞれ0〜100点で厳しく採点してください。
+- empathy（共感性：いいね/保存したくなるか）
+- readability（読みやすさ：スマホで読んだ時のテンポ）
+- topicality（話題性：返信したくなるか）
+各案に short な日本語の講評(reason)を付け、合計点が最も高い案の番号(0始まりのindex)を recommendedIndex として返してください。
+
+${optionsText}`;
+        try {
+          const { invokeLLM } = await import('./_core/llm');
+          const res = await invokeLLM({
+            temperature: 0.3,
+            messages: [{ role: 'user', content: prompt }],
+            response_format: {
+              type: 'json_schema',
+              json_schema: {
+                name: 'option_eval',
+                strict: true,
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    evaluations: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        additionalProperties: false,
+                        properties: {
+                          empathy: { type: 'number' },
+                          readability: { type: 'number' },
+                          topicality: { type: 'number' },
+                          total: { type: 'number' },
+                          reason: { type: 'string' },
+                        },
+                        required: ['empathy', 'readability', 'topicality', 'total', 'reason'],
+                      },
+                    },
+                    recommendedIndex: { type: 'number' },
+                  },
+                  required: ['evaluations', 'recommendedIndex'],
+                },
+              },
+            },
+          });
+          const content = res?.choices?.[0]?.message?.content;
+          const parsed = JSON.parse(typeof content === 'string' ? content : '{}');
+          const evals = Array.isArray(parsed.evaluations) ? parsed.evaluations : [];
+          // recommendedIndex を範囲内に丸める（無ければ合計点最大を選ぶ）
+          let rec = Number.isInteger(parsed.recommendedIndex) ? parsed.recommendedIndex : -1;
+          if (rec < 0 || rec >= input.options.length) {
+            rec = evals.reduce((best: number, e: any, i: number) =>
+              (e?.total ?? 0) > (evals[best]?.total ?? -1) ? i : best, 0);
+          }
+          return { evaluations: evals, recommendedIndex: rec };
+        } catch (e) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '評価の取得に失敗しました。少し時間をおいてお試しください。' });
+        }
       }),
 
     // Get AI generation history
