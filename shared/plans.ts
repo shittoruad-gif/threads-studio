@@ -33,6 +33,8 @@ export interface PlanConfig {
   campaignCharges?: number;
   /** キャンペーン終了後に案内する通常プランのID（isCampaign時のみ） */
   normalCounterpartId?: string;
+  /** キャンペーンの種別（クーポンコードで出し分け）。'seminar' or 'monitor' */
+  campaignTier?: 'seminar' | 'monitor';
 }
 
 // ライト/プロ/ビジネスの機能定義（通常・キャンペーン共通で参照）
@@ -81,39 +83,83 @@ export const PLANS: Record<string, PlanConfig> = {
     },
   },
 
-  // ───────── キャンペーンプラン（3回課金で自動終了→無料に戻る）─────────
+  // ═══════ モニター種別キャンペーン（モニターコードで適用。3回課金後、4ヶ月目から通常価格へ自動移行）═══════
+  // ※モニターリンクは「無制限」で作り直し中。新URL確定後にこの univapayLinkUrl を差し替える。
+  //   （現URLは回数3=自動移行不可のため、自動移行を有効化する前に要差し替え）
   light_campaign: {
     id: 'light_campaign',
-    name: 'ライト キャンペーン',
-    description: '3ヶ月お試し価格（3回課金で自動終了）。機能はライトプランと同じ',
+    name: 'ライト モニター価格',
+    description: '3ヶ月モニター特別価格（4ヶ月目から通常価格¥4,980に自動移行）。機能はライトプランと同じ',
     priceMonthly: 2980,
     univapayLinkUrl: 'https://univa.cc/2Tfu-Z',
     isCampaign: true,
     campaignCharges: 3,
     normalCounterpartId: 'light',
+    campaignTier: 'monitor',
     features: { ...FEATURES_LIGHT },
   },
   pro_campaign: {
     id: 'pro_campaign',
-    name: 'プロ キャンペーン',
-    description: '3ヶ月お試し価格（3回課金で自動終了）。機能はプロプランと同じ',
+    name: 'プロ モニター価格',
+    description: '3ヶ月モニター特別価格（4ヶ月目から通常価格¥9,800に自動移行）。機能はプロプランと同じ',
     priceMonthly: 6980,
     univapayLinkUrl: 'https://univa.cc/qm0Uj5',
     isCampaign: true,
     campaignCharges: 3,
     normalCounterpartId: 'pro',
+    campaignTier: 'monitor',
     popular: true,
     features: { ...FEATURES_PRO },
   },
   business_campaign: {
     id: 'business_campaign',
-    name: 'ビジネス キャンペーン',
-    description: '3ヶ月お試し価格（3回課金で自動終了）。機能はビジネスプランと同じ',
+    name: 'ビジネス モニター価格',
+    description: '3ヶ月モニター特別価格（4ヶ月目から通常価格¥29,800に自動移行）。機能はビジネスプランと同じ',
     priceMonthly: 19800,
     univapayLinkUrl: 'https://univa.cc/HJNLau',
     isCampaign: true,
     campaignCharges: 3,
     normalCounterpartId: 'business',
+    campaignTier: 'monitor',
+    features: { ...FEATURES_BUSINESS },
+  },
+
+  // ═══════ セミナー種別キャンペーン（セミナーコードで適用。3回課金後、4ヶ月目から通常価格へ自動移行）═══════
+  light_seminar: {
+    id: 'light_seminar',
+    name: 'ライト セミナー価格',
+    description: '3ヶ月セミナー特別価格（4ヶ月目から通常価格¥4,980に自動移行）。機能はライトプランと同じ',
+    priceMonthly: 4480,
+    univapayLinkUrl: 'https://univa.cc/u7ImKg',
+    isCampaign: true,
+    campaignCharges: 3,
+    normalCounterpartId: 'light',
+    campaignTier: 'seminar',
+    features: { ...FEATURES_LIGHT },
+  },
+  pro_seminar: {
+    id: 'pro_seminar',
+    name: 'プロ セミナー価格',
+    description: '3ヶ月セミナー特別価格（4ヶ月目から通常価格¥9,800に自動移行）。機能はプロプランと同じ',
+    priceMonthly: 8800,
+    univapayLinkUrl: 'https://univa.cc/C-ZzhL',
+    isCampaign: true,
+    campaignCharges: 3,
+    normalCounterpartId: 'pro',
+    campaignTier: 'seminar',
+    popular: true,
+    features: { ...FEATURES_PRO },
+  },
+  business_seminar: {
+    id: 'business_seminar',
+    name: 'ビジネス セミナー価格',
+    description: '3ヶ月セミナー特別価格（4ヶ月目から通常価格¥29,800に自動移行）。機能はビジネスプランと同じ',
+    priceMonthly: 27800,
+    univapayLinkUrl: 'https://univa.cc/7gjlbv',
+    isCampaign: true,
+    campaignCharges: 3,
+    normalCounterpartId: 'business',
+    campaignTier: 'seminar',
     features: { ...FEATURES_BUSINESS },
   },
 
@@ -241,9 +287,12 @@ export function getCampaignSlotsRemaining(now: Date = new Date()): number {
 /**
  * 通常プランIDに対応するキャンペーンプランを返す（なければundefined）。
  */
-export function getCampaignCounterpart(normalPlanId: string): PlanConfig | undefined {
+export function getCampaignCounterpart(
+  normalPlanId: string,
+  tier: 'seminar' | 'monitor' = 'monitor',
+): PlanConfig | undefined {
   return Object.values(PLANS).find(
-    (p) => p.isCampaign && p.normalCounterpartId === normalPlanId,
+    (p) => p.isCampaign && p.normalCounterpartId === normalPlanId && p.campaignTier === tier,
   );
 }
 

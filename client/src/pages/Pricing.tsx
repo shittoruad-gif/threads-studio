@@ -122,6 +122,8 @@ export default function Pricing() {
   // モニター（キャンペーンクーポン適用済み）のユーザーには
   // キャンペーン価格を自動表示する。コード入力欄は新規登録時のみ。
   const campaignUnlocked = Boolean(user?.isMonitor);
+  // 適用中のキャンペーン種別（セミナー/モニター）。未設定の既存モニターは monitor 扱い。
+  const campaignTier: 'seminar' | 'monitor' = ((user as any)?.campaignTier === 'seminar') ? 'seminar' : 'monitor';
   const slotsRemaining = getCampaignSlotsRemaining();
 
   const { data: currentSubscription, refetch } = trpc.subscription.getStatus.useQuery(
@@ -260,7 +262,7 @@ export default function Pricing() {
           {plans.map((plan) => {
             const colors = PLAN_COLORS[plan.id] || PLAN_COLORS.free;
             // コード適用時、このプランに対応するキャンペーンプランがあれば価格を切替
-            const campaignPlan = campaignUnlocked ? getCampaignCounterpart(plan.id) : undefined;
+            const campaignPlan = campaignUnlocked ? getCampaignCounterpart(plan.id, campaignTier) : undefined;
             return (
               <div
                 key={plan.id}

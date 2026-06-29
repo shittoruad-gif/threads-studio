@@ -60,6 +60,14 @@ export async function hasUserUsedCoupon(userId: number, couponId: number): Promi
 }
 
 /**
+ * クーポンコード → キャンペーン種別（価格の出し分け）。
+ * SEMINAR2026 はセミナー価格、それ以外のモニターコードはモニター価格。
+ */
+export function campaignTierForCode(code: string): 'seminar' | 'monitor' {
+  return (code || '').trim().toUpperCase() === 'SEMINAR2026' ? 'seminar' : 'monitor';
+}
+
+/**
  * Apply a coupon to a user's subscription
  */
 export async function applyCoupon(
@@ -89,7 +97,7 @@ export async function applyCoupon(
         const { users } = await import("../drizzle/schema");
         const db2 = await getDb();
         if (db2) {
-          await db2.update(users).set({ isMonitor: true }).where(eq(users.id, userId));
+          await db2.update(users).set({ isMonitor: true, campaignTier: campaignTierForCode(coupon.code) }).where(eq(users.id, userId));
         }
       } catch (e) {
         console.error("[Coupon] monitor re-apply isMonitor set failed:", e);
@@ -183,7 +191,7 @@ export async function applyCoupon(
     const { users } = await import("../drizzle/schema");
     await db
       .update(users)
-      .set({ isMonitor: true })
+      .set({ isMonitor: true, campaignTier: campaignTierForCode(coupon.code) })
       .where(eq(users.id, userId));
   }
 

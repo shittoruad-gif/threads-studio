@@ -40,6 +40,8 @@ export const users = mysqlTable("users", {
   credits: int("credits").default(0).notNull(),
   // Monitor program participant
   isMonitor: boolean("isMonitor").default(false).notNull(),
+  // 適用中のキャンペーン種別（クーポンで出し分け）: 'seminar' | 'monitor' | null
+  campaignTier: varchar("campaignTier", { length: 20 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
