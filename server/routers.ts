@@ -402,6 +402,12 @@ export const appRouter = router({
       const effPlanId = resolveEffectivePlanId(subscription.planId, subscription.status);
       const plan = getPlan(effPlanId);
 
+      // ★決済失敗フォロー：past_due/unpaid のときはバナー表示と
+      //   「カード再登録」リンクを返す。再登録先は契約プラン（実効プランは
+      //   free になるため subscription.planId から解決）の Univapay リンク。
+      const isPaymentPastDue = subscription.status === 'past_due' || subscription.status === 'unpaid';
+      const contractPlan = getPlan(subscription.planId);
+
       return {
         planId: subscription.planId,
         plan: plan || PLANS.free,
@@ -410,6 +416,11 @@ export const appRouter = router({
         trialEndsAt: subscription.trialEndsAt,
         currentPeriodEnd: subscription.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+        // 決済失敗フォロー用
+        isPaymentPastDue,
+        failedPaymentCount: subscription.failedPaymentCount ?? 0,
+        reRegisterUrl: isPaymentPastDue ? (contractPlan?.univapayLinkUrl ?? null) : null,
+        contractPlanName: isPaymentPastDue ? (contractPlan?.name ?? null) : null,
       };
     }),
 

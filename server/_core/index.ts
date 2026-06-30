@@ -36,6 +36,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import * as db from "../db";
 import { initTrialReminderScheduler } from "../trialReminder";
+import { initPaymentFollowUpScheduler } from "../paymentFollowUp";
 import { startTokenRefreshJob } from "../tokenRefreshJob";
 
 /**
@@ -318,17 +319,42 @@ async function startServer() {
             console.log(`[Univapay Webhook] サブスク解約: user=${user.id}`);
           }
         } else if (isFailed) {
+          // ── 決済失敗フォローアップ（dunning）──────────────────────
+          // 失敗回数を加算し、初回失敗日時（猶予期間の起点）を記録する。
+          // Webhook再送による二重カウントは課金イベントIDで防ぐ。
+          const isDupFail = !!chargeEventId && existing?.lastChargeEventId === chargeEventId;
+          const newFailCount = isDupFail
+            ? (existing?.failedPaymentCount ?? 1)
+            : (existing?.failedPaymentCount ?? 0) + 1;
+          const contractPlan = getPlan(existing?.planId ?? matchedPlanId ?? 'light');
+          const reRegisterUrl = contractPlan?.univapayLinkUrl ?? null;
           if (existing) {
-            await db.updateSubscription(existing.id, { status: 'past_due' });
+            await db.updateSubscription(existing.id, {
+              status: 'past_due',
+              failedPaymentCount: newFailCount,
+              firstFailedPaymentAt: existing.firstFailedPaymentAt ?? new Date(),
+              lastFailedPaymentAt: new Date(),
+              lastChargeEventId: chargeEventId ?? existing.lastChargeEventId ?? undefined,
+            });
           }
-          console.log(`[Univapay Webhook] 決済失敗: user=${user.id}`);
-          // 既存の決済失敗通知導線を流用
+          console.log(`[Univapay Webhook] 決済失敗: user=${user.id} 失敗${newFailCount}回目${isDupFail ? '（再送・据え置き）' : ''}`);
           try {
             const { sendPaymentFailedEmail, notifyOwner } = await import('./notification');
-            const pn = getPlan(existing?.planId ?? matchedPlanId ?? 'light')?.name ?? 'プラン';
-            if (user.email) await sendPaymentFailedEmail(user.email, pn, amount, 1, null);
-            await notifyOwner({ title: `Univapay決済失敗: user ${user.id}`, content: `email=${email} amount=${amount}` });
-          } catch {}
+            const pn = contractPlan?.name ?? 'プラン';
+            // ★顧客へ段階的フォローメール（回数でトーン変化＋カード再登録リンク）
+            if (user.email) await sendPaymentFailedEmail(user.email, pn, amount, newFailCount, null, reRegisterUrl);
+            // ★スタッフ（運営）へ通知：人が電話/LINEでフォローできるよう詳細を添える
+            await notifyOwner({
+              title: `⚠️ カード決済失敗（${newFailCount}回目）: ${user.name ?? user.email}`,
+              content:
+                `顧客: ${user.name ?? '(名前未設定)'} <${email}>\n` +
+                `プラン: ${pn}（${contractPlan?.id ?? '不明'}）\n` +
+                `請求額: ${amount != null ? '¥' + amount.toLocaleString('ja-JP') : '不明'}\n` +
+                `連続失敗回数: ${newFailCount}回\n` +
+                `初回失敗日: ${(existing?.firstFailedPaymentAt ?? new Date()).toLocaleString('ja-JP')}\n` +
+                `→ 顧客にはカード再登録メールを自動送信済み。電話/LINEでのフォローをご検討ください。`,
+            });
+          } catch (e) { console.error('[Univapay Webhook] 決済失敗フォロー処理エラー:', e); }
         } else if (isPaidCharge) {
           // ── 実課金成功（金額>0）→ active 化 ──
           // プランは「金額一致 → 既存プラン維持」の順。どちらも不明なら誤付与を避けて保留通知。
@@ -363,6 +389,11 @@ async function startServer() {
                 cancelAtPeriodEnd: false,
                 campaignChargeCount: newChargeCount,
                 lastChargeEventId: chargeEventId ?? existing.lastChargeEventId ?? undefined,
+                // 課金成功 → 決済失敗フォローの状態をリセット（past_due解消）。
+                failedPaymentCount: 0,
+                firstFailedPaymentAt: null,
+                lastFailedPaymentAt: null,
+                lastDunningReminderAt: null,
               });
               console.log(`[Univapay Webhook] サブスク更新→active: user=${user.id} plan=${planId}${isDuplicateCharge ? '（再送イベント・回数据え置き）' : ''}`);
             } else {
@@ -1046,6 +1077,7 @@ async function startServer() {
   
   // Start trial reminder scheduler
   initTrialReminderScheduler();
+  initPaymentFollowUpScheduler();
   
   // Start scheduled post executor
   const { startScheduledPostExecutor } = await import("../scheduledPostExecutor");

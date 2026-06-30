@@ -200,8 +200,11 @@ export async function sendPaymentFailedEmail(
   amount: number | null,
   attemptCount: number,
   nextRetryAt: Date | null,
+  updateUrl?: string | null,
 ): Promise<boolean> {
-  const portalUrl = `${APP_BASE_URL}/settings`;
+  // カード更新＝Univapayのリンクフォームで再登録する運用のため、
+  // プラン固有の再登録リンクが渡された場合はそれを優先する。
+  const portalUrl = updateUrl || `${APP_BASE_URL}/settings`;
   const amountStr = amount != null ? `¥${amount.toLocaleString('ja-JP')}` : '';
   const retryStr = nextRetryAt
     ? `<p>次回の自動リトライは <strong>${nextRetryAt.toLocaleDateString('ja-JP')}</strong> に行われます。</p>`
@@ -225,9 +228,38 @@ export async function sendPaymentFailedEmail(
         ${amountStr ? `<p>請求額: <strong>${amountStr}</strong></p>` : ''}
         ${urgency}
         ${retryStr}
-        <p>サービス停止を避けるため、お手数ですが以下のボタンからお支払い情報をご確認・更新ください。</p>
+        <p>サービス停止を避けるため、お手数ですが以下のボタンからカード情報のご登録をお願いいたします（新しいカードでの再登録になります）。</p>
       `,
-      'お支払い情報を更新する',
+      'カード情報を登録する',
+      portalUrl,
+    ),
+  });
+}
+
+/**
+ * 決済失敗が続き、猶予期間を過ぎてサービスを自動停止したときの通知メール。
+ * フリープランに戻った旨と、再開（再登録）の導線を案内する。
+ */
+export async function sendSubscriptionStoppedEmail(
+  to: string,
+  planName: string,
+  updateUrl?: string | null,
+): Promise<boolean> {
+  const portalUrl = updateUrl || `${APP_BASE_URL}/pricing`;
+  return sendEmail({
+    to,
+    subject: '【Threads Studio】お支払い未完了のため、有料プランを一時停止しました',
+    html: emailShell(
+      '有料プランを一時停止しました',
+      `
+        <p>いつも Threads Studio をご利用いただきありがとうございます。</p>
+        <p><strong>${planName}プラン</strong>のお支払いが確認できない状態が続いたため、
+        本日付で有料プランを一時停止し、フリープランに切り替えました。</p>
+        <p>自動投稿などの有料機能は現在ご利用いただけません。引き続きご利用になる場合は、
+        以下のボタンからカード情報を登録のうえ、プランを再開してください。</p>
+        <p>ご不明な点がございましたら、お気軽にサポートまでご連絡ください。</p>
+      `,
+      'プランを再開する',
       portalUrl,
     ),
   });

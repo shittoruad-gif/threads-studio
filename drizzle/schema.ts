@@ -94,6 +94,16 @@ export const subscriptions = mysqlTable("subscriptions", {
   campaignChargeCount: int("campaignChargeCount").notNull().default(0),
   // 最後に処理した課金イベントID。Webhook再送時の二重カウントを防ぐ（冪等性）。
   lastChargeEventId: varchar("lastChargeEventId", { length: 255 }),
+  // ── 決済失敗フォローアップ（dunning）─────────────────────────────
+  // カード決済に連続で失敗した回数。成功課金で0にリセット。メールの
+  // トーン段階付け・自動停止の判定に使う。
+  failedPaymentCount: int("failedPaymentCount").notNull().default(0),
+  // 最初に失敗した日時（猶予期間の起点）。成功でnullに戻す。
+  firstFailedPaymentAt: timestamp("firstFailedPaymentAt"),
+  // 直近で失敗した日時。
+  lastFailedPaymentAt: timestamp("lastFailedPaymentAt"),
+  // 直近でフォロー（督促）メールを送った日時。日次cronの多重送信防止。
+  lastDunningReminderAt: timestamp("lastDunningReminderAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [

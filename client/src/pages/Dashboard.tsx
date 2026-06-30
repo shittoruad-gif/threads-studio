@@ -245,6 +245,31 @@ export default function Dashboard() {
           />
         )}
 
+        {/* カード決済失敗（past_due）→ カード再登録への強い導線 */}
+        {(subscription as any)?.isPaymentPastDue && (
+          <div className="mb-6 bg-red-50 border-2 border-red-300 rounded-xl p-4 sm:p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm sm:text-base font-bold text-red-700">
+                  ⚠️ カードのお引き落としに失敗しました
+                </p>
+                <p className="text-xs sm:text-sm text-red-600 mt-1 leading-relaxed">
+                  {(subscription as any)?.contractPlanName ? `「${(subscription as any).contractPlanName}」の` : ''}
+                  自動更新ができていません。サービス停止を避けるため、お早めにカード情報を再登録してください。
+                  （有効期限切れ・残高不足・利用停止などが原因として考えられます）
+                </p>
+              </div>
+              <a
+                href={(subscription as any)?.reRegisterUrl || '/pricing'}
+                {...((subscription as any)?.reRegisterUrl ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                className="shrink-0 inline-flex items-center justify-center rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold px-5 py-2.5 text-sm transition-colors"
+              >
+                カード情報を再登録する
+              </a>
+            </div>
+          </div>
+        )}
+
         {/* 承認待ちの自動投稿があれば通知（承認モードON時） */}
         {(() => {
           const awaitingCount = scheduledPosts?.filter((p) => p.status === 'awaiting_approval').length || 0;
