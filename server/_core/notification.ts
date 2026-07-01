@@ -131,7 +131,40 @@ export async function sendTrialReminderEmail(to: string, daysLeft: number, planN
 }
 
 /**
- * Legacy notifyOwner - now sends email to admin
+ * 運営（管理者）へLINEでプッシュ通知する。
+ * LINE Messaging API の push を使用（LINE Notifyは2025/3終了のため不可）。
+ *   - LINE_CHANNEL_ACCESS_TOKEN: Messagingチャネルの長期アクセストークン
+ *   - LINE_ADMIN_TARGET_ID: 送信先のグループID or ユーザーID
+ * どちらか未設定なら何もしない（メール通知は別途動く）。
+ */
+export async function notifyLine(title: string, content: string): Promise<boolean> {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  const to = process.env.LINE_ADMIN_TARGET_ID;
+  if (!token || !to) return false;
+  try {
+    // LINEのテキストは1通5000文字上限。余裕を持って切り詰める。
+    const text = `${title}\n\n${content}`.slice(0, 4900);
+    const res = await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ to, messages: [{ type: 'text', text }] }),
+    });
+    if (!res.ok) {
+      console.error(`[Notification] LINE push失敗 status=${res.status}: ${await res.text().catch(() => '')}`);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[Notification] LINE push例外:', e);
+    return false;
+  }
+}
+
+/**
+ * Legacy notifyOwner - 管理者へメール＋LINEで通知する
  */
 export async function notifyOwner(payload: NotificationPayload): Promise<boolean> {
   console.log(`[Notification] ${payload.title}: ${payload.content}`);
@@ -147,6 +180,8 @@ export async function notifyOwner(payload: NotificationPayload): Promise<boolean
       html: `<div style="font-family: sans-serif;"><h2>${safeTitle}</h2><pre style="white-space: pre-wrap;">${safeContent}</pre></div>`,
     });
   }
+  // LINE設定があればLINEにも通知（メール失敗と切り離して実行）。
+  await notifyLine(payload.title, payload.content);
   return true;
 }
 
