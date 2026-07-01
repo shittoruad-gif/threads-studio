@@ -2249,6 +2249,30 @@ ${input.commentText}
           content: input.content,
           screenshotUrl: input.screenshotUrl,
         });
+        // ★運営へ即時メール通知（見に行かなくても気づけるように）。
+        //   ADMIN_NOTIFICATION_EMAIL 宛。失敗しても投稿自体は成功扱い。
+        try {
+          const categoryLabel: Record<string, string> = {
+            bug: 'バグ報告',
+            usability: '使いにくい点',
+            feature_request: '機能リクエスト',
+            other: 'その他',
+          };
+          const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
+          const { notifyOwner } = await import('./_core/notification');
+          await notifyOwner({
+            title: `📮 新しいご質問・ご要望（${categoryLabel[input.category] ?? input.category}）`,
+            content:
+              `送信者: ${ctx.user.name ?? '(名前未設定)'} <${ctx.user.email ?? '不明'}>\n` +
+              `ページ: ${input.page}\n` +
+              `カテゴリ: ${categoryLabel[input.category] ?? input.category}\n` +
+              (input.screenshotUrl ? `スクリーンショット: ${input.screenshotUrl}\n` : '') +
+              `\n内容:\n${input.content}\n` +
+              `\n管理画面で確認: ${base}/admin/feedback`,
+          });
+        } catch (e) {
+          console.error('[submitFeedback] 運営通知メール送信エラー:', e);
+        }
         return { success: true, id };
       }),
 
