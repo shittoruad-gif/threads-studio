@@ -31,16 +31,16 @@ export default function MonitorFeedbackWidget() {
         setSubmitted(false);
         setIsOpen(false);
       }, 2000);
-      toast.success('フィードバックを送信しました！ご協力ありがとうございます。');
+      toast.success('送信しました！ありがとうございます。');
     },
     onError: (err) => {
-      toast.error(err.message || 'フィードバックの送信に失敗しました');
+      toast.error(err.message || '送信に失敗しました');
     },
   });
 
   const handleSubmit = () => {
     if (!content.trim()) {
-      toast.error('フィードバック内容を入力してください');
+      toast.error('内容を入力してください');
       return;
     }
 
@@ -74,7 +74,7 @@ export default function MonitorFeedbackWidget() {
           <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageSquarePlus className="h-4 w-4 text-white" />
-              <span className="text-sm font-medium text-white">モニターフィードバック</span>
+              <span className="text-sm font-medium text-white">ご質問・ご要望</span>
             </div>
             <button
               onClick={() => setIsOpen(false)}
@@ -110,9 +110,9 @@ export default function MonitorFeedbackWidget() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">フィードバック内容</Label>
+              <Label className="text-xs">ご質問や改善してほしい点はこちら</Label>
               <Textarea
-                placeholder="お気づきの点やご要望をお聞かせください..."
+                placeholder="ご質問や改善してほしい点をご記入ください..."
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 className="text-sm min-h-[100px] resize-none"
@@ -135,7 +135,7 @@ export default function MonitorFeedbackWidget() {
               ) : (
                 <span className="flex items-center gap-2">
                   <Send className="h-3.5 w-3.5" />
-                  フィードバックを送信
+                  送信する
                 </span>
               )}
             </Button>
@@ -145,7 +145,7 @@ export default function MonitorFeedbackWidget() {
         <button
           onClick={() => setIsOpen(true)}
           className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full p-3.5 shadow-lg hover:shadow-xl transition-all hover:scale-105 group"
-          title="フィードバックを送信"
+          title="ご質問・ご要望"
         >
           <MessageSquarePlus className="h-5 w-5 group-hover:rotate-12 transition-transform" />
         </button>
