@@ -189,6 +189,7 @@ async function generateAutoPost(
         (project as any).n1Customer, (project as any).belief, (project as any).customerWords,
         counselingResult?.realProofs, counselingResult?.menu, counselingResult?.realEpisodes,
         counselingResult?.benefitsDaily, counselingResult?.ctaAssets, counselingResult?.faq,
+        counselingResult?.hoursInfo,
         counselingResult?.industryMyths, counselingResult?.originStory,
       );
       const g = scrubPost(result, supportedFacts);

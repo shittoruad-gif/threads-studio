@@ -49,6 +49,7 @@ export interface CounselingAnswers {
   brandVoiceRaw: string;
   uspRaw: string;
   menuRaw: string;                 // 主なメニュー・コース（実在のサービスだけ投稿に使う）
+  hoursInfoRaw: string;            // 営業時間・定休日・予約方法（固定投稿/Q&A/CTAの事実素材）
   realProofsRaw: string;
   realEpisodesRaw: string;
   benefitsDailyRaw: string;        // 来店後の「日常の変化」（ベネフィット変換の素材）
@@ -67,6 +68,7 @@ export interface CounselingAnswers {
 export interface CounselingResult {
   brandVoice: string;
   menu: string[];
+  hoursInfo: string[];
   realProofs: string[];
   realEpisodes: string[];
   benefitsDaily: string[];
@@ -234,6 +236,31 @@ export const COUNSELING_QUESTIONS: CounselingQuestion[] = [
     ],
     examples: [
       '例：「産後骨盤矯正コース」「猫背改善プログラム（全8回）」「肩こり頭痛専門コース」',
+    ],
+    allowEmptyShortcut: true,
+  },
+
+  // ──────────── Q3.5 営業時間・定休日・予約方法(hoursInfo) ────────────
+  {
+    id: 'hoursInfoRaw',
+    prompt:
+      '営業時間・定休日・予約方法を教えてください。\n\n固定投稿やQ&A、投稿の締めの案内で「事実として」使います（ここに書いていない時間・予約方法をAIが勝手に書くことはありません）。',
+    helper: '近いものをタップ→自店の内容に直してください。書きたくない場合は「なし」でOK。',
+    required: true,
+    ui: 'multiline-list',
+    suggestions: [
+      '平日 9:00〜20:00',
+      '土日祝も営業',
+      '定休日：日曜',
+      '定休日：不定休',
+      '完全予約制',
+      '当日予約OK',
+      'LINEで予約できます',
+      '電話・Webから予約できます',
+      '駐車場あり',
+    ],
+    examples: [
+      '例：「平日9時〜20時／土曜は17時まで」「定休日：日曜・祝日」「LINEか電話で予約（当日OK）」',
     ],
     allowEmptyShortcut: true,
   },
@@ -521,6 +548,7 @@ export function buildCounselingResult(
   return {
     brandVoice: (answers.brandVoiceRaw ?? '').trim(),
     menu: splitToList(answers.menuRaw ?? ''),
+    hoursInfo: splitToList(answers.hoursInfoRaw ?? ''),
     realProofs: splitToList(answers.realProofsRaw ?? ''),
     realEpisodes: splitToList(answers.realEpisodesRaw ?? ''),
     benefitsDaily: splitToList(answers.benefitsDailyRaw ?? ''),

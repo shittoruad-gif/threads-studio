@@ -706,6 +706,7 @@ export const appRouter = router({
           brandVoiceRaw: z.string().default(''),
           uspRaw: z.string().default(''),
           menuRaw: z.string().default(''),
+          hoursInfoRaw: z.string().default(''),
           realProofsRaw: z.string().default(''),
           realEpisodesRaw: z.string().default(''),
           benefitsDailyRaw: z.string().default(''),

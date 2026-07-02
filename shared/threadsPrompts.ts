@@ -180,6 +180,7 @@ export interface ThreadsPromptInput {
 export interface CounselingLike {
   brandVoice?: string;
   menu?: string[];
+  hoursInfo?: string[];
   realProofs?: string[];
   realEpisodes?: string[];
   benefitsDaily?: string[];
@@ -534,6 +535,13 @@ function buildSystemPrompt(
     if (counseling.menu && counseling.menu.length > 0) {
       lines.push(`- ★実際に提供しているメニュー・コース（このリストにあるものだけ施術内容として使用可・存在しないメニューを作らない）:`);
       counseling.menu.forEach((m) => lines.push(`    ・${m}`));
+    }
+    if (counseling.hoursInfo && counseling.hoursInfo.length > 0) {
+      lines.push(`- ★営業時間・定休日・予約方法（事実として使用可。固定投稿・Q&A・投稿の締めの案内に自然に使える）:`);
+      counseling.hoursInfo.forEach((h) => lines.push(`    ・${h}`));
+      lines.push('  → このリストに無い営業時間・定休日・予約方法を推測で書かないこと。');
+    } else {
+      lines.push(`- ★営業時間・予約方法: 未登録。営業時間・定休日・「当日予約OK」等の予約条件を投稿に書かないこと。`);
     }
     if (counseling.realProofs && counseling.realProofs.length > 0) {
       lines.push(`- ★使ってよい実績数字（このリストにあるものだけ使用可・捏造禁止）:`);
@@ -1129,6 +1137,16 @@ ${formatLinksForPrompt(input.links, input.postType)}
 
 【投稿タイプ】
 ${postTypeDescription}${localNote}${trendNote}${seasonalNote}${buzzNote}${ngWordsNote}${styleSamplesNote}
+
+【★会話設計（全投稿共通。Threadsはコメント＝会話量が最も評価される）】
+- 読者が「思わず返信したくなる」書き方を常に心がける：一方的な解説で完結させず、読者の体験・意見が入り込む余白を残す。
+- 投稿の締めは、次のいずれかの「開かれた終わり方」を基本にする：
+  ・軽い問いかけ（例の方向性：「みなさんはどっち派ですか？」「同じ経験ありませんか？」）
+  ・共感の相づちを打ちたくなる一言（例の方向性：「これ、うちだけじゃないはず」）
+  ・読者の状況を気づかう一言（例の方向性：「今日も無理しすぎていませんか」）
+- ただし例外：固定投稿（pinned）とオファー型（offer）はCTA（LINE・予約への導線）を優先し、無理に質問で締めない。
+- 「いいねして」「フォローして」「コメントください」等の直接要求（エンゲージメントベイト）はアルゴリズムのペナルティ対象なので絶対に書かない。問いかけはあくまで自然な会話として。
+- 【コメントが集まる型】の指定がある場合は、その型の構造を最優先する。
 
 【★安全基準（炎上・ブランド毀損・法令対策。例外なく厳守。満たせない内容は出力しない）】
 - 攻撃的・差別的、または政治的・宗教的に偏った発言を一切含めない。
