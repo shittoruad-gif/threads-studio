@@ -30,6 +30,15 @@ import { toast } from 'sonner';
 import { getLoginUrl } from '@/const';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import CouponModal from '@/components/CouponModal';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import TrialBanner from '@/components/TrialBanner';
 import OnboardingTour from '@/components/OnboardingTour';
 import ProjectExplanation from '@/components/ProjectExplanation';
@@ -52,6 +61,11 @@ export default function Dashboard() {
   const { user, isAuthenticated, loading, logout } = useAuth();
   const [location, setLocation] = useLocation();
   const [couponModalOpen, setCouponModalOpen] = useState(false);
+  // 解約アンケート（解約実行の前に理由を1タップで聞く）
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState<string>('');
+  const [cancelDetail, setCancelDetail] = useState('');
+  const submitCancelFeedback = trpc.subscription.submitCancellationFeedback.useMutation();
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [setupWizardOpen, setSetupWizardOpen] = useState(false);
   const utils = trpc.useUtils();
@@ -138,6 +152,8 @@ export default function Dashboard() {
     { enabled: isAuthenticated }
   );
 
+  // フォロワー推移（日次スナップショット。データが2日分たまると表示）
+  const { data: followerTrend } = trpc.stats.followerTrend.useQuery();
   const { data: aiUsage } = trpc.subscription.getAiUsage.useQuery(
     undefined,
     { enabled: isAuthenticated }
@@ -641,6 +657,62 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* フォロワーの伸び（日次スナップショットが2日分たまると表示） */}
+        {followerTrend && followerTrend.trend.length >= 2 && (
+          <div className="bg-background rounded-xl p-6 border border-border mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                  📈 フォロワーの伸び
+                </h2>
+                <p className="text-3xl font-bold text-foreground mt-1">
+                  {followerTrend.latest.toLocaleString()}
+                  <span className="text-sm font-normal text-muted-foreground ml-1">人</span>
+                </p>
+                <p className={`text-sm font-medium mt-0.5 ${followerTrend.weeklyDelta >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {followerTrend.weeklyDelta >= 0 ? '+' : ''}{followerTrend.weeklyDelta.toLocaleString()} この1週間
+                </p>
+              </div>
+              {/* 軽量SVGスパークライン（ライブラリ不使用） */}
+              <div className="flex-1 min-w-0">
+                {(() => {
+                  const pts = followerTrend.trend;
+                  const w = 320, h = 64, pad = 4;
+                  const min = Math.min(...pts.map((p) => p.followers));
+                  const max = Math.max(...pts.map((p) => p.followers));
+                  const range = Math.max(1, max - min);
+                  const coords = pts.map((p, i) => {
+                    const x = pad + (i * (w - pad * 2)) / Math.max(1, pts.length - 1);
+                    const y = h - pad - ((p.followers - min) * (h - pad * 2)) / range;
+                    return `${x.toFixed(1)},${y.toFixed(1)}`;
+                  });
+                  return (
+                    <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-sm h-16" preserveAspectRatio="none" role="img" aria-label="フォロワー数の推移グラフ">
+                      <polyline
+                        points={coords.join(' ')}
+                        fill="none"
+                        stroke="#10b981"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <circle
+                        cx={coords[coords.length - 1]?.split(',')[0]}
+                        cy={coords[coords.length - 1]?.split(',')[1]}
+                        r="3.5"
+                        fill="#10b981"
+                      />
+                    </svg>
+                  );
+                })()}
+                <p className="text-xs text-muted-foreground mt-1">
+                  直近{followerTrend.trend.length}日間（毎朝7時に自動記録）
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Usage Progress Section */}
         {subscription?.plan && (
           <div className="bg-background rounded-xl p-6 border border-border mb-8">
@@ -802,9 +874,9 @@ export default function Dashboard() {
                   variant="ghost"
                   className="text-red-500 hover:text-red-700 hover:bg-red-50"
                   onClick={() => {
-                    if (confirm('本当にサブスクリプションを解約しますか？')) {
-                      cancelSubscription.mutate();
-                    }
+                    setCancelReason('');
+                    setCancelDetail('');
+                    setCancelDialogOpen(true);
                   }}
                   disabled={cancelSubscription.isPending}
                 >
@@ -1184,6 +1256,70 @@ export default function Dashboard() {
           });
         }}
       />
+
+      {/* 解約アンケートダイアログ（理由を聞いてから解約を実行） */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>解約の前に、1つだけ教えてください</DialogTitle>
+            <DialogDescription>
+              今後のサービス改善のため、解約の理由をお聞かせください。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {[
+              { value: 'price', label: '💰 料金が高い' },
+              { value: 'no_effect', label: '📉 効果を感じられなかった' },
+              { value: 'hard_to_use', label: '🤔 使い方が難しい' },
+              { value: 'pause', label: '⏸ 一時的に休止したい' },
+              { value: 'other', label: '📝 その他' },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setCancelReason(opt.value)}
+                className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm transition-colors ${
+                  cancelReason === opt.value
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-medium'
+                    : 'border-border hover:bg-muted/50'
+                }`}
+              >
+                {cancelReason === opt.value ? '✓ ' : ''}{opt.label}
+              </button>
+            ))}
+            <Textarea
+              placeholder="よろしければ詳細をお聞かせください（任意）"
+              value={cancelDetail}
+              onChange={(e) => setCancelDetail(e.target.value)}
+              className="text-sm min-h-[70px]"
+              maxLength={1000}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
+              解約をやめる
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!cancelReason || submitCancelFeedback.isPending || cancelSubscription.isPending}
+              onClick={async () => {
+                try {
+                  await submitCancelFeedback.mutateAsync({
+                    reason: cancelReason as any,
+                    detail: cancelDetail || undefined,
+                  });
+                } catch {
+                  // アンケート送信失敗でも解約は妨げない
+                }
+                cancelSubscription.mutate();
+                setCancelDialogOpen(false);
+              }}
+            >
+              回答して解約する
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Setup Wizard */}
       <SetupWizard

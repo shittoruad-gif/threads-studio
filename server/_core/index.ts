@@ -1139,6 +1139,11 @@ async function startServer() {
   const { startWeeklyReportScheduler } = await import("../weeklyReport");
   startWeeklyReportScheduler();
 
+  // Daily ops: analytics auto-fetch + follower snapshots + hit-post archive
+  // + overdue approval reminders
+  const { initDailyOpsSchedulers } = await import("../dailyOpsJobs");
+  initDailyOpsSchedulers();
+
   // ★起動時キャッチアップ：デプロイ再起動でcron発火を跨いだ場合に
   //   その日の未実行ジョブを追い実行する（DB初期化が落ち着く60秒後）。
   setTimeout(async () => {

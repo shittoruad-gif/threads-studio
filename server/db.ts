@@ -24,7 +24,8 @@ import {
   passwordResetTokens, PasswordResetToken, InsertPasswordResetToken,
   postAnalytics, PostAnalytics, InsertPostAnalytics,
   monitorFeedback, MonitorFeedback, InsertMonitorFeedback,
-  jobRuns, JobRun
+  jobRuns, JobRun,
+  followerSnapshots, hitPostArchive, HitPostArchive, cancellationFeedback
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { PLANS } from '../shared/plans';
@@ -2421,6 +2422,125 @@ export async function getPostAnalyticsWithEngagement(userId: number) {
     : 0;
 
   return { posts: postsWithEngagement, avgEngagement };
+}
+
+// ==================== 成果の見える化・ヒット投稿アーカイブ ====================
+
+/** フォロワー数の日次スナップショットをupsert（同一アカウント×日は上書き＝冪等） */
+export async function upsertFollowerSnapshot(data: {
+  userId: number;
+  threadsAccountId: number;
+  followersCount: number;
+  capturedOn: string; // 'YYYY-MM-DD'(JST)
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(followerSnapshots)
+    .values(data)
+    .onDuplicateKeyUpdate({ set: { followersCount: data.followersCount } });
+}
+
+/**
+ * ユーザーのフォロワー推移（日別合計）。直近days日分を昇順で返す。
+ * 複数アカウント連携時は同日の合計値。
+ */
+export async function getFollowerTrend(
+  userId: number,
+  days: number = 14,
+): Promise<{ capturedOn: string; followers: number }[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({
+    capturedOn: followerSnapshots.capturedOn,
+    followers: sql<number>`SUM(${followerSnapshots.followersCount})`,
+  })
+    .from(followerSnapshots)
+    .where(eq(followerSnapshots.userId, userId))
+    .groupBy(followerSnapshots.capturedOn)
+    .orderBy(desc(followerSnapshots.capturedOn))
+    .limit(days);
+  return rows
+    .map((r) => ({ capturedOn: r.capturedOn, followers: Number(r.followers) }))
+    .reverse();
+}
+
+/** ヒット投稿を全ユーザー横断アーカイブへupsert（threadsPostIdでユニーク・数値は最新に更新） */
+export async function upsertHitPostArchive(data: {
+  userId: number;
+  threadsPostId: string;
+  businessType: string | null;
+  postContent: string | null;
+  impressions: number;
+  likes: number;
+  replies: number;
+  reposts: number;
+  engagement: number;
+  postedAt: Date | null;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(hitPostArchive)
+    .values(data)
+    .onDuplicateKeyUpdate({
+      set: {
+        impressions: data.impressions,
+        likes: data.likes,
+        replies: data.replies,
+        reposts: data.reposts,
+        engagement: data.engagement,
+        businessType: data.businessType,
+      },
+    });
+}
+
+/** ヒット投稿アーカイブ一覧（管理者用。エンゲージメント降順） */
+export async function listHitPostArchive(opts: {
+  businessType?: string;
+  limit: number;
+  offset: number;
+}): Promise<{ rows: HitPostArchive[]; total: number }> {
+  const db = await getDb();
+  if (!db) return { rows: [], total: 0 };
+  const cond = opts.businessType
+    ? sql`${hitPostArchive.businessType} LIKE ${'%' + opts.businessType + '%'}`
+    : sql`1=1`;
+  const rows = await db.select().from(hitPostArchive)
+    .where(cond)
+    .orderBy(desc(hitPostArchive.engagement))
+    .limit(opts.limit)
+    .offset(opts.offset);
+  const cnt = await db.select({ c: sql<number>`COUNT(*)` }).from(hitPostArchive).where(cond);
+  return { rows, total: Number(cnt[0]?.c ?? 0) };
+}
+
+/** 解約理由を保存 */
+export async function createCancellationFeedback(data: {
+  userId: number;
+  planId: string | null;
+  reason: string;
+  detail: string | null;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(cancellationFeedback).values(data);
+}
+
+/** 予定時刻を過ぎた承認待ち投稿（全ユーザー分。リマインド＋翌日スライド用） */
+export async function getOverdueAwaitingApprovalPosts(): Promise<ScheduledPost[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(scheduledPosts)
+    .where(and(
+      eq(scheduledPosts.status, 'awaiting_approval'),
+      lte(scheduledPosts.scheduledAt, new Date()),
+    ));
+}
+
+/** 予約投稿の時刻だけを更新（承認待ちの翌日スライド用） */
+export async function updateScheduledPostTime(postId: number, scheduledAt: Date): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(scheduledPosts).set({ scheduledAt }).where(eq(scheduledPosts.id, postId));
 }
 
 // ==================== Processing Timeout ====================

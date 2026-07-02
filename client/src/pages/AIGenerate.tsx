@@ -1698,6 +1698,38 @@ export default function AIGenerate() {
                       <span className="font-medium">おすすめの投稿時間：</span>
                       <p className="mt-1 text-muted-foreground">{editedPost.timingCandidate}</p>
                     </div>
+                    {/* トピックタグ候補（Threadsの投稿画面で「トピックを追加」に貼る。発見性UP） */}
+                    {(() => {
+                      const candidates = Array.from(new Set([
+                        ...(editForm.mainProblem || '').split(/[、,・\s/]+/).filter((s) => s.length >= 2 && s.length <= 12).slice(0, 2),
+                        (editForm.businessType || '').split(/[（(]/)[0].trim(),
+                        (editForm.area || '').split(/[都道府県市区町村]/).filter(Boolean).pop()?.trim() ?? '',
+                      ].filter((s) => s && s.length >= 2 && s.length <= 12)));
+                      if (candidates.length === 0) return null;
+                      return (
+                        <div>
+                          <span className="font-medium">トピックタグ候補：</span>
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {candidates.map((tag) => (
+                              <button
+                                key={tag}
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(tag).then(
+                                    () => toast.success(`「${tag}」をコピーしました。Threadsの「トピックを追加」に貼り付けてください`),
+                                    () => toast.error('コピーに失敗しました'),
+                                  );
+                                }}
+                                className="px-2.5 py-1 rounded-full text-xs bg-muted hover:bg-emerald-50 hover:text-emerald-700 border border-border transition-colors"
+                              >
+                                #{tag} 📋
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-1">タップでコピー。投稿時にThreadsの「トピックを追加」へ貼ると見つけてもらいやすくなります</p>
+                        </div>
+                      );
+                    })()}
                     <div>
                       <span className="font-medium">次回試してみること：</span>
                       <p className="mt-1 text-muted-foreground">{editedPost.improvement}</p>

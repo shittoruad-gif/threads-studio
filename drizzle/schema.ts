@@ -130,6 +130,66 @@ export const jobRuns = mysqlTable("jobRuns", {
 export type JobRun = typeof jobRuns.$inferSelect;
 
 /**
+ * フォロワー数の日次スナップショット。
+ * 「増えている実感」を見せるためのダッシュボード推移グラフ・週次レポートに使う。
+ * capturedOn は JST の 'YYYY-MM-DD'。アカウント×日でユニーク（日次冪等）。
+ */
+export const followerSnapshots = mysqlTable("followerSnapshots", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  threadsAccountId: int("threadsAccountId").notNull().references(() => threadsAccounts.id, { onDelete: "cascade" }),
+  followersCount: int("followersCount").notNull().default(0),
+  capturedOn: varchar("capturedOn", { length: 10 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uniq_snapshot_account_day").on(table.threadsAccountId, table.capturedOn),
+  index("idx_snapshot_user").on(table.userId),
+]);
+
+export type FollowerSnapshot = typeof followerSnapshots.$inferSelect;
+
+/**
+ * 伸びた投稿の全ユーザー横断アーカイブ。
+ * プロダクト改善（プロンプト・バズ型のアップデート）の学習素材として、
+ * 平均超えエンゲージメントの投稿を毎日自動で貯める。管理者のみ閲覧。
+ * ユーザー退会時は cascade で削除（プライバシー配慮）。
+ */
+export const hitPostArchive = mysqlTable("hitPostArchive", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  threadsPostId: varchar("threadsPostId", { length: 255 }).notNull(),
+  businessType: varchar("businessType", { length: 255 }),
+  postContent: text("postContent"),
+  impressions: int("impressions").notNull().default(0),
+  likes: int("likes").notNull().default(0),
+  replies: int("replies").notNull().default(0),
+  reposts: int("reposts").notNull().default(0),
+  engagement: int("engagement").notNull().default(0),
+  postedAt: timestamp("postedAt"),
+  archivedAt: timestamp("archivedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex("uniq_hit_post").on(table.threadsPostId),
+  index("idx_hit_business").on(table.businessType),
+]);
+
+export type HitPostArchive = typeof hitPostArchive.$inferSelect;
+
+/**
+ * 解約時アンケート。理由をワンタップで集めて改善に活かす。
+ */
+export const cancellationFeedback = mysqlTable("cancellationFeedback", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  planId: varchar("planId", { length: 50 }),
+  reason: varchar("reason", { length: 50 }).notNull(),
+  detail: text("detail"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type CancellationFeedback = typeof cancellationFeedback.$inferSelect;
+
+/**
  * Threads account connections (mock implementation for now)
  */
 export const threadsAccounts = mysqlTable("threadsAccounts", {

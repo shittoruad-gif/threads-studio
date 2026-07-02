@@ -49,6 +49,42 @@ export default function PostAnalytics() {
 
   const [activeTab, setActiveTab] = useState<"overview" | "ranking" | "timing">("overview");
 
+  // ── 当たり投稿 →「文体のお手本」への昇格 ──────────────────────
+  const { data: projectList } = trpc.project.list.useQuery();
+  const utils = trpc.useUtils();
+  const updateProject = trpc.project.update.useMutation({
+    onSuccess: () => {
+      toast.success('文体のお手本に追加しました！今後のAI生成がこの文体を参考にします');
+      utils.project.list.invalidate();
+    },
+    onError: (e) => toast.error(e.message || '追加に失敗しました'),
+  });
+  // 複数プロジェクト時の選択用
+  const [promoteContent, setPromoteContent] = useState<string | null>(null);
+
+  const doPromote = (project: { id: string; styleSamples?: string | null }, content: string) => {
+    const existing = (project.styleSamples || '').trim();
+    // 同一投稿の二重追加を防ぐ（先頭50文字で判定）
+    if (existing && content && existing.includes(content.slice(0, 50))) {
+      toast.info('この投稿はすでにお手本に追加されています');
+      return;
+    }
+    let next = existing ? `${existing}\n---\n${content}` : content;
+    // プロンプト側の上限(2000字)に合わせ、超える場合は古いお手本から削る
+    while (next.length > 2000 && next.includes('\n---\n')) {
+      next = next.slice(next.indexOf('\n---\n') + 5);
+    }
+    updateProject.mutate({ id: project.id, styleSamples: next });
+  };
+
+  const handlePromote = (content: string | null) => {
+    if (!content?.trim()) { toast.error('本文が取得できない投稿です'); return; }
+    const projects = projectList || [];
+    if (projects.length === 0) { toast.error('プロジェクトがありません'); return; }
+    if (projects.length === 1) { doPromote(projects[0] as any, content.trim()); return; }
+    setPromoteContent(content.trim()); // 複数ある場合は選択ダイアログ
+  };
+
   const posts = analyticsData?.posts ?? [];
   const avgEngagement = analyticsData?.avgEngagement ?? 0;
   const hitPostIds = new Set(hitPostsData?.hitPosts?.map((p) => p.threadsPostId) ?? []);
@@ -460,6 +496,16 @@ export default function PostAnalytics() {
                                 </Badge>
                               )}
                             </div>
+                            {isHit && (
+                              <button
+                                type="button"
+                                onClick={() => handlePromote(post.postContent)}
+                                disabled={updateProject.isPending}
+                                className="mb-1 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1 hover:bg-emerald-100 transition-colors"
+                              >
+                                ✍️ 文体のお手本に追加
+                              </button>
+                            )}
                             <div className="flex flex-wrap gap-2 sm:gap-4 text-xs text-muted-foreground">
                               <span className="flex items-center gap-1">
                                 <Eye className="w-3 h-3" />
@@ -585,6 +631,29 @@ export default function PostAnalytics() {
           </>
         )}
       </div>
+
+      {/* 複数プロジェクト時：どの店舗のお手本に追加するか選ぶ */}
+      {promoteContent && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setPromoteContent(null)}>
+          <div className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+            <p className="font-semibold text-foreground mb-1">どの店舗のお手本に追加しますか？</p>
+            <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{promoteContent}</p>
+            <div className="space-y-2">
+              {(projectList || []).map((p: any) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="w-full text-left px-4 py-2.5 rounded-lg border border-border text-sm hover:bg-emerald-50 hover:border-emerald-300 transition-colors"
+                  onClick={() => { doPromote(p, promoteContent); setPromoteContent(null); }}
+                >
+                  {p.name || p.businessType || p.id}
+                </button>
+              ))}
+            </div>
+            <Button variant="ghost" className="w-full mt-3" onClick={() => setPromoteContent(null)}>キャンセル</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

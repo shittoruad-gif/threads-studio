@@ -27,6 +27,7 @@ import {
   X,
   CreditCard,
   MessageCircle,
+  Flame,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -75,6 +76,7 @@ const adminMenuItems: MenuItem[] = [
   { icon: CreditCard, label: "クーポン管理", path: "/admin/coupons", adminOnly: true },
   { icon: Sliders, label: "プリセット管理", path: "/admin/presets", adminOnly: true },
   { icon: MessageCircle, label: "フィードバック", path: "/admin/feedback", adminOnly: true },
+  { icon: Flame, label: "伸びた投稿", path: "/admin/hit-posts", adminOnly: true },
 ];
 
 export default function DashboardLayout({

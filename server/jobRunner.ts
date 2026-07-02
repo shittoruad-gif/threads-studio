@@ -90,7 +90,12 @@ async function jobRegistry(): Promise<TrackedJob[]> {
   const { checkTrialReminders } = await import('./trialReminder');
   const { runPaymentFollowUp } = await import('./paymentFollowUp');
   const { runWeeklyReportBatch } = await import('./weeklyReport');
+  const { runAnalyticsSnapshotJob, runApprovalReminderJob } = await import('./dailyOpsJobs');
   return [
+    // dailyOpsJobs: '0 22 * * *' UTC（7:00 JST）
+    { name: 'analytics_snapshot', hour: 22, minute: 0, tzOffsetHours: 0, maxStalenessHours: 16, run: runAnalyticsSnapshotJob },
+    // dailyOpsJobs: '0 23 * * *' UTC（8:00 JST）
+    { name: 'approval_reminder', hour: 23, minute: 0, tzOffsetHours: 0, maxStalenessHours: 16, run: runApprovalReminderJob },
     // autoPostScheduler: '0 6 * * *' timezone Asia/Tokyo
     { name: 'auto_post_generation', hour: 6, minute: 0, tzOffsetHours: 9, maxStalenessHours: 16, run: processAutoPostGeneration },
     // trialReminder: '0 9 * * *'（TZ指定なし＝サーバローカル。コンテナはUTC）

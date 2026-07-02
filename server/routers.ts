@@ -439,6 +439,42 @@ export const appRouter = router({
       return await db.getAiGenerationUsage(ctx.user.id);
     }),
 
+    // 解約時アンケート（解約処理の前に呼ぶ。保存＋運営へ通知）
+    submitCancellationFeedback: protectedProcedure
+      .input(z.object({
+        reason: z.enum(['price', 'no_effect', 'hard_to_use', 'pause', 'other']),
+        detail: z.string().max(1000).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const subscription = await db.getSubscriptionByUserId(ctx.user.id);
+        await db.createCancellationFeedback({
+          userId: ctx.user.id,
+          planId: subscription?.planId ?? null,
+          reason: input.reason,
+          detail: input.detail?.trim() || null,
+        });
+        const reasonLabel: Record<string, string> = {
+          price: '料金が高い',
+          no_effect: '効果を感じられなかった',
+          hard_to_use: '使い方が難しい',
+          pause: '一時的に休止したい',
+          other: 'その他',
+        };
+        try {
+          const { notifyOwner } = await import('./_core/notification');
+          await notifyOwner({
+            title: `📝 解約アンケート: ${ctx.user.name ?? ctx.user.email}`,
+            content:
+              `顧客: ${ctx.user.name ?? '(名前未設定)'} <${ctx.user.email ?? '不明'}>\n` +
+              `プラン: ${subscription?.planId ?? '不明'}\n` +
+              `理由: ${reasonLabel[input.reason] ?? input.reason}\n` +
+              (input.detail?.trim() ? `詳細: ${input.detail.trim()}\n` : '') +
+              `\n※ このあと解約処理が実行されます。フォローで引き止められる可能性があれば早めのご連絡を。`,
+          });
+        } catch (e) { console.error('[cancelFeedback] 通知失敗:', e); }
+        return { success: true };
+      }),
+
     // Create checkout session for subscription
     createCheckout: protectedProcedure
       .input(z.object({ planId: z.string() }))
@@ -2559,46 +2595,47 @@ ${input.commentText}
 
     // Fetch and store analytics from Threads API for a user's posts
     fetchAndStoreAnalytics: protectedProcedure.mutation(async ({ ctx }) => {
-      const { getThreadsUserPosts, getThreadsPostInsights } = await import("./threadsApi");
-
-      // Get user's connected Threads accounts
       const accounts = await db.getThreadsAccountsByUserId(ctx.user.id);
       if (accounts.length === 0) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Threadsアカウントが連携されていません。' });
       }
-
-      let totalFetched = 0;
-
-      for (const account of accounts) {
-        // Fetch recent posts
-        const posts = await getThreadsUserPosts(account.accessToken, account.threadsUserId, 25);
-
-        // Fetch insights for each post
-        for (const post of posts) {
-          const insights = await getThreadsPostInsights(account.accessToken, post.id);
-
-          await db.upsertPostAnalytics({
-            userId: ctx.user.id,
-            threadsPostId: post.id,
-            postContent: post.text || null,
-            postPermalink: post.permalink || null,
-            postedAt: post.timestamp ? new Date(post.timestamp) : null,
-            impressions: insights.views,
-            likes: insights.likes,
-            replies: insights.replies,
-            reposts: insights.reposts,
-            fetchedAt: new Date(),
-          });
-          totalFetched++;
-        }
-      }
-
+      // 日次自動取得（dailyOpsJobs）と同じ共通処理を使う
+      const { fetchAndStoreAnalyticsForUser } = await import("./dailyOpsJobs");
+      const totalFetched = await fetchAndStoreAnalyticsForUser(ctx.user.id);
       return { success: true, fetchedCount: totalFetched };
+    }),
+
+    // フォロワー推移（日次スナップショットの合計。ダッシュボードのミニグラフ用）
+    followerTrend: protectedProcedure.query(async ({ ctx }) => {
+      const trend = await db.getFollowerTrend(ctx.user.id, 14);
+      const latest = trend.length > 0 ? trend[trend.length - 1].followers : 0;
+      // 7日前（無ければ最古）との差分
+      const baseIdx = Math.max(0, trend.length - 8);
+      const weeklyDelta = trend.length >= 2 ? latest - trend[baseIdx].followers : 0;
+      return { trend, latest, weeklyDelta };
     }),
   }),
 
   // ============ Admin Management ============
   admin: router({
+    // 全ユーザー横断ヒット投稿アーカイブ（プロンプト改善の学習素材。管理者のみ）
+    listHitPostArchive: protectedProcedure
+      .input(z.object({
+        businessType: z.string().optional(),
+        limit: z.number().min(1).max(500).default(100),
+        offset: z.number().min(0).default(0),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '管理者権限が必要です。' });
+        }
+        return await db.listHitPostArchive({
+          businessType: input.businessType?.trim() || undefined,
+          limit: input.limit,
+          offset: input.offset,
+        });
+      }),
+
     // List all coupons (admin only)
     listCoupons: protectedProcedure
       .input(z.object({
