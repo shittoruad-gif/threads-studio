@@ -140,6 +140,12 @@ export interface ThreadsPromptInput {
    * AIには「このネタを軸に、捏造せず院の強みに絡めて書く」ことを指示する。
    */
   seasonalTopic?: string;
+  /**
+   * コメントが集まる型（ポジティブバズパターン）。shared/buzzPatterns.ts の
+   * 静的データ由来の「ラベル：構造指示」文字列。実際のThreadsバズ投稿の
+   * リサーチに基づく型で、温かいコメント・会話を自然に生む構造を指示する。
+   */
+  buzzPattern?: string;
   purpose?: PostPurpose; // 投稿の目的（cv/awareness/authority/fan）
   tone?: PostTone;      // 投稿の口調
   /**
@@ -1042,6 +1048,7 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
     styleSamples: sanitizeForPrompt(input.styleSamples, 2000),
     trendWord: sanitizeForPrompt(input.trendWord, 60),
     seasonalTopic: sanitizeForPrompt(input.seasonalTopic, 300),
+    buzzPattern: sanitizeForPrompt(input.buzzPattern, 800),
     link: sanitizeForPrompt(input.link, 200),
   };
 
@@ -1087,6 +1094,11 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
     ? `\n\n【季節ネタの追加指示】\n- 今回は次の季節ネタを投稿の軸にすること：「${safe.seasonalTopic}」\n- この切り口は一般的な季節の事実。ここに書かれていない具体的なイベント名・日付・統計数値を推測で加えないこと。\n- 季節の話題で共感を作ってから、入力情報にある店舗の強み・ターゲットの悩みに自然につなげる。`
     : '';
 
+  // コメントが集まる型（ポジティブバズパターン）が指定されていれば、その構造に従う
+  const buzzNote = safe.buzzPattern
+    ? `\n\n【★コメントが集まる型の追加指示（実際のThreadsバズ投稿のリサーチに基づく構造。最優先で従うこと）】\n- 今回は次の型で投稿を構成すること：${safe.buzzPattern}\n- Threadsは「会話量」が最も評価される。読者が思わず返信したくなる自然な問いかけ・余白を作ること。\n- ただし「いいねして」「フォローして」「コメントして」等の直接要求（エンゲージメントベイト）はアルゴリズムのペナルティ対象なので絶対に書かない。質問や開かれた締め方で自然に会話を生む。\n- 批判・皮肉・「物申す」調は使わない（この型はポジティブな反応を集めることが目的）。\n- エピソード・数値・固有名詞は入力情報にある事実だけを使う（この型のためでも捏造は絶対にしない）。`
+    : '';
+
   // ユーザー指定のNGワード（投稿に入れたくない言葉）。最優先で禁止する。
   const ngWordsClean = Array.isArray(input.ngWords)
     ? Array.from(new Set(input.ngWords.map((w) => sanitizeForPrompt(w, 60)).filter(Boolean)))
@@ -1116,7 +1128,7 @@ ${safe.trendWord ? `- トレンドワード：${safe.trendWord}` : ''}
 ${formatLinksForPrompt(input.links, input.postType)}
 
 【投稿タイプ】
-${postTypeDescription}${localNote}${trendNote}${seasonalNote}${ngWordsNote}${styleSamplesNote}
+${postTypeDescription}${localNote}${trendNote}${seasonalNote}${buzzNote}${ngWordsNote}${styleSamplesNote}
 
 【★安全基準（炎上・ブランド毀損・法令対策。例外なく厳守。満たせない内容は出力しない）】
 - 攻撃的・差別的、または政治的・宗教的に偏った発言を一切含めない。

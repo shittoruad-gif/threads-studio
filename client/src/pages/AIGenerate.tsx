@@ -14,6 +14,7 @@ import { POST_TYPES, POST_PURPOSES, POST_PURPOSES_LIST, POST_TONES, POST_TONES_L
 import type { PostPurpose, PostTone } from '@shared/threadsPrompts';
 import { THREAD_SEGMENT_DELIMITER } from '@shared/const';
 import { getSeasonalTopics } from '@shared/seasonalTopics';
+import { BUZZ_PATTERNS } from '@shared/buzzPatterns';
 
 // 投稿を「連続投稿（ツリー）」のセグメント区切りで連結する。
 // メイン・続きの投稿・最後のひと押し をそれぞれ独立した投稿（返信チェーン）として送るため。
@@ -77,6 +78,12 @@ export default function AIGenerate() {
   const [seasonalTopic, setSeasonalTopic] = useState<string>('');
   const seasonalTopics = getSeasonalTopics();
   const currentMonth = new Date().getMonth() + 1;
+  // コメントが集まる型（バズパターン）。選択中パターンのid。空 = 未使用。季節ネタと併用可。
+  const [buzzPatternId, setBuzzPatternId] = useState<string>('');
+  const selectedBuzzPattern = BUZZ_PATTERNS.find((p) => p.id === buzzPatternId);
+  const buzzPatternValue = selectedBuzzPattern
+    ? `${selectedBuzzPattern.label}：${selectedBuzzPattern.hint}`
+    : '';
   const [tone, setTone] = useState<PostTone | null>(null);
   const [generatedPost, setGeneratedPost] = useState<GeneratedPost | null>(null);
   const [editedPost, setEditedPost] = useState<GeneratedPost | null>(null);
@@ -448,6 +455,7 @@ export default function AIGenerate() {
         treeCount: postType === 'pinned' ? 0 : treeCount,
         trendWord: postType === 'trend' ? trendWord : undefined,
         seasonalTopic: seasonalTopic || undefined,
+        buzzPattern: buzzPatternValue || undefined,
         purpose: purpose || undefined,
         tone: tone || undefined,
       });
@@ -486,6 +494,7 @@ export default function AIGenerate() {
               treeCount: pt === 'pinned' ? 0 : treeCount,
               trendWord: pt === 'trend' ? trendWord : undefined,
               seasonalTopic: seasonalTopic || undefined,
+              buzzPattern: buzzPatternValue || undefined,
               purpose: purpose || undefined,
               tone: tone || undefined,
             })
@@ -867,6 +876,39 @@ export default function AIGenerate() {
                     )}
                   </div>
                 )}
+
+                {/* コメントが集まる型（実際のThreadsバズ投稿リサーチ由来）。選択は任意・季節ネタと併用可 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <Label>💬 コメントが集まる型（任意）</Label>
+                    <HelpTooltip content="実際のThreadsでポジティブにバズっている投稿を分析した「型」です。選ぶと、温かいコメントや会話が生まれやすい構成で投稿を作ります。もう一度押すと解除できます" />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {BUZZ_PATTERNS.map((p) => {
+                      const selected = buzzPatternId === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setBuzzPatternId(selected ? '' : p.id)}
+                          title={p.description}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                            selected
+                              ? 'bg-sky-600 text-white border-sky-600'
+                              : 'bg-background text-foreground/80 border-border hover:bg-sky-50 hover:border-sky-300'
+                          }`}
+                        >
+                          {selected ? '✓ ' : `${p.emoji} `}{p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {selectedBuzzPattern && (
+                    <p className="text-xs text-sky-700">
+                      {selectedBuzzPattern.emoji} {selectedBuzzPattern.description}
+                    </p>
+                  )}
+                </div>
 
                 {/* 固定投稿は常に1投稿のみ。treeCount セレクタは隠す。 */}
                 {postType !== 'pinned' ? (
