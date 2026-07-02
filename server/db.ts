@@ -23,7 +23,8 @@ import {
   creditTransactions, CreditTransaction, InsertCreditTransaction,
   passwordResetTokens, PasswordResetToken, InsertPasswordResetToken,
   postAnalytics, PostAnalytics, InsertPostAnalytics,
-  monitorFeedback, MonitorFeedback, InsertMonitorFeedback
+  monitorFeedback, MonitorFeedback, InsertMonitorFeedback,
+  jobRuns, JobRun
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { PLANS } from '../shared/plans';
@@ -288,7 +289,7 @@ export async function getSubscriptionsWithPaymentIssues(): Promise<Subscription[
 }
 
 export async function updateSubscription(
-  subscriptionId: number, 
+  subscriptionId: number,
   data: Partial<InsertSubscription>
 ): Promise<void> {
   const db = await getDb();
@@ -297,6 +298,29 @@ export async function updateSubscription(
   await db.update(subscriptions)
     .set(data)
     .where(eq(subscriptions.id, subscriptionId));
+}
+
+// ============ Job Run Tracking（cron欠落キャッチアップ用） ============
+
+export async function getJobRun(jobName: string): Promise<JobRun | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(jobRuns).where(eq(jobRuns.jobName, jobName)).limit(1);
+  return rows[0];
+}
+
+export async function recordJobRun(
+  jobName: string,
+  status: 'success' | 'error',
+  error?: string,
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(jobRuns)
+    .values({ jobName, lastRunAt: new Date(), lastStatus: status, lastError: error ?? null })
+    .onDuplicateKeyUpdate({
+      set: { lastRunAt: new Date(), lastStatus: status, lastError: error ?? null },
+    });
 }
 
 // ============ Threads Account Functions ============

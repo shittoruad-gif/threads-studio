@@ -133,7 +133,14 @@ export default function Pricing() {
   const createCheckout = trpc.subscription.createCheckout.useMutation({
     onSuccess: (data) => {
       if (data.url) {
-        toast.info('決済ページに移動します...');
+        // 決済メール≠登録メールだとWebhookでユーザー特定できず自動反映されないため、
+        // 遷移の瞬間に必ず注意を出す。
+        toast.info('決済ページに移動します...', {
+          description: user?.email
+            ? `お支払い画面では、ご登録のメールアドレス（${user.email}）をご入力ください。`
+            : 'お支払い画面では、アプリにご登録のメールアドレスをご入力ください。',
+          duration: 10000,
+        });
         window.open(data.url, '_blank');
       }
     },
@@ -348,6 +355,17 @@ export default function Pricing() {
             );
           })}
         </div>
+
+        {/* 決済メール＝登録メールの注意（Webhook自動反映のため） */}
+        {isAuthenticated && (
+          <div className="max-w-3xl mx-auto -mt-8 mb-16 text-center">
+            <p className="text-sm text-muted-foreground bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 inline-block">
+              💡 お支払い手続きの際は、アプリにご登録のメールアドレス
+              {user?.email ? <span className="font-semibold text-foreground">（{user.email}）</span> : ''}
+              をご入力ください。別のメールアドレスですと、プランの自動反映ができない場合があります。
+            </p>
+          </div>
+        )}
 
         {/* Detailed Comparison Table */}
         <div className="max-w-7xl mx-auto mb-20">

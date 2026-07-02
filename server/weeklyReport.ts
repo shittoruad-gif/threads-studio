@@ -140,31 +140,34 @@ export async function sendWeeklyReportEmail(userId: number): Promise<boolean> {
 }
 
 /**
+ * 週次レポートの一括送信（cron本体・起動時キャッチアップの両方から呼ぶ）
+ */
+export async function runWeeklyReportBatch(): Promise<void> {
+  console.log('[WeeklyReport] Starting weekly report generation...');
+  const users = await db.getProPlusUsers();
+  console.log(`[WeeklyReport] Sending reports to ${users.length} pro+ users`);
+
+  for (const user of users) {
+    try {
+      await sendWeeklyReportEmail(user.id);
+      console.log(`[WeeklyReport] Sent report to user ${user.id} (${user.email})`);
+    } catch (error) {
+      console.error(`[WeeklyReport] Failed to send report to user ${user.id}:`, error);
+    }
+  }
+
+  console.log('[WeeklyReport] Weekly report generation complete');
+}
+
+/**
  * Start the weekly report scheduler
  * Runs every Monday at 9:00 AM JST (0:00 UTC)
  */
 export function startWeeklyReportScheduler() {
   // Monday at 9:00 AM JST = Monday 0:00 UTC
   cron.schedule('0 0 * * 1', async () => {
-    console.log('[WeeklyReport] Starting weekly report generation...');
-
-    try {
-      const users = await db.getProPlusUsers();
-      console.log(`[WeeklyReport] Sending reports to ${users.length} pro+ users`);
-
-      for (const user of users) {
-        try {
-          await sendWeeklyReportEmail(user.id);
-          console.log(`[WeeklyReport] Sent report to user ${user.id} (${user.email})`);
-        } catch (error) {
-          console.error(`[WeeklyReport] Failed to send report to user ${user.id}:`, error);
-        }
-      }
-
-      console.log('[WeeklyReport] Weekly report generation complete');
-    } catch (error) {
-      console.error('[WeeklyReport] Error in weekly report scheduler:', error);
-    }
+    const { runTrackedJob } = await import('./jobRunner');
+    await runTrackedJob('weekly_report', runWeeklyReportBatch);
   });
 
   console.log('[WeeklyReport] Scheduler started - runs every Monday at 9:00 AM JST');

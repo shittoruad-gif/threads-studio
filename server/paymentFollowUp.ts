@@ -121,7 +121,8 @@ export async function runPaymentFollowUp(now: Date = new Date()): Promise<void> 
 export function initPaymentFollowUpScheduler(): void {
   cron.schedule("30 9 * * *", async () => {
     console.log("[PaymentFollowUp] 日次の決済失敗フォローを実行...");
-    await runPaymentFollowUp();
+    const { runTrackedJob } = await import("./jobRunner");
+    await runTrackedJob("payment_follow_up", () => runPaymentFollowUp());
   });
   console.log("[PaymentFollowUp] Scheduler initialized - runs daily at 9:30 AM");
 }

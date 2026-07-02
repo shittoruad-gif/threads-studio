@@ -413,12 +413,12 @@ export function startAutoPostScheduler() {
   // Run daily at 6:00 AM (JST = UTC+9, so 21:00 UTC previous day)
   cron.schedule('0 6 * * *', async () => {
     console.log('[AutoPost Scheduler] Running daily auto-post generation...');
-    try {
+    // 実行記録＋失敗時の運営通報は runTrackedJob に一元化（起動時キャッチアップ対応）
+    const { runTrackedJob } = await import('./jobRunner');
+    await runTrackedJob('auto_post_generation', async () => {
       const result = await processAutoPostGeneration();
       console.log(`[AutoPost Scheduler] Complete: ${result.generated} generated, ${result.failed} failed out of ${result.processed} users`);
-    } catch (error) {
-      console.error('[AutoPost Scheduler] Fatal error in daily generation:', error);
-    }
+    });
   }, {
     timezone: 'Asia/Tokyo',
   });

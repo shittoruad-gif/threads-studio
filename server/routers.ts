@@ -393,6 +393,11 @@ export const appRouter = router({
           trialEndsAt: null,
           currentPeriodEnd: null,
           cancelAtPeriodEnd: false,
+          // 決済失敗フォロー用（未契約なので常に無し）
+          isPaymentPastDue: false,
+          failedPaymentCount: 0,
+          reRegisterUrl: null as string | null,
+          contractPlanName: null as string | null,
         };
       }
 

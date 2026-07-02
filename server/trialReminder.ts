@@ -7,8 +7,9 @@ import { getPlan } from "../shared/plans";
 
 /**
  * Check for trials ending soon and send reminders
+ * （キャッチアップ実行のため export。jobRunner から再利用する）
  */
-async function checkTrialReminders() {
+export async function checkTrialReminders() {
   const now = new Date();
   
   // 3日後の日時
@@ -151,7 +152,8 @@ export function initTrialReminderScheduler() {
   // 毎日午前9時に実行
   cron.schedule("0 9 * * *", async () => {
     console.log("[TrialReminder] Running daily trial reminder check...");
-    await checkTrialReminders();
+    const { runTrackedJob } = await import("./jobRunner");
+    await runTrackedJob("trial_reminder", checkTrialReminders);
   });
 
   console.log("[TrialReminder] Scheduler initialized - will check daily at 9:00 AM");

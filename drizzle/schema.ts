@@ -115,6 +115,21 @@ export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = typeof subscriptions.$inferInsert;
 
 /**
+ * バックグラウンドジョブの実行記録。
+ * デプロイ再起動とcron時刻が重なって「その日のジョブが丸ごと飛ぶ」事故を防ぐため、
+ * 各ジョブの最終実行を記録し、サーバ起動時に未実行分をキャッチアップする。
+ */
+export const jobRuns = mysqlTable("jobRuns", {
+  jobName: varchar("jobName", { length: 100 }).primaryKey(),
+  lastRunAt: timestamp("lastRunAt").notNull(),
+  lastStatus: varchar("lastStatus", { length: 20 }).notNull().default("success"), // success | error
+  lastError: text("lastError"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type JobRun = typeof jobRuns.$inferSelect;
+
+/**
  * Threads account connections (mock implementation for now)
  */
 export const threadsAccounts = mysqlTable("threadsAccounts", {

@@ -28,7 +28,7 @@ import {
 import { useLocation } from 'wouter';
 import { toast } from 'sonner';
 import { getLoginUrl } from '@/const';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import CouponModal from '@/components/CouponModal';
 import TrialBanner from '@/components/TrialBanner';
 import OnboardingTour from '@/components/OnboardingTour';
@@ -39,7 +39,10 @@ import { UsageProgress } from '@/components/UsageProgress';
 import SetupWizard from '@/components/SetupWizard';
 import { DemoModeBanner } from '@/components/DemoModeBanner';
 import { SetupProgress } from '@/components/SetupProgress';
-import { AIChatWidget } from '@/components/AIChatWidget';
+// AIChatWidgetはmarkdownレンダラ（streamdown/shiki）を引き込み重いため遅延ロード
+const AIChatWidget = lazy(() =>
+  import('@/components/AIChatWidget').then((m) => ({ default: m.AIChatWidget })),
+);
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
 import WeeklyCalendarView from '@/components/WeeklyCalendarView';
 import ErrorGuide from '@/components/ErrorGuide';
@@ -246,7 +249,7 @@ export default function Dashboard() {
         )}
 
         {/* カード決済失敗（past_due）→ カード再登録への強い導線 */}
-        {(subscription as any)?.isPaymentPastDue && (
+        {subscription?.isPaymentPastDue && (
           <div className="mb-6 bg-red-50 border-2 border-red-300 rounded-xl p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <div className="min-w-0 flex-1">
@@ -254,14 +257,14 @@ export default function Dashboard() {
                   ⚠️ カードのお引き落としに失敗しました
                 </p>
                 <p className="text-xs sm:text-sm text-red-600 mt-1 leading-relaxed">
-                  {(subscription as any)?.contractPlanName ? `「${(subscription as any).contractPlanName}」の` : ''}
+                  {subscription.contractPlanName ? `「${subscription.contractPlanName}」の` : ''}
                   自動更新ができていません。サービス停止を避けるため、お早めにカード情報を再登録してください。
                   （有効期限切れ・残高不足・利用停止などが原因として考えられます）
                 </p>
               </div>
               <a
-                href={(subscription as any)?.reRegisterUrl || '/pricing'}
-                {...((subscription as any)?.reRegisterUrl ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                href={subscription.reRegisterUrl || '/pricing'}
+                {...(subscription.reRegisterUrl ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 className="shrink-0 inline-flex items-center justify-center rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold px-5 py-2.5 text-sm transition-colors"
               >
                 カード情報を再登録する
@@ -1195,7 +1198,9 @@ export default function Dashboard() {
       />
 
       {/* AI Chat Widget */}
-      <AIChatWidget />
+      <Suspense fallback={null}>
+        <AIChatWidget />
+      </Suspense>
     </div>
   );
 }

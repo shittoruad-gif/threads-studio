@@ -113,6 +113,42 @@ async function startServer() {
   }
 
   const app = express();
+
+  // ── 5xxバースト検知（サイレント障害の運営通報）─────────────────────
+  //   直近10分間の5xx応答が閾値を超えたら運営へメール＋LINE通報（1時間に1回まで）。
+  //   個別のエラー処理は各ハンドラに任せ、ここは「気づく」ことだけを担う。
+  const FIVEXX_WINDOW_MS = 10 * 60 * 1000;
+  const FIVEXX_THRESHOLD = 5;
+  const FIVEXX_NOTIFY_INTERVAL_MS = 60 * 60 * 1000;
+  let fivexxTimestamps: number[] = [];
+  let fivexxLastNotifiedAt = 0;
+  app.use((req, res, next) => {
+    res.on('finish', () => {
+      if (res.statusCode < 500) return;
+      const now = Date.now();
+      fivexxTimestamps = fivexxTimestamps.filter((t) => now - t < FIVEXX_WINDOW_MS);
+      fivexxTimestamps.push(now);
+      if (
+        fivexxTimestamps.length >= FIVEXX_THRESHOLD &&
+        now - fivexxLastNotifiedAt > FIVEXX_NOTIFY_INTERVAL_MS
+      ) {
+        fivexxLastNotifiedAt = now;
+        const count = fivexxTimestamps.length;
+        import('./notification')
+          .then(({ notifyOwner }) =>
+            notifyOwner({
+              title: `🚨 サーバエラー多発: 10分間に5xxが${count}件`,
+              content:
+                `直近10分間で ${count} 件の5xx応答が発生しています。\n` +
+                `直近の例: ${req.method} ${req.originalUrl} → ${res.statusCode}\n` +
+                `サーバログの確認をおすすめします（通報は1時間に1回まで）。`,
+            }),
+          )
+          .catch((e) => console.error('[5xxAlert] 通報失敗:', e));
+      }
+    });
+    next();
+  });
   app.set('trust proxy', 1);
   const server = createServer(app);
 
@@ -371,7 +407,19 @@ async function startServer() {
               await notifyPlanResolutionIssueToUser(user.email);
             } catch {}
           } else {
-            const currentPeriodEnd = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000);
+            // 次回課金日はUnivapayのペイロードにあればそれを使う（月末ズレの累積防止）。
+            // 見つからなければ従来どおり +31日 にフォールバック。
+            const nextPaymentRaw =
+              data?.subscription?.next_payment?.due_date ??
+              data?.subscription?.next_payment?.date ??
+              data?.next_payment?.due_date ??
+              data?.next_payment?.date ??
+              null;
+            const parsedNext = nextPaymentRaw ? new Date(nextPaymentRaw) : null;
+            const currentPeriodEnd =
+              parsedNext && !isNaN(parsedNext.getTime()) && parsedNext.getTime() > Date.now()
+                ? parsedNext
+                : new Date(Date.now() + 31 * 24 * 60 * 60 * 1000);
             // ★#2 キャンペーンプランの課金回数を数える（規定回数で自動解約）。
             //   ★Webhook再送対策：同じ課金イベントIDなら回数を増やさない（二重カウント防止）。
             const chargedPlan = getPlan(planId);
@@ -1090,6 +1138,17 @@ async function startServer() {
   // Start weekly report scheduler (Monday 9:00 AM JST, pro+ users only)
   const { startWeeklyReportScheduler } = await import("../weeklyReport");
   startWeeklyReportScheduler();
+
+  // ★起動時キャッチアップ：デプロイ再起動でcron発火を跨いだ場合に
+  //   その日の未実行ジョブを追い実行する（DB初期化が落ち着く60秒後）。
+  setTimeout(async () => {
+    try {
+      const { catchUpMissedJobs } = await import("../jobRunner");
+      await catchUpMissedJobs();
+    } catch (e) {
+      console.error("[JobRunner] 起動時キャッチアップ失敗:", e);
+    }
+  }, 60 * 1000);
 
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {

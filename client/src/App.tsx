@@ -2,50 +2,62 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
+import { lazy, Suspense } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { SubscriptionProvider } from "./contexts/SubscriptionContext";
 import DashboardLayout from "./components/DashboardLayout";
-import TemplateSelect from "./pages/TemplateSelect";
-import Studio from "./pages/Studio";
-import Editor from "./pages/Editor";
-import Library from "./pages/Library";
-import Export from "./pages/Export";
-import Pricing from "./pages/Pricing";
-import Dashboard from "./pages/Dashboard";
-import ThreadsConnect from "./pages/ThreadsConnect";
-import PostHistory from "./pages/PostHistory";
+// 初回表示に必要なページだけ静的import（LP・認証系は最速で出す）
 import Landing from "./pages/Landing";
-import TemplateLibrary from "./pages/TemplateLibrary";
-import Guide from "./pages/Guide";
-import AIProjectCreate from "./pages/AIProjectCreate";
-import AIHistory from "./pages/AIHistory";
-import AIGenerate from "./pages/AIGenerate";
-import AICounseling from "./pages/AICounseling";
-import AIStyleCalibration from "./pages/AIStyleCalibration";
-import AdminCoupons from "./pages/AdminCoupons";
-import AdminUsers from "./pages/AdminUsers";
-import AITemplates from "./pages/AITemplates";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import VerifyEmail from "./pages/VerifyEmail";
-import Referral from "./pages/Referral";
-import CommentManager from "./pages/CommentManager";
-import PostAnalytics from "./pages/PostAnalytics";
-import AdminPresets from "./pages/AdminPresets";
-import AdminFeedback from "./pages/AdminFeedback";
-import Privacy from "./pages/Privacy";
-import Terms from "./pages/Terms";
-import FAQ from "./pages/FAQ";
-import CommercialTransaction from "./pages/CommercialTransaction";
-import Settings from "./pages/Settings";
-import TryGenerate from "./pages/TryGenerate";
+// それ以外はルート単位で遅延ロード（初回バンドルを軽くする。
+// スマホ回線の先生でもLPとログインが即表示されることを優先）
+const TemplateSelect = lazy(() => import("./pages/TemplateSelect"));
+const Studio = lazy(() => import("./pages/Studio"));
+const Editor = lazy(() => import("./pages/Editor"));
+const Library = lazy(() => import("./pages/Library"));
+const Export = lazy(() => import("./pages/Export"));
+const Pricing = lazy(() => import("./pages/Pricing"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const ThreadsConnect = lazy(() => import("./pages/ThreadsConnect"));
+const PostHistory = lazy(() => import("./pages/PostHistory"));
+const TemplateLibrary = lazy(() => import("./pages/TemplateLibrary"));
+const Guide = lazy(() => import("./pages/Guide"));
+const AIHistory = lazy(() => import("./pages/AIHistory"));
+const AIGenerate = lazy(() => import("./pages/AIGenerate"));
+const AICounseling = lazy(() => import("./pages/AICounseling"));
+const AIStyleCalibration = lazy(() => import("./pages/AIStyleCalibration"));
+const AdminCoupons = lazy(() => import("./pages/AdminCoupons"));
+const AdminUsers = lazy(() => import("./pages/AdminUsers"));
+const AITemplates = lazy(() => import("./pages/AITemplates"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
+const Referral = lazy(() => import("./pages/Referral"));
+const CommentManager = lazy(() => import("./pages/CommentManager"));
+const PostAnalytics = lazy(() => import("./pages/PostAnalytics"));
+const AdminPresets = lazy(() => import("./pages/AdminPresets"));
+const AdminFeedback = lazy(() => import("./pages/AdminFeedback"));
+const Privacy = lazy(() => import("./pages/Privacy"));
+const Terms = lazy(() => import("./pages/Terms"));
+const FAQ = lazy(() => import("./pages/FAQ"));
+const CommercialTransaction = lazy(() => import("./pages/CommercialTransaction"));
+const Settings = lazy(() => import("./pages/Settings"));
+const TryGenerate = lazy(() => import("./pages/TryGenerate"));
 import { ThreadsAccountProvider } from "./components/ThreadsAccountSwitcher";
 import { PWAInstallBanner } from "./components/PWAInstallBanner";
 import { CelebrationProvider } from "./components/Celebration";
 import { CookieConsent } from "./components/CookieConsent";
+
+/** 遅延ロード中のフォールバック（チラつき防止の控えめなスピナー） */
+function PageLoading() {
+  return (
+    <div className="min-h-[40vh] flex items-center justify-center">
+      <div className="h-8 w-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+    </div>
+  );
+}
 
 function DashboardRoutes() {
   return (
@@ -186,7 +198,9 @@ function App() {
             <TooltipProvider>
               <Toaster />
               <CelebrationProvider />
-              <Router />
+              <Suspense fallback={<PageLoading />}>
+                <Router />
+              </Suspense>
               <PWAInstallBanner />
               <CookieConsent />
             </TooltipProvider>
