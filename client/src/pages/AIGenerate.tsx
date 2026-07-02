@@ -13,6 +13,7 @@ import { trpc } from '@/lib/trpc';
 import { POST_TYPES, POST_PURPOSES, POST_PURPOSES_LIST, POST_TONES, POST_TONES_LIST } from '@shared/threadsPrompts';
 import type { PostPurpose, PostTone } from '@shared/threadsPrompts';
 import { THREAD_SEGMENT_DELIMITER } from '@shared/const';
+import { getSeasonalTopics } from '@shared/seasonalTopics';
 
 // 投稿を「連続投稿（ツリー）」のセグメント区切りで連結する。
 // メイン・続きの投稿・最後のひと押し をそれぞれ独立した投稿（返信チェーン）として送るため。
@@ -72,6 +73,10 @@ export default function AIGenerate() {
   const [postType, setPostType] = useState<PostType>(initialPostType);
   const [treeCount, setTreeCount] = useState<number>(3);
   const [trendWord, setTrendWord] = useState<string>('');
+  // 季節ネタ（今月のおすすめネタ）。選択中のチップの「ラベル：切り口」文字列。空 = 未使用。
+  const [seasonalTopic, setSeasonalTopic] = useState<string>('');
+  const seasonalTopics = getSeasonalTopics();
+  const currentMonth = new Date().getMonth() + 1;
   const [tone, setTone] = useState<PostTone | null>(null);
   const [generatedPost, setGeneratedPost] = useState<GeneratedPost | null>(null);
   const [editedPost, setEditedPost] = useState<GeneratedPost | null>(null);
@@ -442,6 +447,7 @@ export default function AIGenerate() {
         postType,
         treeCount: postType === 'pinned' ? 0 : treeCount,
         trendWord: postType === 'trend' ? trendWord : undefined,
+        seasonalTopic: seasonalTopic || undefined,
         purpose: purpose || undefined,
         tone: tone || undefined,
       });
@@ -479,6 +485,7 @@ export default function AIGenerate() {
               postType: pt,
               treeCount: pt === 'pinned' ? 0 : treeCount,
               trendWord: pt === 'trend' ? trendWord : undefined,
+              seasonalTopic: seasonalTopic || undefined,
               purpose: purpose || undefined,
               tone: tone || undefined,
             })
@@ -823,6 +830,41 @@ export default function AIGenerate() {
                       onChange={(e) => setTrendWord(e.target.value)}
                     />
                     <p className="text-xs text-muted-foreground">今話題のトピックを自分の業種に絡めて、多くの人に見てもらいやすくします</p>
+                  </div>
+                )}
+
+                {/* 季節ネタ（今月のおすすめネタ）。選択は任意。もう一度押すと解除。 */}
+                {seasonalTopics.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1.5">
+                      <Label>🗓 {currentMonth}月のおすすめネタ（任意）</Label>
+                      <HelpTooltip content="季節に合った投稿は共感されやすく反応が上がりやすいです。選ぶと、そのネタを軸にAIが投稿を作ります。もう一度押すと解除できます" />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {seasonalTopics.map((t) => {
+                        const value = `${t.label}：${t.hint}`;
+                        const selected = seasonalTopic === value;
+                        return (
+                          <button
+                            key={t.label}
+                            type="button"
+                            onClick={() => setSeasonalTopic(selected ? '' : value)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                              selected
+                                ? 'bg-emerald-600 text-white border-emerald-600'
+                                : 'bg-background text-foreground/80 border-border hover:bg-emerald-50 hover:border-emerald-300'
+                            }`}
+                          >
+                            {selected ? '✓ ' : ''}{t.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {seasonalTopic && (
+                      <p className="text-xs text-emerald-700">
+                        このネタを軸に、お店の強みへ自然につなげた投稿を作ります
+                      </p>
+                    )}
                   </div>
                 )}
 

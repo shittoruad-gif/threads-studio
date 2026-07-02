@@ -20,8 +20,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Calendar, CheckCircle2, CheckSquare, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, Square, Trash2, AlertTriangle, Link2 } from "lucide-react";
+import { ArrowLeft, Calendar, CheckCircle2, CheckSquare, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, Square, Trash2, AlertTriangle, Link2, Search, Download } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { translatePostError } from "@/lib/postErrors";
@@ -145,10 +146,16 @@ export default function PostHistory() {
     });
   };
 
+  // キーワード検索（本文の部分一致。過去投稿の再利用・重複チェックに使う）
+  const [searchQuery, setSearchQuery] = useState("");
+
   // Filter posts
   const filteredPosts = (scheduledPosts || []).filter((post) => {
-    if (statusFilter === "all") return true;
-    return post.status === statusFilter;
+    if (statusFilter !== "all" && post.status !== statusFilter) return false;
+    if (searchQuery.trim()) {
+      return (post.postContent || "").toLowerCase().includes(searchQuery.trim().toLowerCase());
+    }
+    return true;
   });
 
   // Pagination
@@ -212,6 +219,37 @@ export default function PostHistory() {
     }
   };
 
+  // CSVエクスポート（Excel向けBOM付き。PostAnalyticsと同型）
+  const handleExportCSV = () => {
+    if (filteredPosts.length === 0) {
+      toast.error("エクスポートするデータがありません");
+      return;
+    }
+    const esc = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const statusLabel: Record<string, string> = {
+      awaiting_approval: "承認待ち", pending: "予約中", posted: "投稿済み", failed: "失敗", canceled: "キャンセル",
+    };
+    const header = "状態,本文,予約日時,投稿日時,エラー\n";
+    const rows = filteredPosts
+      .map((p) => [
+        esc(statusLabel[p.status] ?? p.status),
+        esc(p.postContent),
+        esc(p.scheduledAt ? new Date(p.scheduledAt).toLocaleString("ja-JP") : ""),
+        esc(p.postedAt ? new Date(p.postedAt).toLocaleString("ja-JP") : ""),
+        esc(p.errorMessage ? translatePostError(p.errorMessage).title : ""),
+      ].join(","))
+      .join("\n");
+    const csv = "﻿" + header + rows; // BOM for Excel
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `threads_posts_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${filteredPosts.length}件をエクスポートしました`);
+  };
+
   const statusFilters: { value: StatusFilter; label: string; count: number }[] = [
     { value: "all", label: "すべて", count: scheduledPosts?.length || 0 },
     { value: "awaiting_approval", label: "承認待ち", count: scheduledPosts?.filter((p) => p.status === "awaiting_approval").length || 0 },
@@ -263,6 +301,32 @@ export default function PostHistory() {
                     </button>
                   ) : null
                 ))}
+              </div>
+            )}
+
+            {/* キーワード検索＋CSVエクスポート */}
+            {scheduledPosts && scheduledPosts.length > 0 && (
+              <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="本文をキーワード検索..."
+                    value={searchQuery}
+                    onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                    className="pl-9 h-9"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  {searchQuery.trim() && (
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {filteredPosts.length}件ヒット
+                    </span>
+                  )}
+                  <Button variant="outline" size="sm" onClick={handleExportCSV} className="h-9">
+                    <Download className="w-4 h-4 mr-1.5" />
+                    CSVエクスポート
+                  </Button>
+                </div>
               </div>
             )}
           </CardHeader>

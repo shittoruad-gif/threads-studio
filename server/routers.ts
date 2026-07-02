@@ -867,6 +867,7 @@ export const appRouter = router({
         postType: z.enum(['hook_tree', 'expertise', 'local', 'proof', 'empathy', 'story', 'list', 'offer', 'enemy', 'qa', 'trend', 'aruaru', 'pinned']).optional(),
         treeCount: z.number().min(0).max(5).optional(), // 0 = 本文のみ, 1〜5 = ツリー投稿数
         trendWord: z.string().optional(), // トレンドワード（trend型で使用）
+        seasonalTopic: z.string().max(300).optional(), // 季節ネタ（今月のおすすめネタ。静的データ由来）
         purpose: z.enum(['cv', 'awareness', 'authority', 'fan']).optional(), // 投稿の目的
         tone: z.enum(['polite', 'casual', 'professional', 'energetic', 'storytelling']).optional(), // 口調
       }))
@@ -960,6 +961,7 @@ export const appRouter = router({
           catchphrase: (project as any).catchphrase || undefined,
           customerWords: (project as any).customerWords || undefined,
           trendWord: input.trendWord || undefined,
+          seasonalTopic: input.seasonalTopic || undefined,
           purpose: input.purpose,
           tone: input.tone,
           counseling: counselingResult,

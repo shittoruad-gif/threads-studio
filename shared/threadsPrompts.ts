@@ -134,6 +134,12 @@ export interface ThreadsPromptInput {
   customerWords?: string; // お客さんが実際に使った言葉（最優先で使う）
   styleSamples?: string; // 過去の良かった投稿（文体＝口調/絵文字/改行/1文の長さ を模倣するお手本）
   trendWord?: string;  // トレンドワード
+  /**
+   * 季節ネタ（今月のおすすめネタ）。shared/seasonalTopics.ts の静的データ由来の
+   * 「ラベル：切り口」文字列。一般的な季節の事実のみで構成されており、
+   * AIには「このネタを軸に、捏造せず院の強みに絡めて書く」ことを指示する。
+   */
+  seasonalTopic?: string;
   purpose?: PostPurpose; // 投稿の目的（cv/awareness/authority/fan）
   tone?: PostTone;      // 投稿の口調
   /**
@@ -1035,6 +1041,7 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
     customerWords: sanitizeForPrompt(input.customerWords, 500),
     styleSamples: sanitizeForPrompt(input.styleSamples, 2000),
     trendWord: sanitizeForPrompt(input.trendWord, 60),
+    seasonalTopic: sanitizeForPrompt(input.seasonalTopic, 300),
     link: sanitizeForPrompt(input.link, 200),
   };
 
@@ -1075,6 +1082,11 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
     ? `\n\n【トレンド活用の追加指示】\n- 「${safe.trendWord}」というトレンドワードを投稿に自然に含めること。\n- 事実を書くだけでOK。トレンドワードを入れるだけで何倍ものインプレッションが期待できる。`
     : '';
 
+  // 季節ネタ（今月のおすすめネタ）が指定されていれば、そのネタを軸にする
+  const seasonalNote = safe.seasonalTopic
+    ? `\n\n【季節ネタの追加指示】\n- 今回は次の季節ネタを投稿の軸にすること：「${safe.seasonalTopic}」\n- この切り口は一般的な季節の事実。ここに書かれていない具体的なイベント名・日付・統計数値を推測で加えないこと。\n- 季節の話題で共感を作ってから、入力情報にある店舗の強み・ターゲットの悩みに自然につなげる。`
+    : '';
+
   // ユーザー指定のNGワード（投稿に入れたくない言葉）。最優先で禁止する。
   const ngWordsClean = Array.isArray(input.ngWords)
     ? Array.from(new Set(input.ngWords.map((w) => sanitizeForPrompt(w, 60)).filter(Boolean)))
@@ -1104,7 +1116,7 @@ ${safe.trendWord ? `- トレンドワード：${safe.trendWord}` : ''}
 ${formatLinksForPrompt(input.links, input.postType)}
 
 【投稿タイプ】
-${postTypeDescription}${localNote}${trendNote}${ngWordsNote}${styleSamplesNote}
+${postTypeDescription}${localNote}${trendNote}${seasonalNote}${ngWordsNote}${styleSamplesNote}
 
 【★安全基準（炎上・ブランド毀損・法令対策。例外なく厳守。満たせない内容は出力しない）】
 - 攻撃的・差別的、または政治的・宗教的に偏った発言を一切含めない。
