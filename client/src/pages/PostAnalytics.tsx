@@ -64,8 +64,10 @@ export default function PostAnalytics() {
 
   const doPromote = (project: { id: string; styleSamples?: string | null }, content: string) => {
     const existing = (project.styleSamples || '').trim();
-    // 同一投稿の二重追加を防ぐ（先頭50文字で判定）
-    if (existing && content && existing.includes(content.slice(0, 50))) {
+    // 同一投稿の二重追加を防ぐ（区切りで分割し「完全一致」で判定。
+    // 先頭一致だと、定型の書き出しが同じ別投稿を誤って弾いてしまうため）
+    const segments = existing ? existing.split('\n---\n').map((s) => s.trim()) : [];
+    if (segments.includes(content.trim())) {
       toast.info('この投稿はすでにお手本に追加されています');
       return;
     }

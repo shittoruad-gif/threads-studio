@@ -548,19 +548,27 @@ export default function AIGenerate() {
   };
 
   const handleCopy = async (text: string, index: number) => {
-    await navigator.clipboard.writeText(text);
-    setCopiedIndex(index);
-    toast.success('コピーしました');
-    setTimeout(() => setCopiedIndex(null), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(index);
+      toast.success('コピーしました');
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch {
+      toast.error('コピーできませんでした。手動で選択してコピーしてください');
+    }
   };
 
   const handleCopyAll = async () => {
     if (!editedPost) return;
     const allPosts = [editedPost.mainPost, ...editedPost.treePosts].join('\n\n---\n\n');
-    await navigator.clipboard.writeText(allPosts);
-    setCopiedIndex(-1);
-    toast.success('コピーしました');
-    setTimeout(() => setCopiedIndex(null), 2000);
+    try {
+      await navigator.clipboard.writeText(allPosts);
+      setCopiedIndex(-1);
+      toast.success('コピーしました');
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch {
+      toast.error('コピーできませんでした。手動で選択してコピーしてください');
+    }
   };
 
   if (!projectId) {

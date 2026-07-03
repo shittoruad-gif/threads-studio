@@ -91,18 +91,21 @@ async function jobRegistry(): Promise<TrackedJob[]> {
   const { runPaymentFollowUp } = await import('./paymentFollowUp');
   const { runWeeklyReportBatch } = await import('./weeklyReport');
   const { runAnalyticsSnapshotJob, runApprovalReminderJob } = await import('./dailyOpsJobs');
+  // 日次ジョブの maxStalenessHours は 23h。周期(24h)より短いので二重実行はせず、
+  // かつ「起動が発火時刻をまたいで遅れても、その日のうちなら必ず追い実行」できる
+  // （＝丸ごと飛ぶ穴を塞ぐ）。実行が多少遅れても害の無いジョブばかりのため許容。
   return [
     // dailyOpsJobs: '0 22 * * *' UTC（7:00 JST）
-    { name: 'analytics_snapshot', hour: 22, minute: 0, tzOffsetHours: 0, maxStalenessHours: 16, run: runAnalyticsSnapshotJob },
+    { name: 'analytics_snapshot', hour: 22, minute: 0, tzOffsetHours: 0, maxStalenessHours: 23, run: runAnalyticsSnapshotJob },
     // dailyOpsJobs: '0 23 * * *' UTC（8:00 JST）
-    { name: 'approval_reminder', hour: 23, minute: 0, tzOffsetHours: 0, maxStalenessHours: 16, run: runApprovalReminderJob },
+    { name: 'approval_reminder', hour: 23, minute: 0, tzOffsetHours: 0, maxStalenessHours: 23, run: runApprovalReminderJob },
     // autoPostScheduler: '0 6 * * *' timezone Asia/Tokyo
-    { name: 'auto_post_generation', hour: 6, minute: 0, tzOffsetHours: 9, maxStalenessHours: 16, run: processAutoPostGeneration },
+    { name: 'auto_post_generation', hour: 6, minute: 0, tzOffsetHours: 9, maxStalenessHours: 23, run: processAutoPostGeneration },
     // trialReminder: '0 9 * * *'（TZ指定なし＝サーバローカル。コンテナはUTC）
-    { name: 'trial_reminder', hour: 9, minute: 0, tzOffsetHours: 0, maxStalenessHours: 12, run: checkTrialReminders },
+    { name: 'trial_reminder', hour: 9, minute: 0, tzOffsetHours: 0, maxStalenessHours: 23, run: checkTrialReminders },
     // paymentFollowUp: '30 9 * * *'（同上UTC）
-    { name: 'payment_follow_up', hour: 9, minute: 30, tzOffsetHours: 0, maxStalenessHours: 12, run: runPaymentFollowUp },
-    // weeklyReport: '0 0 * * 1' UTC（月曜9:00 JST）
+    { name: 'payment_follow_up', hour: 9, minute: 30, tzOffsetHours: 0, maxStalenessHours: 23, run: runPaymentFollowUp },
+    // weeklyReport: '0 0 * * 1' UTC（月曜9:00 JST）。週次なので長めでも二重実行しない。
     { name: 'weekly_report', hour: 0, minute: 0, tzOffsetHours: 0, weekday: 1, maxStalenessHours: 72, run: runWeeklyReportBatch },
   ];
 }

@@ -41,22 +41,35 @@ export async function fetchAndStoreAnalyticsForUser(userId: number): Promise<num
   const accounts = await getThreadsAccountsByUserId(userId);
   let totalFetched = 0;
   for (const account of accounts) {
-    const posts = await getThreadsUserPosts(account.accessToken, account.threadsUserId, 25);
+    // アカウント単位で隔離：1アカウントのトークン失効等が他アカウントや
+    // 後続処理（フォロワー記録・ヒット投稿アーカイブ）を巻き込まないようにする。
+    let posts: Awaited<ReturnType<typeof getThreadsUserPosts>>;
+    try {
+      posts = await getThreadsUserPosts(account.accessToken, account.threadsUserId, 25);
+    } catch (e) {
+      console.error(`[DailyOps] 投稿一覧取得失敗 user=${userId} account=${account.id}:`, e);
+      continue;
+    }
     for (const post of posts) {
-      const insights = await getThreadsPostInsights(account.accessToken, post.id);
-      await upsertPostAnalytics({
-        userId,
-        threadsPostId: post.id,
-        postContent: post.text || null,
-        postPermalink: post.permalink || null,
-        postedAt: post.timestamp ? new Date(post.timestamp) : null,
-        impressions: insights.views,
-        likes: insights.likes,
-        replies: insights.replies,
-        reposts: insights.reposts,
-        fetchedAt: new Date(),
-      });
-      totalFetched++;
+      // 投稿単位でも隔離：1投稿のインサイト取得失敗で残りを落とさない。
+      try {
+        const insights = await getThreadsPostInsights(account.accessToken, post.id);
+        await upsertPostAnalytics({
+          userId,
+          threadsPostId: post.id,
+          postContent: post.text || null,
+          postPermalink: post.permalink || null,
+          postedAt: post.timestamp ? new Date(post.timestamp) : null,
+          impressions: insights.views,
+          likes: insights.likes,
+          replies: insights.replies,
+          reposts: insights.reposts,
+          fetchedAt: new Date(),
+        });
+        totalFetched++;
+      } catch (e) {
+        console.error(`[DailyOps] インサイト取得失敗 user=${userId} post=${post.id}:`, e);
+      }
     }
   }
   return totalFetched;
