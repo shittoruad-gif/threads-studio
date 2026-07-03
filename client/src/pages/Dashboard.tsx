@@ -42,6 +42,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RELATED_SERVICES } from '@shared/relatedServices';
 import TrialBanner from '@/components/TrialBanner';
 import OnboardingTour from '@/components/OnboardingTour';
 import ProjectExplanation from '@/components/ProjectExplanation';
@@ -1352,14 +1353,7 @@ export default function Dashboard() {
           </DialogHeader>
           <div className="space-y-2.5 max-h-[52vh] overflow-y-auto pr-1">
             <p className="text-xs font-medium text-muted-foreground">気になるものを選んでください（複数OK）</p>
-            {[
-              { label: '公式LINEの作成', desc: '予約・再来の受け皿になる公式LINEアカウントの開設・初期設定を代行します。' },
-              { label: 'LPの作成', desc: '業種を入力するだけで、AIが集客用ランディングページ（治療院の黄金構成）を自動生成。予約につながる1枚ページを制作します。' },
-              { label: '公式LINEトラッキングツール', desc: 'どの広告・投稿から公式LINEに登録されたかを認証画面なしで計測。流入経路別の自動ステップ配信もできる計測ツール（Keiro）。' },
-              { label: '口コミ生成アプリ', desc: 'お客様のGoogle口コミ投稿を自然に後押しし、店舗の口コミ評価を増やすアプリ。' },
-              { label: 'Instagram広告', desc: '代理店に頼らず、Instagram/Meta広告を自分で運用できるSaaS「マカセル」。AIが広告文・動画まで作成します。' },
-              { label: '店舗集客まるっとパック（オールインワン）', desc: 'LP → 広告 → Threads → 公式LINE → 口コミまで、集客を一気通貫で支援するオールインワンです。' },
-            ].map((opt) => {
+            {RELATED_SERVICES.map((opt) => {
               const on = surveyInterests.includes(opt.label);
               return (
                 <button
@@ -1376,7 +1370,7 @@ export default function Dashboard() {
                     </span>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground">{opt.label}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{opt.desc}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{opt.description}</p>
                     </div>
                   </div>
                 </button>

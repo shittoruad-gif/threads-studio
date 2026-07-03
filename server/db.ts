@@ -1781,6 +1781,7 @@ export async function getAllUsers() {
     openId: users.openId,
     email: users.email,
     name: users.name,
+    storeName: users.storeName,
     role: users.role,
     authProvider: users.authProvider,
     createdAt: users.createdAt,

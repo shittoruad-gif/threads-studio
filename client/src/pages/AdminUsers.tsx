@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Key, AlertTriangle, Mail, RefreshCw, Search } from 'lucide-react';
+import { Loader2, Key, AlertTriangle, Mail, RefreshCw, Search, Download } from 'lucide-react';
 import { toast } from 'sonner';
 
 // プラン表示名
@@ -63,14 +63,38 @@ export default function AdminUsers() {
     onError: (e) => toast.error(e.message ?? '更新に失敗しました'),
   });
 
-  // 検索（名前・メール・ID）
+  // 検索（名前・店舗名・メール・ID）
   const q = search.trim().toLowerCase();
   const filteredUsers = (users ?? []).filter((u) =>
     !q ||
     (u.name ?? '').toLowerCase().includes(q) ||
+    ((u as any).storeName ?? '').toLowerCase().includes(q) ||
     (u.email ?? '').toLowerCase().includes(q) ||
     String(u.id).includes(q)
   );
+
+  // CSVエクスポート（セミナー案内の宛先リスト作成用。Excel向けBOM付き）
+  const handleExportCSV = () => {
+    if (filteredUsers.length === 0) { toast.error('エクスポートするデータがありません'); return; }
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = '名前,店舗名,メールアドレス,プラン,状態,モニター,登録日\n';
+    const rows = filteredUsers.map((u) => {
+      const a = u as any;
+      return [
+        esc(u.name), esc(a.storeName), esc(u.email), esc(a.planId ?? ''),
+        esc(a.subscriptionStatus ?? ''), esc(a.isMonitor ? 'はい' : ''),
+        esc(u.createdAt ? new Date(u.createdAt).toLocaleDateString('ja-JP') : ''),
+      ].join(',');
+    }).join('\n');
+    const blob = new Blob(['﻿' + header + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `users_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${filteredUsers.length}件をエクスポートしました`);
+  };
 
   // サマリー集計
   const summary = {
@@ -145,14 +169,20 @@ export default function AdminUsers() {
           <CardDescription>
             登録ユーザーの状況（プラン・状態・モニター・連携・最終ログイン）
           </CardDescription>
-          <div className="relative mt-3 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="名前・メール・IDで検索"
-              className="pl-9"
-            />
+          <div className="mt-3 flex flex-col sm:flex-row gap-2 sm:items-center">
+            <div className="relative max-w-sm flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="名前・店舗名・メール・IDで検索"
+                className="pl-9"
+              />
+            </div>
+            <Button variant="outline" size="sm" onClick={handleExportCSV} className="shrink-0">
+              <Download className="w-4 h-4 mr-1.5" />
+              CSVエクスポート（{filteredUsers.length}件）
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -162,6 +192,7 @@ export default function AdminUsers() {
               <TableRow>
                 <TableHead>ID</TableHead>
                 <TableHead>名前</TableHead>
+                <TableHead>店舗名</TableHead>
                 <TableHead>メールアドレス</TableHead>
                 <TableHead>プラン</TableHead>
                 <TableHead>状態</TableHead>
@@ -185,6 +216,7 @@ export default function AdminUsers() {
                       <span className="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-indigo-100 text-indigo-800">管理者</span>
                     )}
                   </TableCell>
+                  <TableCell className="max-w-[160px] truncate">{(user as any).storeName || '-'}</TableCell>
                   <TableCell className="max-w-[200px] truncate text-xs">{user.email || '-'}</TableCell>
                   <TableCell>{planLabel(u.planId)}</TableCell>
                   <TableCell>

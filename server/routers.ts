@@ -3071,6 +3071,19 @@ ${input.commentText}
       .mutation(async ({ ctx, input }) => {
         const interestsStr = input.interests.join(', ');
         await db.upsertContentInterestSurvey(ctx.user.id, interestsStr, input.freeText?.trim() || null, input.sendInfo);
+
+        // ★案内希望かつ該当サービスがあれば、本人の登録メールへ自動でご案内を送る。
+        if (input.sendInfo && ctx.user.email && input.interests.length > 0) {
+          try {
+            const { servicesFromLabels, RELATED_SERVICES_CONTACT_EMAIL } = await import('../shared/relatedServices');
+            const matched = servicesFromLabels(input.interests);
+            if (matched.length > 0) {
+              const { sendRelatedServicesEmail } = await import('./_core/notification');
+              await sendRelatedServicesEmail(ctx.user.email, matched, RELATED_SERVICES_CONTACT_EMAIL);
+            }
+          } catch (e) { console.error('[survey] 案内メール送信失敗:', e); }
+        }
+
         // 運営へ通知（クロスセルの見込み把握）。失敗しても回答は成功。
         try {
           const { notifyOwner } = await import('./_core/notification');

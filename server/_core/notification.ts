@@ -272,6 +272,43 @@ export async function sendPaymentFailedEmail(
 }
 
 /**
+ * 「他に興味のあるサービス」アンケートで選ばれたサービスの案内を、
+ * 本人の登録メールへ自動送信する。services は {label, description} の配列。
+ */
+export async function sendRelatedServicesEmail(
+  to: string,
+  services: { label: string; description: string }[],
+  contactEmail: string,
+): Promise<boolean> {
+  if (services.length === 0) return false;
+  const items = services
+    .map(
+      (s) => `
+        <div style="border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin:10px 0;">
+          <p style="margin:0 0 4px;font-weight:bold;color:#065f46;">${escapeHtml(s.label)}</p>
+          <p style="margin:0;color:#374151;font-size:14px;line-height:1.6;">${escapeHtml(s.description)}</p>
+        </div>`,
+    )
+    .join('');
+  const mailto = `mailto:${contactEmail}?subject=${encodeURIComponent('サービスの詳細希望')}`;
+  return sendEmail({
+    to,
+    subject: '【Threads Studio】ご興味をお持ちのサービスのご案内',
+    html: emailShell(
+      'ご興味をお持ちのサービスのご案内',
+      `
+        <p>この度は Threads Studio をご利用いただきありがとうございます。</p>
+        <p>アンケートでご興味をお選びいただいた、集客に役立つサービスをご案内します。</p>
+        ${items}
+        <p>詳しい資料のご請求・ご相談は、下のボタンからお気軽にご連絡ください（このメールへのご返信でも承ります）。</p>
+      `,
+      'このサービスについて相談する',
+      mailto,
+    ),
+  });
+}
+
+/**
  * 決済失敗が続き、猶予期間を過ぎてサービスを自動停止したときの通知メール。
  * フリープランに戻った旨と、再開（再登録）の導線を案内する。
  */
