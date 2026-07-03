@@ -26,7 +26,7 @@ import {
   monitorFeedback, MonitorFeedback, InsertMonitorFeedback,
   jobRuns, JobRun,
   followerSnapshots, hitPostArchive, HitPostArchive, cancellationFeedback,
-  hiddenItems
+  hiddenItems, contentInterestSurvey, ContentInterestSurvey
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { PLANS } from '../shared/plans';
@@ -2577,6 +2577,25 @@ export async function removeHiddenItem(userId: number, itemType: string, itemKey
     eq(hiddenItems.itemType, itemType),
     eq(hiddenItems.itemKey, itemKey),
   ));
+}
+
+// ==================== 契約時アンケート（興味のあるコンテンツ） ====================
+
+/** 回答済みか（存在＝回答済み） */
+export async function getContentInterestSurvey(userId: number): Promise<ContentInterestSurvey | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(contentInterestSurvey).where(eq(contentInterestSurvey.userId, userId)).limit(1);
+  return rows[0];
+}
+
+/** アンケート回答を保存（1ユーザー1回・再回答は上書き） */
+export async function upsertContentInterestSurvey(userId: number, interests: string, freeText: string | null): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(contentInterestSurvey)
+    .values({ userId, interests, freeText })
+    .onDuplicateKeyUpdate({ set: { interests, freeText } });
 }
 
 // ==================== Processing Timeout ====================

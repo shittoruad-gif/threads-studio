@@ -3054,6 +3054,36 @@ ${input.commentText}
   }),
 
   // ==================== AI Generation Presets ====================
+  // 契約時アンケート（興味のあるコンテンツ）
+  survey: router({
+    // 回答済みか（未回答なら初回ダイアログを出す判定に使う）
+    contentInterestStatus: protectedProcedure.query(async ({ ctx }) => {
+      const row = await db.getContentInterestSurvey(ctx.user.id);
+      return { answered: !!row };
+    }),
+    submitContentInterest: protectedProcedure
+      .input(z.object({
+        interests: z.array(z.string().max(60)).max(20),
+        freeText: z.string().max(1000).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const interestsStr = input.interests.join(', ');
+        await db.upsertContentInterestSurvey(ctx.user.id, interestsStr, input.freeText?.trim() || null);
+        // 運営へ通知（どんなコンテンツが求められているかの把握）。失敗しても回答は成功。
+        try {
+          const { notifyOwner } = await import('./_core/notification');
+          await notifyOwner({
+            title: `🧭 コンテンツ興味アンケート回答: ${ctx.user.name ?? ctx.user.email}`,
+            content:
+              `顧客: ${ctx.user.name ?? '(名前未設定)'} <${ctx.user.email ?? '不明'}>\n` +
+              `興味のあるコンテンツ: ${interestsStr || '(未選択)'}\n` +
+              (input.freeText?.trim() ? `自由記述: ${input.freeText.trim()}\n` : ''),
+          });
+        } catch (e) { console.error('[survey] 通知失敗:', e); }
+        return { success: true };
+      }),
+  }),
+
   // 非表示アイテム（初期プリセット・投稿テンプレート集で「使わないもの」を隠す）
   hidden: router({
     list: protectedProcedure.query(async ({ ctx }) => {

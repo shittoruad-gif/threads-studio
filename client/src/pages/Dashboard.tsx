@@ -126,6 +126,27 @@ export default function Dashboard() {
     { enabled: isAuthenticated }
   );
 
+  // 契約時アンケート（興味のあるコンテンツ）：プロジェクトがあり未回答なら1回だけ表示
+  const { data: contentInterestStatus } = trpc.survey.contentInterestStatus.useQuery(undefined, { enabled: isAuthenticated });
+  const [surveyOpen, setSurveyOpen] = useState(false);
+  const [surveyInterests, setSurveyInterests] = useState<string[]>([]);
+  const [surveyFreeText, setSurveyFreeText] = useState('');
+  const [surveyDismissed, setSurveyDismissed] = useState(false);
+  const submitInterest = trpc.survey.submitContentInterest.useMutation({
+    onSuccess: () => { utils.survey.contentInterestStatus.invalidate(); setSurveyOpen(false); toast.success('ありがとうございます！今後の改善に活かします'); },
+    onError: (e) => toast.error(e.message || '送信に失敗しました'),
+  });
+  useEffect(() => {
+    if (surveyDismissed) return;
+    if (contentInterestStatus && !contentInterestStatus.answered && projectCount && projectCount > 0) {
+      // セッション内で一度きり（閉じても再表示しない）
+      if (sessionStorage.getItem('contentSurveyShown') !== '1') {
+        sessionStorage.setItem('contentSurveyShown', '1');
+        setSurveyOpen(true);
+      }
+    }
+  }, [contentInterestStatus, projectCount, surveyDismissed]);
+
   // 「登録情報を修正」導線用（先頭プロジェクトのカウンセリング編集へ直接飛ぶ）
   const { data: dashProjects } = trpc.project.list.useQuery(undefined, { enabled: isAuthenticated });
   const firstProjectId = dashProjects?.[0]?.id;
@@ -1317,6 +1338,62 @@ export default function Dashboard() {
           });
         }}
       />
+
+      {/* 契約時アンケート：興味のあるコンテンツ（初回1回だけ） */}
+      <Dialog open={surveyOpen} onOpenChange={(o) => { if (!o) { setSurveyOpen(false); setSurveyDismissed(true); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>どんな投稿に興味がありますか？</DialogTitle>
+            <DialogDescription>
+              ご利用開始ありがとうございます。あなたのお店に合った投稿づくりの参考にさせてください（あとで変更OK・スキップも可能）。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-muted-foreground">気になるものをタップ（複数OK）</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                '地域・ご近所ネタ', '実績・お客様の変化', '共感できるお悩みネタ',
+                'プロの豆知識・セルフケア', 'お客様の声・エピソード', 'キャンペーン・お得情報',
+                'スタッフ・院の雰囲気', 'よくある質問（Q&A）', '季節・時事の話題',
+                'ビフォーアフター的な変化',
+              ].map((g) => {
+                const on = surveyInterests.includes(g);
+                return (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => setSurveyInterests((prev) => on ? prev.filter((x) => x !== g) : [...prev, g])}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      on ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-background text-foreground/80 border-border hover:bg-emerald-50'
+                    }`}
+                  >
+                    {on ? '✓ ' : ''}{g}
+                  </button>
+                );
+              })}
+            </div>
+            <Textarea
+              placeholder="その他・こんな投稿がしたい（任意）"
+              value={surveyFreeText}
+              onChange={(e) => setSurveyFreeText(e.target.value)}
+              className="text-sm min-h-[64px]"
+              maxLength={1000}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => { setSurveyOpen(false); setSurveyDismissed(true); }}>
+              スキップ
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={submitInterest.isPending || (surveyInterests.length === 0 && !surveyFreeText.trim())}
+              onClick={() => submitInterest.mutate({ interests: surveyInterests, freeText: surveyFreeText || undefined })}
+            >
+              {submitInterest.isPending ? '送信中...' : '回答する'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 解約アンケートダイアログ（理由を聞いてから解約を実行） */}
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>

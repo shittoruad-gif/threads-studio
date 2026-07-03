@@ -210,6 +210,20 @@ export const hiddenItems = mysqlTable("hiddenItems", {
 export type HiddenItem = typeof hiddenItems.$inferSelect;
 
 /**
+ * 契約時（利用開始時）の「興味のあるコンテンツ」アンケート。
+ * どんな投稿ネタに興味があるかを把握し、運営の改善・提案に活かす。
+ * ユーザーごとに1回（存在＝回答済み）。
+ */
+export const contentInterestSurvey = mysqlTable("contentInterestSurvey", {
+  userId: int("userId").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  interests: text("interests"), // カンマ区切りの選択ジャンル
+  freeText: text("freeText"),   // 自由記述
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ContentInterestSurvey = typeof contentInterestSurvey.$inferSelect;
+
+/**
  * Threads account connections (mock implementation for now)
  */
 export const threadsAccounts = mysqlTable("threadsAccounts", {
