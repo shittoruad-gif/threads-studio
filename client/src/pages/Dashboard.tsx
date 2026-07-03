@@ -1343,19 +1343,21 @@ export default function Dashboard() {
       <Dialog open={surveyOpen} onOpenChange={(o) => { if (!o) { setSurveyOpen(false); setSurveyDismissed(true); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>どんな投稿に興味がありますか？</DialogTitle>
+            <DialogTitle>他に興味のあるサービスはありますか？</DialogTitle>
             <DialogDescription>
-              ご利用開始ありがとうございます。あなたのお店に合った投稿づくりの参考にさせてください（あとで変更OK・スキップも可能）。
+              ご利用開始ありがとうございます。Threads集客のほかに、ご興味のあるものがあれば教えてください（複数OK・スキップも可能）。今後のご案内の参考にさせていただきます。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-xs font-medium text-muted-foreground">気になるものをタップ（複数OK）</p>
             <div className="flex flex-wrap gap-2">
               {[
-                '地域・ご近所ネタ', '実績・お客様の変化', '共感できるお悩みネタ',
-                'プロの豆知識・セルフケア', 'お客様の声・エピソード', 'キャンペーン・お得情報',
-                'スタッフ・院の雰囲気', 'よくある質問（Q&A）', '季節・時事の話題',
-                'ビフォーアフター的な変化',
+                '公式LINEの作成',
+                'LPの作成',
+                '公式LINEトラッキングツール',
+                '口コミ生成アプリ',
+                'Instagram広告',
+                '店舗集客まるっとパック（オールインワン）',
               ].map((g) => {
                 const on = surveyInterests.includes(g);
                 return (
@@ -1373,7 +1375,7 @@ export default function Dashboard() {
               })}
             </div>
             <Textarea
-              placeholder="その他・こんな投稿がしたい（任意）"
+              placeholder="その他・気になるサービスやご要望（任意）"
               value={surveyFreeText}
               onChange={(e) => setSurveyFreeText(e.target.value)}
               className="text-sm min-h-[64px]"

@@ -3073,11 +3073,12 @@ ${input.commentText}
         try {
           const { notifyOwner } = await import('./_core/notification');
           await notifyOwner({
-            title: `🧭 コンテンツ興味アンケート回答: ${ctx.user.name ?? ctx.user.email}`,
+            title: `🧭 興味のあるサービス アンケート回答: ${ctx.user.name ?? ctx.user.email}`,
             content:
               `顧客: ${ctx.user.name ?? '(名前未設定)'} <${ctx.user.email ?? '不明'}>\n` +
-              `興味のあるコンテンツ: ${interestsStr || '(未選択)'}\n` +
-              (input.freeText?.trim() ? `自由記述: ${input.freeText.trim()}\n` : ''),
+              `興味のあるサービス: ${interestsStr || '(未選択)'}\n` +
+              (input.freeText?.trim() ? `自由記述: ${input.freeText.trim()}\n` : '') +
+              `\n→ クロスセルの見込み。フォローをご検討ください。`,
           });
         } catch (e) { console.error('[survey] 通知失敗:', e); }
         return { success: true };
