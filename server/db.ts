@@ -2590,12 +2590,12 @@ export async function getContentInterestSurvey(userId: number): Promise<ContentI
 }
 
 /** アンケート回答を保存（1ユーザー1回・再回答は上書き） */
-export async function upsertContentInterestSurvey(userId: number, interests: string, freeText: string | null): Promise<void> {
+export async function upsertContentInterestSurvey(userId: number, interests: string, freeText: string | null, wantsInfo: boolean): Promise<void> {
   const db = await getDb();
   if (!db) return;
   await db.insert(contentInterestSurvey)
-    .values({ userId, interests, freeText })
-    .onDuplicateKeyUpdate({ set: { interests, freeText } });
+    .values({ userId, interests, freeText, wantsInfo })
+    .onDuplicateKeyUpdate({ set: { interests, freeText, wantsInfo } });
 }
 
 // ==================== Processing Timeout ====================

@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import TrialBanner from '@/components/TrialBanner';
 import OnboardingTour from '@/components/OnboardingTour';
 import ProjectExplanation from '@/components/ProjectExplanation';
@@ -132,6 +133,7 @@ export default function Dashboard() {
   const [surveyInterests, setSurveyInterests] = useState<string[]>([]);
   const [surveyFreeText, setSurveyFreeText] = useState('');
   const [surveyDismissed, setSurveyDismissed] = useState(false);
+  const [surveySendInfo, setSurveySendInfo] = useState(true); // 登録メールに案内を送る（デフォルトON）
   const submitInterest = trpc.survey.submitContentInterest.useMutation({
     onSuccess: () => { utils.survey.contentInterestStatus.invalidate(); setSurveyOpen(false); toast.success('ありがとうございます！今後の改善に活かします'); },
     onError: (e) => toast.error(e.message || '送信に失敗しました'),
@@ -1348,40 +1350,59 @@ export default function Dashboard() {
               ご利用開始ありがとうございます。Threads集客のほかに、ご興味のあるものがあれば教えてください（複数OK・スキップも可能）。今後のご案内の参考にさせていただきます。
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground">気になるものをタップ（複数OK）</p>
-            <div className="flex flex-wrap gap-2">
-              {[
-                '公式LINEの作成',
-                'LPの作成',
-                '公式LINEトラッキングツール',
-                '口コミ生成アプリ',
-                'Instagram広告',
-                '店舗集客まるっとパック（オールインワン）',
-              ].map((g) => {
-                const on = surveyInterests.includes(g);
-                return (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => setSurveyInterests((prev) => on ? prev.filter((x) => x !== g) : [...prev, g])}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                      on ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-background text-foreground/80 border-border hover:bg-emerald-50'
-                    }`}
-                  >
-                    {on ? '✓ ' : ''}{g}
-                  </button>
-                );
-              })}
-            </div>
+          <div className="space-y-2.5 max-h-[52vh] overflow-y-auto pr-1">
+            <p className="text-xs font-medium text-muted-foreground">気になるものを選んでください（複数OK）</p>
+            {[
+              { label: '公式LINEの作成', desc: '予約・再来の受け皿になる公式LINEアカウントの開設・初期設定を代行します。' },
+              { label: 'LPの作成', desc: '業種を入力するだけで、AIが集客用ランディングページ（治療院の黄金構成）を自動生成。予約につながる1枚ページを制作します。' },
+              { label: '公式LINEトラッキングツール', desc: 'どの広告・投稿から公式LINEに登録されたかを認証画面なしで計測。流入経路別の自動ステップ配信もできる計測ツール（Keiro）。' },
+              { label: '口コミ生成アプリ', desc: 'お客様のGoogle口コミ投稿を自然に後押しし、店舗の口コミ評価を増やすアプリ。' },
+              { label: 'Instagram広告', desc: '代理店に頼らず、Instagram/Meta広告を自分で運用できるSaaS「マカセル」。AIが広告文・動画まで作成します。' },
+              { label: '店舗集客まるっとパック（オールインワン）', desc: 'LP → 広告 → Threads → 公式LINE → 口コミまで、集客を一気通貫で支援するオールインワンです。' },
+            ].map((opt) => {
+              const on = surveyInterests.includes(opt.label);
+              return (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => setSurveyInterests((prev) => on ? prev.filter((x) => x !== opt.label) : [...prev, opt.label])}
+                  className={`w-full text-left rounded-lg border p-3 transition-colors ${
+                    on ? 'border-emerald-500 bg-emerald-50' : 'border-border hover:bg-muted/40'
+                  }`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-muted-foreground/40'}`}>
+                      {on ? '✓' : ''}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground">{opt.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{opt.desc}</p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
             <Textarea
               placeholder="その他・気になるサービスやご要望（任意）"
               value={surveyFreeText}
               onChange={(e) => setSurveyFreeText(e.target.value)}
-              className="text-sm min-h-[64px]"
+              className="text-sm min-h-[56px]"
               maxLength={1000}
             />
           </div>
+          {/* 登録メールへの案内送付（デフォルトON） */}
+          <label className="flex items-start gap-2.5 rounded-lg bg-muted/40 px-3 py-2.5 cursor-pointer">
+            <Checkbox
+              checked={surveySendInfo}
+              onCheckedChange={(v) => setSurveySendInfo(v === true)}
+              className="mt-0.5"
+            />
+            <span className="text-xs text-foreground leading-relaxed">
+              選んだサービスの詳しい案内を、ご登録のメールアドレス
+              {user?.email ? <span className="font-medium">（{user.email}）</span> : ''}
+              に送る
+            </span>
+          </label>
           <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => { setSurveyOpen(false); setSurveyDismissed(true); }}>
               スキップ
@@ -1389,7 +1410,7 @@ export default function Dashboard() {
             <Button
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
               disabled={submitInterest.isPending || (surveyInterests.length === 0 && !surveyFreeText.trim())}
-              onClick={() => submitInterest.mutate({ interests: surveyInterests, freeText: surveyFreeText || undefined })}
+              onClick={() => submitInterest.mutate({ interests: surveyInterests, freeText: surveyFreeText || undefined, sendInfo: surveySendInfo })}
             >
               {submitInterest.isPending ? '送信中...' : '回答する'}
             </Button>

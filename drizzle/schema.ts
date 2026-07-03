@@ -216,8 +216,9 @@ export type HiddenItem = typeof hiddenItems.$inferSelect;
  */
 export const contentInterestSurvey = mysqlTable("contentInterestSurvey", {
   userId: int("userId").primaryKey().references(() => users.id, { onDelete: "cascade" }),
-  interests: text("interests"), // カンマ区切りの選択ジャンル
+  interests: text("interests"), // カンマ区切りの選択サービス
   freeText: text("freeText"),   // 自由記述
+  wantsInfo: boolean("wantsInfo").notNull().default(true), // 登録メールに案内を送ってよいか
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

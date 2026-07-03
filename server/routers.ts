@@ -3063,13 +3063,14 @@ ${input.commentText}
     }),
     submitContentInterest: protectedProcedure
       .input(z.object({
-        interests: z.array(z.string().max(60)).max(20),
+        interests: z.array(z.string().max(80)).max(20),
         freeText: z.string().max(1000).optional(),
+        sendInfo: z.boolean().default(true), // 登録メールに案内を送ってよいか
       }))
       .mutation(async ({ ctx, input }) => {
         const interestsStr = input.interests.join(', ');
-        await db.upsertContentInterestSurvey(ctx.user.id, interestsStr, input.freeText?.trim() || null);
-        // 運営へ通知（どんなコンテンツが求められているかの把握）。失敗しても回答は成功。
+        await db.upsertContentInterestSurvey(ctx.user.id, interestsStr, input.freeText?.trim() || null, input.sendInfo);
+        // 運営へ通知（クロスセルの見込み把握）。失敗しても回答は成功。
         try {
           const { notifyOwner } = await import('./_core/notification');
           await notifyOwner({
@@ -3078,7 +3079,8 @@ ${input.commentText}
               `顧客: ${ctx.user.name ?? '(名前未設定)'} <${ctx.user.email ?? '不明'}>\n` +
               `興味のあるサービス: ${interestsStr || '(未選択)'}\n` +
               (input.freeText?.trim() ? `自由記述: ${input.freeText.trim()}\n` : '') +
-              `\n→ クロスセルの見込み。フォローをご検討ください。`,
+              `メールでの案内: ${input.sendInfo ? '希望する（' + (ctx.user.email ?? '') + '）' : '希望しない'}\n` +
+              `\n→ クロスセルの見込み。案内希望の方には登録メールへご案内を。`,
           });
         } catch (e) { console.error('[survey] 通知失敗:', e); }
         return { success: true };
