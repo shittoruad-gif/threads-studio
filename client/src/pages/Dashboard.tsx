@@ -40,6 +40,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import TrialBanner from '@/components/TrialBanner';
 import OnboardingTour from '@/components/OnboardingTour';
 import ProjectExplanation from '@/components/ProjectExplanation';
@@ -717,6 +718,40 @@ export default function Dashboard() {
                 <p className="text-xs text-muted-foreground mt-1">
                   直近{followerTrend.trend.length}日間（毎朝7時に自動記録）
                 </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 承認モードの状態（自動投稿がONのときに常時表示。ここから即切替できる） */}
+        {autoPostSettings?.autoPostEnabled && (
+          <div className={`mb-8 rounded-xl border-2 p-4 sm:p-5 ${
+            autoPostSettings.autoPostRequireApproval
+              ? 'bg-emerald-50 border-emerald-200'
+              : 'bg-amber-50 border-amber-200'
+          }`}>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm sm:text-base font-bold text-foreground flex items-center gap-2">
+                  🛡 投稿前チェック（承認モード）：
+                  <span className={autoPostSettings.autoPostRequireApproval ? 'text-emerald-700' : 'text-amber-700'}>
+                    {autoPostSettings.autoPostRequireApproval ? 'オン' : 'オフ'}
+                  </span>
+                </p>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-relaxed">
+                  {autoPostSettings.autoPostRequireApproval
+                    ? '自動で作られた投稿は「承認待ち」に入り、あなたが内容を確認して承認するまで公開されません。安心して運用できます。'
+                    : '現在、自動で作られた投稿は確認なしでそのまま公開されます。オンにすると、公開前にあなたが1件ずつ内容をチェックできます。'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-muted-foreground">公開前に確認する</span>
+                <Switch
+                  checked={autoPostSettings.autoPostRequireApproval ?? false}
+                  onCheckedChange={(v) => updateAutoPost.mutate({ autoPostRequireApproval: v })}
+                  disabled={updateAutoPost.isPending}
+                  aria-label="公開前に承認するモードの切り替え"
+                />
               </div>
             </div>
           </div>
