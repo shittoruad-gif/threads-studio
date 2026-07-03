@@ -1,15 +1,34 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TEMPLATES } from "@shared/templates";
-import { ArrowRight, Sparkles, User, LogIn, Crown, Library } from "lucide-react";
+import { ArrowRight, Sparkles, User, LogIn, Crown, Library, EyeOff, RotateCcw, Eye } from "lucide-react";
 import { useLocation } from "wouter";
+import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import HowToUse from "@/components/HowToUse";
 
 export default function TemplateSelect() {
   const [, setLocation] = useLocation();
   const { user, isAuthenticated, loading } = useAuth();
+
+  // 使わないテンプレートを非表示にする（ログイン時のみ・削除ではなく戻せる）
+  const { data: hiddenItems } = trpc.hidden.list.useQuery(undefined, { enabled: isAuthenticated });
+  const hiddenTemplateKeys = new Set(hiddenItems?.template ?? []);
+  const [showHidden, setShowHidden] = useState(false);
+  const utils = trpc.useUtils();
+  const hideMutation = trpc.hidden.hide.useMutation({
+    onSuccess: () => { utils.hidden.list.invalidate(); toast.success('テンプレートを非表示にしました'); },
+  });
+  const unhideMutation = trpc.hidden.unhide.useMutation({
+    onSuccess: () => { utils.hidden.list.invalidate(); toast.success('テンプレートを元に戻しました'); },
+  });
+
+  const visibleTemplates = TEMPLATES.filter(
+    (t) => showHidden || !hiddenTemplateKeys.has(t.id),
+  );
 
   const handleSelectTemplate = (templateId: string) => {
     setLocation(`/studio?template=${templateId}`);
@@ -84,8 +103,23 @@ export default function TemplateSelect() {
           </p>
         </div>
 
+        {/* 非表示にしたテンプレートの表示/非表示トグル（ログイン時のみ） */}
+        {isAuthenticated && hiddenTemplateKeys.size > 0 && (
+          <div className="max-w-5xl mx-auto mb-4 text-right">
+            <Button
+              variant={showHidden ? 'secondary' : 'ghost'}
+              size="sm"
+              className="text-xs"
+              onClick={() => setShowHidden((v) => !v)}
+            >
+              {showHidden ? <Eye className="h-3.5 w-3.5 mr-1" /> : <EyeOff className="h-3.5 w-3.5 mr-1" />}
+              非表示にしたテンプレート {hiddenTemplateKeys.size}件
+            </Button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
-          {TEMPLATES.map((template, index) => (
+          {visibleTemplates.map((template, index) => (
             <Card
               key={template.id}
               className="glass-card group hover-lift cursor-pointer overflow-hidden scale-in"
@@ -94,6 +128,32 @@ export default function TemplateSelect() {
             >
               <CardHeader className="relative">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-all" />
+                {/* 非表示 / 元に戻す */}
+                {isAuthenticated && (
+                  <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {hiddenTemplateKeys.has(template.id) ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-emerald-700"
+                        title="元に戻す"
+                        onClick={(e) => { e.stopPropagation(); unhideMutation.mutate({ itemType: 'template', itemKey: template.id }); }}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5 mr-1" />戻す
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        title="使わないので非表示にする"
+                        onClick={(e) => { e.stopPropagation(); hideMutation.mutate({ itemType: 'template', itemKey: template.id }); }}
+                      >
+                        <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-start justify-between relative z-10">
                   <div className="text-5xl mb-2 group-hover:scale-110 transition-transform">{template.icon}</div>
                   <ArrowRight className="w-6 h-6 text-muted-foreground group-hover:text-primary group-hover:translate-x-2 transition-all" />

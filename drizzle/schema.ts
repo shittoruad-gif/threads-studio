@@ -190,6 +190,26 @@ export const cancellationFeedback = mysqlTable("cancellationFeedback", {
 export type CancellationFeedback = typeof cancellationFeedback.$inferSelect;
 
 /**
+ * ユーザーが「非表示」にした共有アイテム（初期プリセット・デザインテンプレート集）。
+ * これらは全ユーザー共通の静的/管理データで削除はできないため、
+ * ユーザーごとに「使わないものを隠す」ためのマッピング。
+ *   itemType: 'preset'（AI生成プリセット）| 'template'（投稿テンプレート集）
+ *   itemKey: そのアイテムの安定ID（preset.id / template.id）を文字列化したもの
+ */
+export const hiddenItems = mysqlTable("hiddenItems", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  itemType: varchar("itemType", { length: 20 }).notNull(),
+  itemKey: varchar("itemKey", { length: 100 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uniq_hidden_user_item").on(table.userId, table.itemType, table.itemKey),
+  index("idx_hidden_user").on(table.userId),
+]);
+
+export type HiddenItem = typeof hiddenItems.$inferSelect;
+
+/**
  * Threads account connections (mock implementation for now)
  */
 export const threadsAccounts = mysqlTable("threadsAccounts", {

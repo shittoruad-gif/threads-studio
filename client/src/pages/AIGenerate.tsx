@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { ArrowLeft, ArrowRight, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, FileEdit, Smartphone, Send, Link2, ChevronDown, Settings2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, EyeOff, RotateCcw, FileEdit, Smartphone, Send, Link2, ChevronDown, Settings2, AlertCircle } from 'lucide-react';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -191,6 +191,16 @@ export default function AIGenerate() {
 
   const { data: allPresets } = trpc.preset.list.useQuery();
   const { data: customPresets } = trpc.preset.listCustom.useQuery();
+  // 初期プリセットの「非表示」機構（使わないおすすめを隠す。削除ではなく非表示なので戻せる）
+  const { data: hiddenItems } = trpc.hidden.list.useQuery();
+  const hiddenPresetKeys = new Set((hiddenItems?.preset ?? []).map(String));
+  const [showHiddenPresets, setShowHiddenPresets] = useState(false);
+  const hidePresetMutation = trpc.hidden.hide.useMutation({
+    onSuccess: () => { utils.hidden.list.invalidate(); toast.success('このプリセットを非表示にしました'); },
+  });
+  const unhidePresetMutation = trpc.hidden.unhide.useMutation({
+    onSuccess: () => { utils.hidden.list.invalidate(); toast.success('プリセットを元に戻しました'); },
+  });
   const deletePresetMutation = trpc.preset.deleteCustom.useMutation({
     onSuccess: () => {
       utils.preset.listCustom.invalidate();
@@ -229,7 +239,10 @@ export default function AIGenerate() {
 
   // Combine system and custom presets, then filter
   const combinedPresets = (() => {
-    const system = allPresets || [];
+    // 非表示にした初期プリセットを除外（「非表示を表示」中は残し、戻せるようにする）
+    const system = (allPresets || []).filter(
+      (p: any) => showHiddenPresets || !hiddenPresetKeys.has(String(p.id)),
+    );
     const custom = (customPresets || []).map(p => ({ ...p, isCustom: true }));
     // Separate pinned and unpinned custom presets
     const pinnedCustom = custom.filter(p => p.isPinned);
@@ -2025,6 +2038,18 @@ export default function AIGenerate() {
             >
               投稿タイプ別
             </Button>
+            {hiddenPresetKeys.size > 0 && (
+              <Button
+                variant={showHiddenPresets ? 'secondary' : 'ghost'}
+                size="sm"
+                className="ml-auto text-xs"
+                onClick={() => setShowHiddenPresets((v) => !v)}
+                title="非表示にしたプリセットの表示/非表示を切り替え"
+              >
+                {showHiddenPresets ? <Eye className="h-3.5 w-3.5 mr-1" /> : <EyeOff className="h-3.5 w-3.5 mr-1" />}
+                非表示 {hiddenPresetKeys.size}件
+              </Button>
+            )}
           </div>
 
           {/* プリセットカード一覧 */}
@@ -2107,6 +2132,34 @@ export default function AIGenerate() {
                       >
                         <Trash2 className="h-3.5 w-3.5 text-destructive" />
                       </Button>
+                    </div>
+                  )}
+                  {/* 初期プリセット（非custom）：非表示 / 元に戻す */}
+                  {!preset.isCustom && (
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                      {hiddenPresetKeys.has(String(preset.id)) ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-emerald-700"
+                          aria-label="このプリセットを元に戻す"
+                          title="元に戻す"
+                          onClick={(e) => { e.stopPropagation(); unhidePresetMutation.mutate({ itemType: 'preset', itemKey: String(preset.id) }); }}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5 mr-1" />戻す
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          aria-label="このプリセットを非表示にする"
+                          title="使わないので非表示にする"
+                          onClick={(e) => { e.stopPropagation(); hidePresetMutation.mutate({ itemType: 'preset', itemKey: String(preset.id) }); }}
+                        >
+                          <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                      )}
                     </div>
                   )}
                   {preset.isCustom && preset.isPinned && (

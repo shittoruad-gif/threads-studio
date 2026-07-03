@@ -25,7 +25,8 @@ import {
   postAnalytics, PostAnalytics, InsertPostAnalytics,
   monitorFeedback, MonitorFeedback, InsertMonitorFeedback,
   jobRuns, JobRun,
-  followerSnapshots, hitPostArchive, HitPostArchive, cancellationFeedback
+  followerSnapshots, hitPostArchive, HitPostArchive, cancellationFeedback,
+  hiddenItems
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { PLANS } from '../shared/plans';
@@ -2541,6 +2542,41 @@ export async function updateScheduledPostTime(postId: number, scheduledAt: Date)
   const db = await getDb();
   if (!db) return;
   await db.update(scheduledPosts).set({ scheduledAt }).where(eq(scheduledPosts.id, postId));
+}
+
+// ==================== 非表示アイテム（初期プリセット・テンプレ集を隠す） ====================
+
+/** ユーザーの非表示アイテムを種類ごとに返す（{preset:[keys], template:[keys]}） */
+export async function getHiddenItems(userId: number): Promise<{ preset: string[]; template: string[] }> {
+  const db = await getDb();
+  if (!db) return { preset: [], template: [] };
+  const rows = await db.select().from(hiddenItems).where(eq(hiddenItems.userId, userId));
+  const out: { preset: string[]; template: string[] } = { preset: [], template: [] };
+  for (const r of rows) {
+    if (r.itemType === 'preset') out.preset.push(r.itemKey);
+    else if (r.itemType === 'template') out.template.push(r.itemKey);
+  }
+  return out;
+}
+
+/** 非表示に追加（重複は無視＝冪等） */
+export async function addHiddenItem(userId: number, itemType: string, itemKey: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(hiddenItems)
+    .values({ userId, itemType, itemKey })
+    .onDuplicateKeyUpdate({ set: { itemKey } }); // no-op update to swallow duplicates
+}
+
+/** 非表示を解除（元に戻す） */
+export async function removeHiddenItem(userId: number, itemType: string, itemKey: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(hiddenItems).where(and(
+    eq(hiddenItems.userId, userId),
+    eq(hiddenItems.itemType, itemType),
+    eq(hiddenItems.itemKey, itemKey),
+  ));
 }
 
 // ==================== Processing Timeout ====================

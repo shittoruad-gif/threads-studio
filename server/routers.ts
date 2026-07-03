@@ -3054,6 +3054,31 @@ ${input.commentText}
   }),
 
   // ==================== AI Generation Presets ====================
+  // 非表示アイテム（初期プリセット・投稿テンプレート集で「使わないもの」を隠す）
+  hidden: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getHiddenItems(ctx.user.id);
+    }),
+    hide: protectedProcedure
+      .input(z.object({
+        itemType: z.enum(['preset', 'template']),
+        itemKey: z.string().min(1).max(100),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.addHiddenItem(ctx.user.id, input.itemType, input.itemKey);
+        return { success: true };
+      }),
+    unhide: protectedProcedure
+      .input(z.object({
+        itemType: z.enum(['preset', 'template']),
+        itemKey: z.string().min(1).max(100),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.removeHiddenItem(ctx.user.id, input.itemType, input.itemKey);
+        return { success: true };
+      }),
+  }),
+
   preset: router({
     // Get all presets
     list: publicProcedure
