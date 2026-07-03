@@ -13,7 +13,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, refresh } = useAuth();
   const [, setLocation] = useLocation();
   const { theme, toggleTheme } = useTheme();
   const utils = trpc.useUtils();
@@ -43,6 +43,7 @@ export default function Settings() {
 
   // Local state for account
   const [name, setName] = useState(user?.name || "");
+  const [storeName, setStoreName] = useState((user as any)?.storeName || "");
   const [email, setEmail] = useState(user?.email || "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -71,9 +72,16 @@ export default function Settings() {
   useEffect(() => {
     if (user) {
       setName(user.name || "");
+      setStoreName((user as any).storeName || "");
       setEmail(user.email || "");
     }
   }, [user]);
+
+  // プロフィール（名前・店舗名）の保存
+  const updateProfile = trpc.account.updateProfile.useMutation({
+    onSuccess: () => { toast.success("プロフィールを更新しました"); refresh?.(); },
+    onError: (error) => { toast.error(error.message || "更新に失敗しました"); },
+  });
 
   // Password change mutation
   const changePassword = trpc.account.changePassword.useMutation({
@@ -261,6 +269,30 @@ export default function Settings() {
             </div>
 
             <div>
+              <Label htmlFor="storeName" className="text-sm font-medium text-foreground">
+                店舗名・屋号
+              </Label>
+              <Input
+                id="storeName"
+                value={storeName}
+                onChange={(e) => setStoreName(e.target.value)}
+                placeholder="例：○○整体院"
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Button
+                size="sm"
+                onClick={() => updateProfile.mutate({ name: name.trim(), storeName: storeName.trim() || undefined })}
+                disabled={updateProfile.isPending || !name.trim()}
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {updateProfile.isPending ? '保存中...' : '名前・店舗名を保存'}
+              </Button>
+            </div>
+
+            <div>
               <Label htmlFor="email" className="text-sm font-medium text-foreground">
                 メールアドレス
               </Label>
@@ -273,7 +305,7 @@ export default function Settings() {
                 className="mt-1"
                 disabled
               />
-              <p className="text-xs text-muted-foreground/60 mt-1">メールアドレスは変更できません</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">メールアドレスは変更できません（セミナー等のご案内にはこのアドレスを使用します）</p>
             </div>
 
             <div className="pt-2 border-t border-border/50">

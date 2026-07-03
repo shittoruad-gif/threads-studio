@@ -7,6 +7,8 @@ export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
   openId: varchar("openId", { length: 64 }).unique(),
   name: text("name"),
+  // 店舗名・屋号（セミナー情報配信・本人確認のために取得。任意・後から変更可）
+  storeName: varchar("storeName", { length: 255 }),
   email: varchar("email", { length: 320 }).unique(),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),

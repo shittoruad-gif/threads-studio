@@ -35,6 +35,7 @@ export const appRouter = router({
         email: z.string().email(),
         password: z.string().min(10),
         name: z.string().min(1, '名前を入力してください'),
+        storeName: z.string().max(255).optional(), // 店舗名・屋号（任意）
         couponCode: z.string().optional(),
         // #28 紹介コード（/register?ref=XXX から取得）
         referralCode: z.string().trim().min(1).max(16).optional(),
@@ -65,7 +66,7 @@ export const appRouter = router({
         const passwordHash = await hashPassword(input.password);
 
         // Create user
-        const user = await db.createEmailUser(input.email, passwordHash, input.name);
+        const user = await db.createEmailUser(input.email, passwordHash, input.name, input.storeName?.trim() || undefined);
         if (!user) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'ユーザーの作成に失敗しました。' });
         }
@@ -3438,6 +3439,19 @@ ${input.commentText}
 
   // ==================== Account Management ====================
   account: router({
+    // プロフィール（名前・店舗名）の更新。登録後いつでも変更できる。
+    updateProfile: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1, '名前を入力してください').max(100),
+        storeName: z.string().max(255).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.updateUserProfile(ctx.user.id, {
+          name: input.name.trim(),
+          storeName: input.storeName?.trim() || null,
+        });
+        return { success: true };
+      }),
     // パスワード変更
     changePassword: protectedProcedure
       .input(z.object({

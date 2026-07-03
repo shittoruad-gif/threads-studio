@@ -1716,7 +1716,14 @@ export async function deleteChatConversation(conversationId: number) {
 // Email Authentication Functions
 // ============================================================================
 
-export async function createEmailUser(email: string, passwordHash: string, name?: string) {
+/** プロフィール（名前・店舗名）を更新 */
+export async function updateUserProfile(userId: number, data: { name: string; storeName: string | null }): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ name: data.name, storeName: data.storeName }).where(eq(users.id, userId));
+}
+
+export async function createEmailUser(email: string, passwordHash: string, name?: string, storeName?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -1727,6 +1734,7 @@ export async function createEmailUser(email: string, passwordHash: string, name?
     openId,
     email,
     name: name || null,
+    storeName: storeName || null,
     passwordHash,
     authProvider: 'email',
     loginMethod: 'email',

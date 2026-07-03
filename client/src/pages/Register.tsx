@@ -14,6 +14,7 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [storeName, setStoreName] = useState('');
   const [couponCode, setCouponCode] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [error, setError] = useState('');
@@ -83,6 +84,7 @@ export default function Register() {
       email,
       password,
       name,
+      storeName: storeName.trim() || undefined,
       couponCode: couponCode.trim() || undefined,
       referralCode: referralCode || undefined,
     });
@@ -133,6 +135,21 @@ export default function Register() {
                 required
                 disabled={registerMutation.isPending}
                 autoComplete="name"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="storeName">
+                店舗名・屋号 <span className="text-muted-foreground text-xs font-normal">（任意・あとで変更できます）</span>
+              </Label>
+              <Input
+                id="storeName"
+                type="text"
+                placeholder="例：○○整体院"
+                value={storeName}
+                onChange={(e) => setStoreName(e.target.value)}
+                disabled={registerMutation.isPending}
+                autoComplete="organization"
               />
             </div>
 
