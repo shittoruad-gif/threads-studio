@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import ProjectLinksManager from '@/components/ProjectLinksManager';
 import {
   COUNSELING_QUESTIONS,
   type CounselingAnswers,
@@ -316,6 +317,20 @@ export default function AICounseling() {
               );
             })}
           </div>
+
+          {/* 予約・LINE・HP などの誘導先URL（ここでもまとめて修正できる） */}
+          {!isNew && projectId && project && (
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground px-1">
+                予約・LINE・ホームページのリンク
+              </p>
+              <ProjectLinksManager
+                projectId={projectId}
+                initialLinksJson={(project as any).links || null}
+                onSaved={() => utils.project.get.invalidate({ id: projectId })}
+              />
+            </div>
+          )}
 
           <div className="flex items-center gap-2 sticky bottom-2 z-40 bg-background/95 backdrop-blur-sm py-2 -mx-4 px-4 rounded-t-lg">
             <Button

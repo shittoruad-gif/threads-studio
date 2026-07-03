@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Calendar, CheckCircle2, CheckSquare, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, Square, Trash2, AlertTriangle, Link2, Search, Download } from "lucide-react";
+import { ArrowLeft, Calendar, CheckCircle2, CheckSquare, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, Square, Trash2, AlertTriangle, Link2, Search, Download, Pencil } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { translatePostError } from "@/lib/postErrors";
@@ -47,7 +47,8 @@ export default function PostHistory() {
   // ID of the post pending delete confirmation. null = no dialog shown.
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   // 承認待ち投稿の編集用（id と編集中の本文）
-  const [editTarget, setEditTarget] = useState<{ id: number; content: string } | null>(null);
+  const [editTarget, setEditTarget] = useState<{ id: number; content: string; projectId?: string } | null>(null);
+  const editProjectId = editTarget?.projectId;
 
   const { data: scheduledPosts, isLoading, refetch } = trpc.scheduledPost.list.useQuery();
   const cancelPost = trpc.scheduledPost.cancel.useMutation({
@@ -452,22 +453,33 @@ export default function PostHistory() {
                                 variant="outline"
                                 size="sm"
                                 className="glass hover-lift"
-                                onClick={() => setEditTarget({ id: post.id, content: post.postContent || '' })}
+                                onClick={() => setEditTarget({ id: post.id, content: post.postContent || '', projectId: (post as any).projectId })}
                               >
                                 編集
                               </Button>
                             </>
                           )}
                           {post.status === 'pending' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="glass hover-lift"
-                              onClick={() => cancelPost.mutate({ postId: post.id })}
-                              disabled={cancelPost.isPending}
-                            >
-                              キャンセル
-                            </Button>
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="glass hover-lift"
+                                onClick={() => setEditTarget({ id: post.id, content: post.postContent || '', projectId: (post as any).projectId })}
+                              >
+                                <Pencil className="w-3 h-3 mr-1" />
+                                内容を修正
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="glass hover-lift"
+                                onClick={() => cancelPost.mutate({ postId: post.id })}
+                                disabled={cancelPost.isPending}
+                              >
+                                キャンセル
+                              </Button>
+                            </>
                           )}
                           {post.status === 'failed' && (() => {
                             const t = translatePostError(post.errorMessage);
@@ -633,7 +645,7 @@ export default function PostHistory() {
           <DialogHeader>
             <DialogTitle>投稿内容を編集</DialogTitle>
             <DialogDescription>
-              承認前に内容を修正できます。修正後、「承認して投稿」で公開されます。
+              投稿される前に、この投稿の内容を直接修正できます。
             </DialogDescription>
           </DialogHeader>
           <textarea
@@ -645,6 +657,18 @@ export default function PostHistory() {
           <p className="text-xs text-muted-foreground text-right">
             {Array.from(editTarget?.content ?? '').length} 文字
           </p>
+          {/* 根本修正への誘導：毎回同じ間違いなら登録情報を直す */}
+          <div className="text-xs text-muted-foreground bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            💡 毎回同じ間違い（店名・地域・実績など）が出る場合は、この1件を直すだけでなく
+            <button
+              type="button"
+              className="text-emerald-700 font-medium underline mx-1"
+              onClick={() => setLocation(editProjectId ? `/ai-counseling?project=${editProjectId}` : '/ai-generate')}
+            >
+              登録情報（カウンセリング）を修正
+            </button>
+            すると、次回の自動投稿から反映されます。
+          </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setEditTarget(null)}>キャンセル</Button>
             <Button

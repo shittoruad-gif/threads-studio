@@ -2,10 +2,11 @@ import { useAuth } from '@/_core/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/lib/trpc';
-import { 
-  CreditCard, 
-  Settings, 
-  FileText, 
+import {
+  CreditCard,
+  Settings,
+  Pencil,
+  FileText,
   Calendar, 
   Link2, 
   Crown, 
@@ -123,6 +124,14 @@ export default function Dashboard() {
     undefined,
     { enabled: isAuthenticated }
   );
+
+  // 「登録情報を修正」導線用（先頭プロジェクトのカウンセリング編集へ直接飛ぶ）
+  const { data: dashProjects } = trpc.project.list.useQuery(undefined, { enabled: isAuthenticated });
+  const firstProjectId = dashProjects?.[0]?.id;
+  const goEditInfo = () => {
+    if (firstProjectId) setLocation(`/ai-counseling?project=${firstProjectId}`);
+    else setLocation('/ai-generate');
+  };
 
   // ★登録後の最初の一歩はカウンセリング。プロジェクトが1つも無ければ自動誘導する。
   //   一度だけ実行（ユーザーが手動で /dashboard に戻った時に毎回飛ばさないよう sessionStorage で抑制）。
@@ -1202,6 +1211,23 @@ export default function Dashboard() {
             <p className="text-muted-foreground text-sm">集客に特化した投稿を自動生成</p>
             <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-emerald-600 mt-2 transition-colors" />
           </button>
+
+          {projectCount && projectCount > 0 ? (
+            <button
+              onClick={goEditInfo}
+              className="bg-background p-6 rounded-xl text-left hover:shadow-md transition-all border border-border group"
+            >
+              <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center mb-3">
+                <Pencil className="w-5 h-5 text-amber-600" />
+              </div>
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-semibold text-foreground">登録情報を修正</h3>
+                <HelpTooltip content="お店の情報・カウンセリングの回答・予約/LINEのリンクを、いつでもまとめて修正できます。間違って入力した場合はここから直してください。" />
+              </div>
+              <p className="text-muted-foreground text-sm">店舗情報・カウンセリング・リンクを直す</p>
+              <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-emerald-600 mt-2 transition-colors" />
+            </button>
+          ) : null}
 
           <button
             onClick={() => setLocation('/ai-history')}
