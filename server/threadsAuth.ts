@@ -53,10 +53,15 @@ export function getThreadsAuthUrl(config: ThreadsAuthConfig, options: ThreadsAut
     "threads_read_replies",
     // 投稿分析（PostAnalytics）でインサイトAPIを使うため必須
     "threads_manage_insights",
-    // 地域トレンド収集（キーワード検索API）。Meta審査の承認後に有効化される。
-    // 未承認でも他スコープの動作には影響しない（追加のみ）。
-    "threads_keyword_search",
   ];
+
+  // 地域トレンド収集（keyword_search）。Meta審査が「承認された後」だけ要求する。
+  // ★未承認のスコープを一般ユーザーの連携リクエストに混ぜると、Threads連携
+  //   自体が失敗し、他の審査中権限まで巻き添えになる恐れがあるため、
+  //   承認確認まで要求しない（承認後は環境変数を true にするだけで有効化）。
+  if (process.env.THREADS_KEYWORD_SEARCH_APPROVED === "true") {
+    defaultScopes.push("threads_keyword_search");
+  }
 
   const scopes = config.scope || defaultScopes;
 
