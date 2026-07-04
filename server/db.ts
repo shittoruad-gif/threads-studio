@@ -26,7 +26,8 @@ import {
   monitorFeedback, MonitorFeedback, InsertMonitorFeedback,
   jobRuns, JobRun,
   followerSnapshots, hitPostArchive, HitPostArchive, cancellationFeedback,
-  hiddenItems, contentInterestSurvey, ContentInterestSurvey
+  hiddenItems, contentInterestSurvey, ContentInterestSurvey,
+  regionalRefPosts, RegionalRefPost
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { PLANS } from '../shared/plans';
@@ -2586,6 +2587,47 @@ export async function removeHiddenItem(userId: number, itemType: string, itemKey
     eq(hiddenItems.itemType, itemType),
     eq(hiddenItems.itemKey, itemKey),
   ));
+}
+
+// ==================== 地域トレンド（参考投稿） ====================
+
+/** プロジェクトの地域参考投稿一覧（新しい順） */
+export async function listRegionalRefPosts(projectId: string): Promise<RegionalRefPost[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(regionalRefPosts)
+    .where(eq(regionalRefPosts.projectId, projectId))
+    .orderBy(desc(regionalRefPosts.createdAt))
+    .limit(60);
+}
+
+/** 参考投稿を1件追加（手動/収集共通） */
+export async function addRegionalRefPost(data: {
+  userId: number; projectId: string; source: string; area?: string | null;
+  keyword?: string | null; authorUsername?: string | null; text: string;
+  permalink?: string | null; postedAt?: Date | null;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(regionalRefPosts).values({
+    userId: data.userId, projectId: data.projectId, source: data.source,
+    area: data.area ?? null, keyword: data.keyword ?? null,
+    authorUsername: data.authorUsername ?? null, text: data.text,
+    permalink: data.permalink ?? null, postedAt: data.postedAt ?? null,
+  });
+}
+
+/** 既存の参考投稿の permalink 集合（収集時の重複登録を避ける） */
+export async function getRegionalRefPermalinks(projectId: string): Promise<Set<string>> {
+  const rows = await listRegionalRefPosts(projectId);
+  return new Set(rows.map((r) => r.permalink).filter((p): p is string => !!p));
+}
+
+/** 参考投稿を1件削除（本人のもののみ） */
+export async function removeRegionalRefPost(id: number, userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(regionalRefPosts).where(and(eq(regionalRefPosts.id, id), eq(regionalRefPosts.userId, userId)));
 }
 
 // ==================== 契約時アンケート（興味のあるコンテンツ） ====================

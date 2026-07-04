@@ -907,6 +907,8 @@ export const appRouter = router({
         trendWord: z.string().optional(), // トレンドワード（trend型で使用）
         seasonalTopic: z.string().max(300).optional(), // 季節ネタ（今月のおすすめネタ。静的データ由来）
         buzzPattern: z.string().max(800).optional(), // コメントが集まる型（バズパターン。静的データ由来）
+        // 地域トレンド参考投稿ID（regionalRefPostsのid。所有確認の上、本文を参考として渡す）
+        regionalRefIds: z.array(z.number()).max(3).optional(),
         purpose: z.enum(['cv', 'awareness', 'authority', 'fan']).optional(), // 投稿の目的
         tone: z.enum(['polite', 'casual', 'professional', 'energetic', 'storytelling']).optional(), // 口調
       }))
@@ -1002,6 +1004,14 @@ export const appRouter = router({
           trendWord: input.trendWord || undefined,
           seasonalTopic: input.seasonalTopic || undefined,
           buzzPattern: input.buzzPattern || undefined,
+          regionalReferences: await (async () => {
+            // IDから本文を解決（このプロジェクトの参考投稿のみ＝他人のIDを渡されても無効）
+            if (!input.regionalRefIds || input.regionalRefIds.length === 0) return undefined;
+            const refs = await db.listRegionalRefPosts(input.projectId);
+            const wanted = new Set(input.regionalRefIds);
+            const texts = refs.filter((r) => wanted.has(r.id) && r.text).map((r) => r.text as string);
+            return texts.length > 0 ? texts : undefined;
+          })(),
           purpose: input.purpose,
           tone: input.tone,
           counseling: counselingResult,
@@ -3097,6 +3107,103 @@ ${input.commentText}
               `\n→ クロスセルの見込み。案内希望の方には登録メールへご案内を。`,
           });
         } catch (e) { console.error('[survey] 通知失敗:', e); }
+        return { success: true };
+      }),
+  }),
+
+  // ============ 地域トレンド（地域で反応の高い投稿の収集→似た投稿の生成） ============
+  regional: router({
+    // プロジェクトの参考投稿一覧
+    list: protectedProcedure
+      .input(z.object({ projectId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        const project = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'プロジェクトが見つかりません' });
+        }
+        return await db.listRegionalRefPosts(input.projectId);
+      }),
+
+    // Threadsキーワード検索APIで地域の人気投稿（TOP）を自動収集
+    collect: protectedProcedure
+      .input(z.object({ projectId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const project = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'プロジェクトが見つかりません' });
+        }
+        const accounts = await db.getThreadsAccountsByUserId(ctx.user.id);
+        if (accounts.length === 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Threadsアカウントの連携が必要です。' });
+        }
+        const { searchRegionalTopPosts, buildRegionalKeywords } = await import('./threadsRegional');
+        const localTerms = ((project as any).localTerms || '')
+          .split(/\r?\n/).map((s: string) => s.trim()).filter(Boolean);
+        const keywords = buildRegionalKeywords(project.area || '', localTerms);
+        if (keywords.length === 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '地域情報が未設定です。先に登録情報（地域）を入力してください。' });
+        }
+
+        const result = await searchRegionalTopPosts(accounts[0].accessToken, keywords);
+        if (result.errorCode === 'permission') {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: '地域検索の権限（keyword_search）がまだ有効ではありません。Meta審査の承認後に使えるようになります。それまでは「手動で追加」から参考投稿を登録してください。',
+          });
+        }
+        if (result.errorCode === 'auth') {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Threads連携の有効期限が切れています。再連携してください。' });
+        }
+
+        // 重複（同一permalink）を避けて保存
+        const existing = await db.getRegionalRefPermalinks(input.projectId);
+        let saved = 0;
+        for (const p of result.posts.slice(0, 20)) {
+          if (p.permalink && existing.has(p.permalink)) continue;
+          await db.addRegionalRefPost({
+            userId: ctx.user.id,
+            projectId: input.projectId,
+            source: 'collected',
+            area: project.area || null,
+            keyword: p.keyword,
+            authorUsername: p.username,
+            text: p.text,
+            permalink: p.permalink,
+            postedAt: p.timestamp ? new Date(p.timestamp) : null,
+          });
+          saved++;
+        }
+        return { success: true, collected: saved, searchedKeywords: keywords };
+      }),
+
+    // 手動で参考投稿を追加（Threadsで見つけた良い投稿を貼り付け）
+    addManual: protectedProcedure
+      .input(z.object({
+        projectId: z.string(),
+        text: z.string().min(10, '本文を入力してください').max(2000),
+        permalink: z.string().max(500).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const project = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'プロジェクトが見つかりません' });
+        }
+        await db.addRegionalRefPost({
+          userId: ctx.user.id,
+          projectId: input.projectId,
+          source: 'manual',
+          area: project.area || null,
+          text: input.text.trim(),
+          permalink: input.permalink?.trim() || null,
+        });
+        return { success: true };
+      }),
+
+    // 参考投稿の削除
+    remove: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await db.removeRegionalRefPost(input.id, ctx.user.id);
         return { success: true };
       }),
   }),

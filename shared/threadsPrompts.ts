@@ -141,6 +141,13 @@ export interface ThreadsPromptInput {
    */
   seasonalTopic?: string;
   /**
+   * 地域トレンド参考投稿（同じ地域で反応の高かった実在投稿の本文）。
+   * 「題材・切り口」の参考にして、丸写しではない“似た投稿”を作らせる。
+   * 事実（実績・数値・エピソード）は必ず自店の入力情報から取り、
+   * 参考投稿内の他店の事実・数字は一切流用しない。
+   */
+  regionalReferences?: string[];
+  /**
    * コメントが集まる型（ポジティブバズパターン）。shared/buzzPatterns.ts の
    * 静的データ由来の「ラベル：構造指示」文字列。実際のThreadsバズ投稿の
    * リサーチに基づく型で、温かいコメント・会話を自然に生む構造を指示する。
@@ -1102,6 +1109,18 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
     ? `\n\n【季節ネタの追加指示】\n- 今回は次の季節ネタを投稿の軸にすること：「${safe.seasonalTopic}」\n- この切り口は一般的な季節の事実。ここに書かれていない具体的なイベント名・日付・統計数値を推測で加えないこと。\n- 季節の話題で共感を作ってから、入力情報にある店舗の強み・ターゲットの悩みに自然につなげる。`
     : '';
 
+  // 地域トレンド参考投稿：丸写しせず「似た切り口」で書く指示。
+  // 参考投稿はユーザー由来データなので個別にサニタイズし、件数・長さを制限する。
+  const regionalRefsClean = Array.isArray(input.regionalReferences)
+    ? input.regionalReferences
+        .map((r) => sanitizeForPrompt(r, 500))
+        .filter((r): r is string => !!r && r.trim().length > 0)
+        .slice(0, 3)
+    : [];
+  const regionalRefNote = regionalRefsClean.length > 0
+    ? `\n\n【★地域トレンド参考投稿（この地域で実際に反応が高かった投稿。切り口の参考にする）】\n${regionalRefsClean.map((r, i) => `--- 参考${i + 1} ---\n${r}`).join('\n')}\n---\n- 上の参考投稿の「題材・切り口・構成の良さ」だけを参考にし、**文章の丸写し・言い回しのコピーは絶対にしない**（盗用は信頼を失う）。\n- 参考投稿に含まれる他店の実績・数字・エピソード・店名は一切使わない。事実は必ず【入力情報】と【カウンセリング結果】から取る。\n- 「同じ話題を、自分の店の視点・自分の言葉で書いたらどうなるか」を考えて、オリジナルの投稿に仕上げる。`
+    : '';
+
   // コメントが集まる型（ポジティブバズパターン）が指定されていれば、その構造に従う
   const buzzNote = safe.buzzPattern
     ? `\n\n【★コメントが集まる型の追加指示（実際のThreadsバズ投稿のリサーチに基づく構造。最優先で従うこと）】\n- 今回は次の型で投稿を構成すること：${safe.buzzPattern}\n- Threadsは「会話量」が最も評価される。読者が思わず返信したくなる自然な問いかけ・余白を作ること。\n- ただし「いいねして」「フォローして」「コメントして」等の直接要求（エンゲージメントベイト）はアルゴリズムのペナルティ対象なので絶対に書かない。質問や開かれた締め方で自然に会話を生む。\n- 批判・皮肉・「物申す」調は使わない（この型はポジティブな反応を集めることが目的）。\n- エピソード・数値・固有名詞は入力情報にある事実だけを使う（この型のためでも捏造は絶対にしない）。`
@@ -1136,7 +1155,7 @@ ${safe.trendWord ? `- トレンドワード：${safe.trendWord}` : ''}
 ${formatLinksForPrompt(input.links, input.postType)}
 
 【投稿タイプ】
-${postTypeDescription}${localNote}${trendNote}${seasonalNote}${buzzNote}${ngWordsNote}${styleSamplesNote}
+${postTypeDescription}${localNote}${trendNote}${seasonalNote}${regionalRefNote}${buzzNote}${ngWordsNote}${styleSamplesNote}
 
 【★会話設計（全投稿共通。Threadsはコメント＝会話量が最も評価される）】
 - 読者が「思わず返信したくなる」書き方を常に心がける：一方的な解説で完結させず、読者の体験・意見が入り込む余白を残す。

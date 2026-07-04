@@ -227,6 +227,30 @@ export const contentInterestSurvey = mysqlTable("contentInterestSurvey", {
 export type ContentInterestSurvey = typeof contentInterestSurvey.$inferSelect;
 
 /**
+ * 地域トレンド：その地域で反応の高い（Threads人気順=TOP）投稿の参考ストック。
+ * これを素材に「丸写しではない、似た切り口の地域ネタ投稿」を生成する。
+ *   source: 'collected'（キーワード検索APIで自動収集）| 'manual'（クライアントが手動登録）
+ * ※他人の投稿の正確な閲覧数はAPIで取得できないため、Threadsの人気順(TOP)を指標にする。
+ */
+export const regionalRefPosts = mysqlTable("regionalRefPosts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  projectId: varchar("projectId", { length: 50 }).notNull().references(() => projects.id, { onDelete: "cascade" }),
+  source: varchar("source", { length: 20 }).notNull().default("collected"),
+  area: varchar("area", { length: 255 }),
+  keyword: varchar("keyword", { length: 255 }), // 収集に使ったキーワード
+  authorUsername: varchar("authorUsername", { length: 255 }),
+  text: text("text"),
+  permalink: text("permalink"),
+  postedAt: timestamp("postedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  index("idx_regional_project").on(table.projectId),
+]);
+
+export type RegionalRefPost = typeof regionalRefPosts.$inferSelect;
+
+/**
  * Threads account connections (mock implementation for now)
  */
 export const threadsAccounts = mysqlTable("threadsAccounts", {

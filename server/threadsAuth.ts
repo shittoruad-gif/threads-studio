@@ -53,6 +53,9 @@ export function getThreadsAuthUrl(config: ThreadsAuthConfig, options: ThreadsAut
     "threads_read_replies",
     // 投稿分析（PostAnalytics）でインサイトAPIを使うため必須
     "threads_manage_insights",
+    // 地域トレンド収集（キーワード検索API）。Meta審査の承認後に有効化される。
+    // 未承認でも他スコープの動作には影響しない（追加のみ）。
+    "threads_keyword_search",
   ];
 
   const scopes = config.scope || defaultScopes;

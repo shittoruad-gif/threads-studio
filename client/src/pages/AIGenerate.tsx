@@ -78,6 +78,10 @@ export default function AIGenerate() {
   const [seasonalTopic, setSeasonalTopic] = useState<string>('');
   const seasonalTopics = getSeasonalTopics();
   const currentMonth = new Date().getMonth() + 1;
+  // 地域トレンド参考投稿（地域で反応の高い投稿→似た投稿を生成）。選択中のID（最大3件）
+  const [regionalRefIds, setRegionalRefIds] = useState<number[]>([]);
+  const [regionalPanelOpen, setRegionalPanelOpen] = useState(false);
+  const [manualRefText, setManualRefText] = useState('');
   // コメントが集まる型（バズパターン）。選択中パターンのid。空 = 未使用。季節ネタと併用可。
   const [buzzPatternId, setBuzzPatternId] = useState<string>('');
   const selectedBuzzPattern = BUZZ_PATTERNS.find((p) => p.id === buzzPatternId);
@@ -191,6 +195,32 @@ export default function AIGenerate() {
 
   const { data: allPresets } = trpc.preset.list.useQuery();
   const { data: customPresets } = trpc.preset.listCustom.useQuery();
+  // 地域トレンド参考投稿の一覧・収集・手動追加・削除
+  const { data: regionalRefs } = trpc.regional.list.useQuery(
+    { projectId: projectId! },
+    { enabled: !!projectId },
+  );
+  const collectRegional = trpc.regional.collect.useMutation({
+    onSuccess: (d) => {
+      utils.regional.list.invalidate({ projectId: projectId! });
+      toast.success(d.collected > 0
+        ? `この地域の人気投稿を${d.collected}件集めました（検索: ${d.searchedKeywords.join('・')}）`
+        : '新しい投稿は見つかりませんでした（既に収集済みの可能性があります）');
+    },
+    onError: (e) => toast.error(e.message, { duration: 8000 }),
+  });
+  const addManualRef = trpc.regional.addManual.useMutation({
+    onSuccess: () => {
+      utils.regional.list.invalidate({ projectId: projectId! });
+      setManualRefText('');
+      toast.success('参考投稿を追加しました');
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const removeRef = trpc.regional.remove.useMutation({
+    onSuccess: () => utils.regional.list.invalidate({ projectId: projectId! }),
+  });
+
   // 初期プリセットの「非表示」機構（使わないおすすめを隠す。削除ではなく非表示なので戻せる）
   const { data: hiddenItems } = trpc.hidden.list.useQuery();
   const hiddenPresetKeys = new Set((hiddenItems?.preset ?? []).map(String));
@@ -469,6 +499,7 @@ export default function AIGenerate() {
         trendWord: postType === 'trend' ? trendWord : undefined,
         seasonalTopic: seasonalTopic || undefined,
         buzzPattern: buzzPatternValue || undefined,
+        regionalRefIds: regionalRefIds.length > 0 ? regionalRefIds : undefined,
         purpose: purpose || undefined,
         tone: tone || undefined,
       });
@@ -508,6 +539,7 @@ export default function AIGenerate() {
               trendWord: pt === 'trend' ? trendWord : undefined,
               seasonalTopic: seasonalTopic || undefined,
               buzzPattern: buzzPatternValue || undefined,
+              regionalRefIds: regionalRefIds.length > 0 ? regionalRefIds : undefined,
               purpose: purpose || undefined,
               tone: tone || undefined,
             })
@@ -928,6 +960,119 @@ export default function AIGenerate() {
                     <p className="text-xs text-sky-700">
                       {selectedBuzzPattern.emoji} {selectedBuzzPattern.description}
                     </p>
+                  )}
+                </div>
+
+                {/* 地域トレンド：この地域で反応の高い投稿を集めて「似た投稿」を作る */}
+                <div className="space-y-2 rounded-xl border border-border p-3">
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between text-left"
+                    onClick={() => setRegionalPanelOpen((v) => !v)}
+                  >
+                    <span className="flex items-center gap-1.5 text-sm font-medium">
+                      📍 地域トレンド（この地域で伸びている投稿を参考にする）
+                      {regionalRefIds.length > 0 && (
+                        <Badge className="bg-emerald-600 text-white text-xs px-1.5 py-0">{regionalRefIds.length}件 選択中</Badge>
+                      )}
+                    </span>
+                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${regionalPanelOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {regionalPanelOpen && (
+                    <div className="space-y-3 pt-1">
+                      <p className="text-xs text-muted-foreground">
+                        この地域で反応の高い投稿を参考に、<span className="font-medium text-foreground">丸写しではない「似た切り口」の投稿</span>をAIが作ります。参考にしたい投稿を選んで（最大3件）、そのまま「AI投稿を生成」を押してください。
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => collectRegional.mutate({ projectId: projectId! })}
+                          disabled={collectRegional.isPending}
+                        >
+                          {collectRegional.isPending ? (
+                            <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />収集中...</>
+                          ) : (
+                            <><Search className="h-3.5 w-3.5 mr-1.5" />この地域の人気投稿を集める</>
+                          )}
+                        </Button>
+                      </div>
+
+                      {/* 手動追加（審査承認前でも使える） */}
+                      <div className="space-y-1.5">
+                        <Textarea
+                          placeholder="Threadsで見つけた「この地域で伸びている投稿」の本文を貼り付けて追加できます"
+                          value={manualRefText}
+                          onChange={(e) => setManualRefText(e.target.value)}
+                          className="text-xs min-h-[56px]"
+                          maxLength={2000}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs"
+                          disabled={manualRefText.trim().length < 10 || addManualRef.isPending}
+                          onClick={() => addManualRef.mutate({ projectId: projectId!, text: manualRefText })}
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1" />手動で追加
+                        </Button>
+                      </div>
+
+                      {/* 参考投稿一覧（選択式） */}
+                      {(regionalRefs || []).length === 0 ? (
+                        <p className="text-xs text-muted-foreground/70 italic">
+                          まだ参考投稿がありません。「集める」ボタンか手動追加で登録してください。
+                        </p>
+                      ) : (
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {(regionalRefs || []).map((r) => {
+                            const on = regionalRefIds.includes(r.id);
+                            return (
+                              <div
+                                key={r.id}
+                                className={`rounded-lg border p-2.5 text-xs cursor-pointer transition-colors ${
+                                  on ? 'border-emerald-500 bg-emerald-50' : 'border-border hover:bg-muted/40'
+                                }`}
+                                onClick={() => setRegionalRefIds((prev) =>
+                                  on ? prev.filter((x) => x !== r.id)
+                                     : prev.length >= 3 ? (toast.info('参考にできるのは3件までです'), prev) : [...prev, r.id],
+                                )}
+                              >
+                                <div className="flex items-start gap-2">
+                                  <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-muted-foreground/40'}`}>
+                                    {on ? '✓' : ''}
+                                  </span>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="whitespace-pre-wrap break-words line-clamp-4 text-foreground">{r.text}</p>
+                                    <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                                      <span>{r.source === 'manual' ? '手動追加' : `自動収集${r.keyword ? `（${r.keyword}）` : ''}`}</span>
+                                      {r.permalink && (
+                                        <a href={r.permalink} target="_blank" rel="noopener noreferrer" className="underline" onClick={(e) => e.stopPropagation()}>元投稿</a>
+                                      )}
+                                      <button
+                                        type="button"
+                                        className="ml-auto text-destructive/70 hover:text-destructive"
+                                        onClick={(e) => { e.stopPropagation(); removeRef.mutate({ id: r.id }); setRegionalRefIds((prev) => prev.filter((x) => x !== r.id)); }}
+                                      >
+                                        削除
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {regionalRefIds.length > 0 && (
+                        <p className="text-xs text-emerald-700">
+                          選択した{regionalRefIds.length}件の切り口を参考に、あなたのお店の事実だけで「似た投稿」を作ります（文章の丸写しはしません）
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
 
