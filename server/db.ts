@@ -703,6 +703,10 @@ export async function countAccountMonthlyUsage(threadsAccountId: number): Promis
     .from(scheduledPosts)
     .where(and(
       eq(scheduledPosts.threadsAccountId, threadsAccountId),
+      // ★追い投稿（自分の投稿へのひとこと返信）は月間投稿枠を消費しない。
+      //   これを除外しないと、追い投稿がライトプランの枠(40件)を食い潰し
+      //   本体の自動投稿が止まってしまう。
+      sql`${scheduledPosts.replyToThreadsId} IS NULL`,
       sql`(
         (${scheduledPosts.status} = 'posted'
           AND YEAR(DATE_ADD(${scheduledPosts.postedAt}, INTERVAL 9 HOUR)) = YEAR(DATE_ADD(NOW(), INTERVAL 9 HOUR))
@@ -2243,6 +2247,8 @@ export async function getAutoPostSettings(userId: number) {
       autoPostEnabled: users.autoPostEnabled,
       autoPostFrequency: users.autoPostFrequency,
       autoPostRequireApproval: users.autoPostRequireApproval,
+      autoTopicTag: users.autoTopicTag,
+      autoFollowUpEnabled: users.autoFollowUpEnabled,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -2254,7 +2260,7 @@ export async function getAutoPostSettings(userId: number) {
 /**
  * Update user's auto-post settings
  */
-export async function updateAutoPostSettings(userId: number, settings: { autoPostEnabled?: boolean; autoPostFrequency?: "daily" | "twice_daily" | "three_daily"; autoPostRequireApproval?: boolean }) {
+export async function updateAutoPostSettings(userId: number, settings: { autoPostEnabled?: boolean; autoPostFrequency?: "daily" | "twice_daily" | "three_daily"; autoPostRequireApproval?: boolean; autoTopicTag?: boolean; autoFollowUpEnabled?: boolean }) {
   const database = await getDb();
   if (!database) return;
 
@@ -2587,6 +2593,44 @@ export async function removeHiddenItem(userId: number, itemType: string, itemKey
     eq(hiddenItems.itemType, itemType),
     eq(hiddenItems.itemKey, itemKey),
   ));
+}
+
+// ==================== リーチ強化（コメント即応・当たり時間） ====================
+
+/** コメント確認時刻を更新（通知の重複防止） */
+export async function updateUserLastCommentCheck(userId: number, at: Date): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ lastCommentCheckAt: at }).where(eq(users.id, userId));
+}
+
+/**
+ * 本人の実績から「反応が高い投稿時間帯（JST）」を返す。
+ * データが少ないうちは null（呼び出し側はデフォルト時刻を使う）。
+ * 条件: postedAtのある投稿が8件以上・時間帯3種類以上。7〜22時のみ採用。
+ */
+export async function getUserBestPostingHours(userId: number): Promise<number[] | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select({
+    hour: sql<number>`HOUR(DATE_ADD(${postAnalytics.postedAt}, INTERVAL 9 HOUR))`,
+    posts: sql<number>`COUNT(*)`,
+    avgEng: sql<number>`AVG(${postAnalytics.likes} + ${postAnalytics.replies} + ${postAnalytics.reposts})`,
+  })
+    .from(postAnalytics)
+    .where(and(eq(postAnalytics.userId, userId), sql`${postAnalytics.postedAt} IS NOT NULL`))
+    .groupBy(sql`HOUR(DATE_ADD(${postAnalytics.postedAt}, INTERVAL 9 HOUR))`);
+
+  const total = rows.reduce((s, r) => s + Number(r.posts), 0);
+  const usable = rows
+    .map((r) => ({ hour: Number(r.hour), posts: Number(r.posts), avgEng: Number(r.avgEng) }))
+    .filter((r) => r.hour >= 7 && r.hour <= 22 && r.posts >= 2);
+  if (total < 8 || usable.length < 3) return null;
+
+  return usable
+    .sort((a, b) => b.avgEng - a.avgEng)
+    .slice(0, 4)
+    .map((r) => r.hour);
 }
 
 // ==================== 地域トレンド（参考投稿） ====================

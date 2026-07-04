@@ -192,15 +192,37 @@ export async function executePendingPosts() {
           }
         }
 
-        // Post to Threads
-        // ★ツリー（続きの投稿）は本物の返信チェーンとして連続投稿する。
-        //   postContent が区切りを含めば複数投稿に分割、無ければ単一投稿。
-        //   各セグメントは個別投稿なので500字制限による切り捨ては起きない。
-        const segments = splitThreadSegments(post.postContent || '');
-        const result = await createAndPublishThread(
-          { accessToken, threadsUserId: account.threadsUserId },
-          segments,
-        );
+        // ユーザー設定（トピックタグ・追い投稿）と店舗情報を取得
+        const postUser = await db.getUserById(post.userId);
+        const postProject = await db.getProjectById(post.projectId);
+
+        let result: { id: string };
+        if ((post as any).replyToThreadsId) {
+          // ★追い投稿：新規投稿ではなく、元投稿への「返信」として公開する
+          //   （自分の投稿にひとこと足すと、タイムラインで再浮上しやすくなる）
+          const { createAndPublishPost } = await import('./threadsPost');
+          result = await createAndPublishPost({
+            accessToken,
+            threadsUserId: account.threadsUserId,
+            text: (post.postContent || '').slice(0, 480),
+            mediaType: 'TEXT',
+            replyToId: (post as any).replyToThreadsId,
+          });
+        } else {
+          // Post to Threads
+          // ★ツリー（続きの投稿）は本物の返信チェーンとして連続投稿する。
+          //   postContent が区切りを含めば複数投稿に分割、無ければ単一投稿。
+          //   各セグメントは個別投稿なので500字制限による切り捨ては起きない。
+          const segments = splitThreadSegments(post.postContent || '');
+          // トピックタグ（設定ONのとき、店舗情報から1つ。フォロワー外への発見性UP）
+          const topicTag = postUser?.autoTopicTag !== false && postProject
+            ? (await import('./reachBoost')).deriveTopicTag(postProject) ?? undefined
+            : undefined;
+          result = await createAndPublishThread(
+            { accessToken, threadsUserId: account.threadsUserId, topicTag },
+            segments,
+          );
+        }
 
         // Update status to posted
         await db.updateScheduledPost(post.id, {
@@ -210,6 +232,32 @@ export async function executePendingPosts() {
 
         executed++;
         console.log(`[Scheduled Post] Successfully published post ${post.id} to Threads (${result.id})`);
+
+        // ★追い投稿の自動作成：自動投稿のメイン投稿が公開できたら、
+        //   約6時間後に「ひとこと返信」を予約（設定ONのユーザーのみ）。
+        //   承認モードONの人は承認待ちに入れて、勝手に公開しない。
+        if (
+          post.source === 'auto' &&
+          !(post as any).replyToThreadsId &&
+          postUser?.autoFollowUpEnabled !== false
+        ) {
+          try {
+            const { buildFollowUpContent, computeFollowUpTime } = await import('./reachBoost');
+            await db.createScheduledPost({
+              userId: post.userId,
+              projectId: post.projectId,
+              threadsAccountId: post.threadsAccountId,
+              postContent: buildFollowUpContent(postProject?.mainProblem, post.id),
+              scheduledAt: computeFollowUpTime(now),
+              status: postUser?.autoPostRequireApproval ? 'awaiting_approval' : 'pending',
+              source: 'auto',
+              replyToThreadsId: result.id,
+            } as any);
+            console.log(`[Scheduled Post] Follow-up bump scheduled for post ${post.id} (root=${result.id})`);
+          } catch (e) {
+            console.error(`[Scheduled Post] follow-up creation failed for post ${post.id}:`, e);
+          }
+        }
 
       } catch (error) {
         console.error(`[Scheduled Post] Failed to publish post ${post.id}:`, error);

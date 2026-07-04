@@ -67,9 +67,12 @@ const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
  *   9時間ズレて深夜に投稿されていた（例: 21時指定→翌6時JST、17時指定→翌2時JST）。
  *   サーバーのTZに依存せず、必ず「その日のJSTの hour 時」を表す絶対時刻(UTC instant)を返す。
  */
-function getNextPostingTime(index: number): Date {
+function getNextPostingTime(index: number, customHours?: number[] | null): Date {
   const now = new Date();
-  const hour = POSTING_HOURS[index % POSTING_HOURS.length];
+  // 本人の実績で「反応が高い時間帯」が分かっていればそれを優先。
+  // データ不足（null）のときは従来のデフォルト時刻を使う。
+  const hours = customHours && customHours.length > 0 ? customHours : POSTING_HOURS;
+  const hour = hours[index % hours.length];
   const randMinute = Math.floor(Math.random() * 30); // 自然さのためのランダム分
 
   // 現在時刻を「JSTの壁時計」に変換し、UTCゲッターで年月日を取り出す
@@ -100,6 +103,7 @@ async function generateAutoPost(
   threadsAccountId: number,
   postingTimeIndex: number,
   requireApproval: boolean = false,
+  bestHours: number[] | null = null,
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
   const purpose = PURPOSES[purposeIndex % PURPOSES.length];
@@ -229,7 +233,7 @@ async function generateAutoPost(
     void THREADS_MAX_CHARS;
 
     // Schedule the post
-    const scheduledAt = getNextPostingTime(postingTimeIndex);
+    const scheduledAt = getNextPostingTime(postingTimeIndex, bestHours);
 
     await db.createScheduledPost({
       userId,
@@ -332,6 +336,14 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
         // Determine how many posts to generate（ユーザー設定の頻度をプラン上限で頭打ち）
         const postCount = Math.min(getPostCount(user.autoPostFrequency), maxPerDay);
 
+        // ★本人の実績から「反応が高い時間帯」を取得（データ8件未満はnull＝デフォルト時刻）。
+        //   使うほど、その先生の当たり時間に自動で寄っていく。
+        let bestHours: number[] | null = null;
+        try {
+          bestHours = await db.getUserBestPostingHours(user.id);
+          if (bestHours) console.log(`[AutoPost] user ${user.id} best hours(JST): ${bestHours.join(',')}`);
+        } catch { /* データ取得失敗時はデフォルト時刻で続行 */ }
+
         // Generate posts with rotation
         let typeIdx = user.lastAutoPostTypeIndex;
         let purposeIdx = user.lastAutoPurposeIndex;
@@ -372,6 +384,7 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
               account.id,
               i,
               user.autoPostRequireApproval ?? false,
+              bestHours,
             );
 
             if (success) {

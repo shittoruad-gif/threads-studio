@@ -188,6 +188,40 @@ export default function Settings() {
                 />
               </div>
 
+              {/* トピックタグ自動付与 */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium text-foreground">投稿に「トピック」を自動でつける（おすすめ）</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Threadsには投稿に「話題のラベル」をつける機能があります。ONにすると、
+                    お店の悩みワードや地域名を自動でつけて、<br className="hidden sm:inline" />
+                    フォロワー以外の「同じ話題を見ている人」にも届きやすくします
+                  </p>
+                </div>
+                <Switch
+                  checked={(autoPostSettings as any)?.autoTopicTag ?? true}
+                  onCheckedChange={(v) => updateAutoPost.mutate({ autoTopicTag: v } as any)}
+                  disabled={updateAutoPost.isPending}
+                />
+              </div>
+
+              {/* 追い投稿（セルフリプライ） */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium text-foreground">投稿の6時間後に「ひとこと」を自動追加（おすすめ）</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    自動投稿の数時間後に、その投稿へ「気軽にコメントくださいね」などの
+                    やわらかい一言を自動で追加します。<br className="hidden sm:inline" />
+                    投稿がもう一度みんなの画面に表示されやすくなります（深夜は翌朝に自動調整）
+                  </p>
+                </div>
+                <Switch
+                  checked={(autoPostSettings as any)?.autoFollowUpEnabled ?? true}
+                  onCheckedChange={(v) => updateAutoPost.mutate({ autoFollowUpEnabled: v } as any)}
+                  disabled={updateAutoPost.isPending}
+                />
+              </div>
+
               {/* Frequency selection */}
               <div>
                 <Label className="text-sm font-medium text-foreground mb-2 block">

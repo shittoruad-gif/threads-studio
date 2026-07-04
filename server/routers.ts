@@ -1782,9 +1782,20 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           // 画像/動画は単一投稿で扱う。
           const isMedia = input.mediaType && input.mediaType !== 'TEXT';
           const segments = isMedia ? [] : splitThreadSegments(input.text);
+
+          // トピックタグ（設定ONのとき、店舗情報から1つ自動付与。発見性UP）
+          let topicTag: string | undefined;
+          if (ctx.user && (ctx.user as any).autoTopicTag !== false) {
+            const { deriveTopicTag } = await import('./reachBoost');
+            const proj = (account as any).defaultProjectId
+              ? await db.getProjectById((account as any).defaultProjectId)
+              : (await db.getUserProjects(ctx.user.id))?.[0];
+            if (proj) topicTag = deriveTopicTag(proj) ?? undefined;
+          }
+
           const result = (!isMedia && segments.length > 1)
             ? await createAndPublishThread(
-                { accessToken: account.accessToken, threadsUserId: account.threadsUserId },
+                { accessToken: account.accessToken, threadsUserId: account.threadsUserId, topicTag },
                 segments,
               )
             : await createAndPublishPost({
@@ -1794,6 +1805,7 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
                 mediaType: input.mediaType,
                 imageUrl: input.imageUrl,
                 videoUrl: input.videoUrl,
+                topicTag,
               });
 
           return { 
@@ -2614,6 +2626,47 @@ ${input.commentText}
       const { fetchAndStoreAnalyticsForUser } = await import("./dailyOpsJobs");
       const totalFetched = await fetchAndStoreAnalyticsForUser(ctx.user.id);
       return { success: true, fetchedCount: totalFetched };
+    }),
+
+    // プロフィール診断：リーチが予約につながる「受け皿」3点チェック
+    profileAudit: protectedProcedure.query(async ({ ctx }) => {
+      const projects = await db.getUserProjects(ctx.user.id);
+      const project = projects?.[0];
+      const accounts = await db.getThreadsAccountsByUserId(ctx.user.id).catch(() => []);
+
+      // ① 予約/LINEリンクの登録
+      let linksOk = false;
+      try {
+        const links = (project as any)?.links ? JSON.parse((project as any).links) : [];
+        linksOk = Array.isArray(links) && links.some((l: any) => l?.url && String(l.url).trim().length > 0);
+      } catch { linksOk = false; }
+
+      // ② Threadsの自己紹介（bio）に地域名が入っているか
+      //   （地域の人が「近所のお店だ」と気づけるかどうか）
+      const areaTokens = (project?.area || '')
+        .split(/[都道府県市区町村\s　]/)
+        .map((s: string) => s.trim())
+        .filter((s: string) => s.length >= 2);
+      const bios = accounts.map((a: any) => a.biography || '').join(' ');
+      const bioAreaOk = accounts.length > 0 && areaTokens.length > 0
+        ? areaTokens.some((t: string) => bios.includes(t))
+        : false;
+
+      // ③ 固定投稿（お店の入口）を作ったことがあるか
+      let pinnedOk = false;
+      try {
+        const history = await db.getAiGenerationHistory(ctx.user.id, 100);
+        pinnedOk = (history || []).some((h: any) => h.postType === 'pinned');
+      } catch { pinnedOk = false; }
+
+      return {
+        hasProject: !!project,
+        hasAccounts: accounts.length > 0,
+        linksOk,
+        bioAreaOk,
+        pinnedOk,
+        areaHint: areaTokens[areaTokens.length - 1] ?? null,
+      };
     }),
 
     // フォロワー推移（日次スナップショットの合計。ダッシュボードのミニグラフ用）
@@ -3497,7 +3550,7 @@ ${input.commentText}
   autoPost: router({
     getSettings: protectedProcedure.query(async ({ ctx }) => {
       const settings = await db.getAutoPostSettings(ctx.user.id);
-      return settings || { autoPostEnabled: true, autoPostFrequency: 'daily', autoPostRequireApproval: false };
+      return settings || { autoPostEnabled: true, autoPostFrequency: 'daily', autoPostRequireApproval: false, autoTopicTag: true, autoFollowUpEnabled: true };
     }),
 
     updateSettings: protectedProcedure
@@ -3505,6 +3558,8 @@ ${input.commentText}
         autoPostEnabled: z.boolean().optional(),
         autoPostFrequency: z.enum(['daily', 'twice_daily', 'three_daily']).optional(),
         autoPostRequireApproval: z.boolean().optional(),
+        autoTopicTag: z.boolean().optional(),
+        autoFollowUpEnabled: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         await db.updateAutoPostSettings(ctx.user.id, input);

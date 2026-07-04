@@ -20,6 +20,20 @@ export interface CreatePostParams {
   videoUrl?: string;
   children?: string[]; // For carousel posts
   replyToId?: string; // 返信チェーン（ツリー）用：この投稿IDへの返信として作成
+  /**
+   * トピックタグ（Threadsの「トピック」）。フォロワー外の同じ話題を見ている人に
+   * 届きやすくなる。ルート投稿にのみ付与する（返信には付けない）。
+   * 制約: 1〜50文字、ピリオド(.)とアンパサンド(&)は不可。
+   */
+  topicTag?: string;
+}
+
+/** topic_tag のAPI制約に合わせて整形（不正なら null＝付けない） */
+export function sanitizeTopicTag(tag: string | null | undefined): string | null {
+  if (!tag) return null;
+  const clean = tag.replace(/[.&#\s]+/g, '').trim();
+  if (clean.length < 1 || Array.from(clean).length > 50) return null;
+  return clean;
 }
 
 export interface MediaContainer {
@@ -36,7 +50,7 @@ export interface PublishResponse {
 export async function createMediaContainer(
   params: CreatePostParams
 ): Promise<MediaContainer> {
-  const { accessToken, threadsUserId, text, mediaType = "TEXT", imageUrl, videoUrl, children, replyToId } = params;
+  const { accessToken, threadsUserId, text, mediaType = "TEXT", imageUrl, videoUrl, children, replyToId, topicTag } = params;
 
   const body: Record<string, string> = {
     media_type: mediaType,
@@ -51,6 +65,12 @@ export async function createMediaContainer(
   // 返信チェーン（ツリー）: 親投稿への返信として作成
   if (replyToId) {
     body.reply_to_id = replyToId;
+  }
+
+  // トピックタグ（ルート投稿のみ。返信には付けない）
+  const cleanTag = !replyToId ? sanitizeTopicTag(topicTag) : null;
+  if (cleanTag) {
+    body.topic_tag = cleanTag;
   }
 
   // Add media URLs
@@ -269,7 +289,7 @@ export class PartialThreadError extends Error {
 }
 
 export async function createAndPublishThread(
-  base: { accessToken: string; threadsUserId: string },
+  base: { accessToken: string; threadsUserId: string; topicTag?: string },
   segments: string[],
 ): Promise<{ id: string; replyIds: string[] }> {
   const clean = segments.map((s) => (s || '').trim()).filter(Boolean);
@@ -281,6 +301,7 @@ export async function createAndPublishThread(
     threadsUserId: base.threadsUserId,
     text: clean[0],
     mediaType: 'TEXT',
+    topicTag: base.topicTag,
   });
 
   // ルート投稿後に失敗した場合は PartialThreadError を投げる（再試行で二重投稿しない）

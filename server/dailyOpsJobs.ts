@@ -24,6 +24,7 @@ import {
   getPostAnalyticsWithEngagement,
   getOverdueAwaitingApprovalPosts,
   updateScheduledPostTime,
+  updateUserLastCommentCheck,
 } from "./db";
 import { sendEmail } from "./_core/notification";
 
@@ -195,6 +196,83 @@ export async function runApprovalReminderJob(): Promise<void> {
   }
 }
 
+/**
+ * ③ コメント即応通知ジョブ本体（3時間おき）
+ *
+ * Threadsは「コメントへの返信が早いほど投稿が伸びる」仕組みのため、
+ * 新着コメントに気づかず放置するのが一番もったいない。
+ * 新着があれば本人へメールで知らせ、コメント管理ページ（AI返信つき）へ誘導する。
+ */
+export async function runCommentWatchJob(): Promise<void> {
+  const { getThreadsComments } = await import("./threadsApi");
+  const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+  const users = await getAllUsers();
+  let notified = 0;
+
+  for (const u of users) {
+    try {
+      const accounts = await getThreadsAccountsByUserId(u.id);
+      if (!accounts || accounts.length === 0) continue;
+      const fullUser = await getUserById(u.id);
+      if (!fullUser?.email) continue;
+
+      // 前回確認以降のコメントだけを対象（初回は直近24時間）
+      const since = fullUser.lastCommentCheckAt
+        ? new Date(fullUser.lastCommentCheckAt)
+        : new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      const newComments: { text: string; username?: string; parent?: string }[] = [];
+      for (const account of accounts) {
+        try {
+          const comments = await getThreadsComments(account.accessToken, account.threadsUserId, 30);
+          for (const c of comments) {
+            // 自分の返信・確認済み分は除外
+            if (c.username && c.username === account.threadsUsername) continue;
+            if (!c.timestamp || new Date(c.timestamp) <= since) continue;
+            newComments.push({
+              text: c.text,
+              username: c.username,
+              parent: c.parent_post_text ?? undefined,
+            });
+          }
+        } catch (e) {
+          console.error(`[CommentWatch] 取得失敗 user=${u.id} account=${account.id}:`, e);
+        }
+      }
+
+      // 確認時刻は毎回更新（通知の重複防止）
+      await updateUserLastCommentCheck(u.id, new Date());
+
+      if (newComments.length === 0) continue;
+
+      const previews = newComments.slice(0, 3).map((c) => `
+        <div style="border-left:3px solid #10b981;padding:8px 12px;margin:8px 0;background:#f0fdf4;border-radius:0 8px 8px 0;">
+          <p style="margin:0;font-size:14px;color:#111;">${(c.username ? '@' + c.username + '：' : '') + (c.text || '').slice(0, 120).replace(/</g, '&lt;')}</p>
+          ${c.parent ? `<p style="margin:4px 0 0;font-size:11px;color:#6b7280;">（あなたの投稿「${c.parent.slice(0, 40).replace(/</g, '&lt;')}…」へのコメント）</p>` : ''}
+        </div>`).join('');
+
+      await sendEmail({
+        to: fullUser.email,
+        subject: `【Threads Studio】あなたの投稿にコメントが${newComments.length}件届いています`,
+        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+          <h2>コメントが届いています 🎉</h2>
+          <p>あなたの投稿に新しいコメントが <strong>${newComments.length}件</strong> 届きました。</p>
+          ${previews}
+          <p style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:13px;">
+            💡 <strong>返信が早いほど、投稿はもっと多くの人に表示されます。</strong><br/>
+            返信の文章はAIが作ってくれるので、確認して送るだけでOKです。
+          </p>
+          <a href="${base}/comment-manager" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin:12px 0;">AIで返信を作る</a>
+        </div>`,
+      });
+      notified++;
+    } catch (e) {
+      console.error(`[CommentWatch] 処理エラー user=${u.id}:`, e);
+    }
+  }
+  console.log(`[CommentWatch] 完了: ${notified}ユーザーに新着コメント通知`);
+}
+
 /** スケジューラ初期化（_core/index.tsから呼ぶ） */
 export function initDailyOpsSchedulers(): void {
   // 7:00 JST = 22:00 UTC
@@ -207,5 +285,12 @@ export function initDailyOpsSchedulers(): void {
     const { runTrackedJob } = await import("./jobRunner");
     await runTrackedJob("approval_reminder", runApprovalReminderJob);
   });
-  console.log("[DailyOps] Schedulers initialized (analytics 7:00 JST / approval 8:00 JST)");
+  // コメント即応：3時間おき（8〜23時JSTのみ＝深夜は通知しない）。
+  // 高頻度ジョブなので起動時キャッチアップの対象外（次の回がすぐ来るため。
+  // jobRunnerのレジストリには登録しない）。失敗通報はrunTrackedJobが担う。
+  cron.schedule("20 23,2,5,8,11 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    await runTrackedJob("comment_watch", runCommentWatchJob);
+  });
+  console.log("[DailyOps] Schedulers initialized (analytics 7:00 / approval 8:00 / comments 8:20-20:20 JST)");
 }

@@ -33,6 +33,12 @@ export const users = mysqlTable("users", {
   autoPostFrequency: mysqlEnum("autoPostFrequency", ["daily", "twice_daily", "three_daily"]).default("daily").notNull(),
   // 自動投稿を「公開前承認」にする（ON: awaiting_approval で作成し、ユーザー承認後に投稿）
   autoPostRequireApproval: boolean("autoPostRequireApproval").default(false).notNull(),
+  // 投稿にトピックタグ（地域名・悩みワード）を自動でつける（発見性UP）
+  autoTopicTag: boolean("autoTopicTag").default(true).notNull(),
+  // 追い投稿：自動投稿の約6時間後に、自分の投稿へひとこと返信して再浮上させる
+  autoFollowUpEnabled: boolean("autoFollowUpEnabled").default(true).notNull(),
+  // コメント即応通知：最後に新着コメントを確認した時刻（通知の重複防止）
+  lastCommentCheckAt: timestamp("lastCommentCheckAt"),
   // Last auto-post type index (for rotation)
   lastAutoPostTypeIndex: int("lastAutoPostTypeIndex").default(0).notNull(),
   lastAutoPurposeIndex: int("lastAutoPurposeIndex").default(0).notNull(),
@@ -346,6 +352,9 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   // 投稿の生成元：manual=ユーザーが手動で予約 / auto=自動投稿エンジンが生成。
   // 「予約中」が手動か自動か区別がつかない混乱を解消するため。
   source: mysqlEnum("source", ["manual", "auto"]).default("manual").notNull(),
+  // 追い投稿：この値があるときは新規投稿ではなく、このThreads投稿IDへの
+  // 「返信」として公開する（自分の投稿へのひとこと追加＝再浮上ブースト）。
+  replyToThreadsId: varchar("replyToThreadsId", { length: 255 }),
   postedAt: timestamp("postedAt"),
   errorMessage: text("errorMessage"),
   // Store the post content snapshot at scheduling time

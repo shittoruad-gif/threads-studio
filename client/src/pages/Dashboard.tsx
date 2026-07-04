@@ -188,6 +188,8 @@ export default function Dashboard() {
 
   // フォロワー推移（日次スナップショット。データが2日分たまると表示）
   const { data: followerTrend } = trpc.stats.followerTrend.useQuery();
+  // プロフィール診断（せっかく見られても予約に落ちない「受け皿の穴」をチェック）
+  const { data: profileAudit } = trpc.stats.profileAudit.useQuery(undefined, { enabled: isAuthenticated });
   const { data: aiUsage } = trpc.subscription.getAiUsage.useQuery(
     undefined,
     { enabled: isAuthenticated }
@@ -742,6 +744,63 @@ export default function Dashboard() {
                 <p className="text-xs text-muted-foreground mt-1">
                   直近{followerTrend.trend.length}日間（毎朝7時に自動記録）
                 </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* プロフィール診断：受け皿の穴があるときだけ表示（3点チェック） */}
+        {profileAudit?.hasProject && profileAudit?.hasAccounts &&
+          (!profileAudit.linksOk || !profileAudit.bioAreaOk || !profileAudit.pinnedOk) && (
+          <div className="mb-8 rounded-xl border-2 border-sky-200 bg-sky-50 p-4 sm:p-5">
+            <p className="text-sm sm:text-base font-bold text-sky-800 mb-1">
+              🩺 かんたんプロフィール診断 — あと少しで「見られた人」を予約につなげられます
+            </p>
+            <p className="text-xs text-sky-700 mb-3">
+              投稿がたくさんの人に届いても、プロフィールの準備ができていないと予約につながりません。以下の3つを整えましょう。
+            </p>
+            <div className="space-y-2">
+              <div className="flex items-start gap-2 text-sm">
+                <span>{profileAudit.linksOk ? '✅' : '⬜️'}</span>
+                <div className="min-w-0 flex-1">
+                  <span className={profileAudit.linksOk ? 'text-muted-foreground line-through' : 'text-foreground font-medium'}>
+                    予約・LINEのリンクを登録する
+                  </span>
+                  {!profileAudit.linksOk && (
+                    <button className="ml-2 text-xs text-emerald-700 underline" onClick={goEditInfo}>
+                      登録画面をひらく
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-start gap-2 text-sm">
+                <span>{profileAudit.bioAreaOk ? '✅' : '⬜️'}</span>
+                <div className="min-w-0 flex-1">
+                  <span className={profileAudit.bioAreaOk ? 'text-muted-foreground line-through' : 'text-foreground font-medium'}>
+                    Threadsの自己紹介文に地域名{profileAudit.areaHint ? `（例：${profileAudit.areaHint}）` : ''}を入れる
+                  </span>
+                  {!profileAudit.bioAreaOk && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Threadsアプリ →「プロフィール」→「プロフィールを編集」→ 自己紹介に地域名を追加。地元の人が「近所のお店だ！」と気づけるようになります
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-start gap-2 text-sm">
+                <span>{profileAudit.pinnedOk ? '✅' : '⬜️'}</span>
+                <div className="min-w-0 flex-1">
+                  <span className={profileAudit.pinnedOk ? 'text-muted-foreground line-through' : 'text-foreground font-medium'}>
+                    固定投稿（お店の入口になる投稿）を作る
+                  </span>
+                  {!profileAudit.pinnedOk && (
+                    <button
+                      className="ml-2 text-xs text-emerald-700 underline"
+                      onClick={() => setLocation('/ai-generate?postType=pinned')}
+                    >
+                      AIで作る（3分）
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
