@@ -1042,12 +1042,12 @@ export default function AIGenerate() {
                                 )}
                               >
                                 <div className="flex items-start gap-2">
-                                  <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-muted-foreground/40'}`}>
+                                  <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[12px] ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-muted-foreground/40'}`}>
                                     {on ? '✓' : ''}
                                   </span>
                                   <div className="min-w-0 flex-1">
                                     <p className="whitespace-pre-wrap break-words line-clamp-4 text-foreground">{r.text}</p>
-                                    <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                                    <div className="flex items-center gap-2 mt-1 text-[12px] text-muted-foreground">
                                       <span>{r.source === 'manual' ? '手動追加' : `自動収集${r.keyword ? `（${r.keyword}）` : ''}`}</span>
                                       {r.permalink && (
                                         <a href={r.permalink} target="_blank" rel="noopener noreferrer" className="underline" onClick={(e) => e.stopPropagation()}>元投稿</a>
@@ -1360,7 +1360,7 @@ export default function AIGenerate() {
                           placeholder="例：岡山県岡山市北区下中野（できるだけ詳しく）"
                           className="h-8 text-sm"
                         />
-                        <p className="text-[11px] text-muted-foreground">市区町村だけでなく町名まで入れると、地元の呼び方の精度が上がります。</p>
+                        <p className="text-[13px] text-muted-foreground">市区町村だけでなく町名まで入れると、地元の呼び方の精度が上がります。</p>
                       </div>
 
                       {/* 地元での呼び方（地域集客の精度を上げる） */}
@@ -1380,7 +1380,7 @@ export default function AIGenerate() {
                               : <><Search className="h-3 w-3 mr-1" />地図から候補を取得</>}
                           </Button>
                         </div>
-                        <p className="text-[11px] text-emerald-700">
+                        <p className="text-[13px] text-emerald-700">
                           地図データから、近くの<strong>実在する駅・町名</strong>を候補表示します（AIの推測は使わないので地名の捏造はありません）。
                           目印（お店・施設など）は、ご自身が知っている<strong>実在のもの</strong>を1行ずつ追記してください。
                         </p>
@@ -1397,7 +1397,7 @@ export default function AIGenerate() {
                             <div className="space-y-1.5">
                               {groups.map((g) => (
                                 <div key={g.label} className="flex flex-wrap items-center gap-1.5">
-                                  <span className="text-[11px] text-muted-foreground w-14 shrink-0">{g.label}</span>
+                                  <span className="text-[13px] text-muted-foreground w-14 shrink-0">{g.label}</span>
                                   {g.items.map((it, i) => (
                                     <button
                                       key={i}
@@ -1511,7 +1511,7 @@ export default function AIGenerate() {
                           rows={2}
                           className="text-sm"
                         />
-                        <p className="text-[11px] text-muted-foreground">最優先で投稿に使われます（一度登録すれば毎回利用）。</p>
+                        <p className="text-[13px] text-muted-foreground">最優先で投稿に使われます（一度登録すれば毎回利用）。</p>
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">過去の良かった投稿（文体のお手本）</Label>
@@ -1522,7 +1522,7 @@ export default function AIGenerate() {
                           rows={5}
                           className="text-sm"
                         />
-                        <p className="text-[11px] text-muted-foreground">貼り付けた投稿の「文体」だけを再現します。事実は店舗情報から使うので、お手本の内容はコピーされません。</p>
+                        <p className="text-[13px] text-muted-foreground">貼り付けた投稿の「文体」だけを再現します。事実は店舗情報から使うので、お手本の内容はコピーされません。</p>
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">投稿に入れたくないワード</Label>
@@ -1533,7 +1533,7 @@ export default function AIGenerate() {
                           rows={2}
                           className="text-sm"
                         />
-                        <p className="text-[11px] text-muted-foreground">この言葉は生成投稿に必ず含めません（自動投稿・量産も含む）。</p>
+                        <p className="text-[13px] text-muted-foreground">この言葉は生成投稿に必ず含めません（自動投稿・量産も含む）。</p>
                       </div>
                     </>
                   ) : (
@@ -1892,7 +1892,7 @@ export default function AIGenerate() {
                               </button>
                             ))}
                           </div>
-                          <p className="text-[11px] text-muted-foreground mt-1">タップでコピー。投稿時にThreadsの「トピックを追加」へ貼ると見つけてもらいやすくなります</p>
+                          <p className="text-[13px] text-muted-foreground mt-1">タップでコピー。投稿時にThreadsの「トピックを追加」へ貼ると見つけてもらいやすくなります</p>
                         </div>
                       );
                     })()}
@@ -1990,7 +1990,7 @@ export default function AIGenerate() {
                           <span className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">{i + 1}</span>
                           <span className="truncate">{(c._postType && POST_TYPES[c._postType]?.name) || '案'}</span>
                           {isRecommended && (
-                            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-amber-400 text-amber-950 text-[10px] font-bold px-2 py-0.5">⭐AIのおすすめ</span>
+                            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-amber-400 text-amber-950 text-[12px] font-bold px-2 py-0.5">⭐AIのおすすめ</span>
                           )}
                         </CardTitle>
                         <Button
@@ -2009,13 +2009,13 @@ export default function AIGenerate() {
                       )}
                       {ev && (
                         <div className="mt-2 pt-2 border-t border-border/60">
-                          <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground">
+                          <div className="flex items-center gap-2 flex-wrap text-[13px] text-muted-foreground">
                             <span className="font-bold text-foreground">AI採点 {Math.round(ev.total)}点</span>
                             <span>共感{Math.round(ev.empathy)}</span>
                             <span>読みやすさ{Math.round(ev.readability)}</span>
                             <span>話題性{Math.round(ev.topicality)}</span>
                           </div>
-                          {ev.reason && <p className="text-[11px] text-muted-foreground mt-1">{ev.reason}</p>}
+                          {ev.reason && <p className="text-[13px] text-muted-foreground mt-1">{ev.reason}</p>}
                         </div>
                       )}
                     </CardContent>

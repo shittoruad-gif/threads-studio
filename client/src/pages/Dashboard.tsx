@@ -1424,7 +1424,7 @@ export default function Dashboard() {
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
-                    <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-muted-foreground/40'}`}>
+                    <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[12px] ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-muted-foreground/40'}`}>
                       {on ? '✓' : ''}
                     </span>
                     <div className="min-w-0">

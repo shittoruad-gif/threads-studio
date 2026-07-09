@@ -26,7 +26,7 @@ function PostContent({ text }: { text: string }) {
 
 function PhoneStatusBar() {
   return (
-    <div className="flex items-center justify-between px-5 py-1.5 text-black text-[11px] font-semibold">
+    <div className="flex items-center justify-between px-5 py-1.5 text-black text-[13px] font-semibold">
       <span>9:41</span>
       <div className="flex items-center gap-1">
         <Signal className="w-3.5 h-3.5" />
@@ -174,7 +174,7 @@ export default function ThreadsPhonePreview({
 
             {/* Bottom bar */}
             <div className="border-t border-gray-200 py-2 pb-6">
-              <p className="text-[10px] text-center text-gray-400">
+              <p className="text-[12px] text-center text-gray-400">
                 プレビュー — 実際の表示と異なる場合があります
               </p>
             </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Settings as SettingsIcon, Sparkles, Bell, User, CreditCard, AlertTriangle, Save, Loader2, Moon, Sun, Palette } from "lucide-react";
+import { Settings as SettingsIcon, Sparkles, Bell, User, CreditCard, AlertTriangle, Save, Loader2, Moon, Sun, Palette, LogOut } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,18 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 export default function Settings() {
-  const { user, refresh } = useAuth();
+  const { user, refresh, logout } = useAuth();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await logout();
+      window.location.href = "/login";
+    } catch {
+      setLoggingOut(false);
+      toast.error("ログアウトに失敗しました");
+    }
+  };
   const [, setLocation] = useLocation();
   const { theme, toggleTheme } = useTheme();
   const utils = trpc.useUtils();
@@ -389,6 +400,27 @@ export default function Settings() {
             >
               {changePassword.isPending ? "変更中..." : "パスワードを変更"}
             </Button>
+
+            {/* ログアウト */}
+            <div className="pt-4 border-t border-border/50">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label className="text-sm font-medium text-foreground">ログアウト</Label>
+                  <p className="text-xs text-muted-foreground/60 mt-0.5">
+                    このアカウントからサインアウトします
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="shrink-0"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  {loggingOut ? "ログアウト中..." : "ログアウト"}
+                </Button>
+              </div>
+            </div>
           </div>
         </Card>
 
@@ -397,7 +429,7 @@ export default function Settings() {
           <div className="flex items-center gap-2 mb-5">
             <Bell className="w-5 h-5 text-amber-600" />
             <h2 className="text-lg font-semibold text-foreground">通知設定</h2>
-            <span className="ml-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-muted text-muted-foreground">準備中</span>
+            <span className="ml-1 px-2 py-0.5 text-[13px] font-medium rounded-full bg-muted text-muted-foreground">準備中</span>
           </div>
 
           <div className="space-y-4 opacity-60">

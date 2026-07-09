@@ -132,7 +132,7 @@ export default function EmojiPicker({
               title={cat.label}
             >
               <span className="text-lg leading-none">{cat.icon}</span>
-              <span className="text-[10px] leading-none">{cat.label}</span>
+              <span className="text-[12px] leading-none">{cat.label}</span>
             </button>
           ))}
         </div>
@@ -152,7 +152,7 @@ export default function EmojiPicker({
           ))}
         </div>
 
-        <div className="px-3 py-2 border-t border-border text-[11px] text-muted-foreground">
+        <div className="px-3 py-2 border-t border-border text-[13px] text-muted-foreground">
           💡 Threadsでは1投稿に絵文字3〜4個までが自然です
         </div>
       </PopoverContent>

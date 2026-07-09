@@ -123,6 +123,15 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
+  /* ★年配の方でも読みやすいように、スマホ幅では基準文字サイズを底上げする。
+     Tailwindのtextユーティリティはすべてremなので、この1行で本文・見出し・
+     余白・アイコンサイズなどアプリ全体が比例して大きくなる（個別修正不要）。 */
+  @media (max-width: 640px) {
+    html {
+      font-size: 118%;
+    }
+  }
+
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
     font-weight: 700;

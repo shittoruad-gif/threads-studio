@@ -213,7 +213,7 @@ export default function AdminUsers() {
                   <TableCell className="max-w-[160px] truncate">
                     {user.name || '-'}
                     {user.role === 'admin' && (
-                      <span className="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-indigo-100 text-indigo-800">管理者</span>
+                      <span className="ml-1 px-1.5 py-0.5 text-[12px] font-semibold rounded bg-indigo-100 text-indigo-800">管理者</span>
                     )}
                   </TableCell>
                   <TableCell className="max-w-[160px] truncate">{(user as any).storeName || '-'}</TableCell>

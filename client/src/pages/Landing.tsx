@@ -230,7 +230,7 @@ function VideoDemoSection() {
                         i === currentStep ? "bg-primary/10 text-primary" : i < currentStep ? "text-primary" : "text-muted-foreground"
                       }`}>
                       {i < currentStep ? <CheckCircle2 className="w-3.5 h-3.5" /> : (
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] border ${
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[12px] border ${
                           i === currentStep ? "border-primary bg-primary text-white" : "border-muted-foreground"
                         }`}>{s.step}</span>
                       )}
@@ -267,7 +267,7 @@ function VideoDemoSection() {
                       <div className="w-2.5 h-2.5 rounded-full bg-red-400/60" />
                       <div className="w-2.5 h-2.5 rounded-full bg-yellow-400/60" />
                       <div className="w-2.5 h-2.5 rounded-full bg-green-400/60" />
-                      <span className="text-[10px] text-muted-foreground ml-2">Threads Studio</span>
+                      <span className="text-[12px] text-muted-foreground ml-2">Threads Studio</span>
                     </div>
                     {renderMockUI()}
                   </div>

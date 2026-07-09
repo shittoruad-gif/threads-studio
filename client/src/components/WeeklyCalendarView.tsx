@@ -168,7 +168,7 @@ export default function WeeklyCalendarView({
                 {/* Day header */}
                 <div className="text-center mb-1.5">
                   <div
-                    className={`text-[11px] font-medium ${
+                    className={`text-[13px] font-medium ${
                       index === 5
                         ? 'text-blue-500'
                         : index === 6
@@ -194,7 +194,7 @@ export default function WeeklyCalendarView({
                   {postsForDay.map((post) => (
                     <div
                       key={post.id}
-                      className={`rounded px-1.5 py-1 border text-[10px] leading-tight ${getStatusColor(post.status)}`}
+                      className={`rounded px-1.5 py-1 border text-[12px] leading-tight ${getStatusColor(post.status)}`}
                       title={post.postContent}
                     >
                       <div className="flex items-center gap-1 mb-0.5">
@@ -203,7 +203,7 @@ export default function WeeklyCalendarView({
                           {format(parseISO(post.scheduledAt), 'HH:mm')}
                         </span>
                       </div>
-                      <p className="line-clamp-2 text-[10px]">
+                      <p className="line-clamp-2 text-[12px]">
                         {post.postContent.slice(0, 30)}
                         {post.postContent.length > 30 ? '...' : ''}
                       </p>
@@ -212,7 +212,7 @@ export default function WeeklyCalendarView({
 
                   {/* Auto-post placeholder */}
                   {showAutoSlot && (
-                    <div className="rounded px-1.5 py-1 border border-dashed border-border bg-muted/50 text-[10px] text-muted-foreground/60">
+                    <div className="rounded px-1.5 py-1 border border-dashed border-border bg-muted/50 text-[12px] text-muted-foreground/60">
                       <div className="flex items-center gap-1">
                         <Sparkles className="w-2.5 h-2.5" />
                         <span>自動生成予定</span>

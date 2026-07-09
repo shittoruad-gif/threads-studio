@@ -401,7 +401,7 @@ export default function ThreadsConnect() {
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-muted-foreground mt-1">
+                <p className="text-[13px] text-muted-foreground mt-1">
                   複数店舗を運用する場合、このアカウント＝この店舗、と指定すると内容の取り違えを防げます。
                 </p>
               </div>

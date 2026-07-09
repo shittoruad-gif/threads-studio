@@ -205,7 +205,7 @@ export function SchedulePostDialog({ open, onOpenChange, projectId, postContent 
                     {segments.map((seg, i) => (
                       <div key={i} className="text-foreground text-sm whitespace-pre-line">
                         {segments.length > 1 && (
-                          <span className="text-[11px] text-muted-foreground/70 mr-1">
+                          <span className="text-[13px] text-muted-foreground/70 mr-1">
                             {i === 0 ? '①メイン' : `${'②③④⑤⑥'[i - 1] || `${i + 1}`}続き`}：
                           </span>
                         )}
