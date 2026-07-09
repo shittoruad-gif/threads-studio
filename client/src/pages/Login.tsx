@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Sparkles, CheckCircle2, AlertCircle, Ticket } from 'lucide-react';
 import { toast } from 'sonner';
+import { BookmarkButton } from '@/components/BookmarkButton';
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -185,13 +186,15 @@ export default function Login() {
           </form>
 
         </CardContent>
-        <CardFooter className="flex flex-col space-y-2">
+        <CardFooter className="flex flex-col space-y-3">
           <div className="text-sm text-center text-muted-foreground">
             アカウントをお持ちでないですか？{' '}
             <Link href="/register" className="text-primary hover:underline">
               新規登録
             </Link>
           </div>
+          {/* 次回からすぐ開けるよう、ログイン画面の保存を案内 */}
+          <BookmarkButton />
         </CardFooter>
       </Card>
     </div>
