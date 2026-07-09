@@ -20,7 +20,12 @@ export default function TemplateSelect() {
   const [showHidden, setShowHidden] = useState(false);
   const utils = trpc.useUtils();
   const hideMutation = trpc.hidden.hide.useMutation({
-    onSuccess: () => { utils.hidden.list.invalidate(); toast.success('テンプレートを非表示にしました'); },
+    onSuccess: (_data, variables) => {
+      utils.hidden.list.invalidate();
+      toast.success('テンプレートを非表示にしました', {
+        action: { label: '取り消す', onClick: () => unhideMutation.mutate(variables) },
+      });
+    },
   });
   const unhideMutation = trpc.hidden.unhide.useMutation({
     onSuccess: () => { utils.hidden.list.invalidate(); toast.success('テンプレートを元に戻しました'); },

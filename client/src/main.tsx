@@ -6,7 +6,11 @@ import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
+import { applyFontScale, getStoredFontScale } from "./hooks/useFontScale";
 import "./index.css";
+
+// 「文字を大きく」設定を描画前に復元（ちらつき防止）
+applyFontScale(getStoredFontScale());
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -441,12 +441,58 @@ export default function DashboardLayout({
         {/* 決済失敗時の警告バナー — past_due / unpaid / incomplete のみ表示 */}
         <SubscriptionAlertBanner />
 
-        {/* Page Content */}
-        <main className="p-4 sm:p-6 lg:p-8">{children}</main>
+        {/* Page Content。スマホでは下部タブバーに隠れないよう余白を多めに確保 */}
+        <main className="p-4 pb-28 sm:p-6 sm:pb-6 lg:p-8">{children}</main>
       </div>
 
-      {/* Monitor Feedback Widget - only for monitor users */}
-      {user?.isMonitor && <MonitorFeedbackWidget />}
+      {/* スマホ用 下部タブバー — 主要4機能を常時1タップで。年配の方でも迷わない導線 */}
+      {isMobile && (
+        <nav
+          className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-md border-t border-border pb-[env(safe-area-inset-bottom)]"
+          aria-label="メインメニュー"
+        >
+          <div className="grid grid-cols-5">
+            {[
+              { icon: LayoutDashboard, label: "ホーム", path: "/dashboard" },
+              { icon: Sparkles, label: "AI投稿", path: "/ai-generate" },
+              { icon: Calendar, label: "予約・履歴", path: "/post-history" },
+              { icon: Settings, label: "設定", path: "/settings" },
+            ].map((item) => {
+              const active =
+                location === item.path ||
+                (item.path !== "/dashboard" && location.startsWith(item.path));
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.path}
+                  onClick={() => setLocation(item.path)}
+                  aria-label={item.label}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-0.5 min-h-[56px] py-1.5 transition-colors",
+                    active ? "text-primary" : "text-muted-foreground",
+                  )}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="text-[11px] font-medium leading-none">{item.label}</span>
+                </button>
+              );
+            })}
+            {/* 5つ目：その他すべての画面へ（フルメニューを開く） */}
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              aria-label="メニューをすべて表示"
+              className="flex flex-col items-center justify-center gap-0.5 min-h-[56px] py-1.5 text-muted-foreground transition-colors"
+            >
+              <Menu className="w-5 h-5" />
+              <span className="text-[11px] font-medium leading-none">メニュー</span>
+            </button>
+          </div>
+        </nav>
+      )}
+
+      {/* Monitor Feedback Widget - only for monitor users。スマホは下部ナビ分だけ持ち上げる */}
+      {user?.isMonitor && <MonitorFeedbackWidget bottomOffset={isMobile} />}
     </div>
   );
 }

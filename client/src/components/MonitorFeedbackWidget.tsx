@@ -15,8 +15,10 @@ const categoryOptions = [
   { value: 'other', label: 'その他', icon: HelpCircle, color: 'text-blue-500' },
 ] as const;
 
-export default function MonitorFeedbackWidget() {
+export default function MonitorFeedbackWidget({ bottomOffset = false }: { bottomOffset?: boolean }) {
   const [location] = useLocation();
+  // スマホの下部タブバー（約64px）と重ならないよう、FABの下位置を持ち上げる
+  const posClass = bottomOffset ? 'fixed bottom-[76px] right-4 z-50' : 'fixed bottom-6 right-6 z-50';
   const [isOpen, setIsOpen] = useState(false);
   const [category, setCategory] = useState<string>('other');
   const [content, setContent] = useState('');
@@ -56,7 +58,7 @@ export default function MonitorFeedbackWidget() {
 
   if (submitted) {
     return (
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className={posClass}>
         <div className="bg-background border border-border rounded-2xl shadow-xl p-6 w-[min(20rem,calc(100vw-2rem))] flex flex-col items-center gap-3">
           <CheckCircle2 className="h-10 w-10 text-green-500" />
           <p className="text-sm font-medium text-foreground">送信完了！</p>
@@ -67,7 +69,7 @@ export default function MonitorFeedbackWidget() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <div className={posClass}>
       {isOpen ? (
         <div className="bg-background border border-border rounded-2xl shadow-xl w-[min(20rem,calc(100vw-2rem))] overflow-hidden">
           {/* Header */}

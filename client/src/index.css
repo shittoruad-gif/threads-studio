@@ -132,6 +132,30 @@
     }
   }
 
+  /* ★「文字を大きく」トグルON時（設定でユーザーが選択）。
+     classがrem基準の全体をさらに拡大する。classセレクタなので上のhtml指定より優先される。 */
+  html.text-large {
+    font-size: 112%;
+  }
+  @media (max-width: 640px) {
+    html.text-large {
+      font-size: 134%;
+    }
+  }
+
+  /* ★指で押しやすいタップ領域の確保（スマホのみ）。
+     min-heightは「小さいものだけ大きくする」ので既存の大きいボタンは影響なし。
+     スイッチ/チェック/ラジオは固定サイズで意図的に小さいので除外する。 */
+  @media (max-width: 640px) {
+    button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]),
+    a[role="button"],
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select,
+    textarea {
+      min-height: 2.5rem;
+    }
+  }
+
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
     font-weight: 700;

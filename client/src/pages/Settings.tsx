@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useFontScale } from "@/hooks/useFontScale";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -27,6 +28,7 @@ export default function Settings() {
   };
   const [, setLocation] = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const { isLarge, setFontScale } = useFontScale();
   const utils = trpc.useUtils();
 
   // Auto-post settings from API
@@ -484,6 +486,24 @@ export default function Settings() {
                 onCheckedChange={() => toggleTheme?.()}
               />
               <Moon className="w-4 h-4 text-muted-foreground" />
+            </div>
+          </div>
+
+          {/* 文字を大きく */}
+          <div className="flex items-center justify-between pt-5 mt-5 border-t border-border/50">
+            <div>
+              <Label className="text-sm font-medium">文字を大きくする</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                画面全体の文字を一回り大きく表示します（読みやすさ重視）
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">小</span>
+              <Switch
+                checked={isLarge}
+                onCheckedChange={(v) => setFontScale(v ? "large" : "normal")}
+              />
+              <span className="text-lg font-bold text-muted-foreground">大</span>
             </div>
           </div>
         </Card>

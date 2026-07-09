@@ -226,7 +226,12 @@ export default function AIGenerate() {
   const hiddenPresetKeys = new Set((hiddenItems?.preset ?? []).map(String));
   const [showHiddenPresets, setShowHiddenPresets] = useState(false);
   const hidePresetMutation = trpc.hidden.hide.useMutation({
-    onSuccess: () => { utils.hidden.list.invalidate(); toast.success('このプリセットを非表示にしました'); },
+    onSuccess: (_data, variables) => {
+      utils.hidden.list.invalidate();
+      toast.success('このプリセットを非表示にしました', {
+        action: { label: '取り消す', onClick: () => unhidePresetMutation.mutate(variables) },
+      });
+    },
   });
   const unhidePresetMutation = trpc.hidden.unhide.useMutation({
     onSuccess: () => { utils.hidden.list.invalidate(); toast.success('プリセットを元に戻しました'); },
