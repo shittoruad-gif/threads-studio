@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
+import { useLang } from '@/i18n';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { ArrowLeft, ArrowRight, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, EyeOff, RotateCcw, FileEdit, Smartphone, Send, Link2, ChevronDown, Settings2, AlertCircle } from 'lucide-react';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
@@ -55,6 +56,7 @@ interface GeneratedPost {
 }
 
 export default function AIGenerate() {
+  const { t } = useLang();
   const breadcrumbItems = [
     { label: 'AI投稿', href: '/dashboard' },
     { label: '投稿生成' },
@@ -1940,7 +1942,7 @@ export default function AIGenerate() {
                     className="w-full h-12 text-base bg-emerald-600 hover:bg-emerald-700 text-white"
                   >
                     <Send className="h-5 w-5 mr-2" />
-                    今すぐThreadsに投稿
+                    {t('今すぐThreadsに投稿')}
                   </Button>
                   {/* 副アクション */}
                   <div className="flex flex-col sm:flex-row gap-2">
@@ -2077,22 +2079,22 @@ export default function AIGenerate() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-5 w-5 text-emerald-600" />
-              今すぐ投稿しますか？
+              {t('今すぐ投稿しますか？')}
             </DialogTitle>
             <DialogDescription>
-              内容と投稿先のアカウントを、もう一度ご確認ください。
+              {t('内容と投稿先のアカウントを、もう一度ご確認ください。')}
             </DialogDescription>
           </DialogHeader>
           {/* 投稿先アカウントを明示（誤投稿防止） */}
           <div className="flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm">
             <Send className="h-4 w-4 text-blue-600 shrink-0" />
-            <span className="text-blue-800">投稿先：</span>
-            <span className="font-bold text-blue-900 truncate">{selectedAccount ? `@${selectedAccount.threadsUsername}` : '（アカウント未選択）'}</span>
+            <span className="text-blue-800">{t('投稿先：')}</span>
+            <span className="font-bold text-blue-900 truncate">{selectedAccount ? `@${selectedAccount.threadsUsername}` : t('（アカウント未選択）')}</span>
           </div>
           {/* 取り消し不可の警告 */}
           <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2">
             <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
-            <span className="text-sm font-semibold text-red-700">公開後は取り消せません</span>
+            <span className="text-sm font-semibold text-red-700">{t('公開後は取り消せません')}</span>
           </div>
           {editedPost && (() => {
             const full = `${editedPost.mainPost}\n\n${editedPost.treePosts.join('\n\n')}\n\n${editedPost.cta}`.trim();
@@ -2109,7 +2111,7 @@ export default function AIGenerate() {
           })()}
           <DialogFooter>
             <Button variant="ghost" onClick={() => setPublishConfirmOpen(false)} disabled={publishNow.isPending}>
-              キャンセル
+              {t('キャンセル')}
             </Button>
             <Button
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -2120,7 +2122,7 @@ export default function AIGenerate() {
                 publishNow.mutate({ accountId: selectedAccountId, text });
               }}
             >
-              {publishNow.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />投稿中...</> : '投稿する'}
+              {publishNow.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t('投稿中...')}</> : t('投稿する')}
             </Button>
           </DialogFooter>
         </DialogContent>

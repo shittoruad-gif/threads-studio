@@ -1,4 +1,5 @@
 import { useAuth } from '@/_core/hooks/useAuth';
+import { useLang } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -27,6 +28,7 @@ import { useEffect, useState, useRef } from 'react';
 
 export default function ThreadsConnect() {
   const { isAuthenticated, loading } = useAuth();
+  const { t } = useLang();
   const [, setLocation] = useLocation();
   const [oauthCode, setOauthCode] = useState<string | null>(null);
   const callbackProcessed = useRef(false);
@@ -264,22 +266,48 @@ export default function ThreadsConnect() {
           <Link2 className="w-4 h-4" />
           ACCOUNT
         </div>
-        <h1 className="text-2xl font-bold text-foreground mb-2">Threads連携</h1>
+        <h1 className="text-2xl font-bold text-foreground mb-2">{t('Threads連携')}</h1>
         <p className="text-muted-foreground">
-          Threadsアカウントを連携して、直接投稿できるようになります
+          {t('Threadsアカウントを連携して、直接投稿できるようになります')}
         </p>
       </div>
 
-      {/* Info Banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-8 flex items-start gap-3">
+      {/* 3ステップ案内。前提の一文→3つのカードで視覚的に流れを示す。
+          審査員が「①ここを押す→②Metaでログイン→③許可を押す」を一目で把握できるようにする。 */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 flex items-start gap-3">
         <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-        <div>
-          <p className="text-foreground/80 text-sm">
-            <strong>連携の前に：</strong> スマホのThreads（Instagram）にログインできる状態にしておいてください。
-            下の「Threadsと連携」ボタンを押すとThreadsの画面が開くので、<strong>「許可」を押すだけ</strong>で完了です。
-            連携すると、AIで作った投稿をこのアプリから直接投稿・自動投稿できるようになります。
-          </p>
-        </div>
+        <p className="text-foreground/80 text-sm">
+          <strong>{t('連携の前に：')}</strong> {t('スマホのThreads（Instagram）にログインできる状態にしておいてください。')}
+        </p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+        {[
+          {
+            n: 1,
+            title: t('「Threadsと連携」を押す'),
+            desc: t('下の緑色のボタンを1回押します。Threadsのログイン画面が開きます。'),
+          },
+          {
+            n: 2,
+            title: t('Threadsにログイン'),
+            desc: t('Threads（Instagram）のIDとパスワードでログインします。'),
+          },
+          {
+            n: 3,
+            title: t('「許可」を押す'),
+            desc: t('アプリに与える権限の確認画面で「許可」を押すと、この画面に戻り連携完了です。'),
+          },
+        ].map((step) => (
+          <div key={step.n} className="bg-background border border-border rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-sm">
+                {step.n}
+              </span>
+              <p className="text-sm font-semibold text-foreground">{step.title}</p>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">{step.desc}</p>
+          </div>
+        ))}
       </div>
 
       {/* Account Limit */}
@@ -477,9 +505,9 @@ export default function ThreadsConnect() {
         {accounts?.length === 0 && (
           <div className="bg-background border border-border border-dashed rounded-xl p-10 text-center">
             <Link2 className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
-            <p className="text-foreground font-medium mb-1">まだThreadsアカウントが連携されていません</p>
+            <p className="text-foreground font-medium mb-1">{t('まだThreadsアカウントが連携されていません')}</p>
             <p className="text-muted-foreground/70 text-sm mb-5">
-              連携すると、AIで作った投稿をこのアプリから直接投稿・自動投稿できます。
+              {t('連携すると、AIで作った投稿をこのアプリから直接投稿・自動投稿できます。')}
             </p>
             {maxAccounts > 0 ? (
               <Button
@@ -488,14 +516,14 @@ export default function ThreadsConnect() {
                 disabled={handleCallback.isPending || !authUrlData}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Threadsと連携する
+                {t('Threadsと連携する')}
               </Button>
             ) : (
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-6"
                 onClick={() => setLocation('/pricing')}
               >
-                プランを選んで連携を始める
+                {t('プランを選んで連携を始める')}
               </Button>
             )}
           </div>
@@ -512,7 +540,7 @@ export default function ThreadsConnect() {
             disabled={refreshAllTokens.isPending}
           >
             <ShieldCheck className={`w-5 h-5 mr-2 ${refreshAllTokens.isPending ? 'animate-spin' : ''}`} />
-            全アカウントの接続をまとめて更新（期限を延長）
+            {t('全アカウントの接続をまとめて更新（期限を延長）')}
           </Button>
         </div>
       )}
@@ -526,12 +554,12 @@ export default function ThreadsConnect() {
             disabled={handleCallback.isPending || !authUrlData}
           >
             <Plus className="w-5 h-5 mr-2" />
-            {(accounts?.length || 0) > 0 ? '別のThreadsアカウントを連携' : 'Threadsと連携'}
+            {t((accounts?.length || 0) > 0 ? '別のThreadsアカウントを連携' : 'Threadsと連携')}
           </Button>
           {(accounts?.length || 0) > 0 && canAddMore && (
             <p className="text-center text-muted-foreground/60 text-xs flex items-center justify-center gap-1">
               <Info className="w-3 h-3" />
-              クリックするとThreadsのログイン画面が表示されるので、追加したいアカウントを選んでください
+              {t('クリックするとThreadsのログイン画面が表示されるので、追加したいアカウントを選んでください')}
             </p>
           )}
           {!canAddMore && (

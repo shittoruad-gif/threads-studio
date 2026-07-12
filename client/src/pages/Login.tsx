@@ -9,8 +9,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Sparkles, CheckCircle2, AlertCircle, Ticket } from 'lucide-react';
 import { toast } from 'sonner';
 import { BookmarkButton } from '@/components/BookmarkButton';
+import { useLang } from '@/i18n';
 
 export default function Login() {
+  const { t, lang, setLang } = useLang();
   const [, setLocation] = useLocation();
   const searchParams = useSearch();
   const registered = searchParams.includes('registered=true');
@@ -88,15 +90,27 @@ export default function Login() {
             <CardTitle className="text-2xl font-bold">Threads Studio</CardTitle>
           </div>
           <CardDescription>
-            アカウントにログインして、AI投稿生成を始めましょう
+            {t('アカウントにログインして、AI投稿生成を始めましょう')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* 審査用の英語UIモード切替。日本語UIのまま撮る場合は不要だが、Metaの
+              スクリーンキャストのベストプラクティス(英語UI)に合わせたい時にワンタップで切替できる */}
+          <div className="flex justify-end -mt-2 -mb-1">
+            <button
+              type="button"
+              onClick={() => setLang(lang === 'ja' ? 'en' : 'ja')}
+              className="text-xs text-muted-foreground/60 hover:text-muted-foreground underline"
+            >
+              {lang === 'ja' ? 'English' : '日本語'}
+            </button>
+          </div>
+
           {showRegisteredMessage && (
             <Alert className="border-green-500 bg-green-500/10">
               <CheckCircle2 className="h-4 w-4 text-green-500" />
               <AlertDescription className="text-green-600">
-                アカウントが作成されました！メールアドレスとパスワードでログインしてください。
+                {t('アカウントが作成されました！メールアドレスとパスワードでログインしてください。')}
               </AlertDescription>
             </Alert>
           )}
@@ -110,7 +124,7 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">メールアドレス</Label>
+              <Label htmlFor="email">{t('メールアドレス')}</Label>
               <Input
                 id="email"
                 type="email"
@@ -125,9 +139,9 @@ export default function Login() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password">パスワード</Label>
+                <Label htmlFor="password">{t('パスワード')}</Label>
                 <Link href="/forgot-password" className="text-xs text-primary hover:underline">
-                  パスワードを忘れた？
+                  {t('パスワードを忘れた？')}
                 </Link>
               </div>
               <Input
@@ -181,16 +195,16 @@ export default function Login() {
               disabled={loginMutation.isPending}
             >
               {loginMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              ログイン
+              {t('ログイン')}
             </Button>
           </form>
 
         </CardContent>
         <CardFooter className="flex flex-col space-y-3">
           <div className="text-sm text-center text-muted-foreground">
-            アカウントをお持ちでないですか？{' '}
+            {t('アカウントをお持ちでないですか？')}{' '}
             <Link href="/register" className="text-primary hover:underline">
-              新規登録
+              {t('新規登録')}
             </Link>
           </div>
           {/* 次回からすぐ開けるよう、ログイン画面の保存を案内 */}

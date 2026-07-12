@@ -18,6 +18,7 @@ import {
   Flame,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { useLang } from "@/i18n";
 import { toast } from "sonner";
 import { useState } from "react";
 import {
@@ -34,6 +35,7 @@ import {
 } from "recharts";
 
 export default function PostAnalytics() {
+  const { t } = useLang();
   const [, setLocation] = useLocation();
   const { data: analyticsData, isLoading, refetch } = trpc.stats.postAnalytics.useQuery();
   const { data: hitPostsData } = trpc.stats.hitPosts.useQuery();
@@ -207,15 +209,15 @@ export default function PostAnalytics() {
               onClick={() => setLocation("/dashboard")}
             >
               <ArrowLeft className="w-4 h-4 mr-1" />
-              戻る
+              {t('戻る')}
             </Button>
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-foreground flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
-                投稿分析
+                {t('投稿分析')}
               </h1>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Threads投稿のパフォーマンスを分析
+                {t('Threads投稿のパフォーマンスを分析')}
               </p>
             </div>
           </div>
@@ -226,7 +228,7 @@ export default function PostAnalytics() {
                 onClick={handleExportCSV}
               >
                 <Download className="w-4 h-4 mr-2" />
-                CSV出力
+                {t('CSV出力')}
               </Button>
             )}
             <Button
@@ -239,7 +241,7 @@ export default function PostAnalytics() {
               ) : (
                 <RefreshCw className="w-4 h-4 mr-2" />
               )}
-              最新データを取得
+              {t('最新データを取得')}
             </Button>
           </div>
         </div>
@@ -247,15 +249,15 @@ export default function PostAnalytics() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <p className="mt-4 text-muted-foreground">データを読み込み中...</p>
+            <p className="mt-4 text-muted-foreground">{t('データを読み込み中...')}</p>
           </div>
         ) : posts.length === 0 ? (
           <Card className="glass-card">
             <CardContent className="flex flex-col items-center justify-center py-16">
               <BarChart3 className="w-12 h-12 text-muted-foreground/50 mb-4" />
-              <h3 className="text-lg font-semibold mb-2">分析データがありません</h3>
+              <h3 className="text-lg font-semibold mb-2">{t('分析データがありません')}</h3>
               <p className="text-muted-foreground text-center mb-6 max-w-md">
-                Threadsアカウントを連携して「最新データを取得」ボタンを押すと、投稿のパフォーマンスデータが表示されます。
+                {t('Threadsアカウントを連携して「最新データを取得」ボタンを押すと、投稿のパフォーマンスデータが表示されます。')}
               </p>
               <Button
                 onClick={() => fetchAnalytics.mutate()}
@@ -267,7 +269,7 @@ export default function PostAnalytics() {
                 ) : (
                   <RefreshCw className="w-4 h-4 mr-2" />
                 )}
-                データを取得する
+                {t('データを取得する')}
               </Button>
             </CardContent>
           </Card>
@@ -281,7 +283,7 @@ export default function PostAnalytics() {
                     <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
                       <Eye className="w-4 h-4 text-blue-600" />
                     </div>
-                    <span className="text-xs text-muted-foreground">閲覧数</span>
+                    <span className="text-xs text-muted-foreground">{t('閲覧数')}</span>
                   </div>
                   <p className="text-xl sm:text-2xl font-bold">{formatNumber(totalImpressions)}</p>
                 </CardContent>
@@ -292,7 +294,7 @@ export default function PostAnalytics() {
                     <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center">
                       <Heart className="w-4 h-4 text-rose-500" />
                     </div>
-                    <span className="text-xs text-muted-foreground">いいね</span>
+                    <span className="text-xs text-muted-foreground">{t('いいね')}</span>
                   </div>
                   <p className="text-xl sm:text-2xl font-bold">{formatNumber(totalLikes)}</p>
                 </CardContent>
@@ -303,7 +305,7 @@ export default function PostAnalytics() {
                     <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
                       <MessageCircle className="w-4 h-4 text-amber-600" />
                     </div>
-                    <span className="text-xs text-muted-foreground">返信</span>
+                    <span className="text-xs text-muted-foreground">{t('返信')}</span>
                   </div>
                   <p className="text-xl sm:text-2xl font-bold">{formatNumber(totalReplies)}</p>
                 </CardContent>
@@ -314,7 +316,7 @@ export default function PostAnalytics() {
                     <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
                       <Repeat2 className="w-4 h-4 text-emerald-600" />
                     </div>
-                    <span className="text-xs text-muted-foreground">リポスト</span>
+                    <span className="text-xs text-muted-foreground">{t('リポスト')}</span>
                   </div>
                   <p className="text-xl sm:text-2xl font-bold">{formatNumber(totalReposts)}</p>
                 </CardContent>

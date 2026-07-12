@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
+import { useLang } from '@/i18n';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,6 +18,7 @@ import {
 } from '@/components/ui/dialog';
 
 export default function CommentManager() {
+  const { t } = useLang();
   const breadcrumbItems = [
     { label: 'ダッシュボード', href: '/dashboard' },
     { label: 'コメント管理' },
@@ -115,9 +117,9 @@ export default function CommentManager() {
         <PageBreadcrumb items={breadcrumbItems} />
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold mb-2">コメント管理</h1>
+            <h1 className="text-3xl font-bold mb-2">{t('コメント管理')}</h1>
             <p className="text-muted-foreground">
-              投稿へのコメントにAIで返信を生成・投稿できます
+              {t('投稿へのコメントにAIで返信を生成・投稿できます')}
             </p>
           </div>
           <ThreadsAccountSwitcher />
@@ -125,8 +127,8 @@ export default function CommentManager() {
         <Card>
           <CardContent className="pt-6 text-center text-muted-foreground">
             <MessageCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-            <p className="text-lg font-medium mb-2">Threadsアカウントを連携してください</p>
-            <p className="text-sm">コメント管理を使うには、まずThreadsアカウントの連携が必要です。</p>
+            <p className="text-lg font-medium mb-2">{t('Threadsアカウントを連携してください')}</p>
+            <p className="text-sm">{t('コメント管理を使うには、まずThreadsアカウントの連携が必要です。')}</p>
           </CardContent>
         </Card>
       </div>
@@ -138,9 +140,9 @@ export default function CommentManager() {
       <PageBreadcrumb items={breadcrumbItems} />
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold mb-2">コメント管理</h1>
+          <h1 className="text-3xl font-bold mb-2">{t('コメント管理')}</h1>
           <p className="text-muted-foreground">
-            投稿へのコメントにAIで返信を生成・投稿できます
+            {t('投稿へのコメントにAIで返信を生成・投稿できます')}
             {selectedAccount && (
               <span className="ml-2 text-sm">
                 (@{selectedAccount.threadsUsername})
@@ -156,7 +158,7 @@ export default function CommentManager() {
             disabled={isLoading}
           >
             <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
-            更新
+            {t('更新')}
           </Button>
           <ThreadsAccountSwitcher />
         </div>
@@ -170,8 +172,8 @@ export default function CommentManager() {
         <Card>
           <CardContent className="pt-6 text-center text-muted-foreground">
             <MessageCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-            <p className="text-lg font-medium mb-2">コメントがまだありません</p>
-            <p className="text-sm">投稿にコメントが付くとここに表示されます。</p>
+            <p className="text-lg font-medium mb-2">{t('コメントがまだありません')}</p>
+            <p className="text-sm">{t('投稿にコメントが付くとここに表示されます。')}</p>
           </CardContent>
         </Card>
       ) : (
@@ -212,7 +214,7 @@ export default function CommentManager() {
                         {isPosted && (
                           <Badge className="bg-green-100 text-green-700 border-green-300 ml-auto shrink-0">
                             <Check className="w-3 h-3 mr-1" />
-                            返信済み
+                            {t('返信済み')}
                           </Badge>
                         )}
                       </div>
@@ -232,7 +234,7 @@ export default function CommentManager() {
                         aria-label={`@${comment.username || '不明'}のコメントにAI返信を生成`}
                       >
                         <Sparkles className="w-4 h-4 mr-1" />
-                        AI返信を生成
+                        {t('AI返信を生成')}
                       </Button>
                     </div>
                   </div>
@@ -249,10 +251,10 @@ export default function CommentManager() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-orange-600">
               <MessageCircle className="w-5 h-5" />
-              AI返信を生成
+              {t('AI返信を生成')}
             </DialogTitle>
             <DialogDescription id="reply-dialog-desc">
-              コメントに対する自然で温かい返信を生成します。
+              {t('コメントに対する自然で温かい返信を生成します。')}
             </DialogDescription>
           </DialogHeader>
 
@@ -276,12 +278,12 @@ export default function CommentManager() {
                   {generateReplyMutation.isPending ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      返信を生成中...
+                      {t('返信を生成中...')}
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 mr-2" />
-                      AI返信を生成する
+                      {t('AI返信を生成する')}
                     </>
                   )}
                 </Button>
@@ -290,7 +292,7 @@ export default function CommentManager() {
               {/* Reply candidates */}
               {generatedReplies.length > 0 && (
                 <div className="space-y-3">
-                  <p className="text-sm font-medium">返信候補（クリックで選択）</p>
+                  <p className="text-sm font-medium">{t('返信候補（クリックで選択）')}</p>
                   <div className="grid gap-2">
                     {generatedReplies.map((reply, index) => (
                       <button
@@ -312,13 +314,13 @@ export default function CommentManager() {
 
                   {/* Editable reply */}
                   <div>
-                    <label className="text-sm font-medium mb-2 block">返信を編集</label>
+                    <label className="text-sm font-medium mb-2 block">{t('返信を編集')}</label>
                     <textarea
                       value={editedReply}
                       onChange={(e) => setEditedReply(e.target.value)}
                       rows={3}
                       className="w-full p-3 text-sm border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-orange-400"
-                      placeholder="返信を入力..."
+                      placeholder={t('返信を入力...')}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
                       {editedReply.length}文字
@@ -333,7 +335,7 @@ export default function CommentManager() {
                     disabled={generateReplyMutation.isPending}
                   >
                     <RefreshCw className={`w-4 h-4 mr-1 ${generateReplyMutation.isPending ? 'animate-spin' : ''}`} />
-                    別の候補を生成
+                    {t('別の候補を生成')}
                   </Button>
                 </div>
               )}
@@ -345,7 +347,7 @@ export default function CommentManager() {
               variant="outline"
               onClick={() => { setReplyDialogOpen(false); setSelectedComment(null); setGeneratedReplies([]); setEditedReply(''); }}
             >
-              キャンセル
+              {t('キャンセル')}
             </Button>
             {editedReply && (
               <Button
@@ -353,7 +355,7 @@ export default function CommentManager() {
                 onClick={handleCopyReply}
               >
                 <Copy className="w-4 h-4 mr-1" />
-                コピー
+                {t('コピー')}
               </Button>
             )}
             {editedReply && (
@@ -365,12 +367,12 @@ export default function CommentManager() {
                 {postReplyMutation.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    投稿中...
+                    {t('投稿中...')}
                   </>
                 ) : (
                   <>
                     <Send className="w-4 h-4 mr-2" />
-                    投稿する
+                    {t('投稿する')}
                   </>
                 )}
               </Button>

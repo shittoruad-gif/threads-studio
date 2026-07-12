@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useFontScale } from "@/hooks/useFontScale";
+import { useLang } from "@/i18n";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -29,6 +30,7 @@ export default function Settings() {
   const [, setLocation] = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { isLarge, setFontScale } = useFontScale();
+  const { lang, setLang } = useLang();
   const utils = trpc.useUtils();
 
   // Auto-post settings from API
@@ -504,6 +506,32 @@ export default function Settings() {
                 onCheckedChange={(v) => setFontScale(v ? "large" : "normal")}
               />
               <span className="text-lg font-bold text-muted-foreground">大</span>
+            </div>
+          </div>
+
+          {/* 表示言語（日本語 / English）。審査用の英語スクリーンキャストを撮るときに使う */}
+          <div className="flex items-center justify-between pt-5 mt-5 border-t border-border/50">
+            <div>
+              <Label className="text-sm font-medium">表示言語 / Language</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                日本語 / English（審査用の英語表示に切り替えられます）
+              </p>
+            </div>
+            <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
+              <button
+                type="button"
+                onClick={() => setLang("ja")}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${lang === "ja" ? "bg-emerald-600 text-white" : "text-muted-foreground hover:bg-muted"}`}
+              >
+                日本語
+              </button>
+              <button
+                type="button"
+                onClick={() => setLang("en")}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${lang === "en" ? "bg-emerald-600 text-white" : "text-muted-foreground hover:bg-muted"}`}
+              >
+                English
+              </button>
             </div>
           </div>
         </Card>

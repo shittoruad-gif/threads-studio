@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import { lazy, Suspense } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { LangProvider } from "./i18n";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { SubscriptionProvider } from "./contexts/SubscriptionContext";
 import DashboardLayout from "./components/DashboardLayout";
@@ -197,6 +198,7 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
+      <LangProvider>
       <ThemeProvider defaultTheme="light" switchable>
         <SubscriptionProvider>
           <ThreadsAccountProvider>
@@ -212,6 +214,7 @@ function App() {
           </ThreadsAccountProvider>
         </SubscriptionProvider>
       </ThemeProvider>
+      </LangProvider>
     </ErrorBoundary>
   );
 }

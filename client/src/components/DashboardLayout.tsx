@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useLang } from "@/i18n";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { cn } from "@/lib/utils";
@@ -85,6 +86,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { loading, user, logout } = useAuth();
+  const { t } = useLang();
   const [location, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -244,7 +246,7 @@ export default function DashboardLayout({
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
-                title={collapsed ? item.label : undefined}
+                title={collapsed ? t(item.label) : undefined}
               >
                 <span className="relative flex-shrink-0">
                   <item.icon
@@ -259,7 +261,7 @@ export default function DashboardLayout({
                 </span>
                 {!collapsed && (
                   <>
-                    <span className="truncate">{item.label}</span>
+                    <span className="truncate">{t(item.label)}</span>
                     {(() => {
                       const dynamicBadge = item.badgeKey ? dynamicBadges[item.badgeKey] : null;
                       const badgeText = dynamicBadge || item.badge;
@@ -337,10 +339,10 @@ export default function DashboardLayout({
             <button
               onClick={handleLogout}
               className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              aria-label="ログアウト"
+              aria-label={t("ログアウト")}
             >
               <LogOut className="w-4 h-4" />
-              ログアウト
+              {t("ログアウト")}
             </button>
           </div>
         ) : (
@@ -466,7 +468,7 @@ export default function DashboardLayout({
                 <button
                   key={item.path}
                   onClick={() => setLocation(item.path)}
-                  aria-label={item.label}
+                  aria-label={t(item.label)}
                   aria-current={active ? "page" : undefined}
                   className={cn(
                     "flex flex-col items-center justify-center gap-0.5 min-h-[56px] py-1.5 transition-colors",
@@ -474,7 +476,7 @@ export default function DashboardLayout({
                   )}
                 >
                   <Icon className="w-5 h-5" />
-                  <span className="text-[11px] font-medium leading-none">{item.label}</span>
+                  <span className="text-[11px] font-medium leading-none">{t(item.label)}</span>
                 </button>
               );
             })}
@@ -485,7 +487,7 @@ export default function DashboardLayout({
               className="flex flex-col items-center justify-center gap-0.5 min-h-[56px] py-1.5 text-muted-foreground transition-colors"
             >
               <Menu className="w-5 h-5" />
-              <span className="text-[11px] font-medium leading-none">メニュー</span>
+              <span className="text-[11px] font-medium leading-none">{t("メニュー")}</span>
             </button>
           </div>
         </nav>
