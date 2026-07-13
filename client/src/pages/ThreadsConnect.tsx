@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { trpc } from '@/lib/trpc';
-import { Link2, Unlink, AlertCircle, Plus, User, RefreshCw, Users, ShieldCheck, Info, ChevronRight } from 'lucide-react';
+import { Link2, Unlink, AlertCircle, Plus, User, RefreshCw, Users, ShieldCheck, Info, ChevronRight, Monitor } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { toast } from 'sonner';
 import { getLoginUrl } from '@/const';
@@ -272,12 +272,27 @@ export default function ThreadsConnect() {
         </p>
       </div>
 
-      {/* 3ステップ案内。前提の一文→3つのカードで視覚的に流れを示す。
-          審査員が「①ここを押す→②Metaでログイン→③許可を押す」を一目で把握できるようにする。 */}
+      {/* PC推奨バナー（全ユーザー・初回から表示）。スマホではThreadsアプリの横取り等で
+          「このページは存在しません」に飛ぶ事例があるため、まずPCを強く推奨する。 */}
+      <div className="bg-emerald-50 border-2 border-emerald-300 rounded-xl p-4 mb-4 flex items-start gap-3">
+        <Monitor className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="text-emerald-900 font-bold text-sm sm:text-base">
+            {t('連携は「パソコン」から行うのがおすすめです')}
+          </p>
+          <p className="text-emerald-800 text-xs sm:text-sm mt-1 leading-relaxed">
+            {t('スマホだと、Threadsアプリの影響でうまく連携できず「このページは存在しません」と表示されることがあります。パソコンのブラウザで')}
+            {' '}<code className="px-1 bg-white/70 rounded text-[13px]">threads-studio.com</code>{' '}
+            {t('を開いて連携すると確実です。')}
+          </p>
+        </div>
+      </div>
+
+      {/* 3ステップ案内。①ボタン→②Threadsログイン→③許可 の流れを視覚的に示す。 */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 flex items-start gap-3">
         <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
         <p className="text-foreground/80 text-sm">
-          <strong>{t('連携の前に：')}</strong> {t('スマホのThreads（Instagram）にログインできる状態にしておいてください。')}
+          <strong>{t('連携の前に：')}</strong> {t('連携したいアカウントでThreads（Instagram）にログインできる状態にしておいてください。')}
         </p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
@@ -558,23 +573,43 @@ export default function ThreadsConnect() {
                 {t('別のアカウントを連携するときの注意')}
               </p>
               <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-                {t('下のボタンを押しても、Threadsが「今使っているアカウントとして続行」と表示してしまい、別のアカウントを選べないことがあります（Threadsの仕様）。次の3つの方法のどれかで、追加したいアカウントに切り替えてから連携ボタンを押してください。')}
+                {t('下のボタンを押しても、Threadsが「今使っているアカウントとして続行」と表示してしまい、別のアカウントを選べないことがあります（Threadsの仕様）。')}
+                {' '}<strong>{t('特にスマホでは、Threadsアプリの影響で「このページは存在しません」と表示され、うまく進まないことがあります。')}</strong>
+                {' '}{t('次の方法のどれかで、追加したいアカウントに切り替えてから連携ボタンを押してください。')}
               </p>
             </div>
           </div>
 
           <div className="space-y-2">
-            {/* 方法A：シークレットウィンドウ（最推奨・確実） */}
+            {/* 方法A：パソコンでログアウトしてから連携（最推奨・確実） */}
             <details className="rounded-lg bg-white border border-amber-200 group" open>
               <summary className="flex items-center justify-between gap-2 px-3 py-2 cursor-pointer list-none">
                 <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
                   <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">A</span>
-                  {t('シークレットウィンドウを使う（一番おすすめ）')}
+                  {t('【一番おすすめ】パソコンでThreadsからログアウトしてから連携する')}
+                </span>
+                <ChevronRight className="w-4 h-4 text-muted-foreground group-open:rotate-90 transition-transform" />
+              </summary>
+              <ol className="px-3 pb-3 pt-1 space-y-1.5 text-xs text-foreground/80 leading-relaxed">
+                <li>1. <strong>{t('パソコンのブラウザ')}</strong>{t('で別タブを開き、')} <a href="https://www.threads.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">threads.com</a> {t('を開く')}</li>
+                <li>2. {t('プロフィールアイコン → 設定 →「ログアウト」を押す')}</li>
+                <li>3. {t('この画面に戻って「別のThreadsアカウントを連携」を押す')}</li>
+                <li>4. {t('Threadsのログイン画面が出る → 追加したいアカウントのID・パスワードを入力')}</li>
+                <li>5. {t('権限確認画面で「許可 (Allow)」を押す → 新しいアカウントが追加されます')}</li>
+              </ol>
+            </details>
+
+            {/* 方法B：パソコンのシークレットウィンドウ */}
+            <details className="rounded-lg bg-white border border-amber-200 group">
+              <summary className="flex items-center justify-between gap-2 px-3 py-2 cursor-pointer list-none">
+                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs">B</span>
+                  {t('パソコンのシークレットウィンドウを使う')}
                 </span>
                 <ChevronRight className="w-4 h-4 text-muted-foreground group-open:rotate-90 transition-transform" />
               </summary>
               <ol className="px-3 pb-3 pt-1 space-y-2 text-xs text-foreground/80 leading-relaxed">
-                <li>1. ブラウザで<strong>{t('新しいシークレットウィンドウ / プライベートウィンドウ')}</strong>{t('を開く')}</li>
+                <li>1. <strong>{t('パソコン')}</strong>{t('で新しいシークレットウィンドウ / プライベートウィンドウを開く')}</li>
                 <li>
                   2. {t('シークレットウィンドウのアドレスバーに以下のURLを貼り付ける：')}
                   <div className="mt-1.5 flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1.5">
@@ -605,40 +640,28 @@ export default function ThreadsConnect() {
               </ol>
             </details>
 
-            {/* 方法B：Threadsからログアウト */}
-            <details className="rounded-lg bg-white border border-amber-200 group">
-              <summary className="flex items-center justify-between gap-2 px-3 py-2 cursor-pointer list-none">
-                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs">B</span>
-                  {t('Threadsからログアウトしてから連携する')}
-                </span>
-                <ChevronRight className="w-4 h-4 text-muted-foreground group-open:rotate-90 transition-transform" />
-              </summary>
-              <ol className="px-3 pb-3 pt-1 space-y-1.5 text-xs text-foreground/80 leading-relaxed">
-                <li>1. {t('別タブで')} <a href="https://www.threads.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">threads.com</a> {t('を開く')}</li>
-                <li>2. {t('プロフィールアイコン → 設定 →「ログアウト」を押す')}</li>
-                <li>3. {t('この画面に戻って「別のThreadsアカウントを連携」を押す')}</li>
-                <li>4. {t('Threadsのログイン画面が出る → 追加したいアカウントで入る')}</li>
-                <li>5. {t('権限確認画面で「許可 (Allow)」を押す')}</li>
-              </ol>
-            </details>
-
-            {/* 方法C：Threadsアプリで別アカウントに切り替え（スマホ） */}
+            {/* 方法C：スマホの場合（シークレットモードは避ける） */}
             <details className="rounded-lg bg-white border border-amber-200 group">
               <summary className="flex items-center justify-between gap-2 px-3 py-2 cursor-pointer list-none">
                 <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
                   <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center text-xs">C</span>
-                  {t('スマホのThreadsアプリで別アカウントに切り替えてから連携')}
+                  {t('どうしてもスマホで行う場合')}
                 </span>
                 <ChevronRight className="w-4 h-4 text-muted-foreground group-open:rotate-90 transition-transform" />
               </summary>
-              <ol className="px-3 pb-3 pt-1 space-y-1.5 text-xs text-foreground/80 leading-relaxed">
-                <li>1. {t('スマホのThreadsアプリを開く')}</li>
-                <li>2. {t('プロフィールタブ → 上部のアカウント名をタップ → 追加したいアカウントに切り替え')}</li>
-                <li>3. {t('（未追加の場合は「アカウントを追加」→ 追加したいアカウントでログイン → 切り替え）')}</li>
-                <li>4. {t('同じスマホのブラウザでこの画面を開いて「別のThreadsアカウントを連携」を押す')}</li>
-                <li>5. {t('権限確認画面で「許可 (Allow)」を押す')}</li>
-              </ol>
+              <div className="px-3 pb-3 pt-1 text-xs text-foreground/80 leading-relaxed">
+                <p className="mb-2 flex items-start gap-1 text-[11px] text-red-700">
+                  <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                  <span>{t('⚠️ スマホの「シークレットモード / プライベートブラウズ」は使わないでください。Threadsアプリに横取りされ、うまく連携できないことがあります。必ず通常のブラウザで行ってください。')}</span>
+                </p>
+                <ol className="space-y-1.5">
+                  <li>1. {t('スマホのThreadsアプリを開く')}</li>
+                  <li>2. {t('プロフィールタブ → 上部のアカウント名をタップ → 追加したいアカウントに切り替え')}</li>
+                  <li>3. {t('（未追加の場合は「アカウントを追加」→ 追加したいアカウントでログイン → 切り替え）')}</li>
+                  <li>4. {t('同じスマホの通常ブラウザ（シークレットではない）でこの画面を開いて「別のThreadsアカウントを連携」を押す')}</li>
+                  <li>5. {t('権限確認画面で「許可 (Allow)」を押す')}</li>
+                </ol>
+              </div>
             </details>
           </div>
 

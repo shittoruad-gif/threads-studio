@@ -41,7 +41,11 @@ export const dict: Record<string, string> = {
 
   // ── Threads連携画面（審査で最重要） ──
   "Threadsアカウントを連携して、直接投稿できるようになります": "Connect your Threads account to publish directly from this app",
+  "連携は「パソコン」から行うのがおすすめです": "We recommend connecting from a computer",
+  "スマホだと、Threadsアプリの影響でうまく連携できず「このページは存在しません」と表示されることがあります。パソコンのブラウザで": "On a phone, the Threads app can interfere and you may see a \"page not found\" error. Connecting from a computer browser at",
+  "を開いて連携すると確実です。": "is more reliable.",
   "連携の前に：": "Before you connect:",
+  "連携したいアカウントでThreads（Instagram）にログインできる状態にしておいてください。": "Make sure you can log into Threads (Instagram) with the account you want to connect.",
   "スマホのThreads（Instagram）にログインできる状態にしておいてください。": "Make sure you can log into Threads (Instagram) on your phone.",
   "下の「Threadsと連携」ボタンを押すとThreadsの画面が開くので、": "Tap the \"Connect Threads\" button below to open the Threads login screen —",
   "「許可」を押すだけ": "just tap \"Allow\"",
@@ -69,6 +73,19 @@ export const dict: Record<string, string> = {
   "Threads（Instagram）のIDとパスワードでログインします。": "Log in with your Threads (Instagram) username and password.",
   "「許可」を押す": "Tap \"Allow\"",
   "アプリに与える権限の確認画面で「許可」を押すと、この画面に戻り連携完了です。": "On the permission consent screen, tap \"Allow\". You will be returned here and the connection is complete.",
+
+  // 複数アカウント連携ガイド（A/B/C）
+  "別のアカウントを連携するときの注意": "A note on connecting another account",
+  "下のボタンを押しても、Threadsが「今使っているアカウントとして続行」と表示してしまい、別のアカウントを選べないことがあります（Threadsの仕様）。": "Even after tapping the button below, Threads may show \"Continue as [your current account]\" and not let you choose a different one — this is how Threads behaves.",
+  "特にスマホでは、Threadsアプリの影響で「このページは存在しません」と表示され、うまく進まないことがあります。": "On phones especially, the Threads app can interfere and show a \"page not found\" error, blocking you from continuing.",
+  "次の方法のどれかで、追加したいアカウントに切り替えてから連携ボタンを押してください。": "Use one of the methods below to switch to the account you want to add, then press the connect button.",
+  "【一番おすすめ】パソコンでThreadsからログアウトしてから連携する": "[Recommended] Log out of Threads on a computer, then connect",
+  "パソコンのブラウザ": "your computer's browser",
+  "パソコンのシークレットウィンドウを使う": "Use an incognito/private window on a computer",
+  "パソコン": "A computer",
+  "どうしてもスマホで行う場合": "If you must do this on a phone",
+  "⚠️ スマホの「シークレットモード / プライベートブラウズ」は使わないでください。Threadsアプリに横取りされ、うまく連携できないことがあります。必ず通常のブラウザで行ってください。": "⚠️ Do not use incognito/private mode on a phone — the Threads app can intercept it and break the connection. Use your regular browser instead.",
+  "同じスマホの通常ブラウザ（シークレットではない）でこの画面を開いて「別のThreadsアカウントを連携」を押す": "On the same phone, open this page in your regular browser (not incognito) and tap \"Connect a different Threads account\"",
 
   // ── AI投稿生成 / 公開 ──
   "投稿を生成": "Generate post",
