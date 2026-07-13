@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { trpc } from '@/lib/trpc';
-import { Link2, Unlink, AlertCircle, Plus, User, RefreshCw, Users, ShieldCheck, Info } from 'lucide-react';
+import { Link2, Unlink, AlertCircle, Plus, User, RefreshCw, Users, ShieldCheck, Info, ChevronRight } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { toast } from 'sonner';
 import { getLoginUrl } from '@/const';
@@ -545,6 +545,86 @@ export default function ThreadsConnect() {
         </div>
       )}
 
+      {/* 追加連携が難しい理由と3つの解決策の事前ガイド。
+          既に1件以上連携済みで、まだ追加余地がある時だけ表示する。
+          「なぜ同じアカウントが出るのか」を先に説明し、方法A/B/Cを提示することで、
+          Threads OAuth 特有のはまりどころを回避してもらう。 */}
+      {(accounts?.length || 0) > 0 && canAddMore && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-start gap-2 mb-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-900">
+                {t('別のアカウントを連携するときの注意')}
+              </p>
+              <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                {t('下のボタンを押しても、Threadsが「今使っているアカウントとして続行」と表示してしまい、別のアカウントを選べないことがあります（Threadsの仕様）。次の3つの方法のどれかで、追加したいアカウントに切り替えてから連携ボタンを押してください。')}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {/* 方法A：シークレットウィンドウ（最推奨・確実） */}
+            <details className="rounded-lg bg-white border border-amber-200 group" open>
+              <summary className="flex items-center justify-between gap-2 px-3 py-2 cursor-pointer list-none">
+                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">A</span>
+                  {t('シークレットウィンドウを使う（一番おすすめ）')}
+                </span>
+                <ChevronRight className="w-4 h-4 text-muted-foreground group-open:rotate-90 transition-transform" />
+              </summary>
+              <ol className="px-3 pb-3 pt-1 space-y-1.5 text-xs text-foreground/80 leading-relaxed">
+                <li>1. ブラウザで<strong>{t('新しいシークレットウィンドウ / プライベートウィンドウ')}</strong>{t('を開く')}</li>
+                <li>2. {t('シークレットウィンドウで')} <code className="px-1 bg-muted rounded">threads-studio.com</code> {t('にログイン')}</li>
+                <li>3. {t('サイドバーの「Threads連携」→「別のThreadsアカウントを連携」を押す')}</li>
+                <li>4. {t('Threadsのログイン画面が出る → 追加したいアカウントの ID・パスワードを入力')}</li>
+                <li>5. {t('権限確認画面で「許可 (Allow)」を押す → 新しいアカウントが追加されます')}</li>
+              </ol>
+            </details>
+
+            {/* 方法B：Threadsからログアウト */}
+            <details className="rounded-lg bg-white border border-amber-200 group">
+              <summary className="flex items-center justify-between gap-2 px-3 py-2 cursor-pointer list-none">
+                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs">B</span>
+                  {t('Threadsからログアウトしてから連携する')}
+                </span>
+                <ChevronRight className="w-4 h-4 text-muted-foreground group-open:rotate-90 transition-transform" />
+              </summary>
+              <ol className="px-3 pb-3 pt-1 space-y-1.5 text-xs text-foreground/80 leading-relaxed">
+                <li>1. {t('別タブで')} <a href="https://www.threads.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">threads.com</a> {t('を開く')}</li>
+                <li>2. {t('プロフィールアイコン → 設定 →「ログアウト」を押す')}</li>
+                <li>3. {t('この画面に戻って「別のThreadsアカウントを連携」を押す')}</li>
+                <li>4. {t('Threadsのログイン画面が出る → 追加したいアカウントで入る')}</li>
+                <li>5. {t('権限確認画面で「許可 (Allow)」を押す')}</li>
+              </ol>
+            </details>
+
+            {/* 方法C：Threadsアプリで別アカウントに切り替え（スマホ） */}
+            <details className="rounded-lg bg-white border border-amber-200 group">
+              <summary className="flex items-center justify-between gap-2 px-3 py-2 cursor-pointer list-none">
+                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center text-xs">C</span>
+                  {t('スマホのThreadsアプリで別アカウントに切り替えてから連携')}
+                </span>
+                <ChevronRight className="w-4 h-4 text-muted-foreground group-open:rotate-90 transition-transform" />
+              </summary>
+              <ol className="px-3 pb-3 pt-1 space-y-1.5 text-xs text-foreground/80 leading-relaxed">
+                <li>1. {t('スマホのThreadsアプリを開く')}</li>
+                <li>2. {t('プロフィールタブ → 上部のアカウント名をタップ → 追加したいアカウントに切り替え')}</li>
+                <li>3. {t('（未追加の場合は「アカウントを追加」→ 追加したいアカウントでログイン → 切り替え）')}</li>
+                <li>4. {t('同じスマホのブラウザでこの画面を開いて「別のThreadsアカウントを連携」を押す')}</li>
+                <li>5. {t('権限確認画面で「許可 (Allow)」を押す')}</li>
+              </ol>
+            </details>
+          </div>
+
+          <p className="text-[11px] text-amber-800/70 mt-3 leading-relaxed">
+            <strong>{t('補足：')}</strong>{t('「連携解除」を押すと現在のアカウントの連携が切れてしまうので、複数アカウントを両方使いたい場合は解除せず、上の3つのどれかを使ってください。')}
+          </p>
+        </div>
+      )}
+
       {/* Connect Button（未連携時は空状態カード内のボタンに集約し、ここでは追加連携のみ表示） */}
       {maxAccounts > 0 && (accounts?.length || 0) > 0 && (
         <div className="space-y-3">
@@ -559,7 +639,7 @@ export default function ThreadsConnect() {
           {(accounts?.length || 0) > 0 && canAddMore && (
             <p className="text-center text-muted-foreground/60 text-xs flex items-center justify-center gap-1">
               <Info className="w-3 h-3" />
-              {t('クリックするとThreadsのログイン画面が表示されるので、追加したいアカウントを選んでください')}
+              {t('上の3つの方法のどれかで別アカウントに切り替えてからこのボタンを押してください')}
             </p>
           )}
           {!canAddMore && (
