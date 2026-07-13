@@ -11,7 +11,7 @@ describe("Threads OAuth", () => {
     const redirectUri = "https://example.com/callback";
     const authUrl = getThreadsAuthUrl({ redirectUri });
 
-    expect(authUrl).toContain("https://threads.net/oauth/authorize");
+    expect(authUrl).toContain("https://www.threads.com/oauth/authorize");
     expect(authUrl).toContain("client_id=");
     expect(authUrl).toContain("redirect_uri=");
     expect(authUrl).toContain("response_type=code");

@@ -62,7 +62,7 @@ describe('Threads OAuth Callback Route', () => {
 
 describe('Threads OAuth Auth URL Generation', () => {
   it('should generate correct OAuth URL format', () => {
-    const THREADS_OAUTH_URL = 'https://threads.net/oauth/authorize';
+    const THREADS_OAUTH_URL = 'https://www.threads.com/oauth/authorize';
     const clientId = 'test_app_id';
     const redirectUri = 'https://example.com/api/threads/callback';
     const scopes = ['threads_basic', 'threads_content_publish', 'threads_manage_replies', 'threads_read_replies'];
@@ -76,7 +76,7 @@ describe('Threads OAuth Auth URL Generation', () => {
     
     const authUrl = `${THREADS_OAUTH_URL}?${params.toString()}`;
     
-    expect(authUrl).toContain('https://threads.net/oauth/authorize');
+    expect(authUrl).toContain('https://www.threads.com/oauth/authorize');
     expect(authUrl).toContain('client_id=test_app_id');
     expect(authUrl).toContain('response_type=code');
     expect(authUrl).toContain('threads_basic');
@@ -92,7 +92,7 @@ describe('Threads OAuth Auth URL Generation', () => {
       response_type: 'code',
     });
     
-    const url = `https://threads.net/oauth/authorize?${params.toString()}`;
+    const url = `https://www.threads.com/oauth/authorize?${params.toString()}`;
     expect(url).toContain(encodeURIComponent(redirectUri));
   });
 });

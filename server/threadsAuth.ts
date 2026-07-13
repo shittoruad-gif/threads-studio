@@ -6,7 +6,13 @@
 
 import { ENV } from "./_core/env";
 
-const THREADS_OAUTH_URL = "https://threads.net/oauth/authorize";
+// 2025年以降、Threads は threads.net → threads.com に段階的に移行された。
+// authorize は依然 threads.net でも 200 を返すが、内部で www.threads.com/login?next=...
+// への 301 が挟まり、next の redirect_uri が二重エンコードされる。シークレット
+// モードでは途中でセッション周りが噛み合わず「このページは存在しません」を出す実例あり。
+// 直接 www.threads.com/oauth/authorize を叩いてリダイレクトを1段減らす。
+const THREADS_OAUTH_URL = "https://www.threads.com/oauth/authorize";
+// トークン交換とグラフAPIは Meta 公式ドキュメント通り graph.threads.net を維持。
 const THREADS_TOKEN_URL = "https://graph.threads.net/oauth/access_token";
 const THREADS_GRAPH_URL = "https://graph.threads.net/v1.0";
 
