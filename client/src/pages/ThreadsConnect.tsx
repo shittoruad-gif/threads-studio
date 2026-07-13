@@ -573,12 +573,35 @@ export default function ThreadsConnect() {
                 </span>
                 <ChevronRight className="w-4 h-4 text-muted-foreground group-open:rotate-90 transition-transform" />
               </summary>
-              <ol className="px-3 pb-3 pt-1 space-y-1.5 text-xs text-foreground/80 leading-relaxed">
+              <ol className="px-3 pb-3 pt-1 space-y-2 text-xs text-foreground/80 leading-relaxed">
                 <li>1. ブラウザで<strong>{t('新しいシークレットウィンドウ / プライベートウィンドウ')}</strong>{t('を開く')}</li>
-                <li>2. {t('シークレットウィンドウで')} <code className="px-1 bg-muted rounded">threads-studio.com</code> {t('にログイン')}</li>
-                <li>3. {t('サイドバーの「Threads連携」→「別のThreadsアカウントを連携」を押す')}</li>
-                <li>4. {t('Threadsのログイン画面が出る → 追加したいアカウントの ID・パスワードを入力')}</li>
-                <li>5. {t('権限確認画面で「許可 (Allow)」を押す → 新しいアカウントが追加されます')}</li>
+                <li>
+                  2. {t('シークレットウィンドウのアドレスバーに以下のURLを貼り付ける：')}
+                  <div className="mt-1.5 flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1.5">
+                    <code className="flex-1 text-[13px] font-mono text-emerald-800 break-all">https://threads-studio.com/login</code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText('https://threads-studio.com/login')
+                          .then(() => toast.success('URLをコピーしました'))
+                          .catch(() => toast.error('コピーに失敗しました'));
+                      }}
+                      className="flex-shrink-0 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium px-2 py-1"
+                    >
+                      {t('コピー')}
+                    </button>
+                  </div>
+                  <p className="mt-1.5 flex items-start gap-1 text-[11px] text-red-700">
+                    <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                    <span>
+                      {t('⚠️ 「threads.com」ではありません（それはThreads本体で、このアプリではありません）。必ず「threads-')}<strong>{t('studio')}</strong>{t('.com」')}
+                    </span>
+                  </p>
+                </li>
+                <li>3. {t('メールアドレスとパスワードでThreads Studioにログイン')}</li>
+                <li>4. {t('サイドバーの「Threads連携」を開いて「別のThreadsアカウントを連携」を押す')}</li>
+                <li>5. {t('Threadsのログイン画面が出る → 追加したいアカウントのID・パスワードを入力')}</li>
+                <li>6. {t('権限確認画面で「許可 (Allow)」を押す → 新しいアカウントが追加されます')}</li>
               </ol>
             </details>
 
