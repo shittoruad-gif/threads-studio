@@ -5,7 +5,19 @@
 
 const UNIVAPAY_API_URL = 'https://api.univapay.com';
 const UNIVAPAY_JWT_TOKEN = process.env.UNIVAPAY_JWT_TOKEN!;
+const UNIVAPAY_SECRET = process.env.UNIVAPAY_SECRET ?? '';
 const UNIVAPAY_STORE_ID = process.env.UNIVAPAY_STORE_ID!;
+
+// UnivaPay サーバーAPI の Bearer 認証は「JWT.Secret」形式（App Token JWT と
+// Application Secret をピリオドで結合したもの）が必要。JWT 単体だと Webウィジェット
+// 用途になりドメイン制限に阻まれ、Secret 単体だと INVALID_CREDENTIALS で 401 になる。
+// 両方揃っている場合のみ結合し、片方欠けている場合は JWT 単体を送る（互換維持のため）。
+function buildAuthorizationHeader(): string {
+  if (UNIVAPAY_JWT_TOKEN && UNIVAPAY_SECRET) {
+    return `Bearer ${UNIVAPAY_JWT_TOKEN}.${UNIVAPAY_SECRET}`;
+  }
+  return `Bearer ${UNIVAPAY_JWT_TOKEN}`;
+}
 
 /**
  * Make authenticated request to Univapay API
@@ -17,7 +29,7 @@ async function univapayRequest(
 ) {
   const url = `${UNIVAPAY_API_URL}${endpoint}`;
   const headers: Record<string, string> = {
-    'Authorization': `Bearer ${UNIVAPAY_JWT_TOKEN}`,
+    'Authorization': buildAuthorizationHeader(),
     'Content-Type': 'application/json',
   };
 
