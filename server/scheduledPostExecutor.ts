@@ -8,6 +8,7 @@ import * as db from "./db";
 import { createAndPublishThread, splitThreadSegments, PartialThreadError } from "./threadsPost";
 import { notifyOwner, sendEmail } from "./_core/notification";
 import { refreshAccessToken } from "./threadsAuth";
+import { toPublicErrorMessage, escapeHtml } from "../shared/sanitize";
 
 const APP_BASE_URL = process.env.APP_BASE_URL || "https://threads-studio.com";
 
@@ -51,13 +52,17 @@ async function notifyUserPostFailure(
       cta = { label: "投稿履歴を確認", href: `${APP_BASE_URL}/post-history?status=failed` };
     }
 
+    // 生のAPIエラー（コード番号・JSON）をそのまま見せず、行動できる日本語文言に変換する。
+    // 元のエラーは呼び出し側の console.error / notifyOwner に残る（運用追跡用）。
+    const friendlyDetail = escapeHtml(toPublicErrorMessage(errorMessage));
+
     await sendEmail({
       to: user.email,
       subject,
       html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
         <h2>${heading}</h2>
         <p>${body}</p>
-        <p style="color:#666;font-size:13px;">詳細: ${errorMessage}</p>
+        <p style="color:#666;font-size:13px;">詳細: ${friendlyDetail}</p>
         <a href="${cta.href}" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0;">${cta.label}</a>
       </div>`,
     });

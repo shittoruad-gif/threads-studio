@@ -123,6 +123,29 @@ export function toPublicErrorMessage(err: unknown, fallback = '一時的なエ�
   const raw = err instanceof Error ? err.message : String(err);
   const lower = raw.toLowerCase();
 
+  // Threads(Meta Graph) API の生レスポンスJSONが混ざっている場合、
+  // エラーコード番号からユーザが行動できる日本語文言に変換する。
+  // 生JSON（"code":190 等）やfbtrace_idをそのままメール・画面に出さない。
+  const codeMatch = raw.match(/"code"\s*:\s*(\d+)/);
+  const looksLikeThreadsRaw =
+    /failed to (create|publish) media container|failed to get container status|oauthexception|fbtrace_id/i.test(raw);
+  if (codeMatch || looksLikeThreadsRaw) {
+    const code = codeMatch ? Number(codeMatch[1]) : null;
+    if (code === 190 || lower.includes('oauthexception')) {
+      return 'Threads連携の有効期限が切れています。アプリの「Threads連携」から再連携してください。';
+    }
+    if (code === 4 || code === 17 || code === 32 || code === 613) {
+      return 'Threadsの投稿回数制限（レート制限）に達しました。時間を置くと自動的に解除されます。';
+    }
+    if (code === 24) {
+      return 'Threads側で投稿の処理が完了しませんでした。一時的なエラーのことが多く、時間を置いて再投稿すると解決します。';
+    }
+    if (code === 368) {
+      return 'Threads側で投稿が一時的に制限されています。時間を置いてから再度お試しください。';
+    }
+    return 'Threadsへの投稿処理でエラーが発生しました。一時的なことが多いため、時間を置いてから再度お試しください。';
+  }
+
   // Threads API のよくあるエラー（ユーザに伝えると行動できるもの）
   if (lower.includes('rate limit') || lower.includes('rate-limit')) {
     return 'Threads APIのレート制限に達しました。しばらく待ってから再度お試しください。';
@@ -136,6 +159,13 @@ export function toPublicErrorMessage(err: unknown, fallback = '一時的なエ�
   }
   if (lower.includes('timed out') || lower.includes('timeout')) {
     return 'リクエストがタイムアウトしました。再度お試しください。';
+  }
+  if (lower.includes('fetch failed') || lower.includes('network')) {
+    return '通信エラーが発生しました。一時的なことが多いため、時間を置いてから再度お試しください。';
+  }
+  if (raw.includes('コンテナの処理に失敗')) {
+    // 内部用語（コンテナ・status=）を出さずに言い換える
+    return 'Threads側で投稿の処理が完了しませんでした。一時的なエラーのことが多く、時間を置いて再投稿すると解決します。';
   }
   if (lower.includes('not found') || lower.includes('404')) {
     return '対象が見つかりませんでした。';
