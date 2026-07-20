@@ -14,13 +14,56 @@ import { stripRawUrls } from "../shared/sanitize";
 import { invokeLLM } from "./_core/llm";
 import { nanoid } from "nanoid";
 
-// Post types and purposes for rotation
+// 自動投稿のローテーション。Threads講座の実測知見に合わせ、
+// 「共感・会話を生む短文型」を主力にし、売り込み色の強い型は頻度を絞る。
+// （実測: 短い共感/質問投稿ほど閲覧・返信が伸び、毎回オファー付きの長文は
+//   広告として流し読みされ到達が落ちる。オファーは5〜6投稿に1回で十分）
 const POST_TYPES = [
-  'hook_tree', 'expertise', 'local', 'proof', 'empathy', 'story',
-  'list', 'offer', 'enemy', 'qa', 'trend', 'aruaru'
+  'aruaru', 'empathy', 'qa', 'local', 'list', 'offer'
 ] as const;
 
+// CTA（LINE誘導文）を本文に連結する投稿タイプ。
+// それ以外の型は問いかけで終わらせて会話を誘発し、誘導はプロフィール・
+// 固定投稿に任せる（毎回CTAを付けると全投稿が広告になり評価が落ちる）。
+const CTA_POST_TYPES = new Set<string>(['offer', 'local']);
+
 const PURPOSES = ['cv', 'awareness', 'authority', 'fan'] as const;
+
+// 自動投稿の読みやすさ上限。Threadsで最も読まれるのは150〜250文字レンジで、
+// 300文字を超える自動投稿は「長い広告」として流し読みされる。
+// プロンプトでも指示するが、AIが超過した場合は段落単位で機械的に削る。
+const AUTO_POST_CHAR_BUDGET = 300;
+
+// 生成プロンプトの末尾に付ける自動投稿専用の最終指示。
+// LLMは末尾の指示に最も従いやすいため、文字数と1行目のルールをここで再強調する。
+const AUTO_POST_STYLE_ADDENDUM = `
+
+【自動投稿モードの最終指示（これまでの全指示より優先・厳守）】
+- mainPost は最大250文字。**150〜220文字が理想**。短いほど読まれる。長い説明は書かない。
+- 1行目は20文字以内で止める。「悩みの言語化」「共感の問いかけ」「意外な事実」のどれかで始める。
+- 空行で2〜4ブロックに分ける。1ブロックは1〜2行まで。
+- 1投稿1メッセージ。あれもこれも詰め込まない。伝えることを1つに絞る。
+- 締めは読者が答えたくなる短い問いかけ1行（「あなたはどっち？」「心当たりありませんか？」など）。
+- 宣伝口調・案内文口調（「ご案内します」「ぜひご利用ください」）は使わない。友達に話す口調で。`;
+
+/**
+ * 本文を段落単位で文字数予算内に収める。
+ * 文の途中でぶつ切りにせず、後ろの段落から丸ごと落とす（最低1段落は残す）。
+ * CTA付きの場合はCTA段落を保持し、本文側の段落を削る。
+ */
+function trimToBudget(mainPost: string, cta: string | null, budget: number): string {
+  const parts = mainPost.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
+  const ctaPart = (cta || '').trim();
+  const len = (s: string) => Array.from(s).length;
+  const assemble = (blocks: string[]) =>
+    [...blocks, ...(ctaPart ? [ctaPart] : [])].join('\n\n');
+
+  let blocks = parts;
+  while (blocks.length > 1 && len(assemble(blocks)) > budget) {
+    blocks = blocks.slice(0, -1);
+  }
+  return assemble(blocks);
+}
 
 // Optimal posting times (JST hours)
 // Based on Threads engagement data: 20-22時 is the highest-engagement window,
@@ -170,8 +213,10 @@ async function generateAutoPost(
     });
 
     // Call LLM
+    // ★自動投稿は人の目を通らず公開されるため、短文・会話調の最終指示を
+    //   プロンプト末尾に追加する（末尾の指示が最も遵守されやすい）。
     const response = await invokeLLM({
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content: prompt + AUTO_POST_STYLE_ADDENDUM }],
       response_format: JSON_SCHEMA,
     });
 
@@ -205,32 +250,31 @@ async function generateAutoPost(
       console.warn('[AutoPost] factGuard skipped:', (e as Error).message);
     }
 
-    // Combine main post + tree posts + CTA into full post content。
-    // treeCount=0 を指定しているので通常 treePosts は空配列。
-    // ハッシュタグ（#）は使わない方針のため、AIが誤って返しても本文には連結しない。
-    // ★treeCount=0 固定なので treePosts は使わない（AIが誤って返しても本文に混ぜない）。
-    //   本文に生URLが混入していたら除去（方針A）。
-    const rawContent = [
-      stripRawUrls(result.mainPost),
-      stripRawUrls(result.cta || ''),
-    ].filter(Boolean).join('\n\n');
+    // 本文の組み立て。treeCount=0 固定なので treePosts は使わない。
+    // 本文に生URLが混入していたら除去（方針A）。
+    //
+    // ★CTAは投稿タイプで出し分ける：オファー系・地域CV系の投稿だけに連結し、
+    //   共感・会話系の投稿は問いかけで終わらせる。全投稿にCTAを付けると
+    //   アカウント全体が「広告の羅列」になり、Threadsの評価も読者の反応も落ちる。
+    const includeCta = CTA_POST_TYPES.has(postType);
+    const mainText = stripRawUrls(result.mainPost);
+    const ctaText = includeCta ? stripRawUrls(result.cta || '') : '';
 
-    // Threads API は1投稿500文字制限。長すぎると API 側で拒否されるか
-    // 切り詰められて無音失敗する。安全側に倒して 480 文字で切る。
-    // （通常は treeCount=0 + プロンプト文字数予算で十分短いはずだが、
-    //   AIが指示を無視した時のための最後の安全網）
-    const THREADS_MAX_CHARS = 500;
-    const SAFETY_LIMIT = 480;
-    let fullContent = rawContent;
-    if (Array.from(rawContent).length > SAFETY_LIMIT) {
+    // ★読みやすさ予算（300字）を機械的に強制する。
+    //   プロンプト指示をAIが超過した場合、文の途中でぶつ切りにせず
+    //   段落単位で後ろから削る（CTAを付ける投稿ではCTA段落は保持）。
+    let fullContent = trimToBudget(mainText, ctaText || null, AUTO_POST_CHAR_BUDGET);
+    if (Array.from(fullContent).length < Array.from([mainText, ctaText].filter(Boolean).join('\n\n')).length) {
       console.warn(
-        `[AutoPost] Generated content exceeds safety limit ` +
-        `(${Array.from(rawContent).length} chars > ${SAFETY_LIMIT}). Truncating. userId=${userId} projectId=${project.id}`,
+        `[AutoPost] Content trimmed to budget (${AUTO_POST_CHAR_BUDGET} chars) userId=${userId} projectId=${project.id}`,
       );
-      // コードポイント単位で切る（絵文字でサロゲートペア破壊を防ぐ）
-      fullContent = Array.from(rawContent).slice(0, SAFETY_LIMIT - 1).join('') + '…';
     }
-    void THREADS_MAX_CHARS;
+
+    // Threads API の1投稿500文字制限に対する最終安全網（通常は届かない）。
+    const SAFETY_LIMIT = 480;
+    if (Array.from(fullContent).length > SAFETY_LIMIT) {
+      fullContent = Array.from(fullContent).slice(0, SAFETY_LIMIT - 1).join('') + '…';
+    }
 
     // Schedule the post
     const scheduledAt = getNextPostingTime(postingTimeIndex, bestHours);
