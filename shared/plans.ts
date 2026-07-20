@@ -84,11 +84,12 @@ export const PLANS: Record<string, PlanConfig> = {
   },
 
   // ═══════ モニター種別キャンペーン（モニターコードで適用。3回課金後、4ヶ月目から通常価格へ自動移行）═══════
-  // ※キャンペーン系リンク（モニター/セミナー全6本）は「回数指定なし」で作り直し中。
-  //   新URL確定後に univapayLinkUrl を差し替える。
-  //   UnivaPay仕様（2026-07-21 公式docs確認）: 回数指定ありのサブスクは金額変更不可のため
-  //   自動移行（4ヶ月目に通常価格へ増額）には回数指定なしが必須。増額の上限規定は無い
-  //   （「上限額」という設定はUnivaPayに存在しない）。
+  // ★2026-07-21 全6本の決済ページを実機確認済み：モニター/セミナーとも「継続課金」（回数指定なし）
+  //   かつ金額も正しい。差し替え不要（過去の「回数3で作り直し要」メモは誤りだった）。
+  //   UnivaPay仕様（公式docs＋テストモード実証済み）: 回数指定なしなら課金開始後に
+  //   PATCH {amount, next_payment.amount} で増額可能（上限規定なし）。
+  //   自動移行の実行系: webhook が campaignCharges 回目の課金で updateSubscriptionNextAmount
+  //   を呼ぶ（env CAMPAIGN_AUTO_REVERT_ENABLED=true で有効・本番設定済み）。
   light_campaign: {
     id: 'light_campaign',
     name: 'ライト モニター価格',
