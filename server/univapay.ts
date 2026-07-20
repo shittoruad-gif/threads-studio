@@ -145,9 +145,10 @@ export async function updateSubscription(
  *  - `next_payment.amount` … 次回課金のみに適用される金額
  *  両方を新価格に設定することで「次回課金から以降ずっと新価格」になる。
  *
- * 重要な前提（Univapay仕様）：
- *  - 「回数制限付き定期課金」では次回課金額を変更できない → キャンペーン契約は回数無制限で作成すること。
- *  - サブスク作成時の「課金金額上限(max amount)」までしか引き上げられない → リンクの上限を通常価格に設定すること。
+ * 重要な前提（Univapay仕様・2026-07-21 公式docs再確認）：
+ *  - 「回数指定あり」の定期課金では金額を変更できない → キャンペーン契約のリンクは必ず回数指定なし（無制限）で作成すること。
+ *  - 増額に上限の規定は無い（「課金金額上限」という設定はUnivaPayに存在しない。リンクフォームにも該当欄なし）。
+ *  - 変更できるのは status が unconfirmed / unpaid / current / suspended のとき。
  *  - 本番有効化前に必ずUnivapayテスト環境で実挙動を検証すること。
  */
 export async function updateSubscriptionNextAmount(
