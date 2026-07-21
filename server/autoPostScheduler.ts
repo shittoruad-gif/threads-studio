@@ -60,6 +60,31 @@ const AI_PHRASE_PATTERNS = [
   /と思われがちですが/, /ぜひ一度/, /してみてください/,
 ];
 
+// ★地域ガード：都道府県・主要都市の地名リスト。
+//   プロジェクト自身の店舗情報（area/localTerms等）に含まれない地名が本文に
+//   混入していたら「別地域の投稿」として公開せずスキップする。
+//   デモデータ混入・AIの幻覚による「渋谷区」事故の最終防衛線。
+const REGION_WORDS = [
+  '北海道','青森','岩手','宮城','秋田','山形','福島','茨城','栃木','群馬',
+  '埼玉','千葉','東京','神奈川','新潟','富山','石川','福井','山梨','長野',
+  '岐阜','静岡','愛知','三重','滋賀','京都','大阪','兵庫','奈良','和歌山',
+  '鳥取','島根','広島','山口','徳島','香川','愛媛','高知','福岡','佐賀',
+  '長崎','熊本','大分','宮崎','鹿児島','沖縄',
+  '渋谷','新宿','池袋','銀座','横浜','川崎','名古屋','札幌','仙台','神戸','梅田','難波',
+];
+
+/**
+ * 本文に「このプロジェクトの地域ではない地名」が含まれていればその地名を返す。
+ * allowedSources（店舗のエリア・地元呼称・店名・強み等）に登場する地名は許可。
+ */
+function findForeignRegionWords(
+  text: string,
+  allowedSources: Array<string | null | undefined>,
+): string[] {
+  const allowed = allowedSources.filter(Boolean).join('\n');
+  return REGION_WORDS.filter((w) => text.includes(w) && !allowed.includes(w));
+}
+
 /**
  * 人間化リライト（2パス目）。
  * 1パス目の生成結果を「友達に送るメッセージ」の口語に書き直す。
@@ -348,6 +373,20 @@ async function generateAutoPost(
       fullContent = Array.from(fullContent).slice(0, SAFETY_LIMIT - 1).join('') + '…';
     }
 
+    // ★地域ガード：店舗の地域と無関係な地名が混入していたら公開せずスキップ。
+    //   （例：デモデータ由来の「渋谷区」。1枠失うより誤地域の投稿が出る方が害が大きい）
+    const foreignRegions = findForeignRegionWords(fullContent, [
+      project.area, (project as any).localTerms, (project as any).storeName,
+      project.strength, project.proof, (project as any).usp, project.target,
+    ]);
+    if (foreignRegions.length > 0) {
+      console.warn(
+        `[AutoPost] ★地域ガード発動: 別地域の地名(${foreignRegions.join(',')})を検出したため投稿をスキップ ` +
+        `userId=${userId} projectId=${project.id}`,
+      );
+      return false;
+    }
+
     // Schedule the post
     const scheduledAt = getNextPostingTime(postingTimeIndex, bestHours);
 
@@ -426,7 +465,11 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
         //   日替わりでローテーションして1つ選ぶ（postCount のぶんだけ）。
         const allProjects = await db.getUserProjects(user.id);
         if (!allProjects || allProjects.length === 0) continue;
+        // ★デモプロジェクト（idが demo_ で始まる架空店舗データ。例:「東京都渋谷区の整体院」）は
+        //   自動投稿の対象から除外する。過去にMeta審査用デモユーザーの自動投稿が
+        //   本物のThreadsアカウントへ「渋谷区」の投稿を公開してしまった事故の再発防止。
         const eligibleProjects = allProjects.filter((p) =>
+          !String(p.id).startsWith('demo_') &&
           p.businessType && p.area && p.target && p.mainProblem && p.strength,
         );
         if (eligibleProjects.length === 0) {

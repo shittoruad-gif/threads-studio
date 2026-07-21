@@ -238,6 +238,33 @@ export async function executePendingPosts() {
         executed++;
         console.log(`[Scheduled Post] Successfully published post ${post.id} to Threads (${result.id})`);
 
+        // ★流入計測コメント：自動投稿のメイン公開直後に、自分の投稿へ1件だけ返信し、
+        //   投稿ごとに固有のお問い合わせキーワード「体験{投稿ID}」を案内する。
+        //   - LINE側（Keiro）は「体験」の部分一致自動応答が受けるため、
+        //     「体験318」のようなコード付きメッセージにも案内が自動返信される。
+        //   - 受信メッセージにコードが残るので「どの投稿から何人来たか」を
+        //     投稿単位で計測でき、流入の多かった投稿を次の型として磨ける。
+        if (post.source === 'auto' && !(post as any).replyToThreadsId) {
+          try {
+            const inquiryCode = `体験${post.id}`;
+            const commentText =
+              `気になった方は、プロフィールの固定投稿にある公式LINEから「${inquiryCode}」とメッセージしてください😊\n` +
+              `空き状況やご質問も、そのままトークでお答えします。`;
+            const { createAndPublishPost } = await import('./threadsPost');
+            const reply = await createAndPublishPost({
+              accessToken,
+              threadsUserId: account.threadsUserId,
+              text: commentText,
+              mediaType: 'TEXT',
+              replyToId: result.id,
+            });
+            console.log(`[Scheduled Post] Inquiry comment posted for post ${post.id} (code=${inquiryCode}, reply=${reply.id})`);
+          } catch (e) {
+            // コメントは計測用の付加機能。失敗しても本体投稿は成功として扱う。
+            console.error(`[Scheduled Post] inquiry comment failed for post ${post.id}:`, e);
+          }
+        }
+
         // ★追い投稿の自動作成：自動投稿のメイン投稿が公開できたら、
         //   約6時間後に「ひとこと返信」を予約（設定ONのユーザーのみ）。
         //   承認モードONの人は承認待ちに入れて、勝手に公開しない。
