@@ -43,8 +43,69 @@ const AUTO_POST_STYLE_ADDENDUM = `
 - 1行目は20文字以内で止める。「悩みの言語化」「共感の問いかけ」「意外な事実」のどれかで始める。
 - 空行で2〜4ブロックに分ける。1ブロックは1〜2行まで。
 - 1投稿1メッセージ。あれもこれも詰め込まない。伝えることを1つに絞る。
-- 締めは読者が答えたくなる短い問いかけ1行（「あなたはどっち？」「心当たりありませんか？」など）。
-- 宣伝口調・案内文口調（「ご案内します」「ぜひご利用ください」）は使わない。友達に話す口調で。`;
+- 締めは読者が答えたくなる短い問いかけ1行。ただし型通りの「あなたは〜ありますか？」ではなく、本当に聞きたいから聞く感じの一言（「みんなどうしてる？」「同じ人いる？」）。
+- 宣伝口調・案内文口調（「ご案内します」「ぜひご利用ください」）は使わない。友達に話す口調で。
+
+【AIっぽさの禁止（最重要）】次の「AI文の癖」が1つでもあると読者はスルーする。全て禁止：
+- 定型フレーズ：「〜してみませんか」「〜がおすすめです」「〜はいかがですか」「安心してください」「ぜひ」「〜と思われがちですが」「実は〜なんです」の乱用
+- 全部説明しようとする（原因→理由→解決→行動まで1投稿に詰める）。人間は言い切って終わる。
+- 文の長さが均一（すべて20〜30字の整った文）。人間は短い文と長い文が混ざる。「それ、うちのことです。」のような5〜15字の文を混ぜる。
+- です・ます の機械的な連続。「〜なんです」「〜だったりします」「〜ですよね」を混ぜ、体言止めも使う。
+- 完璧な構成。少し砕けて、少し余白があるくらいが人間の文章。`;
+
+// 人間化リライト（2パス目）で除去したいAI定型表現。
+// 機械チェック用：リライト後もこれらが残っていたらログに残す（品質モニタリング）。
+const AI_PHRASE_PATTERNS = [
+  /してみませんか/, /がおすすめです/, /はいかがですか/, /安心してください/,
+  /と思われがちですが/, /ぜひ一度/, /してみてください/,
+];
+
+/**
+ * 人間化リライト（2パス目）。
+ * 1パス目の生成結果を「友達に送るメッセージ」の口語に書き直す。
+ * モデル・APIは同じものを使い、編集専用の短いプロンプトで役割を絞ることで
+ * 「構成が整いすぎたAI文」を崩す。事実の追加は禁止（削るのは可）なので
+ * factGuard通過後に実行しても捏造は発生しない。
+ * 失敗時は元のテキストをそのまま返す（リライトはベストエフォート）。
+ */
+async function naturalizeContent(text: string): Promise<string> {
+  try {
+    const prompt = `あなたはSNS投稿の編集者です。次のThreads投稿を、内容はそのままに「友達に送るLINEメッセージ」のような自然な話し言葉に書き直してください。
+
+【絶対ルール】
+- 事実・情報を足さない。数字・店名・地名・意味を変えない。削って短くするのはOK。
+- 文の長さをバラつかせる。5〜15字の短い文を1つは入れてリズムを作る。
+- です・ます の連続を崩す。「〜なんです」「〜ですよね」「〜だったり」など口語に。体言止めもOK。
+- ただしタメ口に全振りしない。ベースはやわらかい です・ます 調で、口語を3割ほど混ぜる。
+  「〜でさ」「〜じゃん」「〜だよね」のような馴れ馴れしい言い方は使わない
+  （お店の公式アカウント。親しみやすいけど、礼儀のある距離感を保つ）。
+- 禁止フレーズ：「してみませんか」「がおすすめです」「いかがですか」「安心してください」「ぜひ」「と思われがちですが」
+- 締めの問いかけは、本当に聞きたいから聞く感じの短い一言に（例「同じ方いますか？」「みなさんどうしてますか？」）。
+- 絵文字は最大1個。無くてもいい。
+- 完璧に整えない。少し砕けているくらいがちょうどいい。
+- 全体は元の文字数以下にする。
+
+【出力】書き直した本文だけを出力。前置き・説明・引用符は不要。
+
+---
+${text}
+---`;
+    const res = await invokeLLM({ messages: [{ role: 'user', content: prompt }] });
+    const out = (res.choices[0]?.message?.content ?? '').toString().trim();
+    // 空・異常長（増えた/極端に短い）は失敗扱いで元文を使う
+    const inLen = Array.from(text).length;
+    const outLen = Array.from(out).length;
+    if (!out || outLen > inLen * 1.2 || outLen < 30) return text;
+    const remaining = AI_PHRASE_PATTERNS.filter((re) => re.test(out));
+    if (remaining.length > 0) {
+      console.warn(`[AutoPost] naturalize left AI-phrases: ${remaining.map(String).join(',')}`);
+    }
+    return out;
+  } catch (e) {
+    console.warn('[AutoPost] naturalize skipped:', (e as Error).message);
+    return text;
+  }
+}
 
 /**
  * 本文を段落単位で文字数予算内に収める。
@@ -257,7 +318,17 @@ async function generateAutoPost(
     //   共感・会話系の投稿は問いかけで終わらせる。全投稿にCTAを付けると
     //   アカウント全体が「広告の羅列」になり、Threadsの評価も読者の反応も落ちる。
     const includeCta = CTA_POST_TYPES.has(postType);
-    const mainText = stripRawUrls(result.mainPost);
+
+    // ★人間化リライト（2パス目）：factGuard通過後の本文を口語に書き直す。
+    //   事実の追加は禁止プロンプトで担保（削るのみ可）。CTAは定型で良いので対象外。
+    //   リライト後にNGワードガードを再適用する（言い換えで規制語が混入した場合の保険）。
+    let naturalMain = await naturalizeContent(stripRawUrls(result.mainPost));
+    try {
+      const guarded = await enforceNgWords({ mainPost: naturalMain } as any, ngWords);
+      naturalMain = (guarded as any).mainPost || naturalMain;
+    } catch { /* ガード失敗時はリライト文をそのまま使う（生成時ガードは通過済み） */ }
+
+    const mainText = naturalMain;
     const ctaText = includeCta ? stripRawUrls(result.cta || '') : '';
 
     // ★読みやすさ予算（300字）を機械的に強制する。
