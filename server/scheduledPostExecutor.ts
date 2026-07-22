@@ -239,14 +239,15 @@ export async function executePendingPosts() {
         console.log(`[Scheduled Post] Successfully published post ${post.id} to Threads (${result.id})`);
 
         // ★流入計測コメント：自動投稿のメイン公開直後に、自分の投稿へ1件だけ返信し、
-        //   投稿ごとに固有のお問い合わせキーワード「体験{投稿ID}」を案内する。
-        //   - LINE側（Keiro）は「体験」の部分一致自動応答が受けるため、
-        //     「体験318」のようなコード付きメッセージにも案内が自動返信される。
-        //   - 受信メッセージにコードが残るので「どの投稿から何人来たか」を
-        //     投稿単位で計測でき、流入の多かった投稿を次の型として磨ける。
+        //   お問い合わせキーワードを案内する。
+        //   - キーワードは自然な一言をローテーション（数字コードは違和感があるため不使用）。
+        //     同日の3投稿は連番IDのため必ず別の言葉になり、「言葉×日付」で
+        //     どの投稿から何人来たかをLINE受信箱から判別できる。
+        //   - 各キーワードにはLINE側（Keiro）の部分一致自動応答を用意しておくこと。
         if (post.source === 'auto' && !(post as any).replyToThreadsId) {
           try {
-            const inquiryCode = `体験${post.id}`;
+            const INQUIRY_KEYWORDS = ['体験', 'ピラティス', '姿勢', '猫背', 'グループ'];
+            const inquiryCode = INQUIRY_KEYWORDS[post.id % INQUIRY_KEYWORDS.length];
             const commentText =
               `気になった方は、プロフィールの固定投稿にある公式LINEから「${inquiryCode}」とメッセージしてください😊\n` +
               `空き状況やご質問も、そのままトークでお答えします。`;
