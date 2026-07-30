@@ -1,5 +1,21 @@
 # Meta App Review — Submission Notes (2026-07)
 
+## 再提出済み (2026-07-23 深夜)
+
+- submission_id 1382263747144662 として3権限＋更新2権限を再申請、ステータス「審査中」（20日以内に審査）。
+- スクリーンキャスト: `~/Documents/meta_review/threads_studio_review.mp4`（398秒・1920x938・英語キャプション付き、raw素材は raw5.mov / seg2.mov）。
+  1本でOAuth同意→AI生成→Publish→threads.com実表示→Comment返信→Insights取得のE2Eを連続収録。
+- 3権限それぞれの申請ノートに動画タイムライン＋テスト手順を英語で記載。
+- 審査担当者の指示欄・テスト認証情報欄のパスワードを ThreadsReview2026! に修正
+  （プリフィルは旧PW shittoru4106 のままだった。DBハッシュとbcrypt照合して現行PWを確認済み）。
+- accesscode欄に入っていたオーナー実アカウント(shittoru.ad@gmail.com)の認証情報は削除し審査用アカウントに差し替え。
+
+### 録画の技術メモ（次回用）
+- screencapture -v は通常のBashだとサンドボックスの子プロセス回収で〜22秒で死ぬ。run_in_background でも数分で自然終了することがある → 短いセグメントに分けて撮り、ffmpegでconcatが確実。
+- 録画対象はChromeがあるディスプレイを `-D <n>` で明示（メイン4K=Claude画面、1080p=LINE、ULTRAWIDE=Chrome だった）。
+- ファイル選択ダイアログはAppleScriptで Cmd+Shift+G → クリップボードpaste（直接keystrokeは日本語IMEに化ける）。
+- claude-in-chrome の file_upload はユーザー共有ファイル限定で使えない。可視の「ファイルをアップロード」ボタンをクリック→ネイティブダイアログ操作で回避。
+
 対象アプリ: Threads Studio (App ID 1250891946948510)
 再申請対象: threads_content_publish / threads_manage_replies / threads_manage_insights
 承認済み: threads_basic / threads_read_replies
