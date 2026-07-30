@@ -246,8 +246,8 @@ export async function executePendingPosts() {
         //   - 各キーワードにはLINE側（Keiro）の部分一致自動応答を用意しておくこと。
         if (post.source === 'auto' && !(post as any).replyToThreadsId) {
           try {
-            const INQUIRY_KEYWORDS = ['体験', 'ピラティス', '姿勢', '猫背', 'グループ'];
-            const inquiryCode = INQUIRY_KEYWORDS[post.id % INQUIRY_KEYWORDS.length];
+            const { inquiryKeywordForPost } = await import('../shared/inquiryKeywords');
+            const inquiryCode = inquiryKeywordForPost(post.id);
             const commentText =
               `気になった方は、プロフィールの固定投稿にある公式LINEから「${inquiryCode}」とメッセージしてください😊\n` +
               `空き状況やご質問も、そのままトークでお答えします。`;

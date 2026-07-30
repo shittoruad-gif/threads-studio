@@ -2672,6 +2672,70 @@ ${input.commentText}
       };
     }),
 
+    // LINE問い合わせ計測（Keiro連携）。
+    // 自動投稿のコメントで案内した合言葉ごとのLINE受信数をKeiroから取得し、
+    // 「その合言葉を最後に案内した投稿」に紐付けて投稿別の問い合わせ数を返す。
+    // プロジェクトにKeiro連携（keiroHitsUrl/Key）が未設定なら enabled:false を返しUIは非表示。
+    inquiryStats: protectedProcedure.query(async ({ ctx }) => {
+      const { INQUIRY_KEYWORDS, inquiryKeywordForPost } = await import("../shared/inquiryKeywords");
+      const projects = await db.getUserProjects(ctx.user.id);
+      const project: any = (projects || []).find((p: any) => p.keiroHitsUrl && p.keiroHitsKey);
+      if (!project) return { enabled: false as const };
+
+      const DAYS = 30;
+      const since = new Date(Date.now() - DAYS * 24 * 60 * 60 * 1000);
+
+      // 1) 集計対象の自動投稿（メインのみ）と各投稿の合言葉
+      const posts = await db.getPostedAutoPostsByProject(project.id, since);
+      const postRows = posts
+        .filter((p) => p.postedAt)
+        .map((p) => ({
+          id: p.id,
+          postedAt: (p.postedAt as Date).getTime(),
+          keyword: inquiryKeywordForPost(p.id),
+          excerpt: String(p.postContent || '').replace(/\s+/g, ' ').slice(0, 40),
+        }));
+
+      // 2) Keiroから合言葉ヒット（LINE受信）を取得
+      let hits: Array<{ keyword: string; at: number }> = [];
+      try {
+        const url = new URL(String(project.keiroHitsUrl));
+        url.searchParams.set('keywords', INQUIRY_KEYWORDS.join(','));
+        url.searchParams.set('since', String(since.getTime()));
+        const r = await fetch(url.toString(), {
+          headers: { 'x-api-key': String(project.keiroHitsKey) },
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!r.ok) throw new Error(`Keiro API ${r.status}`);
+        const data = await r.json() as { hits?: Array<{ keyword: string; at: number }> };
+        hits = Array.isArray(data.hits) ? data.hits : [];
+      } catch (e) {
+        console.error('[inquiryStats] Keiro fetch failed:', (e as Error).message);
+        return { enabled: true as const, error: 'LINE側の集計データを取得できませんでした。', posts: [], totalHits: 0, days: DAYS };
+      }
+
+      // 3) 紐付け：各ヒットを「その時点までに同じ合言葉を案内した最新の投稿」に帰属させる。
+      //    （合言葉はローテーションするため、直近にその言葉を出した投稿が最有力）
+      const counts = new Map<number, number>();
+      let unattributed = 0;
+      for (const h of hits) {
+        const candidates = postRows.filter((p) => p.keyword === h.keyword && p.postedAt <= h.at);
+        if (candidates.length === 0) { unattributed++; continue; }
+        const target = candidates[candidates.length - 1];
+        counts.set(target.id, (counts.get(target.id) || 0) + 1);
+      }
+
+      return {
+        enabled: true as const,
+        days: DAYS,
+        totalHits: hits.length,
+        unattributed,
+        posts: postRows
+          .map((p) => ({ ...p, inquiries: counts.get(p.id) || 0 }))
+          .sort((a, b) => b.postedAt - a.postedAt),
+      };
+    }),
+
     // フォロワー推移（日次スナップショットの合計。ダッシュボードのミニグラフ用）
     followerTrend: protectedProcedure.query(async ({ ctx }) => {
       const trend = await db.getFollowerTrend(ctx.user.id, 14);

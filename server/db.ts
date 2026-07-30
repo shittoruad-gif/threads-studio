@@ -561,6 +561,26 @@ export async function getScheduledPostsByUserId(userId: number): Promise<Schedul
     .orderBy(desc(scheduledPosts.scheduledAt));
 }
 
+/**
+ * LINE問い合わせ計測用：公開済みの自動メイン投稿（追い投稿=返信は除く）を古い順で返す。
+ * 各投稿の合言葉は shared/inquiryKeywords.ts の inquiryKeywordForPost(id) で決まる。
+ */
+export async function getPostedAutoPostsByProject(projectId: string, since: Date): Promise<ScheduledPost[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select()
+    .from(scheduledPosts)
+    .where(and(
+      eq(scheduledPosts.projectId, projectId),
+      eq(scheduledPosts.source, 'auto'),
+      eq(scheduledPosts.status, 'posted'),
+      gte(scheduledPosts.postedAt, since),
+      sql`${scheduledPosts.replyToThreadsId} IS NULL`,
+    ))
+    .orderBy(scheduledPosts.postedAt);
+}
+
 export async function getPendingScheduledPosts(): Promise<ScheduledPost[]> {
   const db = await getDb();
   if (!db) return [];

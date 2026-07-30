@@ -38,6 +38,7 @@ export default function PostAnalytics() {
   const { t } = useLang();
   const [, setLocation] = useLocation();
   const { data: analyticsData, isLoading, refetch } = trpc.stats.postAnalytics.useQuery();
+  const { data: inquiryData } = trpc.stats.inquiryStats.useQuery();
   const { data: hitPostsData } = trpc.stats.hitPosts.useQuery();
   const fetchAnalytics = trpc.stats.fetchAndStoreAnalytics.useMutation({
     onSuccess: (data) => {
@@ -451,6 +452,58 @@ export default function PostAnalytics() {
                           </div>
                         ))}
                       </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* LINE問い合わせ計測（Keiro連携時のみ表示） */}
+                {inquiryData?.enabled && (
+                  <Card className="glass-card border-green-500/20">
+                    <CardHeader>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <MessageCircle className="w-4 h-4 text-green-600" />
+                        LINE問い合わせ（投稿別・直近{inquiryData.days}日）
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground">
+                        各投稿のコメントで案内した合言葉が公式LINEに届いた数です。どの投稿が問い合わせにつながったかが分かります。
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      {"error" in inquiryData && inquiryData.error ? (
+                        <p className="text-sm text-muted-foreground py-4 text-center">{inquiryData.error}</p>
+                      ) : inquiryData.posts.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4 text-center">
+                          集計対象の自動投稿がまだありません
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm pb-2 border-b border-border/50">
+                            <span className="text-muted-foreground">期間合計</span>
+                            <span className="font-bold text-green-600">{inquiryData.totalHits}件</span>
+                          </div>
+                          {inquiryData.posts.map((p) => (
+                            <div
+                              key={p.id}
+                              className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/40"
+                            >
+                              <Badge variant="outline" className="flex-shrink-0 font-normal">
+                                「{p.keyword}」
+                              </Badge>
+                              <p className="flex-1 min-w-0 text-xs text-muted-foreground truncate">
+                                {p.excerpt || "（本文なし）"}
+                              </p>
+                              <span className={`flex-shrink-0 text-sm font-bold ${p.inquiries > 0 ? "text-green-600" : "text-muted-foreground"}`}>
+                                {p.inquiries}件
+                              </span>
+                            </div>
+                          ))}
+                          {(inquiryData.unattributed ?? 0) > 0 && (
+                            <p className="text-xs text-muted-foreground pt-1">
+                              ほか、投稿に紐付かない合言葉の受信が{inquiryData.unattributed}件（固定投稿や過去投稿経由の可能性）
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )}
