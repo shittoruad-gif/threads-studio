@@ -113,7 +113,7 @@ export default function PostAnalytics() {
     .slice(-10)
     .map((p, i) => ({
       name: p.postedAt
-        ? new Date(p.postedAt).toLocaleDateString("ja-JP", { month: "short", day: "numeric" })
+        ? new Date(p.postedAt).toLocaleDateString(lang === 'en' ? 'en-US' : 'ja-JP', { month: "short", day: "numeric" })
         : `${t('投稿')}${i + 1}`,
       インプレッション: p.impressions,
       エンゲージメント: p.engagement,
@@ -594,7 +594,7 @@ export default function PostAnalytics() {
                             </div>
                             {post.postedAt && (
                               <p className="text-xs text-muted-foreground/60 mt-1">
-                                {new Date(post.postedAt).toLocaleString("ja-JP", {
+                                {new Date(post.postedAt).toLocaleString(lang === 'en' ? 'en-US' : 'ja-JP', {
                                   year: "numeric",
                                   month: "2-digit",
                                   day: "2-digit",

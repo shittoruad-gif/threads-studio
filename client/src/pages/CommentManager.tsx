@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 
 export default function CommentManager() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const breadcrumbItems = [
     { label: t('ダッシュボード'), href: '/dashboard' },
     { label: t('コメント管理') },
@@ -207,7 +207,7 @@ export default function CommentManager() {
                           </p>
                           {comment.timestamp && (
                             <p className="text-xs text-muted-foreground">
-                              {new Date(comment.timestamp).toLocaleString('ja-JP')}
+                              {new Date(comment.timestamp).toLocaleString(lang === 'en' ? 'en-US' : 'ja-JP')}
                             </p>
                           )}
                         </div>
