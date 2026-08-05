@@ -2053,7 +2053,7 @@ export default function AIGenerate() {
                   <Sparkles className="h-12 w-12 text-primary/40 mb-4" />
                   <p className="text-foreground font-medium mb-1">{t("ここに投稿の下書きが表示されます")}</p>
                   <p className="text-sm text-muted-foreground max-w-xs">
-                    左の「投稿の目的を選ぶ」から目的を選んで、<br />
+                    {t("左の「投稿の目的を選ぶ」から目的を選んで、")}<br />
                     {t("「AI投稿を生成」を押すと下書きができます。")}
                   </p>
                 </CardContent>

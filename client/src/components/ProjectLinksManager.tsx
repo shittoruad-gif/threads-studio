@@ -141,7 +141,7 @@ export default function ProjectLinksManager({
                     {/* Type badge */}
                     <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-muted text-xs font-medium min-w-0">
                       <span className="text-base leading-none">{cfg.emoji}</span>
-                      <span className="truncate">{cfg.name}</span>
+                      <span className="truncate">{t(cfg.name)}</span>
                     </div>
 
                     {/* Default toggle */}
@@ -223,7 +223,7 @@ export default function ProjectLinksManager({
               >
                 <Plus className="w-3 h-3" />
                 <span className="text-base leading-none">{cfg.emoji}</span>
-                {cfg.name}
+                {t(cfg.name)}
               </Button>
             ))}
           </div>

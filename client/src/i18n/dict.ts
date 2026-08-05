@@ -758,4 +758,9 @@ export const dict: Record<string, string> = {
   "未保存の変更があります": "You have unsaved changes",
   "保存済み": "Saved",
   "保存中...": "Saving...",
+  "LINE公式": "LINE Official",
+  "Web予約": "Online booking",
+  "公式HP": "Website",
+  "その他": "Other",
+  "左の「投稿の目的を選ぶ」から目的を選んで、": "Pick a goal under \"Choose the goal of your post\" on the left, then",
 };
