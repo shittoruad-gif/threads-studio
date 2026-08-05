@@ -767,7 +767,7 @@ export default function AIGenerate() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5">
                     <Label>{t("投稿の目的を選ぶ")}</Label>
-                    <HelpTooltip content="投稿の目的によって、AIが生成する投稿のスタイルが変わります" />
+                    <HelpTooltip content={t("投稿の目的によって、AIが生成する投稿のスタイルが変わります")} />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {POST_PURPOSES_LIST.map((p) => (
@@ -787,14 +787,14 @@ export default function AIGenerate() {
                         }`}
                       >
                         <div className="text-lg mb-1">{p.icon}</div>
-                        <div className="text-sm font-medium">{p.name}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">{p.description}</div>
+                        <div className="text-sm font-medium">{t(p.name)}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{t(p.description)}</div>
                       </button>
                     ))}
                   </div>
                   {purpose && (
                     <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
-                      <p className="text-sm text-foreground">💡 {POST_PURPOSES[purpose].advice}</p>
+                      <p className="text-sm text-foreground">💡 {t(POST_PURPOSES[purpose].advice)}</p>
                     </div>
                   )}
                 </div>

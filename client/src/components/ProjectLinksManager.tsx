@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLang } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -40,6 +41,7 @@ export default function ProjectLinksManager({
   initialLinksJson,
   onSaved,
 }: ProjectLinksManagerProps) {
+  const { t } = useLang();
   const [links, setLinks] = useState<ProjectLink[]>(() => parseProjectLinks(initialLinksJson));
   const [dirty, setDirty] = useState(false);
 
@@ -52,12 +54,12 @@ export default function ProjectLinksManager({
 
   const setLinksMutation = trpc.project.setLinks.useMutation({
     onSuccess: () => {
-      toast.success('URLを保存しました');
+      toast.success(t("URLを保存しました"));
       setDirty(false);
       onSaved?.(links);
     },
     onError: (err) => {
-      toast.error(`保存できませんでした: ${err.message}`);
+      toast.error(`${t('保存できませんでした')}: ${err.message}`);
     },
   });
 
@@ -113,18 +115,18 @@ export default function ProjectLinksManager({
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <LinkIcon className="w-4 h-4 text-emerald-600" />
-          誘導用URLの登録
+          {t("誘導用URLの登録")}
         </CardTitle>
         <CardDescription>
-          LINE公式・Web予約・公式HPなどのURLを1度登録しておくと、
-          固定投稿や自動投稿のCTAで自動的に最適なURLが使われます。
+          {t("LINE公式・Web予約・公式HPなどのURLを1度登録しておくと、")}
+          {t("固定投稿や自動投稿のCTAで自動的に最適なURLが使われます。")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Existing links */}
         {links.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-            まだURLが登録されていません。下のボタンから追加してください。
+            {t("まだURLが登録されていません。下のボタンから追加してください。")}
           </div>
         ) : (
           <div className="space-y-3">
@@ -146,19 +148,19 @@ export default function ProjectLinksManager({
                     {link.isDefault ? (
                       <span
                         className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800"
-                        title="この種別の既定URLとして使われます"
+                        title={t("この種別の既定URLとして使われます")}
                       >
                         <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                        既定
+                        {t("既定")}
                       </span>
                     ) : (
                       <button
                         type="button"
                         onClick={() => setDefault(link.id)}
                         className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                        title="この種別の既定URLにする"
+                        title={t("この種別の既定URLにする")}
                       >
-                        既定にする
+                        {t("既定にする")}
                       </button>
                     )}
 
@@ -171,7 +173,7 @@ export default function ProjectLinksManager({
                         rel="noopener noreferrer"
                         className="text-xs text-blue-600 hover:underline flex items-center gap-1"
                       >
-                        開く
+                        {t("開く")}
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     )}
@@ -179,7 +181,7 @@ export default function ProjectLinksManager({
                       type="button"
                       onClick={() => removeLink(link.id)}
                       className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50"
-                      title="削除"
+                      title={t("削除")}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -189,7 +191,7 @@ export default function ProjectLinksManager({
                     <Input
                       value={link.label}
                       onChange={e => updateLink(link.id, { label: e.target.value })}
-                      placeholder="表示名（例: LINE登録）"
+                      placeholder={t("表示名（例: LINE登録）")}
                       maxLength={40}
                       className="sm:col-span-1"
                     />
@@ -209,7 +211,7 @@ export default function ProjectLinksManager({
 
         {/* Add link buttons */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">URLを追加</p>
+          <p className="text-xs text-muted-foreground mb-2">{t("URLを追加")}</p>
           <div className="flex flex-wrap gap-2">
             {LINK_TYPES_LIST.map(cfg => (
               <Button
@@ -230,14 +232,14 @@ export default function ProjectLinksManager({
         {/* Save / status row */}
         <div className="flex items-center justify-between border-t border-border pt-3">
           <p className="text-xs text-muted-foreground">
-            {dirty ? '未保存の変更があります' : '保存済み'}
+            {dirty ? t('未保存の変更があります') : t('保存済み')}
           </p>
           <Button
             onClick={handleSave}
             disabled={!dirty || setLinksMutation.isPending}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
-            {setLinksMutation.isPending ? '保存中...' : '保存'}
+            {setLinksMutation.isPending ? t('保存中...') : t('保存')}
           </Button>
         </div>
       </CardContent>
