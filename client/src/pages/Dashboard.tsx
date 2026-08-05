@@ -298,7 +298,7 @@ export default function Dashboard() {
         {subscription?.isTrialing && subscription?.trialEndsAt && (
           <TrialBanner
             trialEndsAt={subscription.trialEndsAt}
-            planName={subscription.plan?.name || t('トライアル')}
+            planName={subscription.plan?.name ? t(subscription.plan.name) : t('トライアル')}
           />
         )}
 
@@ -443,7 +443,7 @@ export default function Dashboard() {
             </p>
           </div>
           <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-sm px-3 py-1 shrink-0">
-            {subscription?.plan?.name || t('無料プラン')}
+            {subscription?.plan?.name ? t(subscription.plan.name) : t('無料プラン')}
           </Badge>
         </div>
 
@@ -951,7 +951,7 @@ export default function Dashboard() {
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <p className="text-muted-foreground text-sm mb-1">{t("現在のプラン")}</p>
-                <p className="text-2xl font-bold text-foreground">{subscription?.plan?.name || t('無料プラン')}</p>
+                <p className="text-2xl font-bold text-foreground">{subscription?.plan?.name ? t(subscription.plan.name) : t('無料プラン')}</p>
                 {subscription?.plan?.priceMonthly ? (
                   <p className="text-muted-foreground">¥{subscription.plan.priceMonthly.toLocaleString()}{t('/月')}</p>
                 ) : null}
