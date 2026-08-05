@@ -1,3 +1,4 @@
+import { useLang } from "@/i18n";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -20,6 +21,7 @@ interface PageBreadcrumbProps {
 }
 
 export default function PageBreadcrumb({ items, className = "" }: PageBreadcrumbProps) {
+  const { t } = useLang();
   const [, setLocation] = useLocation();
 
   return (
@@ -32,7 +34,7 @@ export default function PageBreadcrumb({ items, className = "" }: PageBreadcrumb
             className="flex items-center gap-1 cursor-pointer hover:text-primary transition-colors"
           >
             <Home className="w-4 h-4" />
-            <span>ホーム</span>
+            <span>{t("ホーム")}</span>
           </BreadcrumbLink>
         </BreadcrumbItem>
 
@@ -46,14 +48,14 @@ export default function PageBreadcrumb({ items, className = "" }: PageBreadcrumb
               <BreadcrumbItem>
                 {isLast || !item.href ? (
                   <BreadcrumbPage className="font-medium">
-                    {item.label}
+                    {t(item.label)}
                   </BreadcrumbPage>
                 ) : (
                   <BreadcrumbLink
                     onClick={() => item.href && setLocation(item.href)}
                     className="cursor-pointer hover:text-primary transition-colors"
                   >
-                    {item.label}
+                    {t(item.label)}
                   </BreadcrumbLink>
                 )}
               </BreadcrumbItem>
