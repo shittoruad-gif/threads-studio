@@ -35,7 +35,7 @@ import {
 } from "recharts";
 
 export default function PostAnalytics() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [, setLocation] = useLocation();
   const { data: analyticsData, isLoading, refetch } = trpc.stats.postAnalytics.useQuery();
   const { data: inquiryData } = trpc.stats.inquiryStats.useQuery();
@@ -114,7 +114,7 @@ export default function PostAnalytics() {
     .map((p, i) => ({
       name: p.postedAt
         ? new Date(p.postedAt).toLocaleDateString("ja-JP", { month: "short", day: "numeric" })
-        : `投稿${i + 1}`,
+        : `${t('投稿')}${i + 1}`,
       インプレッション: p.impressions,
       エンゲージメント: p.engagement,
       エンゲージメント率: Number(p.engagementRate.toFixed(2)),
@@ -131,7 +131,7 @@ export default function PostAnalytics() {
   }
 
   const timingData = Array.from({ length: 24 }, (_, h) => ({
-    時間帯: `${h}時`,
+    時間帯: lang === 'en' ? `${h}:00` : `${h}時`,
     hour: h,
     投稿数: hourCounts[h]?.count ?? 0,
     平均エンゲージメント: hourCounts[h]
@@ -151,6 +151,11 @@ export default function PostAnalytics() {
   }
 
   const formatNumber = (n: number) => {
+    if (lang === 'en') {
+      if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+      if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+      return n.toLocaleString();
+    }
     if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
     if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
     return n.toLocaleString();

@@ -1,9 +1,11 @@
 import { usePWAInstall } from '@/hooks/usePWAInstall';
+import { useLang } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Download, X, Smartphone } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export function PWAInstallBanner() {
+  const { t } = useLang();
   const { isInstallable, isInstalled, install } = usePWAInstall();
   const [dismissed, setDismissed] = useState(false);
   const [show, setShow] = useState(false);
@@ -50,10 +52,10 @@ export function PWAInstallBanner() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-foreground text-sm">
-            アプリをインストール
+            {t("アプリをインストール")}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-            ホーム画面に追加して、より快適にご利用いただけます
+            {t("ホーム画面に追加して、より快適にご利用いただけます")}
           </p>
           <div className="flex items-center gap-2 mt-2.5">
             <Button
@@ -62,7 +64,7 @@ export function PWAInstallBanner() {
               onClick={handleInstall}
             >
               <Download className="w-3.5 h-3.5 mr-1.5" />
-              インストール
+              {t("インストール")}
             </Button>
             <Button
               variant="ghost"
@@ -70,14 +72,14 @@ export function PWAInstallBanner() {
               className="text-muted-foreground/60 hover:text-foreground h-8 px-3 text-xs"
               onClick={handleDismiss}
             >
-              後で
+              {t("後で")}
             </Button>
           </div>
         </div>
         <button
           onClick={handleDismiss}
           className="flex-shrink-0 text-muted-foreground/40 hover:text-muted-foreground transition-colors p-0.5"
-          aria-label="閉じる"
+          aria-label={t("閉じる")}
         >
           <X className="w-4 h-4" />
         </button>

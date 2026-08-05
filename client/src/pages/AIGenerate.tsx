@@ -58,8 +58,8 @@ interface GeneratedPost {
 export default function AIGenerate() {
   const { t } = useLang();
   const breadcrumbItems = [
-    { label: 'AI投稿', href: '/dashboard' },
-    { label: '投稿生成' },
+    { label: t('AI投稿'), href: '/dashboard' },
+    { label: t('投稿生成') },
   ];
 
   const [location, setLocation] = useLocation();
@@ -122,7 +122,7 @@ export default function AIGenerate() {
       triggerCelebration('first-post');
     },
     onError: (e) => {
-      toast.error(e.message || '投稿に失敗しました。時間をおいて再度お試しください。');
+      toast.error(e.message || t('投稿に失敗しました。時間をおいて再度お試しください。'));
     },
   });
   const [saveTemplateDialogOpen, setSaveTemplateDialogOpen] = useState(false);
@@ -206,8 +206,8 @@ export default function AIGenerate() {
     onSuccess: (d) => {
       utils.regional.list.invalidate({ projectId: projectId! });
       toast.success(d.collected > 0
-        ? `この地域の人気投稿を${d.collected}件集めました（検索: ${d.searchedKeywords.join('・')}）`
-        : '新しい投稿は見つかりませんでした（既に収集済みの可能性があります）');
+        ? `${t('この地域の人気投稿を')}${d.collected}${t('件集めました')}`
+        : t('新しい投稿は見つかりませんでした（既に収集済みの可能性があります）'));
     },
     onError: (e) => toast.error(e.message, { duration: 8000 }),
   });
@@ -230,8 +230,8 @@ export default function AIGenerate() {
   const hidePresetMutation = trpc.hidden.hide.useMutation({
     onSuccess: (_data, variables) => {
       utils.hidden.list.invalidate();
-      toast.success('このプリセットを非表示にしました', {
-        action: { label: '取り消す', onClick: () => unhidePresetMutation.mutate(variables) },
+      toast.success(t('このプリセットを非表示にしました'), {
+        action: { label: t('取り消す'), onClick: () => unhidePresetMutation.mutate(variables) },
       });
     },
   });
@@ -270,7 +270,7 @@ export default function AIGenerate() {
   const togglePinMutation = trpc.preset.togglePin.useMutation({
     onSuccess: (data) => {
       utils.preset.listCustom.invalidate();
-      toast.success(data.isPinned ? 'ピン留めしました' : 'ピン留めを解除しました');
+      toast.success(data.isPinned ? t('ピン留めしました') : t('ピン留めを解除しました'));
     },
   });
 
