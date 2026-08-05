@@ -117,7 +117,7 @@ export default function AIGenerate() {
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const publishNow = trpc.threads.post.useMutation({
     onSuccess: () => {
-      toast.success('Threadsに投稿しました！');
+      toast.success(t("Threadsに投稿しました！"));
       setPublishConfirmOpen(false);
       triggerCelebration('first-post');
     },
@@ -172,7 +172,7 @@ export default function AIGenerate() {
     onSuccess: (data) => {
       setLocalSuggestions(data);
       const total = data.stations.length + data.nicknames.length + data.landmarks.length;
-      if (total === 0) toast.info('候補が見つかりませんでした。お手数ですが手入力してください。');
+      if (total === 0) toast.info(t("候補が見つかりませんでした。お手数ですが手入力してください。"));
     },
     onError: (e) => toast.error(e.message),
   });
@@ -215,7 +215,7 @@ export default function AIGenerate() {
     onSuccess: () => {
       utils.regional.list.invalidate({ projectId: projectId! });
       setManualRefText('');
-      toast.success('参考投稿を追加しました');
+      toast.success(t("参考投稿を追加しました"));
     },
     onError: (e) => toast.error(e.message),
   });
@@ -236,12 +236,12 @@ export default function AIGenerate() {
     },
   });
   const unhidePresetMutation = trpc.hidden.unhide.useMutation({
-    onSuccess: () => { utils.hidden.list.invalidate(); toast.success('プリセットを元に戻しました'); },
+    onSuccess: () => { utils.hidden.list.invalidate(); toast.success(t("プリセットを元に戻しました")); },
   });
   const deletePresetMutation = trpc.preset.deleteCustom.useMutation({
     onSuccess: () => {
       utils.preset.listCustom.invalidate();
-      toast.success('カスタムプリセットを削除しました');
+      toast.success(t("カスタムプリセットを削除しました"));
     },
   });
   const savePresetMutation = trpc.preset.createCustom.useMutation({
@@ -250,7 +250,7 @@ export default function AIGenerate() {
       setSavePresetDialogOpen(false);
       setPresetName('');
       setPresetDescription('');
-      toast.success('カスタムプリセットを保存しました');
+      toast.success(t("カスタムプリセットを保存しました"));
     },
     onError: (error: any) => {
       toast.error(error.message);
@@ -261,7 +261,7 @@ export default function AIGenerate() {
       utils.preset.listCustom.invalidate();
       setEditPresetDialogOpen(false);
       setEditingPreset(null);
-      toast.success('プリセットを更新しました');
+      toast.success(t("プリセットを更新しました"));
     },
     onError: (error: any) => {
       toast.error(error.message);
@@ -427,13 +427,13 @@ export default function AIGenerate() {
       );
     } catch (e) {
       console.error('Failed to parse preset params:', e);
-      toast.error('プリセットの読み込みに失敗しました');
+      toast.error(t("プリセットの読み込みに失敗しました"));
     }
   };
 
   const saveTemplateMutation = trpc.template.create.useMutation({
     onSuccess: () => {
-      toast.success('テンプレートを保存しました');
+      toast.success(t("テンプレートを保存しました"));
       setSaveTemplateDialogOpen(false);
       setTemplateName('');
       setTemplateDescription('');
@@ -448,11 +448,11 @@ export default function AIGenerate() {
 
   const handleSaveAsTemplate = () => {
     if (!templateName.trim()) {
-      toast.error('テンプレート名を入力してください');
+      toast.error(t("テンプレート名を入力してください"));
       return;
     }
     if (!project) {
-      toast.error('プロジェクトが見つかりません');
+      toast.error(t("プロジェクトが見つかりません"));
       return;
     }
 
@@ -521,7 +521,7 @@ export default function AIGenerate() {
       triggerCelebration('first-generation');
     } catch (e: any) {
       setGenerationError(e?.message || 'AI生成に失敗しました。時間をおいて再度お試しください。');
-      toast.error('AI生成に失敗しました');
+      toast.error(t("AI生成に失敗しました"));
     } finally {
       setIsGeneratingSingle(false);
     }
@@ -558,7 +558,7 @@ export default function AIGenerate() {
       utils.subscription.getAiUsage.invalidate();
       if (ok.length === 0) {
         setGenerationError('AI生成に失敗しました。時間をおいて再度お試しください。');
-        toast.error('AI生成に失敗しました');
+        toast.error(t("AI生成に失敗しました"));
       } else {
         setCandidates(ok);
         triggerCelebration('first-generation');
@@ -603,10 +603,10 @@ export default function AIGenerate() {
     try {
       await navigator.clipboard.writeText(text);
       setCopiedIndex(index);
-      toast.success('コピーしました');
+      toast.success(t("コピーしました"));
       setTimeout(() => setCopiedIndex(null), 2000);
     } catch {
-      toast.error('コピーできませんでした。手動で選択してコピーしてください');
+      toast.error(t("コピーできませんでした。手動で選択してコピーしてください"));
     }
   };
 
@@ -616,10 +616,10 @@ export default function AIGenerate() {
     try {
       await navigator.clipboard.writeText(allPosts);
       setCopiedIndex(-1);
-      toast.success('コピーしました');
+      toast.success(t("コピーしました"));
       setTimeout(() => setCopiedIndex(null), 2000);
     } catch {
-      toast.error('コピーできませんでした。手動で選択してコピーしてください');
+      toast.error(t("コピーできませんでした。手動で選択してコピーしてください"));
     }
   };
 
@@ -646,8 +646,8 @@ export default function AIGenerate() {
             onClick={() => setLocation('/dashboard')}
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            <span className="hidden sm:inline">ダッシュボードに戻る</span>
-            <span className="sm:hidden">戻る</span>
+            <span className="hidden sm:inline">{t("ダッシュボードに戻る")}</span>
+            <span className="sm:hidden">{t("戻る")}</span>
           </Button>
           <ThreadsAccountSwitcher />
         </div>
@@ -659,17 +659,17 @@ export default function AIGenerate() {
               <div className="flex-1 space-y-1">
                 <p className="text-sm font-semibold flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-primary" />
-                  AIが「事実だけ」で書けるように、最初にカウンセリングを受けませんか？
+                  {t("AIが「事実だけ」で書けるように、最初にカウンセリングを受けませんか？")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  使ってよい数字・実例・メニュー・よくある質問・原体験・NG項目を最初に教えると、AIが勝手な数字や架空エピソードを作らず、全ジャンルのネタを正確に量産できます。全13問・約5分（「なし」ワンタップでスキップ可）。
+                  {t("使ってよい数字・実例・メニュー・よくある質問・原体験・NG項目を最初に教えると、AIが勝手な数字や架空エピソードを作らず、全ジャンルのネタを正確に量産できます。全13問・約5分（「なし」ワンタップでスキップ可）。")}
                 </p>
               </div>
               <Button
                 onClick={() => setLocation(`/ai-counseling?project=${projectId}`)}
                 className="shrink-0"
               >
-                カウンセリングを始める
+                {t("カウンセリングを始める")}
                 <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             </CardContent>
@@ -681,7 +681,7 @@ export default function AIGenerate() {
           <div className="mb-6 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5">
             <p className="text-sm text-emerald-800 flex items-center gap-2 min-w-0">
               <Check className="h-4 w-4 shrink-0" />
-              <span className="truncate">カウンセリング済み — 入力内容はいつでも修正できます</span>
+              <span className="truncate">{t("カウンセリング済み — 入力内容はいつでも修正できます")}</span>
             </p>
             <Button
               variant="outline"
@@ -690,7 +690,7 @@ export default function AIGenerate() {
               onClick={() => setLocation(`/ai-counseling?project=${projectId}`)}
             >
               <Pencil className="h-3.5 w-3.5 mr-1" />
-              確認・修正する
+              {t("確認・修正する")}
             </Button>
           </div>
         )}
@@ -710,7 +710,7 @@ export default function AIGenerate() {
               <CardHeader>
                 <CardTitle>{project?.title}</CardTitle>
                 <CardDescription>
-                  AIが最適なThreads投稿を自動生成します
+                  {t("AIが最適なThreads投稿を自動生成します")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -720,21 +720,21 @@ export default function AIGenerate() {
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
                         <Sparkles className="h-4 w-4 text-primary" />
-                        はじめての方へ：3ステップで完成します
+                        {t("はじめての方へ：3ステップで完成します")}
                       </p>
                       <button
                         type="button"
                         onClick={dismissIntro}
-                        aria-label="この案内を閉じる"
+                        aria-label={t("この案内を閉じる")}
                         className="text-muted-foreground/60 hover:text-foreground shrink-0"
                       >
                         <X className="h-4 w-4" />
                       </button>
                     </div>
                     <ol className="mt-2 space-y-1.5 text-sm text-muted-foreground">
-                      <li><span className="font-medium text-primary">①</span> <span className="text-foreground">投稿の目的を選ぶ</span>（迷ったら「予約・LINE登録を増やしたい」でOK）</li>
-                      <li><span className="font-medium text-primary">②</span> <span className="text-foreground">「AI投稿を生成」</span>を押す（細かい設定は不要です）</li>
-                      <li><span className="font-medium text-primary">③</span> 内容を確認して <span className="text-foreground">「今すぐThreadsに投稿」または「予約する」</span></li>
+                      <li><span className="font-medium text-primary">①</span> <span className="text-foreground">{t("投稿の目的を選ぶ")}</span>{t("（迷ったら「予約・LINE登録を増やしたい」でOK）")}</li>
+                      <li><span className="font-medium text-primary">②</span> <span className="text-foreground">{t("「AI投稿を生成」")}</span>{t("を押す（細かい設定は不要です）")}</li>
+                      <li><span className="font-medium text-primary">③</span> {t("内容を確認して")} <span className="text-foreground">{t("「今すぐThreadsに投稿」または「予約する」")}</span></li>
                     </ol>
                   </div>
                 )}
@@ -743,20 +743,20 @@ export default function AIGenerate() {
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div className="min-w-0">
                       <h3 className="font-medium flex items-center gap-1.5">
-                        プリセットから選択
+                        {t("プリセットから選択")}
                         <HelpTooltip content="過去に保存した設定や、業種・目的別のおすすめ設定を呼び出して、入力の手間なく生成できます。初めての方は使わなくてもOKです。" />
                       </h3>
-                      <p className="text-sm text-muted-foreground">業種・目的別のテンプレートを使って簡単に生成</p>
+                      <p className="text-sm text-muted-foreground">{t("業種・目的別のテンプレートを使って簡単に生成")}</p>
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
                       <Button variant="outline" size="sm" onClick={() => setPresetDialogOpen(true)}>
                         <Sparkles className="w-4 h-4 mr-1" />
-                        プリセットを選択
+                        {t("プリセットを選択")}
                       </Button>
                       {project && (
-                        <Button variant="ghost" size="sm" onClick={() => setSavePresetDialogOpen(true)} title="現在の設定をマイプリセットとして保存">
+                        <Button variant="ghost" size="sm" onClick={() => setSavePresetDialogOpen(true)} title={t("現在の設定をマイプリセットとして保存")}>
                           <Plus className="w-4 h-4 mr-1" />
-                          保存
+                          {t("保存")}
                         </Button>
                       )}
                     </div>
@@ -766,7 +766,7 @@ export default function AIGenerate() {
                 {/* 投稿の目的を選ぶ */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5">
-                    <Label>投稿の目的を選ぶ</Label>
+                    <Label>{t("投稿の目的を選ぶ")}</Label>
                     <HelpTooltip content="投稿の目的によって、AIが生成する投稿のスタイルが変わります" />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -807,13 +807,13 @@ export default function AIGenerate() {
                 >
                   <span className="flex items-center gap-2 text-sm font-medium text-foreground">
                     <Settings2 className="h-4 w-4 text-muted-foreground" />
-                    詳細設定（スタイル・返信数・口調）
+                    {t("詳細設定（スタイル・返信数・口調）")}
                   </span>
                   <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
                 </button>
                 {!showAdvanced && (
                   <p className="text-xs text-muted-foreground -mt-1">
-                    そのまま下の「AI投稿を生成」を押せば、目的に合った投稿が作れます。細かく調整したいときだけ開いてください。
+                    {t("そのまま下の「AI投稿を生成」を押せば、目的に合った投稿が作れます。細かく調整したいときだけ開いてください。")}
                   </p>
                 )}
 
@@ -823,7 +823,7 @@ export default function AIGenerate() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <Label>投稿のスタイルを選ぶ</Label>
+                      <Label>{t("投稿のスタイルを選ぶ")}</Label>
                       <HelpTooltip content="投稿の型（テンプレート）を選びます。業種や目的に合ったスタイルを選ぶと効果的です" />
                     </div>
                     {purpose && (
@@ -855,8 +855,8 @@ export default function AIGenerate() {
                                 <span className="flex items-center gap-2">
                                   <span>{(type as any).icon}</span>
                                   <span>{type.name}</span>
-                                  {isRecommended && <Badge variant="default" className="text-xs py-0 px-1">おすすめ</Badge>}
-                                  {(type as any).cvPower === '最高' && <Badge variant="destructive" className="text-xs py-0 px-1">予約に直結</Badge>}
+                                  {isRecommended && <Badge variant="default" className="text-xs py-0 px-1">{t("おすすめ")}</Badge>}
+                                  {(type as any).cvPower === '最高' && <Badge variant="destructive" className="text-xs py-0 px-1">{t("予約に直結")}</Badge>}
                                 </span>
                               </SelectItem>
                             );
@@ -871,7 +871,7 @@ export default function AIGenerate() {
                               <span className="flex items-center gap-2">
                                 <span>{(type as any).icon}</span>
                                 <span>{type.name}</span>
-                                {(type as any).cvPower === '最高' && <Badge variant="destructive" className="text-xs py-0 px-1">予約に直結</Badge>}
+                                {(type as any).cvPower === '最高' && <Badge variant="destructive" className="text-xs py-0 px-1">{t("予約に直結")}</Badge>}
                               </span>
                             </SelectItem>
                           );
@@ -892,13 +892,13 @@ export default function AIGenerate() {
                 {/* 時事ネタ入力（trend型のみ表示）*/}
                 {postType === 'trend' && (
                   <div className="space-y-2">
-                    <Label>使いたい時事ネタ・トレンドワード</Label>
+                    <Label>{t("使いたい時事ネタ・トレンドワード")}</Label>
                     <Input
-                      placeholder="例：高校野球、猛暑、新NISA、大谷翻訳..."
+                      placeholder={t("例：高校野球、猛暑、新NISA、大谷翻訳...")}
                       value={trendWord}
                       onChange={(e) => setTrendWord(e.target.value)}
                     />
-                    <p className="text-xs text-muted-foreground">今話題のトピックを自分の業種に絡めて、多くの人に見てもらいやすくします</p>
+                    <p className="text-xs text-muted-foreground">{t("今話題のトピックを自分の業種に絡めて、多くの人に見てもらいやすくします")}</p>
                   </div>
                 )}
 
@@ -931,7 +931,7 @@ export default function AIGenerate() {
                     </div>
                     {seasonalTopic && (
                       <p className="text-xs text-emerald-700">
-                        このネタを軸に、お店の強みへ自然につなげた投稿を作ります
+                        {t("このネタを軸に、お店の強みへ自然につなげた投稿を作ります")}
                       </p>
                     )}
                   </div>
@@ -940,7 +940,7 @@ export default function AIGenerate() {
                 {/* コメントが集まる型（実際のThreadsバズ投稿リサーチ由来）。選択は任意・季節ネタと併用可 */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5">
-                    <Label>💬 コメントが集まる型（任意）</Label>
+                    <Label>{t("💬 コメントが集まる型（任意）")}</Label>
                     <HelpTooltip content="実際のThreadsでポジティブにバズっている投稿を分析した「型」です。選ぶと、温かいコメントや会話が生まれやすい構成で投稿を作ります。もう一度押すと解除できます" />
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -978,7 +978,7 @@ export default function AIGenerate() {
                     onClick={() => setRegionalPanelOpen((v) => !v)}
                   >
                     <span className="flex items-center gap-1.5 text-sm font-medium">
-                      📍 地域トレンド（この地域で伸びている投稿を参考にする）
+                      {t("📍 地域トレンド（この地域で伸びている投稿を参考にする）")}
                       {regionalRefIds.length > 0 && (
                         <Badge className="bg-emerald-600 text-white text-xs px-1.5 py-0">{regionalRefIds.length}件 選択中</Badge>
                       )}
@@ -989,7 +989,7 @@ export default function AIGenerate() {
                   {regionalPanelOpen && (
                     <div className="space-y-3 pt-1">
                       <p className="text-xs text-muted-foreground">
-                        この地域で反応の高い投稿を参考に、<span className="font-medium text-foreground">丸写しではない「似た切り口」の投稿</span>をAIが作ります。参考にしたい投稿を選んで（最大3件）、そのまま「AI投稿を生成」を押してください。
+                        この地域で反応の高い投稿を参考に、<span className="font-medium text-foreground">{t("丸写しではない「似た切り口」の投稿")}</span>をAIが作ります。参考にしたい投稿を選んで（最大3件）、そのまま「AI投稿を生成」を押してください。
                       </p>
                       <div className="flex flex-wrap gap-2">
                         <Button
@@ -1000,9 +1000,9 @@ export default function AIGenerate() {
                           disabled={collectRegional.isPending}
                         >
                           {collectRegional.isPending ? (
-                            <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />収集中...</>
+                            <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />{t("収集中...")}</>
                           ) : (
-                            <><Search className="h-3.5 w-3.5 mr-1.5" />この地域の人気投稿を集める</>
+                            <><Search className="h-3.5 w-3.5 mr-1.5" />{t("この地域の人気投稿を集める")}</>
                           )}
                         </Button>
                       </div>
@@ -1010,7 +1010,7 @@ export default function AIGenerate() {
                       {/* 手動追加（審査承認前でも使える） */}
                       <div className="space-y-1.5">
                         <Textarea
-                          placeholder="Threadsで見つけた「この地域で伸びている投稿」の本文を貼り付けて追加できます"
+                          placeholder={t("Threadsで見つけた「この地域で伸びている投稿」の本文を貼り付けて追加できます")}
                           value={manualRefText}
                           onChange={(e) => setManualRefText(e.target.value)}
                           className="text-xs min-h-[56px]"
@@ -1031,7 +1031,7 @@ export default function AIGenerate() {
                       {/* 参考投稿一覧（選択式） */}
                       {(regionalRefs || []).length === 0 ? (
                         <p className="text-xs text-muted-foreground/70 italic">
-                          まだ参考投稿がありません。「集める」ボタンか手動追加で登録してください。
+                          {t("まだ参考投稿がありません。「集める」ボタンか手動追加で登録してください。")}
                         </p>
                       ) : (
                         <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
@@ -1045,7 +1045,7 @@ export default function AIGenerate() {
                                 }`}
                                 onClick={() => setRegionalRefIds((prev) =>
                                   on ? prev.filter((x) => x !== r.id)
-                                     : prev.length >= 3 ? (toast.info('参考にできるのは3件までです'), prev) : [...prev, r.id],
+                                     : prev.length >= 3 ? (toast.info(t("参考にできるのは3件までです")), prev) : [...prev, r.id],
                                 )}
                               >
                                 <div className="flex items-start gap-2">
@@ -1057,14 +1057,14 @@ export default function AIGenerate() {
                                     <div className="flex items-center gap-2 mt-1 text-[12px] text-muted-foreground">
                                       <span>{r.source === 'manual' ? '手動追加' : `自動収集${r.keyword ? `（${r.keyword}）` : ''}`}</span>
                                       {r.permalink && (
-                                        <a href={r.permalink} target="_blank" rel="noopener noreferrer" className="underline" onClick={(e) => e.stopPropagation()}>元投稿</a>
+                                        <a href={r.permalink} target="_blank" rel="noopener noreferrer" className="underline" onClick={(e) => e.stopPropagation()}>{t("元投稿")}</a>
                                       )}
                                       <button
                                         type="button"
                                         className="ml-auto text-destructive/70 hover:text-destructive"
                                         onClick={(e) => { e.stopPropagation(); removeRef.mutate({ id: r.id }); setRegionalRefIds((prev) => prev.filter((x) => x !== r.id)); }}
                                       >
-                                        削除
+                                        {t("削除")}
                                       </button>
                                     </div>
                                   </div>
@@ -1087,7 +1087,7 @@ export default function AIGenerate() {
                 {postType !== 'pinned' ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-1.5">
-                      <Label>追加の返信投稿（任意）</Label>
+                      <Label>{t("追加の返信投稿（任意）")}</Label>
                       <HelpTooltip content="メイン投稿に続くツリー（返信）の数です。3〜5本がおすすめです" />
                     </div>
                     <Select value={treeCount.toString()} onValueChange={(value) => setTreeCount(parseInt(value))}>
@@ -1095,12 +1095,12 @@ export default function AIGenerate() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="0">なし（最初の1投稿のみ）</SelectItem>
-                        <SelectItem value="1">追加1投稿（詳細を補足）</SelectItem>
-                        <SelectItem value="2">追加2投稿</SelectItem>
-                        <SelectItem value="3">追加3投稿</SelectItem>
-                        <SelectItem value="4">追加4投稿</SelectItem>
-                        <SelectItem value="5">追加5投稿（最大）</SelectItem>
+                        <SelectItem value="0">{t("なし（最初の1投稿のみ）")}</SelectItem>
+                        <SelectItem value="1">{t("追加1投稿（詳細を補足）")}</SelectItem>
+                        <SelectItem value="2">{t("追加2投稿")}</SelectItem>
+                        <SelectItem value="3">{t("追加3投稿")}</SelectItem>
+                        <SelectItem value="4">{t("追加4投稿")}</SelectItem>
+                        <SelectItem value="5">{t("追加5投稿（最大）")}</SelectItem>
                       </SelectContent>
                     </Select>
                     <p className="text-sm text-muted-foreground">
@@ -1113,10 +1113,10 @@ export default function AIGenerate() {
                 ) : (
                   <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
                     <p className="text-sm text-amber-900">
-                      📌 <strong>固定投稿モード</strong>：1投稿で完結する形式で生成します。Threadsのプロフィール上部に固定して使ってください。
+                      📌 <strong>{t("固定投稿モード")}</strong>：1投稿で完結する形式で生成します。Threadsのプロフィール上部に固定して使ってください。
                     </p>
                     <p className="text-xs text-amber-800 mt-1">
-                      生成後、投稿の右上「…」→「プロフィールに固定」でThreads側の固定設定ができます。
+                      {t("生成後、投稿の右上「…」→「プロフィールに固定」でThreads側の固定設定ができます。")}
                     </p>
                   </div>
                 )}
@@ -1124,7 +1124,7 @@ export default function AIGenerate() {
                 {/* 口調の選択 */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5">
-                    <Label>口調を選ぶ（任意）</Label>
+                    <Label>{t("口調を選ぶ（任意）")}</Label>
                     <HelpTooltip content="投稿の文体・トーンを選びます。選ばない場合はAIが自動で判断します" />
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1137,7 +1137,7 @@ export default function AIGenerate() {
                           : 'border-border text-muted-foreground hover:border-primary/50'
                       }`}
                     >
-                      🤖 おまかせ
+                      {t("🤖 おまかせ")}
                     </button>
                     {POST_TONES_LIST.map((t) => (
                       <button
@@ -1165,7 +1165,7 @@ export default function AIGenerate() {
                 {aiUsage && (
                   <div className="p-3 bg-muted rounded-lg">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">今月のAI生成回数</span>
+                      <span className="text-muted-foreground">{t("今月のAI生成回数")}</span>
                       <span className="font-medium">
                         {aiUsage.count} / {aiUsage.limit === -1 ? '無制限' : aiUsage.limit === null ? '-' : `${aiUsage.limit}回`}
                       </span>
@@ -1200,7 +1200,7 @@ export default function AIGenerate() {
                             className="mt-2 w-full bg-red-600 hover:bg-red-700 text-white"
                             onClick={() => setLocation('/pricing')}
                           >
-                            プランをアップグレードして続ける
+                            {t("プランをアップグレードして続ける")}
                           </Button>
                         </div>
                       );
@@ -1219,9 +1219,9 @@ export default function AIGenerate() {
                         className="w-full h-12 text-base"
                       >
                         {isGeneratingSingle ? (
-                          <><Loader2 className="h-5 w-5 mr-2 animate-spin" />生成中...</>
+                          <><Loader2 className="h-5 w-5 mr-2 animate-spin" />{t("生成中...")}</>
                         ) : (
-                          <><Sparkles className="h-5 w-5 mr-2" />AI投稿を生成</>
+                          <><Sparkles className="h-5 w-5 mr-2" />{t("AI投稿を生成")}</>
                         )}
                       </Button>
                       <Button
@@ -1231,13 +1231,13 @@ export default function AIGenerate() {
                         className="w-full h-11"
                       >
                         {isGeneratingOptions ? (
-                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" />3案を生成中...</>
+                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t("3案を生成中...")}</>
                         ) : (
-                          <>3案から選んで作る（AI生成3回分）</>
+                          <>{t("3案から選んで作る（AI生成3回分）")}</>
                         )}
                       </Button>
                       <p className="text-xs text-muted-foreground text-center">
-                        まず1案だけ作ります。いろいろ見比べたいときは「3案から選んで作る」を押してください。
+                        {t("まず1案だけ作ります。いろいろ見比べたいときは「3案から選んで作る」を押してください。")}
                       </p>
                     </>
                   );
@@ -1264,12 +1264,12 @@ export default function AIGenerate() {
             {project && (
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-base">プロジェクト情報</CardTitle>
+                  <CardTitle className="text-base">{t("プロジェクト情報")}</CardTitle>
                   {!editingProject ? (
                     <Button
                       variant="ghost"
                       size="sm"
-                      aria-label="プロジェクト情報を編集"
+                      aria-label={t("プロジェクト情報を編集")}
                       onClick={() => {
                         setEditForm({
                           storeName: (project as any).storeName || '',
@@ -1299,14 +1299,14 @@ export default function AIGenerate() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        aria-label="変更を保存"
+                        aria-label={t("変更を保存")}
                         onClick={() => {
                           updateProjectMutation.mutate({
                             id: projectId!,
                             ...editForm,
                           } as any);
                           setEditingProject(false);
-                          toast.success('プロジェクト情報を更新しました');
+                          toast.success(t("プロジェクト情報を更新しました"));
                         }}
                       >
                         <Check className="h-4 w-4 text-green-500" />
@@ -1314,7 +1314,7 @@ export default function AIGenerate() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        aria-label="編集をキャンセル"
+                        aria-label={t("編集をキャンセル")}
                         onClick={() => {
                           // Check if form has changes
                           const hasChanges =
@@ -1342,38 +1342,38 @@ export default function AIGenerate() {
                   {editingProject ? (
                     <>
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">店名（任意・一度入れれば毎回使われます）</Label>
+                        <Label className="text-xs text-muted-foreground">{t("店名（任意・一度入れれば毎回使われます）")}</Label>
                         <Input
                           value={editForm.storeName}
                           onChange={(e) => setEditForm({ ...editForm, storeName: e.target.value })}
-                          placeholder="例：○○整体院"
+                          placeholder={t("例：○○整体院")}
                           className="h-8 text-sm"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">業種</Label>
+                        <Label className="text-xs text-muted-foreground">{t("業種")}</Label>
                         <Input
                           value={editForm.businessType}
                           onChange={(e) => setEditForm({ ...editForm, businessType: e.target.value })}
-                          placeholder="例：整体院、美容サロン"
+                          placeholder={t("例：整体院、美容サロン")}
                           className="h-8 text-sm"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">地域</Label>
+                        <Label className="text-xs text-muted-foreground">{t("地域")}</Label>
                         <Input
                           value={editForm.area}
                           onChange={(e) => setEditForm({ ...editForm, area: e.target.value })}
-                          placeholder="例：岡山県岡山市北区下中野（できるだけ詳しく）"
+                          placeholder={t("例：岡山県岡山市北区下中野（できるだけ詳しく）")}
                           className="h-8 text-sm"
                         />
-                        <p className="text-[13px] text-muted-foreground">市区町村だけでなく町名まで入れると、地元の呼び方の精度が上がります。</p>
+                        <p className="text-[13px] text-muted-foreground">{t("市区町村だけでなく町名まで入れると、地元の呼び方の精度が上がります。")}</p>
                       </div>
 
                       {/* 地元での呼び方（地域集客の精度を上げる） */}
                       <div className="space-y-1.5 rounded-lg border border-emerald-200 bg-emerald-50/60 p-2.5">
                         <div className="flex items-center justify-between gap-2">
-                          <Label className="text-xs font-medium text-emerald-800">地元での呼び方（最寄り駅・通称・ランドマーク）</Label>
+                          <Label className="text-xs font-medium text-emerald-800">{t("地元での呼び方（最寄り駅・通称・ランドマーク）")}</Label>
                           <Button
                             type="button"
                             variant="outline"
@@ -1383,13 +1383,13 @@ export default function AIGenerate() {
                             onClick={() => suggestLocalTerms.mutate({ area: editForm.area.trim(), businessType: editForm.businessType.trim() || undefined })}
                           >
                             {suggestLocalTerms.isPending
-                              ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" />検索中...</>
-                              : <><Search className="h-3 w-3 mr-1" />地図から候補を取得</>}
+                              ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" />{t("検索中...")}</>
+                              : <><Search className="h-3 w-3 mr-1" />{t("地図から候補を取得")}</>}
                           </Button>
                         </div>
                         <p className="text-[13px] text-emerald-700">
-                          地図データから、近くの<strong>実在する駅・町名</strong>を候補表示します（AIの推測は使わないので地名の捏造はありません）。
-                          目印（お店・施設など）は、ご自身が知っている<strong>実在のもの</strong>を1行ずつ追記してください。
+                          地図データから、近くの<strong>{t("実在する駅・町名")}</strong>を候補表示します（AIの推測は使わないので地名の捏造はありません）。
+                          目印（お店・施設など）は、ご自身が知っている<strong>{t("実在のもの")}</strong>を1行ずつ追記してください。
                         </p>
 
                         {/* AI候補（タップで下の欄に追加） */}
@@ -1431,97 +1431,97 @@ export default function AIGenerate() {
                       </div>
 
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">ターゲット</Label>
+                        <Label className="text-xs text-muted-foreground">{t("ターゲット")}</Label>
                         <Textarea
                           value={editForm.target}
                           onChange={(e) => setEditForm({ ...editForm, target: e.target.value })}
-                          placeholder="例：30-50代の女性"
+                          placeholder={t("例：30-50代の女性")}
                           rows={2}
                           className="text-sm"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">主な悩み</Label>
+                        <Label className="text-xs text-muted-foreground">{t("主な悩み")}</Label>
                         <Textarea
                           value={editForm.mainProblem}
                           onChange={(e) => setEditForm({ ...editForm, mainProblem: e.target.value })}
-                          placeholder="例：慢性的な腰痛、肩こり"
+                          placeholder={t("例：慢性的な腰痛、肩こり")}
                           rows={2}
                           className="text-sm"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">強み・特徴</Label>
+                        <Label className="text-xs text-muted-foreground">{t("強み・特徴")}</Label>
                         <Textarea
                           value={editForm.strength}
                           onChange={(e) => setEditForm({ ...editForm, strength: e.target.value })}
-                          placeholder="例：国家資格保持者による施術"
+                          placeholder={t("例：国家資格保持者による施術")}
                           rows={2}
                           className="text-sm"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">実績・証拠</Label>
+                        <Label className="text-xs text-muted-foreground">{t("実績・証拠")}</Label>
                         <Textarea
                           value={editForm.proof}
                           onChange={(e) => setEditForm({ ...editForm, proof: e.target.value })}
-                          placeholder="例：月間100名以上の施術実績"
+                          placeholder={t("例：月間100名以上の施術実績")}
                           rows={2}
                           className="text-sm"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">USP（独自の強み）</Label>
+                        <Label className="text-xs text-muted-foreground">{t("USP（独自の強み）")}</Label>
                         <Textarea
                           value={editForm.usp}
                           onChange={(e) => setEditForm({ ...editForm, usp: e.target.value })}
-                          placeholder="例：産後骨盤矯正専門・国家資格保持者のみ在籍"
+                          placeholder={t("例：産後骨盤矯正専門・国家資格保持者のみ在籍")}
                           rows={2}
                           className="text-sm"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">N1分析（実在の顧客像）</Label>
+                        <Label className="text-xs text-muted-foreground">{t("N1分析（実在の顧客像）")}</Label>
                         <Textarea
                           value={editForm.n1Customer}
                           onChange={(e) => setEditForm({ ...editForm, n1Customer: e.target.value })}
-                          placeholder="実在の1人の顧客のエピソード・言葉・感情"
+                          placeholder={t("実在の1人の顧客のエピソード・言葉・感情")}
                           rows={3}
                           className="text-sm"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">主張・信念</Label>
+                        <Label className="text-xs text-muted-foreground">{t("主張・信念")}</Label>
                         <Textarea
                           value={editForm.belief}
                           onChange={(e) => setEditForm({ ...editForm, belief: e.target.value })}
-                          placeholder="例：腰痛は薬で抑えるのではなく、根本から整えるべき"
+                          placeholder={t("例：腰痛は薬で抑えるのではなく、根本から整えるべき")}
                           rows={2}
                           className="text-sm"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">口癖・方言・決めゼリフ</Label>
+                        <Label className="text-xs text-muted-foreground">{t("口癖・方言・決めゼリフ")}</Label>
                         <Input
                           value={editForm.catchphrase}
                           onChange={(e) => setEditForm({ ...editForm, catchphrase: e.target.value })}
-                          placeholder="例：〜じゃけぇ／今日もあなたの体、諦めんといて"
+                          placeholder={t("例：〜じゃけぇ／今日もあなたの体、諦めんといて")}
                           className="h-8 text-sm"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">お客さんが実際に使った言葉</Label>
+                        <Label className="text-xs text-muted-foreground">{t("お客さんが実際に使った言葉")}</Label>
                         <Textarea
                           value={editForm.customerWords}
                           onChange={(e) => setEditForm({ ...editForm, customerWords: e.target.value })}
-                          placeholder="例：朝起きた瞬間から腰が重い／夕方になると首がバキバキ"
+                          placeholder={t("例：朝起きた瞬間から腰が重い／夕方になると首がバキバキ")}
                           rows={2}
                           className="text-sm"
                         />
-                        <p className="text-[13px] text-muted-foreground">最優先で投稿に使われます（一度登録すれば毎回利用）。</p>
+                        <p className="text-[13px] text-muted-foreground">{t("最優先で投稿に使われます（一度登録すれば毎回利用）。")}</p>
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">過去の良かった投稿（文体のお手本）</Label>
+                        <Label className="text-xs text-muted-foreground">{t("過去の良かった投稿（文体のお手本）")}</Label>
                         <Textarea
                           value={editForm.styleSamples}
                           onChange={(e) => setEditForm({ ...editForm, styleSamples: e.target.value })}
@@ -1529,55 +1529,55 @@ export default function AIGenerate() {
                           rows={5}
                           className="text-sm"
                         />
-                        <p className="text-[13px] text-muted-foreground">貼り付けた投稿の「文体」だけを再現します。事実は店舗情報から使うので、お手本の内容はコピーされません。</p>
+                        <p className="text-[13px] text-muted-foreground">{t("貼り付けた投稿の「文体」だけを再現します。事実は店舗情報から使うので、お手本の内容はコピーされません。")}</p>
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">投稿に入れたくないワード</Label>
+                        <Label className="text-xs text-muted-foreground">{t("投稿に入れたくないワード")}</Label>
                         <Textarea
                           value={editForm.ngWords}
                           onChange={(e) => setEditForm({ ...editForm, ngWords: e.target.value })}
-                          placeholder="改行またはカンマ区切り（例：激安, 最安値）"
+                          placeholder={t("改行またはカンマ区切り（例：激安, 最安値）")}
                           rows={2}
                           className="text-sm"
                         />
-                        <p className="text-[13px] text-muted-foreground">この言葉は生成投稿に必ず含めません（自動投稿・量産も含む）。</p>
+                        <p className="text-[13px] text-muted-foreground">{t("この言葉は生成投稿に必ず含めません（自動投稿・量産も含む）。")}</p>
                       </div>
                     </>
                   ) : (
                     <>
                       {project.businessType && (
                         <div>
-                          <span className="font-medium">業種：</span>
+                          <span className="font-medium">{t("業種：")}</span>
                           {project.businessType}
                         </div>
                       )}
                       {project.area && (
                         <div>
-                          <span className="font-medium">地域：</span>
+                          <span className="font-medium">{t("地域：")}</span>
                           {project.area}
                         </div>
                       )}
                       {project.target && (
                         <div>
-                          <span className="font-medium">ターゲット：</span>
+                          <span className="font-medium">{t("ターゲット：")}</span>
                           {project.target}
                         </div>
                       )}
                       {project.mainProblem && (
                         <div>
-                          <span className="font-medium">主な悩み：</span>
+                          <span className="font-medium">{t("主な悩み：")}</span>
                           {project.mainProblem}
                         </div>
                       )}
                       {project.strength && (
                         <div>
-                          <span className="font-medium">強み：</span>
+                          <span className="font-medium">{t("強み：")}</span>
                           {project.strength}
                         </div>
                       )}
                       {project.proof && (
                         <div>
-                          <span className="font-medium">実績：</span>
+                          <span className="font-medium">{t("実績：")}</span>
                           {project.proof}
                         </div>
                       )}
@@ -1589,13 +1589,13 @@ export default function AIGenerate() {
                       )}
                       {(project as any).n1Customer && (
                         <div className="p-2 bg-blue-500/10 rounded-lg">
-                          <span className="font-medium text-blue-600">👤 N1顧客像：</span>
+                          <span className="font-medium text-blue-600">{t("👤 N1顧客像：")}</span>
                           <p className="text-sm mt-1 text-muted-foreground">{(project as any).n1Customer}</p>
                         </div>
                       )}
                       {!project.businessType && !project.area && !project.target && (
                         <p className="text-muted-foreground text-xs">
-                          プロジェクト情報が未設定です。ペンアイコンをクリックして編集してください。
+                          {t("プロジェクト情報が未設定です。ペンアイコンをクリックして編集してください。")}
                         </p>
                       )}
                     </>
@@ -1612,7 +1612,7 @@ export default function AIGenerate() {
                 {/* 生成完了→次の一手を明示 */}
                 <div className="flex items-start gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 mb-3 text-sm text-emerald-800">
                   <Check className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span>投稿ができました！内容を確認して、下の「今すぐThreadsに投稿」または「投稿を予約する」を押してください。</span>
+                  <span>{t("投稿ができました！内容を確認して、下の「今すぐThreadsに投稿」または「投稿を予約する」を押してください。")}</span>
                 </div>
                 {/* 表示モード切り替え */}
                 <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -1626,7 +1626,7 @@ export default function AIGenerate() {
                       onClick={() => setViewMode('edit')}
                     >
                       <FileEdit className="w-4 h-4" />
-                      編集
+                      {t("編集")}
                     </button>
                     <button
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
@@ -1637,7 +1637,7 @@ export default function AIGenerate() {
                       onClick={() => setViewMode('preview')}
                     >
                       <Eye className="w-4 h-4" />
-                      プレビュー
+                      {t("プレビュー")}
                     </button>
                     <button
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
@@ -1648,14 +1648,14 @@ export default function AIGenerate() {
                       onClick={() => setViewMode('phone')}
                     >
                       <Smartphone className="w-4 h-4" />
-                      スマホプレビュー
+                      {t("スマホプレビュー")}
                     </button>
                   </div>
                   {viewMode === 'preview' && (
-                    <span className="text-xs text-muted-foreground">Threads上での見え方</span>
+                    <span className="text-xs text-muted-foreground">{t("Threads上での見え方")}</span>
                   )}
                   {viewMode === 'phone' && (
-                    <span className="text-xs text-muted-foreground">スマートフォンでの見え方</span>
+                    <span className="text-xs text-muted-foreground">{t("スマートフォンでの見え方")}</span>
                   )}
                 </div>
 
@@ -1674,7 +1674,7 @@ export default function AIGenerate() {
                       <CardContent className="py-4">
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
-                            <span className="text-muted-foreground">メイン投稿：</span>
+                            <span className="text-muted-foreground">{t("メイン投稿：")}</span>
                             <span className={`font-medium ${editedPost.mainPost.length > 500 ? 'text-red-500' : 'text-foreground'}`}>
                               {editedPost.mainPost.length} / 500文字
                             </span>
@@ -1707,7 +1707,7 @@ export default function AIGenerate() {
                     {/* ライトモードプレビュー */}
                     <details className="group">
                       <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
-                        ライトモードで表示
+                        {t("ライトモードで表示")}
                       </summary>
                       <div className="mt-3">
                         <ThreadsPostPreview
@@ -1727,7 +1727,7 @@ export default function AIGenerate() {
                       <CardContent className="py-4">
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
-                            <span className="text-muted-foreground">メイン投稿：</span>
+                            <span className="text-muted-foreground">{t("メイン投稿：")}</span>
                             <span className={`font-medium ${editedPost.mainPost.length > 500 ? 'text-red-500' : 'text-foreground'}`}>
                               {editedPost.mainPost.length} / 500文字
                             </span>
@@ -1741,7 +1741,7 @@ export default function AIGenerate() {
                             </div>
                           ))}
                           <div>
-                            <span className="text-muted-foreground">合計投稿数：</span>
+                            <span className="text-muted-foreground">{t("合計投稿数：")}</span>
                             <span className="font-medium">
                               {1 + editedPost.treePosts.filter(p => p.trim()).length + (editedPost.cta?.trim() ? 1 : 0)}件
                             </span>
@@ -1756,11 +1756,11 @@ export default function AIGenerate() {
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">メイン投稿</CardTitle>
+                      <CardTitle className="text-base">{t("メイン投稿")}</CardTitle>
                       <Button
                         variant="ghost"
                         size="sm"
-                        aria-label="メイン投稿をコピー"
+                        aria-label={t("メイン投稿をコピー")}
                         onClick={() => handleCopy(editedPost.mainPost, 0)}
                       >
                         {copiedIndex === 0 ? (
@@ -1770,7 +1770,7 @@ export default function AIGenerate() {
                         )}
                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">Threadsで最初に表示される一番大事な投稿です。ここで興味を引きます。</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t("Threadsで最初に表示される一番大事な投稿です。ここで興味を引きます。")}</p>
                   </CardHeader>
                   <CardContent>
                     <TextareaWithEmoji
@@ -1803,7 +1803,7 @@ export default function AIGenerate() {
                           )}
                         </Button>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">メイン投稿への返信としてぶら下がる補足です。詳しい説明や続きを書きます。</p>
+                      <p className="text-xs text-muted-foreground mt-1">{t("メイン投稿への返信としてぶら下がる補足です。詳しい説明や続きを書きます。")}</p>
                     </CardHeader>
                     <CardContent>
                       <TextareaWithEmoji
@@ -1823,8 +1823,8 @@ export default function AIGenerate() {
                 {/* CTA */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base">最後のひと押し（予約・問い合わせの案内）</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-1">読者にしてほしい行動（予約・LINE登録・問い合わせ）を促す締めの一文です。</p>
+                    <CardTitle className="text-base">{t("最後のひと押し（予約・問い合わせの案内）")}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">{t("読者にしてほしい行動（予約・LINE登録・問い合わせ）を促す締めの一文です。")}</p>
                   </CardHeader>
                   <CardContent>
                     <TextareaWithEmoji
@@ -1844,31 +1844,31 @@ export default function AIGenerate() {
                 {/* メタ情報 */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base">AIからのアドバイス</CardTitle>
+                    <CardTitle className="text-base">{t("AIからのアドバイス")}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
                     {editedPost.hookType && (
                       <div className="p-2 bg-primary/10 rounded-lg">
-                        <span className="font-medium text-primary">🎯 最初の1行の引き方：</span>
+                        <span className="font-medium text-primary">{t("🎯 最初の1行の引き方：")}</span>
                         <span className="text-sm">{editedPost.hookType}</span>
                       </div>
                     )}
                     {editedPost.cvGoal && (
                       <div className="p-2 bg-green-500/10 rounded-lg">
-                        <span className="font-medium text-green-600">📊 この投稿の目的：</span>
+                        <span className="font-medium text-green-600">{t("📊 この投稿の目的：")}</span>
                         <span className="text-sm">{editedPost.cvGoal}</span>
                       </div>
                     )}
                     <div>
-                      <span className="font-medium">投稿の狙い：</span>
+                      <span className="font-medium">{t("投稿の狙い：")}</span>
                       <p className="mt-1 text-muted-foreground">{editedPost.goal}</p>
                     </div>
                     <div>
-                      <span className="font-medium">期待できる効果：</span>
+                      <span className="font-medium">{t("期待できる効果：")}</span>
                       <p className="mt-1 text-muted-foreground">{editedPost.expectedEffect}</p>
                     </div>
                     <div>
-                      <span className="font-medium">おすすめの投稿時間：</span>
+                      <span className="font-medium">{t("おすすめの投稿時間：")}</span>
                       <p className="mt-1 text-muted-foreground">{editedPost.timingCandidate}</p>
                     </div>
                     {/* トピックタグ候補（Threadsの投稿画面で「トピックを追加」に貼る。発見性UP） */}
@@ -1881,7 +1881,7 @@ export default function AIGenerate() {
                       if (candidates.length === 0) return null;
                       return (
                         <div>
-                          <span className="font-medium">トピックタグ候補：</span>
+                          <span className="font-medium">{t("トピックタグ候補：")}</span>
                           <div className="mt-1 flex flex-wrap gap-1.5">
                             {candidates.map((tag) => (
                               <button
@@ -1890,7 +1890,7 @@ export default function AIGenerate() {
                                 onClick={() => {
                                   navigator.clipboard.writeText(tag).then(
                                     () => toast.success(`「${tag}」をコピーしました。Threadsの「トピックを追加」に貼り付けてください`),
-                                    () => toast.error('コピーに失敗しました'),
+                                    () => toast.error(t("コピーに失敗しました")),
                                   );
                                 }}
                                 className="px-2.5 py-1 rounded-full text-xs bg-muted hover:bg-emerald-50 hover:text-emerald-700 border border-border transition-colors"
@@ -1899,16 +1899,16 @@ export default function AIGenerate() {
                               </button>
                             ))}
                           </div>
-                          <p className="text-[13px] text-muted-foreground mt-1">タップでコピー。投稿時にThreadsの「トピックを追加」へ貼ると見つけてもらいやすくなります</p>
+                          <p className="text-[13px] text-muted-foreground mt-1">{t("タップでコピー。投稿時にThreadsの「トピックを追加」へ貼ると見つけてもらいやすくなります")}</p>
                         </div>
                       );
                     })()}
                     <div>
-                      <span className="font-medium">次回試してみること：</span>
+                      <span className="font-medium">{t("次回試してみること：")}</span>
                       <p className="mt-1 text-muted-foreground">{editedPost.improvement}</p>
                     </div>
                     <div>
-                      <span className="font-medium">今週の改善ヒント：</span>
+                      <span className="font-medium">{t("今週の改善ヒント：")}</span>
                       <p className="mt-1 text-muted-foreground">{editedPost.weeklyImprovementPoint}</p>
                     </div>
                   </CardContent>
@@ -1924,14 +1924,14 @@ export default function AIGenerate() {
                   {(connectedAccounts?.length ?? 0) === 0 && (
                     <div className="flex items-center gap-2 rounded-lg bg-yellow-50 border border-yellow-200 px-3 py-2 text-sm text-yellow-800">
                       <Link2 className="h-4 w-4 shrink-0" />
-                      <span className="min-w-0 flex-1">投稿するにはThreadsの連携が必要です。</span>
+                      <span className="min-w-0 flex-1">{t("投稿するにはThreadsの連携が必要です。")}</span>
                       <Button
                         size="sm"
                         variant="outline"
                         className="shrink-0 border-yellow-300 text-yellow-800 hover:bg-yellow-100"
                         onClick={() => setLocation('/threads-connect')}
                       >
-                        連携する
+                        {t("連携する")}
                       </Button>
                     </div>
                   )}
@@ -1952,7 +1952,7 @@ export default function AIGenerate() {
                       className="flex-1 h-11"
                     >
                       <Calendar className="h-5 w-5 mr-2" />
-                      投稿を予約する
+                      {t("投稿を予約する")}
                     </Button>
                     <Button
                       variant="outline"
@@ -1960,7 +1960,7 @@ export default function AIGenerate() {
                       className="flex-1 h-11"
                     >
                       <Copy className="h-5 w-5 mr-2" />
-                      全てコピー
+                      {t("全てコピー")}
                     </Button>
                     <Button
                       variant="outline"
@@ -1968,7 +1968,7 @@ export default function AIGenerate() {
                       className="flex-1 h-11"
                     >
                       <Save className="h-5 w-5 mr-2" />
-                      ひな形に保存
+                      {t("ひな形に保存")}
                     </Button>
                   </div>
                 </div>
@@ -1977,9 +1977,9 @@ export default function AIGenerate() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Sparkles className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold text-foreground">3案できました。使いたい案を選んでください</h3>
+                  <h3 className="font-semibold text-foreground">{t("3案できました。使いたい案を選んでください")}</h3>
                   {isEvaluating && (
-                    <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />AIが採点中…</span>
+                    <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />{t("AIが採点中…")}</span>
                   )}
                 </div>
                 {candidates.map((c, i) => {
@@ -1997,7 +1997,7 @@ export default function AIGenerate() {
                           <span className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">{i + 1}</span>
                           <span className="truncate">{(c._postType && POST_TYPES[c._postType]?.name) || '案'}</span>
                           {isRecommended && (
-                            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-amber-400 text-amber-950 text-[12px] font-bold px-2 py-0.5">⭐AIのおすすめ</span>
+                            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-amber-400 text-amber-950 text-[12px] font-bold px-2 py-0.5">{t("⭐AIのおすすめ")}</span>
                           )}
                         </CardTitle>
                         <Button
@@ -2005,7 +2005,7 @@ export default function AIGenerate() {
                           className="shrink-0"
                           onClick={(e) => { e.stopPropagation(); selectCandidate(c); }}
                         >
-                          この案を使う
+                          {t("この案を使う")}
                         </Button>
                       </div>
                     </CardHeader>
@@ -2036,7 +2036,7 @@ export default function AIGenerate() {
                   disabled={isGeneratingOptions}
                 >
                   <Sparkles className="h-4 w-4 mr-2" />
-                  別の3案を作り直す
+                  {t("別の3案を作り直す")}
                 </Button>
               </div>
             ) : (isGeneratingOptions || isGeneratingSingle) ? (
@@ -2044,17 +2044,17 @@ export default function AIGenerate() {
                 <CardContent className="flex flex-col items-center justify-center h-full py-12 text-center">
                   <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
                   <p className="text-foreground font-medium mb-1">{isGeneratingOptions ? '3案を生成しています…' : '投稿を生成しています…'}</p>
-                  <p className="text-sm text-muted-foreground">少しお待ちください（10〜30秒ほど）</p>
+                  <p className="text-sm text-muted-foreground">{t("少しお待ちください（10〜30秒ほど）")}</p>
                 </CardContent>
               </Card>
             ) : (
               <Card className="lg:h-full lg:min-h-[420px] border-dashed">
                 <CardContent className="flex flex-col items-center justify-center h-full py-12 text-center">
                   <Sparkles className="h-12 w-12 text-primary/40 mb-4" />
-                  <p className="text-foreground font-medium mb-1">ここに投稿の下書きが表示されます</p>
+                  <p className="text-foreground font-medium mb-1">{t("ここに投稿の下書きが表示されます")}</p>
                   <p className="text-sm text-muted-foreground max-w-xs">
                     左の「投稿の目的を選ぶ」から目的を選んで、<br />
-                    「AI投稿を生成」を押すと下書きができます。
+                    {t("「AI投稿を生成」を押すと下書きができます。")}
                   </p>
                 </CardContent>
               </Card>
@@ -2132,9 +2132,9 @@ export default function AIGenerate() {
       <Dialog open={presetDialogOpen} onOpenChange={setPresetDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto w-[95vw] sm:w-auto">
           <DialogHeader>
-            <DialogTitle>プリセットを選択</DialogTitle>
+            <DialogTitle>{t("プリセットを選択")}</DialogTitle>
             <DialogDescription>
-              業種・目的別のテンプレートから選んで、効果的な投稿を簡単に生成できます。
+              {t("業種・目的別のテンプレートから選んで、効果的な投稿を簡単に生成できます。")}
             </DialogDescription>
           </DialogHeader>
 
@@ -2144,7 +2144,7 @@ export default function AIGenerate() {
             <Input
               value={presetSearchQuery}
               onChange={(e) => setPresetSearchQuery(e.target.value)}
-              placeholder="プリセットを検索…（業種名、ターゲット等）"
+              placeholder={t("プリセットを検索…（業種名、ターゲット等）")}
               className="pl-9 h-9"
             />
           </div>
@@ -2156,7 +2156,7 @@ export default function AIGenerate() {
               size="sm"
               onClick={() => setSelectedCategory('all')}
             >
-              すべて
+              {t("すべて")}
             </Button>
             <Button
               variant={selectedCategory === 'custom' ? 'default' : 'outline'}
@@ -2164,7 +2164,7 @@ export default function AIGenerate() {
               onClick={() => setSelectedCategory('custom')}
             >
               <Star className="h-3 w-3 mr-1" />
-              マイプリセット
+              {t("マイプリセット")}
               {customPresets && customPresets.length > 0 && (
                 <Badge variant="secondary" className="ml-1 text-xs px-1.5 py-0">{customPresets.length}</Badge>
               )}
@@ -2174,21 +2174,21 @@ export default function AIGenerate() {
               size="sm"
               onClick={() => setSelectedCategory('industry')}
             >
-              業種別
+              {t("業種別")}
             </Button>
             <Button
               variant={selectedCategory === 'purpose' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setSelectedCategory('purpose')}
             >
-              目的別
+              {t("目的別")}
             </Button>
             <Button
               variant={selectedCategory === 'post_type' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setSelectedCategory('post_type')}
             >
-              投稿タイプ別
+              {t("投稿タイプ別")}
             </Button>
             {hiddenPresetKeys.size > 0 && (
               <Button
@@ -2196,7 +2196,7 @@ export default function AIGenerate() {
                 size="sm"
                 className="ml-auto text-xs"
                 onClick={() => setShowHiddenPresets((v) => !v)}
-                title="非表示にしたプリセットの表示/非表示を切り替え"
+                title={t("非表示にしたプリセットの表示/非表示を切り替え")}
               >
                 {showHiddenPresets ? <Eye className="h-3.5 w-3.5 mr-1" /> : <EyeOff className="h-3.5 w-3.5 mr-1" />}
                 非表示 {hiddenPresetKeys.size}件
@@ -2211,11 +2211,11 @@ export default function AIGenerate() {
                 <p>「{presetSearchQuery}」に一致するプリセットが見つかりません</p>
               ) : selectedCategory === 'custom' ? (
                 <div className="space-y-2">
-                  <p>カスタムプリセットがまだありません</p>
-                  <p className="text-xs">ダイアログを閉じて、「現在の設定を保存」ボタンから保存できます</p>
+                  <p>{t("カスタムプリセットがまだありません")}</p>
+                  <p className="text-xs">{t("ダイアログを閉じて、「現在の設定を保存」ボタンから保存できます")}</p>
                 </div>
               ) : (
-                <p>プリセットがありません</p>
+                <p>{t("プリセットがありません")}</p>
               )}
             </div>
           ) : (
@@ -2245,7 +2245,7 @@ export default function AIGenerate() {
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0"
-                        aria-label="プリセットを編集"
+                        aria-label={t("プリセットを編集")}
                         onClick={(e) => {
                           e.stopPropagation();
                           try {
@@ -2264,7 +2264,7 @@ export default function AIGenerate() {
                             setEditingPreset(preset);
                             setEditPresetDialogOpen(true);
                           } catch {
-                            toast.error('プリセットの読み込みに失敗しました');
+                            toast.error(t("プリセットの読み込みに失敗しました"));
                           }
                         }}
                       >
@@ -2274,7 +2274,7 @@ export default function AIGenerate() {
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0"
-                        aria-label="プリセットを削除"
+                        aria-label={t("プリセットを削除")}
                         onClick={(e) => {
                           e.stopPropagation();
                           if (confirm('このカスタムプリセットを削除しますか？')) {
@@ -2294,8 +2294,8 @@ export default function AIGenerate() {
                           variant="ghost"
                           size="sm"
                           className="h-7 px-2 text-xs text-emerald-700"
-                          aria-label="このプリセットを元に戻す"
-                          title="元に戻す"
+                          aria-label={t("このプリセットを元に戻す")}
+                          title={t("元に戻す")}
                           onClick={(e) => { e.stopPropagation(); unhidePresetMutation.mutate({ itemType: 'preset', itemKey: String(preset.id) }); }}
                         >
                           <RotateCcw className="h-3.5 w-3.5 mr-1" />戻す
@@ -2305,8 +2305,8 @@ export default function AIGenerate() {
                           variant="ghost"
                           size="sm"
                           className="h-7 w-7 p-0"
-                          aria-label="このプリセットを非表示にする"
-                          title="使わないので非表示にする"
+                          aria-label={t("このプリセットを非表示にする")}
+                          title={t("使わないので非表示にする")}
                           onClick={(e) => { e.stopPropagation(); hidePresetMutation.mutate({ itemType: 'preset', itemKey: String(preset.id) }); }}
                         >
                           <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
@@ -2351,7 +2351,7 @@ export default function AIGenerate() {
                         {POST_TYPES[preset.postType as keyof typeof POST_TYPES]?.name || preset.postType}
                       </Badge>
                       {preset.isCustom ? (
-                        <Badge variant="secondary" className="text-xs">カスタム</Badge>
+                        <Badge variant="secondary" className="text-xs">{t("カスタム")}</Badge>
                       ) : (
                         <span>使用回数: {preset.usageCount}</span>
                       )}
@@ -2368,39 +2368,39 @@ export default function AIGenerate() {
       <Dialog open={saveTemplateDialogOpen} onOpenChange={setSaveTemplateDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>テンプレートとして保存</DialogTitle>
+            <DialogTitle>{t("テンプレートとして保存")}</DialogTitle>
             <DialogDescription>
-              この生成設定をテンプレートとして保存し、後で再利用できます。
+              {t("この生成設定をテンプレートとして保存し、後で再利用できます。")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="template-name">テンプレート名 *</Label>
+              <Label htmlFor="template-name">{t("テンプレート名 *")}</Label>
               <Input
                 id="template-name"
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
-                placeholder="例: 新規顧客獲得用"
+                placeholder={t("例: 新規顧客獲得用")}
               />
             </div>
             <div>
-              <Label htmlFor="template-description">説明（任意）</Label>
+              <Label htmlFor="template-description">{t("説明（任意）")}</Label>
               <Textarea
                 id="template-description"
                 value={templateDescription}
                 onChange={(e) => setTemplateDescription(e.target.value)}
-                placeholder="このテンプレートの用途を説明してください"
+                placeholder={t("このテンプレートの用途を説明してください")}
                 rows={3}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSaveTemplateDialogOpen(false)}>
-              キャンセル
+              {t("キャンセル")}
             </Button>
             <Button onClick={handleSaveAsTemplate} disabled={saveTemplateMutation.isPending}>
               {saveTemplateMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              保存
+              {t("保存")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2410,34 +2410,34 @@ export default function AIGenerate() {
       <Dialog open={savePresetDialogOpen} onOpenChange={setSavePresetDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>マイプリセットとして保存</DialogTitle>
+            <DialogTitle>{t("マイプリセットとして保存")}</DialogTitle>
             <DialogDescription>
-              現在の投稿タイプとプロジェクト設定をプリセットとして保存し、次回からワンクリックで呼び出せます。
+              {t("現在の投稿タイプとプロジェクト設定をプリセットとして保存し、次回からワンクリックで呼び出せます。")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="preset-name">プリセット名 *</Label>
+              <Label htmlFor="preset-name">{t("プリセット名 *")}</Label>
               <Input
                 id="preset-name"
                 value={presetName}
                 onChange={(e) => setPresetName(e.target.value)}
-                placeholder="例: 美容室・新規集客用"
+                placeholder={t("例: 美容室・新規集客用")}
               />
             </div>
             <div>
-              <Label htmlFor="preset-description">説明（任意）</Label>
+              <Label htmlFor="preset-description">{t("説明（任意）")}</Label>
               <Textarea
                 id="preset-description"
                 value={presetDescription}
                 onChange={(e) => setPresetDescription(e.target.value)}
-                placeholder="このプリセットの用途を説明してください"
+                placeholder={t("このプリセットの用途を説明してください")}
                 rows={2}
               />
             </div>
             {project && (
               <div className="p-3 bg-muted rounded-lg text-xs space-y-1">
-                <p className="font-medium text-sm mb-2">保存される設定:</p>
+                <p className="font-medium text-sm mb-2">{t("保存される設定:")}</p>
                 <p>投稿タイプ: {POST_TYPES[postType]?.name || postType}</p>
                 {project.businessType && <p>業種: {project.businessType}</p>}
                 {project.target && <p>ターゲット: {project.target}</p>}
@@ -2449,12 +2449,12 @@ export default function AIGenerate() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSavePresetDialogOpen(false)}>
-              キャンセル
+              {t("キャンセル")}
             </Button>
             <Button
               onClick={() => {
                 if (!presetName.trim()) {
-                  toast.error('プリセット名を入力してください');
+                  toast.error(t("プリセット名を入力してください"));
                   return;
                 }
                 if (!project) return;
@@ -2477,7 +2477,7 @@ export default function AIGenerate() {
             >
               {savePresetMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               <Star className="w-4 h-4 mr-1" />
-              保存
+              {t("保存")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2490,32 +2490,32 @@ export default function AIGenerate() {
       }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>プリセットを編集</DialogTitle>
+            <DialogTitle>{t("プリセットを編集")}</DialogTitle>
             <DialogDescription>
-              カスタムプリセットの設定を変更できます。
+              {t("カスタムプリセットの設定を変更できます。")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="edit-preset-name">プリセット名 *</Label>
+              <Label htmlFor="edit-preset-name">{t("プリセット名 *")}</Label>
               <Input
                 id="edit-preset-name"
                 value={editPresetForm.name}
                 onChange={(e) => setEditPresetForm(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="例: 美容室・新規集客用"
+                placeholder={t("例: 美容室・新規集客用")}
               />
             </div>
             <div>
-              <Label htmlFor="edit-preset-desc">説明（任意）</Label>
+              <Label htmlFor="edit-preset-desc">{t("説明（任意）")}</Label>
               <Input
                 id="edit-preset-desc"
                 value={editPresetForm.description}
                 onChange={(e) => setEditPresetForm(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="このプリセットの用途"
+                placeholder={t("このプリセットの用途")}
               />
             </div>
             <div>
-              <Label>投稿タイプ</Label>
+              <Label>{t("投稿タイプ")}</Label>
               <Select value={editPresetForm.postType} onValueChange={(v) => setEditPresetForm(prev => ({ ...prev, postType: v }))}>
                 <SelectTrigger>
                   <SelectValue />
@@ -2528,60 +2528,60 @@ export default function AIGenerate() {
               </Select>
             </div>
             <div className="border-t pt-4">
-              <p className="text-sm font-medium mb-3">プロジェクト情報</p>
+              <p className="text-sm font-medium mb-3">{t("プロジェクト情報")}</p>
               <div className="grid gap-3">
                 <div>
-                  <Label htmlFor="edit-preset-biz">業種</Label>
+                  <Label htmlFor="edit-preset-biz">{t("業種")}</Label>
                   <Input
                     id="edit-preset-biz"
                     value={editPresetForm.businessType}
                     onChange={(e) => setEditPresetForm(prev => ({ ...prev, businessType: e.target.value }))}
-                    placeholder="例: 美容室"
+                    placeholder={t("例: 美容室")}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="edit-preset-target">ターゲット</Label>
+                  <Label htmlFor="edit-preset-target">{t("ターゲット")}</Label>
                   <Input
                     id="edit-preset-target"
                     value={editPresetForm.targetAudience}
                     onChange={(e) => setEditPresetForm(prev => ({ ...prev, targetAudience: e.target.value }))}
-                    placeholder="例: 20〜40代女性"
+                    placeholder={t("例: 20〜40代女性")}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="edit-preset-area">地域</Label>
+                  <Label htmlFor="edit-preset-area">{t("地域")}</Label>
                   <Input
                     id="edit-preset-area"
                     value={editPresetForm.area}
                     onChange={(e) => setEditPresetForm(prev => ({ ...prev, area: e.target.value }))}
-                    placeholder="例: 東京都渋谷区"
+                    placeholder={t("例: 東京都渋谷区")}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="edit-preset-problem">主な悩み</Label>
+                  <Label htmlFor="edit-preset-problem">{t("主な悩み")}</Label>
                   <Input
                     id="edit-preset-problem"
                     value={editPresetForm.mainProblem}
                     onChange={(e) => setEditPresetForm(prev => ({ ...prev, mainProblem: e.target.value }))}
-                    placeholder="例: 新規集客が難しい"
+                    placeholder={t("例: 新規集客が難しい")}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="edit-preset-strength">強み</Label>
+                  <Label htmlFor="edit-preset-strength">{t("強み")}</Label>
                   <Input
                     id="edit-preset-strength"
                     value={editPresetForm.strength}
                     onChange={(e) => setEditPresetForm(prev => ({ ...prev, strength: e.target.value }))}
-                    placeholder="例: オーガニックカラー専門"
+                    placeholder={t("例: オーガニックカラー専門")}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="edit-preset-proof">実績・証拠</Label>
+                  <Label htmlFor="edit-preset-proof">{t("実績・証拠")}</Label>
                   <Input
                     id="edit-preset-proof"
                     value={editPresetForm.proof}
                     onChange={(e) => setEditPresetForm(prev => ({ ...prev, proof: e.target.value }))}
-                    placeholder="例: 口コミ評価4.8"
+                    placeholder={t("例: 口コミ評価4.8")}
                   />
                 </div>
               </div>
@@ -2589,12 +2589,12 @@ export default function AIGenerate() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditPresetDialogOpen(false)}>
-              キャンセル
+              {t("キャンセル")}
             </Button>
             <Button
               onClick={() => {
                 if (!editPresetForm.name.trim()) {
-                  toast.error('プリセット名を入力してください');
+                  toast.error(t("プリセット名を入力してください"));
                   return;
                 }
                 if (!editingPreset) return;
@@ -2617,7 +2617,7 @@ export default function AIGenerate() {
               disabled={updatePresetMutation.isPending}
             >
               {updatePresetMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              更新
+              {t("更新")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2640,6 +2640,7 @@ export default function AIGenerate() {
  * and dig their existing project out of /dashboard.
  */
 function ProjectAutoPicker() {
+  const { t } = useLang();
   const [, setLocation] = useLocation();
   const { data: projects, isLoading } = trpc.project.list.useQuery();
 
@@ -2673,9 +2674,9 @@ function ProjectAutoPicker() {
 
   return (
     <div className="container max-w-2xl py-10 px-4">
-      <h1 className="text-xl font-bold mb-2">どのプロジェクトでAI投稿を作りますか？</h1>
+      <h1 className="text-xl font-bold mb-2">{t("どのプロジェクトでAI投稿を作りますか？")}</h1>
       <p className="text-sm text-muted-foreground mb-6">
-        過去に作ったプロジェクトを選ぶと、お店の情報を再入力せずにすぐAI生成に進めます。
+        {t("過去に作ったプロジェクトを選ぶと、お店の情報を再入力せずにすぐAI生成に進めます。")}
       </p>
 
       <div className="space-y-2">
@@ -2705,7 +2706,7 @@ function ProjectAutoPicker() {
           onClick={() => setLocation('/ai-project-create')}
         >
           <Plus className="w-4 h-4 mr-2" />
-          新しいプロジェクトを作る
+          {t("新しいプロジェクトを作る")}
         </Button>
       </div>
     </div>

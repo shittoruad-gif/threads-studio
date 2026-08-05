@@ -20,8 +20,8 @@ import {
 export default function CommentManager() {
   const { t } = useLang();
   const breadcrumbItems = [
-    { label: 'ダッシュボード', href: '/dashboard' },
-    { label: 'コメント管理' },
+    { label: t('ダッシュボード'), href: '/dashboard' },
+    { label: t('コメント管理') },
   ];
 
   const { selectedAccountId, selectedAccount } = useThreadsAccount();
@@ -49,7 +49,7 @@ export default function CommentManager() {
         setSelectedReplyIndex(0);
         setEditedReply(data.replies[0]);
       }
-      toast.success('返信候補を生成しました');
+      toast.success(t('返信候補を生成しました'));
     },
     onError: (error) => {
       toast.error(error.message);
@@ -58,7 +58,7 @@ export default function CommentManager() {
 
   const postReplyMutation = trpc.threads.postReply.useMutation({
     onSuccess: () => {
-      toast.success('返信を投稿しました');
+      toast.success(t('返信を投稿しました'));
       if (selectedComment) {
         setPostedCommentIds(prev => new Set(prev).add(selectedComment.id));
       }
@@ -105,9 +105,9 @@ export default function CommentManager() {
   const handleCopyReply = async () => {
     try {
       await navigator.clipboard.writeText(editedReply);
-      toast.success('コピーしました');
+      toast.success(t('コピーしました'));
     } catch (err) {
-      toast.error('コピーに失敗しました。ブラウザの権限設定を確認してください。');
+      toast.error(t('コピーに失敗しました。ブラウザの権限設定を確認してください。'));
     }
   };
 
@@ -191,7 +191,7 @@ export default function CommentManager() {
                       {/* Parent post preview */}
                       {comment.parent_post_text && (
                         <div className="mb-3 p-2 bg-muted rounded-lg border-l-4 border-orange-300">
-                          <p className="text-xs font-medium text-muted-foreground mb-1">元の投稿</p>
+                          <p className="text-xs font-medium text-muted-foreground mb-1">{t('元の投稿')}</p>
                           <p className="text-sm line-clamp-2">{comment.parent_post_text}</p>
                         </div>
                       )}
@@ -203,7 +203,7 @@ export default function CommentManager() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold truncate">
-                            @{comment.username || '不明'}
+                            @{comment.username || t('不明')}
                           </p>
                           {comment.timestamp && (
                             <p className="text-xs text-muted-foreground">
@@ -231,7 +231,7 @@ export default function CommentManager() {
                         className="bg-orange-500 hover:bg-orange-600 text-white"
                         onClick={() => handleOpenReplyDialog(comment)}
                         disabled={isPosted}
-                        aria-label={`@${comment.username || '不明'}のコメントにAI返信を生成`}
+                        aria-label={`@${comment.username || t('不明')}`}
                       >
                         <Sparkles className="w-4 h-4 mr-1" />
                         {t('AI返信を生成')}
@@ -263,7 +263,7 @@ export default function CommentManager() {
               {/* Original comment */}
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-xs font-medium text-muted-foreground mb-1">
-                  @{selectedComment.username || '不明'} さんのコメント
+                  @{selectedComment.username || t('不明')}{t('さんのコメント')}
                 </p>
                 <p className="text-sm">{selectedComment.text}</p>
               </div>
@@ -305,7 +305,7 @@ export default function CommentManager() {
                         }`}
                       >
                         <span className="text-xs font-medium text-orange-600 mb-1 block">
-                          候補 {index + 1}
+                          {t('候補')} {index + 1}
                         </span>
                         {reply}
                       </button>
@@ -323,7 +323,7 @@ export default function CommentManager() {
                       placeholder={t('返信を入力...')}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      {editedReply.length}文字
+                      {editedReply.length}{t('文字')}
                     </p>
                   </div>
 

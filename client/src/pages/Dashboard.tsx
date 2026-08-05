@@ -1,4 +1,5 @@
 import { useAuth } from '@/_core/hooks/useAuth';
+import { useLang } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/lib/trpc';
@@ -62,6 +63,7 @@ import ErrorGuide from '@/components/ErrorGuide';
 import PinnedPostRecommendation from '@/components/PinnedPostRecommendation';
 
 export default function Dashboard() {
+  const { t } = useLang();
   const { user, isAuthenticated, loading, logout } = useAuth();
   const [location, setLocation] = useLocation();
   const [couponModalOpen, setCouponModalOpen] = useState(false);
@@ -80,7 +82,7 @@ export default function Dashboard() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('success') === 'true') {
-      toast.success('サブスクリプションが開始されました！');
+      toast.success(t("サブスクリプションが開始されました！"));
       // Clean up URL
       window.history.replaceState({}, '', '/dashboard');
     }
@@ -136,7 +138,7 @@ export default function Dashboard() {
   const [surveyDismissed, setSurveyDismissed] = useState(false);
   const [surveySendInfo, setSurveySendInfo] = useState(true); // 登録メールに案内を送る（デフォルトON）
   const submitInterest = trpc.survey.submitContentInterest.useMutation({
-    onSuccess: () => { utils.survey.contentInterestStatus.invalidate(); setSurveyOpen(false); toast.success('ありがとうございます！今後の改善に活かします'); },
+    onSuccess: () => { utils.survey.contentInterestStatus.invalidate(); setSurveyOpen(false); toast.success(t("ありがとうございます！今後の改善に活かします")); },
     onError: (e) => toast.error(e.message || '送信に失敗しました'),
   });
   useEffect(() => {
@@ -232,13 +234,13 @@ export default function Dashboard() {
   const updateAutoPost = trpc.autoPost.updateSettings.useMutation({
     onSuccess: () => {
       utils.autoPost.getSettings.invalidate();
-      toast.success('自動投稿設定を更新しました');
+      toast.success(t("自動投稿設定を更新しました"));
     },
   });
 
   const cancelSubscription = trpc.univapay.cancelSubscription.useMutation({
     onSuccess: () => {
-      toast.success('サブスクリプションを解約しました');
+      toast.success(t("サブスクリプションを解約しました"));
       utils.subscription.getStatus.invalidate();
     },
     onError: (error) => {
@@ -306,12 +308,12 @@ export default function Dashboard() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <div className="min-w-0 flex-1">
                 <p className="text-sm sm:text-base font-bold text-red-700">
-                  ⚠️ カードのお引き落としに失敗しました
+                  {t("⚠️ カードのお引き落としに失敗しました")}
                 </p>
                 <p className="text-xs sm:text-sm text-red-600 mt-1 leading-relaxed">
                   {subscription.contractPlanName ? `「${subscription.contractPlanName}」の` : ''}
-                  自動更新ができていません。サービス停止を避けるため、お早めにカード情報を再登録してください。
-                  （有効期限切れ・残高不足・利用停止などが原因として考えられます）
+                  {t("自動更新ができていません。サービス停止を避けるため、お早めにカード情報を再登録してください。")}
+                  {t("（有効期限切れ・残高不足・利用停止などが原因として考えられます）")}
                 </p>
               </div>
               <a
@@ -319,7 +321,7 @@ export default function Dashboard() {
                 {...(subscription.reRegisterUrl ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 className="shrink-0 inline-flex items-center justify-center rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold px-5 py-2.5 text-sm transition-colors"
               >
-                カード情報を再登録する
+                {t("カード情報を再登録する")}
               </a>
             </div>
           </div>
@@ -336,7 +338,7 @@ export default function Dashboard() {
                   ✋ 承認待ちの自動投稿が {awaitingCount} 件あります
                 </p>
                 <p className="text-xs text-amber-700 mt-0.5">
-                  内容を確認して承認すると公開されます
+                  {t("内容を確認して承認すると公開されます")}
                 </p>
               </div>
               <Button
@@ -344,7 +346,7 @@ export default function Dashboard() {
                 className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
                 onClick={() => setLocation('/post-history?status=awaiting_approval')}
               >
-                確認する
+                {t("確認する")}
               </Button>
             </div>
           );
@@ -385,7 +387,7 @@ export default function Dashboard() {
                 className={`shrink-0 text-white ${isExpired ? 'bg-red-600 hover:bg-red-700' : 'bg-yellow-600 hover:bg-yellow-700'}`}
                 onClick={() => setLocation('/threads-connect')}
               >
-                連携を更新する
+                {t("連携を更新する")}
               </Button>
             </div>
           );
@@ -410,7 +412,7 @@ export default function Dashboard() {
                     投稿に失敗した予約が {recentFailed.length} 件あります
                   </p>
                   <p className="text-xs text-red-700 mt-0.5">
-                    原因と対処方法を確認して、再投稿または連携の更新を行えます。
+                    {t("原因と対処方法を確認して、再投稿または連携の更新を行えます。")}
                   </p>
                 </div>
               </div>
@@ -419,7 +421,7 @@ export default function Dashboard() {
                 className="bg-red-600 hover:bg-red-700 text-white shrink-0"
                 onClick={() => setLocation('/post-history?status=failed')}
               >
-                確認する
+                {t("確認する")}
               </Button>
             </div>
           );
@@ -448,17 +450,17 @@ export default function Dashboard() {
         {/* New User Getting Started Guide */}
         {(!threadsAccounts || threadsAccounts.length === 0) && (!projectCount || projectCount === 0) && (
           <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-6">
-            <h2 className="text-lg font-bold text-foreground mb-2">🚀 はじめましょう！</h2>
+            <h2 className="text-lg font-bold text-foreground mb-2">{t("🚀 はじめましょう！")}</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              Threads Studioを使って、AIが自動でThreads投稿を生成・公開します。以下の3ステップで始められます。
+              {t("Threads Studioを使って、AIが自動でThreads投稿を生成・公開します。以下の3ステップで始められます。")}
             </p>
             <div className="grid sm:grid-cols-3 gap-4">
               <div className="bg-white rounded-lg p-4 border border-blue-100">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">1</div>
-                  <span className="font-medium text-foreground text-sm">プランを選択</span>
+                  <span className="font-medium text-foreground text-sm">{t("プランを選択")}</span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">利用目的に合ったプランを選んで始めましょう</p>
+                <p className="text-xs text-muted-foreground mb-3">{t("利用目的に合ったプランを選んで始めましょう")}</p>
                 <Button
                   size="sm"
                   variant="outline"
@@ -466,15 +468,15 @@ export default function Dashboard() {
                   onClick={() => setLocation('/pricing')}
                 >
                   <CreditCard className="w-3 h-3 mr-1" />
-                  プランを見る
+                  {t("プランを見る")}
                 </Button>
               </div>
               <div className="bg-white rounded-lg p-4 border border-blue-100">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">2</div>
-                  <span className="font-medium text-foreground text-sm">Threads連携</span>
+                  <span className="font-medium text-foreground text-sm">{t("Threads連携")}</span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">Threadsアカウントを接続して投稿を自動化</p>
+                <p className="text-xs text-muted-foreground mb-3">{t("Threadsアカウントを接続して投稿を自動化")}</p>
                 <Button
                   size="sm"
                   variant="outline"
@@ -482,15 +484,15 @@ export default function Dashboard() {
                   onClick={() => setLocation('/threads-connect')}
                 >
                   <Link2 className="w-3 h-3 mr-1" />
-                  連携する
+                  {t("連携する")}
                 </Button>
               </div>
               <div className="bg-white rounded-lg p-4 border border-blue-100">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">3</div>
-                  <span className="font-medium text-foreground text-sm">店舗情報を登録</span>
+                  <span className="font-medium text-foreground text-sm">{t("店舗情報を登録")}</span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">業種・地域・強みを入力すればAIが投稿を生成</p>
+                <p className="text-xs text-muted-foreground mb-3">{t("業種・地域・強みを入力すればAIが投稿を生成")}</p>
                 <Button
                   size="sm"
                   variant="outline"
@@ -498,7 +500,7 @@ export default function Dashboard() {
                   onClick={() => setLocation('/ai-project-create')}
                 >
                   <FileText className="w-3 h-3 mr-1" />
-                  登録する
+                  {t("登録する")}
                 </Button>
               </div>
             </div>
@@ -516,7 +518,7 @@ export default function Dashboard() {
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <h2 className="font-bold text-lg text-foreground">自動投稿</h2>
+                    <h2 className="font-bold text-lg text-foreground">{t("自動投稿")}</h2>
                     <HelpTooltip content="ONにすると、AIが毎日自動で投稿を生成してThreadsに投稿します" />
                   </div>
                   <p className="text-sm text-muted-foreground">
@@ -537,7 +539,7 @@ export default function Dashboard() {
                       const maxPerDay = subscription?.plan?.features?.maxAutoPostsPerDay ?? 0;
                       return (
                         <>
-                          <option value="daily">1日1回</option>
+                          <option value="daily">{t("1日1回")}</option>
                           <option value="twice_daily" disabled={maxPerDay < 2}>1日2回{maxPerDay < 2 ? '（上位プラン）' : ''}</option>
                           <option value="three_daily" disabled={maxPerDay < 3}>1日3回{maxPerDay < 3 ? '（上位プラン）' : ''}</option>
                         </>
@@ -608,7 +610,7 @@ export default function Dashboard() {
                     className="ml-auto h-6 px-2 text-xs"
                     onClick={() => setLocation('/threads-connect')}
                   >
-                    再連携
+                    {t("再連携")}
                   </Button>
                 </div>
               );
@@ -641,7 +643,7 @@ export default function Dashboard() {
                 onClick={() => setLocation('/post-history?status=pending')}
               >
                 <Calendar className="w-4 h-4 mr-2" />
-                予約投稿を管理（個別に停止・削除）
+                {t("予約投稿を管理（個別に停止・削除）")}
                 <ChevronRight className="w-4 h-4 ml-auto" />
               </Button>
             )}
@@ -664,7 +666,7 @@ export default function Dashboard() {
                 onClick={() => setLocation('/threads-connect')}
               >
                 <Link2 className="w-4 h-4 mr-2" />
-                Threadsアカウントを連携して自動投稿を開始
+                {t("Threadsアカウントを連携して自動投稿を開始")}
               </Button>
             )}
           </div>
@@ -672,17 +674,17 @@ export default function Dashboard() {
           {/* Stats Column */}
           <div className="flex flex-col gap-4 min-w-0">
             <div className="flex-1 flex flex-col justify-center bg-background rounded-xl p-4 border border-border">
-              <p className="text-muted-foreground text-xs mb-1">総投稿数</p>
+              <p className="text-muted-foreground text-xs mb-1">{t("総投稿数")}</p>
               <p className="text-2xl font-bold text-foreground">{stats?.totalPosts || 0}</p>
             </div>
             <div className="flex-1 flex flex-col justify-center bg-background rounded-xl p-4 border border-border">
-              <p className="text-muted-foreground text-xs mb-1">予約中</p>
+              <p className="text-muted-foreground text-xs mb-1">{t("予約中")}</p>
               <p className="text-2xl font-bold text-foreground">
                 {stats?.postsByStatus?.find((s: any) => s.status === 'pending')?.count || 0}
               </p>
             </div>
             <div className="flex-1 flex flex-col justify-center bg-background rounded-xl p-4 border border-border">
-              <p className="text-muted-foreground text-xs mb-1">今月のAI生成</p>
+              <p className="text-muted-foreground text-xs mb-1">{t("今月のAI生成")}</p>
               <p className="text-2xl font-bold text-foreground">
                 {aiUsage?.count || 0}
                 {aiUsage?.limit && aiUsage.limit > 0 && (
@@ -699,11 +701,11 @@ export default function Dashboard() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="min-w-0">
                 <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                  📈 フォロワーの伸び
+                  {t("📈 フォロワーの伸び")}
                 </h2>
                 <p className="text-3xl font-bold text-foreground mt-1">
                   {followerTrend.latest.toLocaleString()}
-                  <span className="text-sm font-normal text-muted-foreground ml-1">人</span>
+                  <span className="text-sm font-normal text-muted-foreground ml-1">{t("人")}</span>
                 </p>
                 <p className={`text-sm font-medium mt-0.5 ${followerTrend.weeklyDelta >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                   {followerTrend.weeklyDelta >= 0 ? '+' : ''}{followerTrend.weeklyDelta.toLocaleString()} この1週間
@@ -723,7 +725,7 @@ export default function Dashboard() {
                     return `${x.toFixed(1)},${y.toFixed(1)}`;
                   });
                   return (
-                    <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-sm h-16" preserveAspectRatio="none" role="img" aria-label="フォロワー数の推移グラフ">
+                    <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-sm h-16" preserveAspectRatio="none" role="img" aria-label={t("フォロワー数の推移グラフ")}>
                       <polyline
                         points={coords.join(' ')}
                         fill="none"
@@ -754,21 +756,21 @@ export default function Dashboard() {
           (!profileAudit.linksOk || !profileAudit.bioAreaOk || !profileAudit.pinnedOk) && (
           <div className="mb-8 rounded-xl border-2 border-sky-200 bg-sky-50 p-4 sm:p-5">
             <p className="text-sm sm:text-base font-bold text-sky-800 mb-1">
-              🩺 かんたんプロフィール診断 — あと少しで「見られた人」を予約につなげられます
+              {t("🩺 かんたんプロフィール診断 — あと少しで「見られた人」を予約につなげられます")}
             </p>
             <p className="text-xs text-sky-700 mb-3">
-              投稿がたくさんの人に届いても、プロフィールの準備ができていないと予約につながりません。以下の3つを整えましょう。
+              {t("投稿がたくさんの人に届いても、プロフィールの準備ができていないと予約につながりません。以下の3つを整えましょう。")}
             </p>
             <div className="space-y-2">
               <div className="flex items-start gap-2 text-sm">
                 <span>{profileAudit.linksOk ? '✅' : '⬜️'}</span>
                 <div className="min-w-0 flex-1">
                   <span className={profileAudit.linksOk ? 'text-muted-foreground line-through' : 'text-foreground font-medium'}>
-                    予約・LINEのリンクを登録する
+                    {t("予約・LINEのリンクを登録する")}
                   </span>
                   {!profileAudit.linksOk && (
                     <button className="ml-2 text-xs text-emerald-700 underline" onClick={goEditInfo}>
-                      登録画面をひらく
+                      {t("登録画面をひらく")}
                     </button>
                   )}
                 </div>
@@ -781,7 +783,7 @@ export default function Dashboard() {
                   </span>
                   {!profileAudit.bioAreaOk && (
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Threadsアプリ →「プロフィール」→「プロフィールを編集」→ 自己紹介に地域名を追加。地元の人が「近所のお店だ！」と気づけるようになります
+                      {t("Threadsアプリ →「プロフィール」→「プロフィールを編集」→ 自己紹介に地域名を追加。地元の人が「近所のお店だ！」と気づけるようになります")}
                     </p>
                   )}
                 </div>
@@ -790,14 +792,14 @@ export default function Dashboard() {
                 <span>{profileAudit.pinnedOk ? '✅' : '⬜️'}</span>
                 <div className="min-w-0 flex-1">
                   <span className={profileAudit.pinnedOk ? 'text-muted-foreground line-through' : 'text-foreground font-medium'}>
-                    固定投稿（お店の入口になる投稿）を作る
+                    {t("固定投稿（お店の入口になる投稿）を作る")}
                   </span>
                   {!profileAudit.pinnedOk && (
                     <button
                       className="ml-2 text-xs text-emerald-700 underline"
                       onClick={() => setLocation('/ai-generate?postType=pinned')}
                     >
-                      AIで作る（3分）
+                      {t("AIで作る（3分）")}
                     </button>
                   )}
                 </div>
@@ -816,7 +818,7 @@ export default function Dashboard() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <div className="min-w-0 flex-1">
                 <p className="text-sm sm:text-base font-bold text-foreground flex items-center gap-2">
-                  🛡 投稿前チェック（承認モード）：
+                  {t("🛡 投稿前チェック（承認モード）：")}
                   <span className={autoPostSettings.autoPostRequireApproval ? 'text-emerald-700' : 'text-amber-700'}>
                     {autoPostSettings.autoPostRequireApproval ? 'オン' : 'オフ'}
                   </span>
@@ -828,12 +830,12 @@ export default function Dashboard() {
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs text-muted-foreground">公開前に確認する</span>
+                <span className="text-xs text-muted-foreground">{t("公開前に確認する")}</span>
                 <Switch
                   checked={autoPostSettings.autoPostRequireApproval ?? false}
                   onCheckedChange={(v) => updateAutoPost.mutate({ autoPostRequireApproval: v })}
                   disabled={updateAutoPost.isPending}
-                  aria-label="公開前に承認するモードの切り替え"
+                  aria-label={t("公開前に承認するモードの切り替え")}
                 />
               </div>
             </div>
@@ -845,7 +847,7 @@ export default function Dashboard() {
           <div className="bg-background rounded-xl p-6 border border-border mb-8">
             <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-emerald-600" />
-              使用状況
+              {t("使用状況")}
             </h2>
             <div className="grid md:grid-cols-2 gap-6">
               <UsageProgress
@@ -893,7 +895,7 @@ export default function Dashboard() {
         {/* Monthly Posts Chart */}
         {stats?.monthlyPosts && stats.monthlyPosts.length > 0 && (
           <div className="bg-background rounded-xl p-6 border border-border mb-8">
-            <h2 className="text-lg font-semibold text-foreground mb-4">月間投稿数</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-4">{t("月間投稿数")}</h2>
             <div className="space-y-3">
               {stats.monthlyPosts.map((item: any) => (
                 <div key={item.month} className="flex items-center gap-4">
@@ -917,7 +919,7 @@ export default function Dashboard() {
         {/* Popular Templates */}
         {popularTemplates && popularTemplates.length > 0 && (
           <div className="bg-background rounded-xl p-6 border border-border mb-8">
-            <h2 className="text-lg font-semibold text-foreground mb-4">人気テンプレート</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-4">{t("人気テンプレート")}</h2>
             <div className="space-y-3">
               {popularTemplates.map((template: any, index: number) => (
                 <div key={template.id} className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
@@ -941,14 +943,14 @@ export default function Dashboard() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <Crown className="w-5 h-5 text-emerald-600" />
-                サブスクリプション
+                {t("サブスクリプション")}
               </h2>
               {getStatusBadge(subscription?.status || 'free')}
             </div>
 
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <p className="text-muted-foreground text-sm mb-1">現在のプラン</p>
+                <p className="text-muted-foreground text-sm mb-1">{t("現在のプラン")}</p>
                 <p className="text-2xl font-bold text-foreground">{subscription?.plan?.name || '無料プラン'}</p>
                 {subscription?.plan?.priceMonthly ? (
                   <p className="text-muted-foreground">¥{subscription.plan.priceMonthly.toLocaleString()}/月</p>
@@ -957,7 +959,7 @@ export default function Dashboard() {
 
               {subscription?.isTrialing && subscription?.trialEndsAt && (
                 <div>
-                  <p className="text-muted-foreground text-sm mb-1">トライアル終了日</p>
+                  <p className="text-muted-foreground text-sm mb-1">{t("トライアル終了日")}</p>
                   <p className="text-lg font-semibold text-foreground">
                     {formatDate(subscription.trialEndsAt)}
                   </p>
@@ -966,7 +968,7 @@ export default function Dashboard() {
 
               {subscription?.currentPeriodEnd && !subscription?.isTrialing && (
                 <div>
-                  <p className="text-muted-foreground text-sm mb-1">次回請求日</p>
+                  <p className="text-muted-foreground text-sm mb-1">{t("次回請求日")}</p>
                   <p className="text-lg font-semibold text-foreground">
                     {formatDate(subscription.currentPeriodEnd)}
                   </p>
@@ -978,10 +980,10 @@ export default function Dashboard() {
               <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-yellow-800 font-medium">解約済み</p>
+                  <p className="text-yellow-800 font-medium">{t("解約済み")}</p>
                   <p className="text-yellow-700 text-sm">
-                    現在の請求期間終了後にサブスクリプションが終了します。
-                    再度ご利用になる場合は、料金プランから再登録してください。
+                    {t("現在の請求期間終了後にサブスクリプションが終了します。")}
+                    {t("再度ご利用になる場合は、料金プランから再登録してください。")}
                   </p>
                 </div>
               </div>
@@ -994,7 +996,7 @@ export default function Dashboard() {
                 onClick={() => setCouponModalOpen(true)}
               >
                 <Crown className="w-4 h-4 mr-2" />
-                クーポンコードを適用
+                {t("クーポンコードを適用")}
               </Button>
               {subscription?.planId !== 'free' && !subscription?.cancelAtPeriodEnd && (
                 <Button
@@ -1007,14 +1009,14 @@ export default function Dashboard() {
                   }}
                   disabled={cancelSubscription.isPending}
                 >
-                  解約する
+                  {t("解約する")}
                 </Button>
               )}
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
                 onClick={() => setLocation('/pricing')}
               >
-                プランを変更
+                {t("プランを変更")}
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
@@ -1028,7 +1030,7 @@ export default function Dashboard() {
                   <FileText className="w-5 h-5 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-sm">プロジェクト数</p>
+                  <p className="text-muted-foreground text-sm">{t("プロジェクト数")}</p>
                   <p className="text-xl font-bold text-foreground">
                     {projectCount ?? 0}
                     {subscription?.plan?.features?.maxProjects !== -1 && (
@@ -1047,7 +1049,7 @@ export default function Dashboard() {
                   <Link2 className="w-5 h-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-sm">Threads連携</p>
+                  <p className="text-muted-foreground text-sm">{t("Threads連携")}</p>
                   <p className="text-xl font-bold text-foreground">
                     {threadsAccounts?.length ?? 0}
                     {subscription?.plan?.features?.maxThreadsAccounts !== -1 && (
@@ -1066,10 +1068,10 @@ export default function Dashboard() {
                   <Calendar className="w-5 h-5 text-orange-600" />
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-sm">予約投稿</p>
+                  <p className="text-muted-foreground text-sm">{t("予約投稿")}</p>
                   <p className="text-xl font-bold text-foreground">
                     {subscription?.plan?.features?.maxScheduledPosts === 0 ? (
-                      <span className="text-muted-foreground/60 text-sm">利用不可</span>
+                      <span className="text-muted-foreground/60 text-sm">{t("利用不可")}</span>
                     ) : subscription?.plan?.features?.maxScheduledPosts === -1 ? (
                       '無制限'
                     ) : (
@@ -1087,15 +1089,15 @@ export default function Dashboard() {
           <div className="bg-background rounded-xl p-6 border border-border mb-8">
             <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5 text-emerald-600" />
-              請求履歴
+              {t("請求履歴")}
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="text-left text-muted-foreground text-sm border-b border-border">
-                    <th className="pb-3 font-medium">日付</th>
-                    <th className="pb-3 font-medium">金額</th>
-                    <th className="pb-3 font-medium">ステータス</th>
+                    <th className="pb-3 font-medium">{t("日付")}</th>
+                    <th className="pb-3 font-medium">{t("金額")}</th>
+                    <th className="pb-3 font-medium">{t("ステータス")}</th>
                     <th className="pb-3"></th>
                   </tr>
                 </thead>
@@ -1110,7 +1112,7 @@ export default function Dashboard() {
                       </td>
                       <td className="py-3">
                         {invoice.status === 'paid' ? (
-                          <span className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full text-xs font-medium">支払い済み</span>
+                          <span className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full text-xs font-medium">{t("支払い済み")}</span>
                         ) : (
                           <span className="text-yellow-600 bg-yellow-50 px-2 py-1 rounded-full text-xs font-medium">{invoice.status}</span>
                         )}
@@ -1143,31 +1145,31 @@ export default function Dashboard() {
           <div className="mt-8 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-6 border-2 border-emerald-200">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-8 h-8 text-emerald-600" />
-              <h3 className="font-semibold text-foreground text-lg">最初の投稿を生成しましょう！</h3>
+              <h3 className="font-semibold text-foreground text-lg">{t("最初の投稿を生成しましょう！")}</h3>
             </div>
             <p className="text-muted-foreground text-sm mb-4">
-              3ステップで簡単に始められます
+              {t("3ステップで簡単に始められます")}
             </p>
             <div className="grid md:grid-cols-3 gap-4 mb-4">
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">1</div>
                 <div>
-                  <p className="text-foreground text-sm font-medium">プロジェクト作成</p>
-                  <p className="text-muted-foreground text-xs">業種を選ぶだけで自動入力</p>
+                  <p className="text-foreground text-sm font-medium">{t("プロジェクト作成")}</p>
+                  <p className="text-muted-foreground text-xs">{t("業種を選ぶだけで自動入力")}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">2</div>
                 <div>
-                  <p className="text-foreground text-sm font-medium">Threads連携</p>
-                  <p className="text-muted-foreground text-xs">ガイドに沿って簡単連携</p>
+                  <p className="text-foreground text-sm font-medium">{t("Threads連携")}</p>
+                  <p className="text-muted-foreground text-xs">{t("ガイドに沿って簡単連携")}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">3</div>
                 <div>
-                  <p className="text-foreground text-sm font-medium">AI生成</p>
-                  <p className="text-muted-foreground text-xs">プリセットから選んで生成</p>
+                  <p className="text-foreground text-sm font-medium">{t("AI生成")}</p>
+                  <p className="text-muted-foreground text-xs">{t("プリセットから選んで生成")}</p>
                 </div>
               </div>
             </div>
@@ -1192,73 +1194,73 @@ export default function Dashboard() {
         <div className="mt-8 bg-gradient-to-br from-emerald-900 to-teal-900 rounded-xl p-6 text-white mb-8">
           <h2 className="text-lg font-semibold mb-1 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-emerald-300" />
-            Threads集客ガイド
+            {t("Threads集客ガイド")}
           </h2>
-          <p className="text-emerald-200 text-sm mb-5">効果的な投稿のコツをまとめました。投稿タイプ・時間帯・ジャンルを意識して投稿しましょう。</p>
+          <p className="text-emerald-200 text-sm mb-5">{t("効果的な投稿のコツをまとめました。投稿タイプ・時間帯・ジャンルを意識して投稿しましょう。")}</p>
           <div className="grid md:grid-cols-3 gap-4">
             {/* 推奨投稿時間帯 */}
             <div className="bg-white/10 rounded-lg p-4">
               <h3 className="font-semibold text-sm mb-3 flex items-center gap-1">
                 <Clock className="w-4 h-4 text-yellow-300" />
-                推奨投稿時間帯
+                {t("推奨投稿時間帯")}
               </h3>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-emerald-100">20〜22時</span>
-                  <span className="text-yellow-300 text-xs font-bold">★★★★★ 最高</span>
+                  <span className="text-sm text-emerald-100">{t("20〜22時")}</span>
+                  <span className="text-yellow-300 text-xs font-bold">{t("★★★★★ 最高")}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-emerald-100">23時前後</span>
-                  <span className="text-yellow-300 text-xs font-bold">★★★★★ 最高</span>
+                  <span className="text-sm text-emerald-100">{t("23時前後")}</span>
+                  <span className="text-yellow-300 text-xs font-bold">{t("★★★★★ 最高")}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-emerald-100">16〜17時</span>
-                  <span className="text-yellow-200 text-xs font-bold">★★★★ 高い</span>
+                  <span className="text-sm text-emerald-100">{t("16〜17時")}</span>
+                  <span className="text-yellow-200 text-xs font-bold">{t("★★★★ 高い")}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-emerald-100">12〜15時</span>
-                  <span className="text-emerald-200 text-xs">★★★ 普通</span>
+                  <span className="text-sm text-emerald-100">{t("12〜15時")}</span>
+                  <span className="text-emerald-200 text-xs">{t("★★★ 普通")}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-emerald-100">6〜11時</span>
-                  <span className="text-emerald-300 text-xs">★★ 低い</span>
+                  <span className="text-sm text-emerald-100">{t("6〜11時")}</span>
+                  <span className="text-emerald-300 text-xs">{t("★★ 低い")}</span>
                 </div>
               </div>
-              <p className="text-emerald-300 text-xs mt-3">※実績データに基づく分析</p>
+              <p className="text-emerald-300 text-xs mt-3">{t("※実績データに基づく分析")}</p>
             </div>
             {/* 強ジャンル */}
             <div className="bg-white/10 rounded-lg p-4">
               <h3 className="font-semibold text-sm mb-3 flex items-center gap-1">
                 <BarChart3 className="w-4 h-4 text-blue-300" />
-                集客に強いジャンル
+                {t("集客に強いジャンル")}
               </h3>
               <div className="space-y-2">
                 <div className="flex items-start gap-2">
                   <span className="text-lg">📍</span>
                   <div>
-                    <p className="text-sm font-medium">地元ネタ</p>
-                    <p className="text-emerald-200 text-xs">予約につながりやすい / 地元の人に届きやすい</p>
+                    <p className="text-sm font-medium">{t("地元ネタ")}</p>
+                    <p className="text-emerald-200 text-xs">{t("予約につながりやすい / 地元の人に届きやすい")}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-lg">📊</span>
                   <div>
-                    <p className="text-sm font-medium">ビフォーアフター</p>
-                    <p className="text-emerald-200 text-xs">予約につながりやすい / 写真1枚で信頼感が伝わる</p>
+                    <p className="text-sm font-medium">{t("ビフォーアフター")}</p>
+                    <p className="text-emerald-200 text-xs">{t("予約につながりやすい / 写真1枚で信頼感が伝わる")}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-lg">💰</span>
                   <div>
-                    <p className="text-sm font-medium">お金の話題</p>
-                    <p className="text-emerald-200 text-xs">多くの人に見てもらいやすい / 税金・補助金・年収</p>
+                    <p className="text-sm font-medium">{t("お金の話題")}</p>
+                    <p className="text-emerald-200 text-xs">{t("多くの人に見てもらいやすい / 税金・補助金・年収")}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-lg">🔥</span>
                   <div>
-                    <p className="text-sm font-medium">時事ネタ</p>
-                    <p className="text-emerald-200 text-xs">多くの人に見てもらいやすい / 今話題のトピックを活用</p>
+                    <p className="text-sm font-medium">{t("時事ネタ")}</p>
+                    <p className="text-emerald-200 text-xs">{t("多くの人に見てもらいやすい / 今話題のトピックを活用")}</p>
                   </div>
                 </div>
               </div>
@@ -1267,32 +1269,32 @@ export default function Dashboard() {
             <div className="bg-white/10 rounded-lg p-4">
               <h3 className="font-semibold text-sm mb-3 flex items-center gap-1">
                 <Sparkles className="w-4 h-4 text-purple-300" />
-                勝ちパターンの法則
+                {t("勝ちパターンの法則")}
               </h3>
               <div className="space-y-2 text-sm">
                 <div className="flex items-start gap-2">
                   <span className="text-emerald-300 font-bold text-xs mt-0.5">①</span>
-                  <p className="text-emerald-100 text-xs">1行目で止める（12〜18文字）</p>
+                  <p className="text-emerald-100 text-xs">{t("1行目で止める（12〜18文字）")}</p>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-emerald-300 font-bold text-xs mt-0.5">②</span>
-                  <p className="text-emerald-100 text-xs">売り込まず「理由付き導線」</p>
+                  <p className="text-emerald-100 text-xs">{t("売り込まず「理由付き導線」")}</p>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-emerald-300 font-bold text-xs mt-0.5">③</span>
-                  <p className="text-emerald-100 text-xs">当たり投稿は10本以上量産</p>
+                  <p className="text-emerald-100 text-xs">{t("当たり投稿は10本以上量産")}</p>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-emerald-300 font-bold text-xs mt-0.5">④</span>
-                  <p className="text-emerald-100 text-xs">記事で伝えたいメッセージ（予約・LINE登録等）は1つに絞る</p>
+                  <p className="text-emerald-100 text-xs">{t("記事で伝えたいメッセージ（予約・LINE登録等）は1つに絞る")}</p>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-emerald-300 font-bold text-xs mt-0.5">⑤</span>
-                  <p className="text-emerald-100 text-xs">見られる数より「誰に届くか」を大事に</p>
+                  <p className="text-emerald-100 text-xs">{t("見られる数より「誰に届くか」を大事に")}</p>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-emerald-300 font-bold text-xs mt-0.5">⑥</span>
-                  <p className="text-emerald-100 text-xs">週１回振り返り：反応の良かった投稿のパターンをまた使う</p>
+                  <p className="text-emerald-100 text-xs">{t("週１回振り返り：反応の良かった投稿のパターンをまた使う")}</p>
                 </div>
               </div>
               <Button
@@ -1301,7 +1303,7 @@ export default function Dashboard() {
                 onClick={() => setLocation('/ai-project-create')}
               >
                 <Sparkles className="w-3 h-3 mr-1" />
-                AI投稿を生成する
+                {t("AI投稿を生成する")}
               </Button>
             </div>
           </div>
@@ -1323,10 +1325,10 @@ export default function Dashboard() {
               <Sparkles className="w-5 h-5 text-yellow-600" />
             </div>
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-foreground">AI投稿生成</h3>
+              <h3 className="font-semibold text-foreground">{t("AI投稿生成")}</h3>
               <HelpTooltip content="業種・地域・ターゲットを設定するだけで、プロフィール遷移→LINE登録→予約に繋がる高品質なThreads投稿をAIが自動生成します。" />
             </div>
-            <p className="text-muted-foreground text-sm">集客に特化した投稿を自動生成</p>
+            <p className="text-muted-foreground text-sm">{t("集客に特化した投稿を自動生成")}</p>
             <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-emerald-600 mt-2 transition-colors" />
           </button>
 
@@ -1339,10 +1341,10 @@ export default function Dashboard() {
                 <Pencil className="w-5 h-5 text-amber-600" />
               </div>
               <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-semibold text-foreground">登録情報を修正</h3>
+                <h3 className="font-semibold text-foreground">{t("登録情報を修正")}</h3>
                 <HelpTooltip content="お店の情報・カウンセリングの回答・予約/LINEのリンクを、いつでもまとめて修正できます。間違って入力した場合はここから直してください。" />
               </div>
-              <p className="text-muted-foreground text-sm">店舗情報・カウンセリング・リンクを直す</p>
+              <p className="text-muted-foreground text-sm">{t("店舗情報・カウンセリング・リンクを直す")}</p>
               <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-emerald-600 mt-2 transition-colors" />
             </button>
           ) : null}
@@ -1355,10 +1357,10 @@ export default function Dashboard() {
               <History className="w-5 h-5 text-blue-600" />
             </div>
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-foreground">AI生成履歴</h3>
+              <h3 className="font-semibold text-foreground">{t("AI生成履歴")}</h3>
               <HelpTooltip content="過去にAIで生成した投稿を確認・再利用できます。履歴からコピーして、簡単に再度使用することができます。" />
             </div>
-            <p className="text-muted-foreground text-sm">過去の生成内容を再利用</p>
+            <p className="text-muted-foreground text-sm">{t("過去の生成内容を再利用")}</p>
             <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-emerald-600 mt-2 transition-colors" />
           </button>
 
@@ -1370,8 +1372,8 @@ export default function Dashboard() {
             <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center mb-3">
               <Link2 className="w-5 h-5 text-blue-600" />
             </div>
-            <h3 className="font-semibold text-foreground mb-1">Threads連携</h3>
-            <p className="text-muted-foreground text-sm">アカウントを連携して直接投稿</p>
+            <h3 className="font-semibold text-foreground mb-1">{t("Threads連携")}</h3>
+            <p className="text-muted-foreground text-sm">{t("アカウントを連携して直接投稿")}</p>
             <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-emerald-600 mt-2 transition-colors" />
           </button>
 
@@ -1383,8 +1385,8 @@ export default function Dashboard() {
             <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center mb-3">
               <Calendar className="w-5 h-5 text-green-600" />
             </div>
-            <h3 className="font-semibold text-foreground mb-1">投稿履歴・予約</h3>
-            <p className="text-muted-foreground text-sm">予約投稿の管理と履歴確認</p>
+            <h3 className="font-semibold text-foreground mb-1">{t("投稿履歴・予約")}</h3>
+            <p className="text-muted-foreground text-sm">{t("予約投稿の管理と履歴確認")}</p>
             <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-emerald-600 mt-2 transition-colors" />
           </button>
         </div>
@@ -1405,13 +1407,13 @@ export default function Dashboard() {
       <Dialog open={surveyOpen} onOpenChange={(o) => { if (!o) { setSurveyOpen(false); setSurveyDismissed(true); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>他に興味のあるサービスはありますか？</DialogTitle>
+            <DialogTitle>{t("他に興味のあるサービスはありますか？")}</DialogTitle>
             <DialogDescription>
-              ご利用開始ありがとうございます。Threads集客のほかに、ご興味のあるものがあれば教えてください（複数OK・スキップも可能）。今後のご案内の参考にさせていただきます。
+              {t("ご利用開始ありがとうございます。Threads集客のほかに、ご興味のあるものがあれば教えてください（複数OK・スキップも可能）。今後のご案内の参考にさせていただきます。")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2.5 max-h-[52vh] overflow-y-auto pr-1">
-            <p className="text-xs font-medium text-muted-foreground">気になるものを選んでください（複数OK）</p>
+            <p className="text-xs font-medium text-muted-foreground">{t("気になるものを選んでください（複数OK）")}</p>
             {RELATED_SERVICES.map((opt) => {
               const on = surveyInterests.includes(opt.label);
               return (
@@ -1436,7 +1438,7 @@ export default function Dashboard() {
               );
             })}
             <Textarea
-              placeholder="その他・気になるサービスやご要望（任意）"
+              placeholder={t("その他・気になるサービスやご要望（任意）")}
               value={surveyFreeText}
               onChange={(e) => setSurveyFreeText(e.target.value)}
               className="text-sm min-h-[56px]"
@@ -1451,14 +1453,14 @@ export default function Dashboard() {
               className="mt-0.5"
             />
             <span className="text-xs text-foreground leading-relaxed">
-              選んだサービスの詳しい案内を、ご登録のメールアドレス
+              {t("選んだサービスの詳しい案内を、ご登録のメールアドレス")}
               {user?.email ? <span className="font-medium">（{user.email}）</span> : ''}
-              に送る
+              {t("に送る")}
             </span>
           </label>
           <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => { setSurveyOpen(false); setSurveyDismissed(true); }}>
-              スキップ
+              {t("スキップ")}
             </Button>
             <Button
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -1475,9 +1477,9 @@ export default function Dashboard() {
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>解約の前に、1つだけ教えてください</DialogTitle>
+            <DialogTitle>{t("解約の前に、1つだけ教えてください")}</DialogTitle>
             <DialogDescription>
-              今後のサービス改善のため、解約の理由をお聞かせください。
+              {t("今後のサービス改善のため、解約の理由をお聞かせください。")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -1502,7 +1504,7 @@ export default function Dashboard() {
               </button>
             ))}
             <Textarea
-              placeholder="よろしければ詳細をお聞かせください（任意）"
+              placeholder={t("よろしければ詳細をお聞かせください（任意）")}
               value={cancelDetail}
               onChange={(e) => setCancelDetail(e.target.value)}
               className="text-sm min-h-[70px]"
@@ -1511,7 +1513,7 @@ export default function Dashboard() {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
-              解約をやめる
+              {t("解約をやめる")}
             </Button>
             <Button
               variant="destructive"
@@ -1529,7 +1531,7 @@ export default function Dashboard() {
                 setCancelDialogOpen(false);
               }}
             >
-              回答して解約する
+              {t("回答して解約する")}
             </Button>
           </DialogFooter>
         </DialogContent>

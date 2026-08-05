@@ -42,7 +42,7 @@ export default function PostAnalytics() {
   const { data: hitPostsData } = trpc.stats.hitPosts.useQuery();
   const fetchAnalytics = trpc.stats.fetchAndStoreAnalytics.useMutation({
     onSuccess: (data) => {
-      toast.success(`${data.fetchedCount}件の投稿データを取得しました`);
+      toast.success(`${data.fetchedCount}${t('件の投稿データを取得しました')}`);
       refetch();
     },
     onError: (error) => {
@@ -57,10 +57,10 @@ export default function PostAnalytics() {
   const utils = trpc.useUtils();
   const updateProject = trpc.project.update.useMutation({
     onSuccess: () => {
-      toast.success('文体のお手本に追加しました！今後のAI生成がこの文体を参考にします');
+      toast.success(t('文体のお手本に追加しました！今後のAI生成がこの文体を参考にします'));
       utils.project.list.invalidate();
     },
-    onError: (e) => toast.error(e.message || '追加に失敗しました'),
+    onError: (e) => toast.error(e.message || t('追加に失敗しました')),
   });
   // 複数プロジェクト時の選択用
   const [promoteContent, setPromoteContent] = useState<string | null>(null);
@@ -71,7 +71,7 @@ export default function PostAnalytics() {
     // 先頭一致だと、定型の書き出しが同じ別投稿を誤って弾いてしまうため）
     const segments = existing ? existing.split('\n---\n').map((s) => s.trim()) : [];
     if (segments.includes(content.trim())) {
-      toast.info('この投稿はすでにお手本に追加されています');
+      toast.info(t('この投稿はすでにお手本に追加されています'));
       return;
     }
     let next = existing ? `${existing}\n---\n${content}` : content;
@@ -83,9 +83,9 @@ export default function PostAnalytics() {
   };
 
   const handlePromote = (content: string | null) => {
-    if (!content?.trim()) { toast.error('本文が取得できない投稿です'); return; }
+    if (!content?.trim()) { toast.error(t('本文が取得できない投稿です')); return; }
     const projects = projectList || [];
-    if (projects.length === 0) { toast.error('プロジェクトがありません'); return; }
+    if (projects.length === 0) { toast.error(t('プロジェクトがありません')); return; }
     if (projects.length === 1) { doPromote(projects[0] as any, content.trim()); return; }
     setPromoteContent(content.trim()); // 複数ある場合は選択ダイアログ
   };
@@ -157,13 +157,13 @@ export default function PostAnalytics() {
   };
 
   const truncateText = (text: string | null, maxLen: number = 60) => {
-    if (!text) return "（テキストなし）";
+    if (!text) return t("（テキストなし）");
     return text.length > maxLen ? text.slice(0, maxLen) + "..." : text;
   };
 
   const handleExportCSV = () => {
     if (posts.length === 0) {
-      toast.error("エクスポートするデータがありません");
+      toast.error(t("エクスポートするデータがありません"));
       return;
     }
     const header = "投稿日時,投稿内容,閲覧数,いいね,返信,リポスト,エンゲージメント,エンゲージメント率(%)\n";
@@ -182,7 +182,7 @@ export default function PostAnalytics() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success("分析データをCSVでダウンロードしました");
+    toast.success(t("分析データをCSVでダウンロードしました"));
   };
 
   return (
@@ -327,9 +327,9 @@ export default function PostAnalytics() {
             {/* Tab Navigation */}
             <div className="flex gap-1 mb-6 bg-muted/50 rounded-lg p-1 w-fit">
               {([
-                { key: "overview" as const, label: "概要", icon: TrendingUp },
-                { key: "ranking" as const, label: "投稿ランキング", icon: Star },
-                { key: "timing" as const, label: "投稿時間分析", icon: Clock },
+                { key: "overview" as const, label: t("概要"), icon: TrendingUp },
+                { key: "ranking" as const, label: t("投稿ランキング"), icon: Star },
+                { key: "timing" as const, label: t("投稿時間分析"), icon: Clock },
               ]).map((tab) => (
                 <button
                   key={tab.key}
@@ -354,7 +354,7 @@ export default function PostAnalytics() {
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
                       <TrendingUp className="w-4 h-4 text-primary" />
-                      エンゲージメント推移
+                      {t("エンゲージメント推移")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -382,6 +382,7 @@ export default function PostAnalytics() {
                           <Line
                             type="monotone"
                             dataKey="インプレッション"
+                            name={t("インプレッション")}
                             stroke="hsl(220, 70%, 55%)"
                             strokeWidth={2}
                             dot={{ fill: "hsl(220, 70%, 55%)", r: 4 }}
@@ -389,6 +390,7 @@ export default function PostAnalytics() {
                           <Line
                             type="monotone"
                             dataKey="エンゲージメント"
+                            name={t("エンゲージメント")}
                             stroke="hsl(var(--primary))"
                             strokeWidth={2}
                             dot={{ fill: "hsl(var(--primary))", r: 4 }}
@@ -397,7 +399,7 @@ export default function PostAnalytics() {
                       </ResponsiveContainer>
                     ) : (
                       <p className="text-center text-muted-foreground py-8">
-                        トレンドデータがありません
+                        {t("トレンドデータがありません")}
                       </p>
                     )}
                   </CardContent>
@@ -409,7 +411,7 @@ export default function PostAnalytics() {
                     <CardHeader>
                       <CardTitle className="text-base flex items-center gap-2">
                         <Flame className="w-4 h-4 text-orange-500" />
-                        当たり投稿 TOP3
+                        {t("当たり投稿 TOP3")}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -447,7 +449,7 @@ export default function PostAnalytics() {
                             </div>
                             <Badge className="bg-orange-100 text-orange-700 border-orange-200 flex-shrink-0">
                               <Flame className="w-3 h-3 mr-1" />
-                              当たり
+                              {t("当たり")}
                             </Badge>
                           </div>
                         ))}
@@ -462,10 +464,10 @@ export default function PostAnalytics() {
                     <CardHeader>
                       <CardTitle className="text-base flex items-center gap-2">
                         <MessageCircle className="w-4 h-4 text-green-600" />
-                        LINE問い合わせ（投稿別・直近{inquiryData.days}日）
+                        {t("LINE問い合わせ（投稿別・直近")}{inquiryData.days}{t("日）")}
                       </CardTitle>
                       <p className="text-xs text-muted-foreground">
-                        各投稿のコメントで案内した合言葉が公式LINEに届いた数です。どの投稿が問い合わせにつながったかが分かります。
+                        {t("各投稿のコメントで案内した合言葉が公式LINEに届いた数です。どの投稿が問い合わせにつながったかが分かります。")}
                       </p>
                     </CardHeader>
                     <CardContent>
@@ -473,13 +475,13 @@ export default function PostAnalytics() {
                         <p className="text-sm text-muted-foreground py-4 text-center">{inquiryData.error}</p>
                       ) : inquiryData.posts.length === 0 ? (
                         <p className="text-sm text-muted-foreground py-4 text-center">
-                          集計対象の自動投稿がまだありません
+                          {t("集計対象の自動投稿がまだありません")}
                         </p>
                       ) : (
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-sm pb-2 border-b border-border/50">
-                            <span className="text-muted-foreground">期間合計</span>
-                            <span className="font-bold text-green-600">{inquiryData.totalHits}件</span>
+                            <span className="text-muted-foreground">{t("期間合計")}</span>
+                            <span className="font-bold text-green-600">{inquiryData.totalHits}{t("件")}</span>
                           </div>
                           {inquiryData.posts.map((p) => (
                             <div
@@ -490,16 +492,16 @@ export default function PostAnalytics() {
                                 「{p.keyword}」
                               </Badge>
                               <p className="flex-1 min-w-0 text-xs text-muted-foreground truncate">
-                                {p.excerpt || "（本文なし）"}
+                                {p.excerpt || t("（本文なし）")}
                               </p>
                               <span className={`flex-shrink-0 text-sm font-bold ${p.inquiries > 0 ? "text-green-600" : "text-muted-foreground"}`}>
-                                {p.inquiries}件
+                                {p.inquiries}{t("件")}
                               </span>
                             </div>
                           ))}
                           {(inquiryData.unattributed ?? 0) > 0 && (
                             <p className="text-xs text-muted-foreground pt-1">
-                              ほか、投稿に紐付かない合言葉の受信が{inquiryData.unattributed}件（固定投稿や過去投稿経由の可能性）
+                              {t("ほか、投稿に紐付かない合言葉の受信が")}{inquiryData.unattributed}{t("件（固定投稿や過去投稿経由の可能性）")}
                             </p>
                           )}
                         </div>

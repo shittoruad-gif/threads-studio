@@ -186,10 +186,10 @@ export default function DashboardLayout({
               <Sparkles className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-2xl font-semibold tracking-tight text-center text-foreground">
-              ログインしてください
+              {t("ログインしてください")}
             </h1>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
-              ダッシュボードにアクセスするにはログインが必要です。
+              {t("ダッシュボードにアクセスするにはログインが必要です。")}
             </p>
           </div>
           <Button
@@ -199,7 +199,7 @@ export default function DashboardLayout({
             size="lg"
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
           >
-            ログイン
+            {t("ログイン")}
           </Button>
         </div>
       </div>
@@ -225,7 +225,7 @@ export default function DashboardLayout({
       <div className="mb-2">
         {!collapsed && (
           <p className="px-4 py-2 text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider">
-            {title}
+            {t(title)}
           </p>
         )}
         <nav className="space-y-0.5 px-2">
@@ -349,8 +349,8 @@ export default function DashboardLayout({
           <button
             onClick={handleLogout}
             className="w-full flex items-center justify-center p-2 rounded-lg hover:bg-muted text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-            title="ログアウト"
-            aria-label="ログアウト"
+            title={t("ログアウト")}
+            aria-label={t("ログアウト")}
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -373,7 +373,7 @@ export default function DashboardLayout({
           {/* Collapse toggle */}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            aria-label={sidebarOpen ? "サイドバーを閉じる" : "サイドバーを開く"}
+            aria-label={sidebarOpen ? t("サイドバーを閉じる") : t("サイドバーを開く")}
             className="absolute -right-3 top-20 w-6 h-6 bg-background border border-border rounded-full flex items-center justify-center shadow-sm hover:shadow-md transition-all z-50"
           >
             {sidebarOpen ? (
@@ -395,7 +395,7 @@ export default function DashboardLayout({
           <aside className="fixed top-0 left-0 h-full w-[280px] bg-background z-50 shadow-xl">
             <button
               onClick={() => setMobileSidebarOpen(false)}
-              aria-label="メニューを閉じる"
+              aria-label={t("メニューを閉じる")}
               className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-muted"
             >
               <X className="w-5 h-5 text-muted-foreground" />
@@ -419,7 +419,7 @@ export default function DashboardLayout({
               {isMobile && (
                 <button
                   onClick={() => setMobileSidebarOpen(true)}
-                  aria-label="メニューを開く"
+                  aria-label={t("メニューを開く")}
                   className="p-2 rounded-lg hover:bg-muted"
                 >
                   <Menu className="w-5 h-5 text-muted-foreground" />
@@ -431,8 +431,8 @@ export default function DashboardLayout({
               <button
                 onClick={() => setLocation("/")}
                 className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground/80 transition-colors"
-                title="ホームに戻る"
-                aria-label="ホームに戻る"
+                title={t("ホームに戻る")}
+                aria-label={t("ホームに戻る")}
               >
                 <Home className="w-4 h-4" />
               </button>
@@ -451,7 +451,7 @@ export default function DashboardLayout({
       {isMobile && (
         <nav
           className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-md border-t border-border pb-[env(safe-area-inset-bottom)]"
-          aria-label="メインメニュー"
+          aria-label={t("メインメニュー")}
         >
           <div className="grid grid-cols-5">
             {[
@@ -483,7 +483,7 @@ export default function DashboardLayout({
             {/* 5つ目：その他すべての画面へ（フルメニューを開く） */}
             <button
               onClick={() => setMobileSidebarOpen(true)}
-              aria-label="メニューをすべて表示"
+              aria-label={t("メニューをすべて表示")}
               className="flex flex-col items-center justify-center gap-0.5 min-h-[56px] py-1.5 text-muted-foreground transition-colors"
             >
               <Menu className="w-5 h-5" />

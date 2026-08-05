@@ -28,7 +28,7 @@ import { useEffect, useState, useRef } from 'react';
 
 export default function ThreadsConnect() {
   const { isAuthenticated, loading } = useAuth();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [, setLocation] = useLocation();
   const [oauthCode, setOauthCode] = useState<string | null>(null);
   const callbackProcessed = useRef(false);
@@ -44,9 +44,9 @@ export default function ThreadsConnect() {
     
     if (error) {
       if (error === 'access_denied') {
-        toast.error('Threadsの認証がキャンセルされました');
+        toast.error(t("Threadsの認証がキャンセルされました"));
       } else {
-        toast.error(`認証エラー: ${error}`);
+        toast.error(`${t('認証エラー')}: ${error}`);
       }
       window.history.replaceState({}, '', window.location.pathname);
       return;
@@ -114,10 +114,10 @@ export default function ThreadsConnect() {
         if (userIntentRef.current === 'add-different') {
           setShowSameAccountGuide(true);
         } else {
-          toast.success('Threadsとの接続をやり直しました（有効期限を更新）');
+          toast.success(t("Threadsとの接続をやり直しました（有効期限を更新）"));
         }
       } else {
-        toast.success('Threadsアカウントを連携しました');
+        toast.success(t("Threadsアカウントを連携しました"));
       }
       userIntentRef.current = null;
       refetch();
@@ -127,13 +127,13 @@ export default function ThreadsConnect() {
       console.error('[Threads OAuth] Callback error:', error);
       callbackProcessed.current = false;
       userIntentRef.current = null;
-      toast.error(`連携エラー: ${error.message}`);
+      toast.error(`${t('連携エラー')}: ${error.message}`);
     },
   });
 
   const disconnectAccount = trpc.threads.disconnect.useMutation({
     onSuccess: () => {
-      toast.success('アカウントの連携を解除しました');
+      toast.success(t("アカウントの連携を解除しました"));
       refetch();
     },
     onError: (error) => {
@@ -143,7 +143,7 @@ export default function ThreadsConnect() {
 
   const syncProfile = trpc.threads.syncProfile.useMutation({
     onSuccess: () => {
-      toast.success('プロフィールを同期しました');
+      toast.success(t("プロフィールを同期しました"));
       refetch();
     },
     onError: (error) => {
@@ -177,7 +177,7 @@ export default function ThreadsConnect() {
   });
   const setDefaultProject = trpc.threads.setDefaultProject.useMutation({
     onSuccess: () => {
-      toast.success('このアカウントの自動投稿の店舗を設定しました');
+      toast.success(t("このアカウントの自動投稿の店舗を設定しました"));
       refetch();
     },
     onError: (error) => {
@@ -192,7 +192,7 @@ export default function ThreadsConnect() {
   const startOAuth = (mode: 'reconnect' | 'switch') => {
     const url = mode === 'switch' ? authUrlForceData?.authUrl : authUrlData?.authUrl;
     if (!url) {
-      toast.error('認証URLを取得できませんでした');
+      toast.error(t("認証URLを取得できませんでした"));
       return;
     }
     userIntentRef.current = mode === 'switch' ? 'add-different' : 'reconnect';
@@ -235,11 +235,11 @@ export default function ThreadsConnect() {
           <div className="animate-spin rounded-full h-10 w-10 border-2 border-emerald-500 border-t-transparent mx-auto mb-4"></div>
           {isProcessingCallback ? (
             <>
-              <p className="text-foreground/80 text-lg font-medium">認証情報を確認中...</p>
-              <p className="text-muted-foreground text-sm mt-2">しばらくお待ちください</p>
+              <p className="text-foreground/80 text-lg font-medium">{t("認証情報を確認中...")}</p>
+              <p className="text-muted-foreground text-sm mt-2">{t("しばらくお待ちください")}</p>
             </>
           ) : (
-            <p className="text-muted-foreground text-sm">読み込み中...</p>
+            <p className="text-muted-foreground text-sm">{t("読み込み中...")}</p>
           )}
         </div>
       </div>
@@ -251,8 +251,8 @@ export default function ThreadsConnect() {
       <div className="flex items-center justify-center py-32">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-2 border-emerald-500 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-foreground/80 text-lg font-medium">アカウントを連携中...</p>
-          <p className="text-muted-foreground text-sm mt-2">Threadsとの接続を確立しています</p>
+          <p className="text-foreground/80 text-lg font-medium">{t("アカウントを連携中...")}</p>
+          <p className="text-muted-foreground text-sm mt-2">{t("Threadsとの接続を確立しています")}</p>
         </div>
       </div>
     );
@@ -333,9 +333,9 @@ export default function ThreadsConnect() {
               <Link2 className="w-5 h-5 text-emerald-600" />
             </div>
             <div>
-              <p className="text-foreground font-medium">連携アカウント数</p>
+              <p className="text-foreground font-medium">{t("連携アカウント数")}</p>
               <p className="text-muted-foreground text-sm">
-                {accounts?.length || 0} / {maxAccounts === -1 ? '無制限' : maxAccounts}
+                {accounts?.length || 0} / {maxAccounts === -1 ? t('無制限') : maxAccounts}
               </p>
             </div>
           </div>
@@ -344,7 +344,7 @@ export default function ThreadsConnect() {
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
               onClick={() => setLocation('/pricing')}
             >
-              プランをアップグレード
+              {t("プランをアップグレード")}
             </Button>
           )}
         </div>
@@ -360,7 +360,7 @@ export default function ThreadsConnect() {
                 {account.profilePictureUrl ? (
                   <img
                     src={account.profilePictureUrl}
-                    alt={`${account.threadsUsername || 'ユーザー'}のプロフィール画像`}
+                    alt={`${account.threadsUsername || 'user'} ${t('のプロフィール画像')}`}
                     className="w-14 h-14 rounded-full object-cover border-2 border-border/50 shrink-0"
                   />
                 ) : (
@@ -381,10 +381,10 @@ export default function ThreadsConnect() {
                   className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
                   onClick={() => refreshToken.mutate({ accountId: account.id })}
                   disabled={refreshToken.isPending}
-                  title="同じアカウントのまま、接続の有効期限を60日延長します"
+                  title={t("同じアカウントのまま、接続の有効期限を60日延長します")}
                 >
                   <ShieldCheck className={`w-4 h-4 mr-1.5 ${refreshToken.isPending ? 'animate-spin' : ''}`} />
-                  接続を更新（期限を延長）
+                  {t("接続を更新（期限を延長）")}
                 </Button>
                 <Button
                   variant="outline"
@@ -392,10 +392,10 @@ export default function ThreadsConnect() {
                   className="text-blue-600 border-blue-200 hover:bg-blue-50"
                   onClick={handleReconnect}
                   disabled={handleCallback.isPending}
-                  title="Threadsのログイン画面でやり直して接続を作り直します（別のアカウントへの切り替えもこちら）"
+                  title={t("Threadsのログイン画面でやり直して接続を作り直します（別のアカウントへの切り替えもこちら）")}
                 >
                   <Link2 className="w-4 h-4 mr-1.5" />
-                  接続をやり直す
+                  {t("接続をやり直す")}
                 </Button>
                 <Button
                   variant="outline"
@@ -405,7 +405,7 @@ export default function ThreadsConnect() {
                   disabled={syncProfile.isPending}
                 >
                   <RefreshCw className={`w-4 h-4 mr-1.5 ${syncProfile.isPending ? 'animate-spin' : ''}`} />
-                  同期
+                  {t("同期")}
                 </Button>
                 <Button
                   variant="outline"
@@ -415,7 +415,7 @@ export default function ThreadsConnect() {
                   disabled={disconnectAccount.isPending}
                 >
                   <Unlink className="w-4 h-4 mr-1.5" />
-                  連携解除
+                  {t("連携解除")}
                 </Button>
               </div>
             </div>
@@ -424,7 +424,7 @@ export default function ThreadsConnect() {
             {projectList && projectList.length > 0 && (
               <div className="mb-4 p-3 rounded-lg bg-muted/30 border border-border/60">
                 <label className="block text-xs font-medium text-foreground/80 mb-1.5">
-                  このアカウントで自動投稿する店舗
+                  {t("このアカウントで自動投稿する店舗")}
                 </label>
                 <select
                   value={(account as any).defaultProjectId ?? ''}
@@ -437,7 +437,7 @@ export default function ThreadsConnect() {
                   disabled={setDefaultProject.isPending}
                   className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground text-sm"
                 >
-                  <option value="">全店舗を日替わりで投稿（指定なし）</option>
+                  <option value="">{t("全店舗を日替わりで投稿（指定なし）")}</option>
                   {projectList.map((p) => (
                     <option key={p.id} value={p.id}>
                       {(p as any).storeName || p.title}
@@ -445,7 +445,7 @@ export default function ThreadsConnect() {
                   ))}
                 </select>
                 <p className="text-[13px] text-muted-foreground mt-1">
-                  複数店舗を運用する場合、このアカウント＝この店舗、と指定すると内容の取り違えを防げます。
+                  {t("複数店舗を運用する場合、このアカウント＝この店舗、と指定すると内容の取り違えを防げます。")}
                 </p>
               </div>
             )}
@@ -469,8 +469,8 @@ export default function ThreadsConnect() {
                   <AlertCircle className={`w-4 h-4 flex-shrink-0 ${isExpired ? 'text-red-500' : 'text-yellow-600'}`} />
                   <p className={`text-sm flex-1 ${isExpired ? 'text-red-700' : 'text-yellow-700'}`}>
                     {isExpired
-                      ? 'Threadsとの接続の有効期限が切れています。自動投稿が停止しています。「接続を更新」を押すと復旧します。'
-                      : `Threadsとの接続の有効期限が残り${daysLeft}日です。期限が切れると自動投稿が停止します。早めの更新がおすすめです。`
+                      ? t('Threadsとの接続の有効期限が切れています。自動投稿が停止しています。「接続を更新」を押すと復旧します。')
+                      : `${t('Threadsとの接続の有効期限が残り')}${daysLeft}${t('日です。期限が切れると自動投稿が停止します。早めの更新がおすすめです。')}`
                     }
                   </p>
                   <Button
@@ -481,7 +481,7 @@ export default function ThreadsConnect() {
                     disabled={refreshToken.isPending}
                   >
                     <ShieldCheck className={`w-4 h-4 mr-1 ${refreshToken.isPending ? 'animate-spin' : ''}`} />
-                    接続を更新
+                    {t("接続を更新")}
                   </Button>
                 </div>
               ) : null;
@@ -492,25 +492,25 @@ export default function ThreadsConnect() {
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-emerald-500" />
                 <span className="text-muted-foreground">
-                  フォロワー: <span className="text-foreground font-medium">{account.followersCount?.toLocaleString() || 0}</span>
+                  {t("フォロワー")}: <span className="text-foreground font-medium">{account.followersCount?.toLocaleString() || 0}</span>
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-teal-500" />
                 <span className="text-muted-foreground">
-                  フォロー中: <span className="text-foreground font-medium">{account.followingCount?.toLocaleString() || 0}</span>
+                  {t("フォロー中")}: <span className="text-foreground font-medium">{account.followingCount?.toLocaleString() || 0}</span>
                 </span>
               </div>
               {account.tokenExpiresAt && (
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground/60 text-xs">
-                    接続の有効期限: {new Date(account.tokenExpiresAt).toLocaleDateString('ja-JP')}
+                    {t("接続の有効期限")}: {new Date(account.tokenExpiresAt).toLocaleDateString(lang === 'en' ? 'en-US' : 'ja-JP')}
                   </span>
                 </div>
               )}
               {account.lastSyncedAt && (
                 <div className="w-full sm:w-auto sm:ml-auto text-muted-foreground/60 text-xs">
-                  最終同期: {new Date(account.lastSyncedAt).toLocaleString('ja-JP')}
+                  {t("最終同期")}: {new Date(account.lastSyncedAt).toLocaleString(lang === 'en' ? 'en-US' : 'ja-JP')}
                 </div>
               )}
             </div>
@@ -618,8 +618,8 @@ export default function ThreadsConnect() {
                       type="button"
                       onClick={() => {
                         navigator.clipboard?.writeText('https://threads-studio.com/login')
-                          .then(() => toast.success('URLをコピーしました'))
-                          .catch(() => toast.error('コピーに失敗しました'));
+                          .then(() => toast.success(t("URLをコピーしました")))
+                          .catch(() => toast.error(t("コピーに失敗しました")));
                       }}
                       className="flex-shrink-0 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium px-2 py-1"
                     >
@@ -690,7 +690,7 @@ export default function ThreadsConnect() {
           )}
           {!canAddMore && (
             <p className="text-center text-muted-foreground/60 text-sm">
-              ※ 新しいアカウントの追加は上限に達していますが、既存アカウントの接続更新・やり直しは可能です
+              {t("※ 新しいアカウントの追加は上限に達していますが、既存アカウントの接続更新・やり直しは可能です")}
             </p>
           )}
         </div>
@@ -699,13 +699,13 @@ export default function ThreadsConnect() {
       <AlertDialog open={disconnectTargetId !== null} onOpenChange={() => setDisconnectTargetId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>アカウント連携を解除しますか？</AlertDialogTitle>
+            <AlertDialogTitle>{t("アカウント連携を解除しますか？")}</AlertDialogTitle>
             <AlertDialogDescription>
-              このアカウントの連携を解除すると、予約投稿や自動投稿が停止します。再度連携することで復旧できます。
+              {t("このアカウントの連携を解除すると、予約投稿や自動投稿が停止します。再度連携することで復旧できます。")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogCancel>{t("キャンセル")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 if (disconnectTargetId) {
@@ -715,7 +715,7 @@ export default function ThreadsConnect() {
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              連携を解除する
+              {t("連携を解除する")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -729,19 +729,19 @@ export default function ThreadsConnect() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
               <AlertCircle className="w-5 h-5 text-amber-500" />
-              同じアカウントが連携されました
+              {t("同じアカウントが連携されました")}
             </DialogTitle>
             <DialogDescription className="pt-2 text-foreground/80">
-              認証画面で同じアカウントを選んだため、既存の接続の有効期限が更新されました。
+              {t("認証画面で同じアカウントを選んだため、既存の接続の有効期限が更新されました。")}
               <br /><br />
-              <strong>別のアカウントを追加</strong>するには、もう一度
-              「別のThreadsアカウントを連携」をクリックして、Threadsのログイン画面で
-              <strong>「別のアカウントでログイン」</strong>を選んでください。
+              <strong>{t("別のアカウントを追加")}</strong>{t("するには、もう一度")}
+              {t("「別のThreadsアカウントを連携」をクリックして、Threadsのログイン画面で")}
+              <strong>{t("「別のアカウントでログイン」")}</strong>{t("を選んでください。")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button onClick={() => setShowSameAccountGuide(false)}>
-              わかりました
+              {t("わかりました")}
             </Button>
           </DialogFooter>
         </DialogContent>
