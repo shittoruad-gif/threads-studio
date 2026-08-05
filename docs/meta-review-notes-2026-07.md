@@ -118,3 +118,38 @@ Steps to test:
   - publish: 権限チェック通過＋実投稿の公開実績あり
 - 審査用アカウント(749)は渋谷区デモを一掃し、実店舗（玉島）相当の安全な
   プロジェクト1本のみに整理。ログインは 2026-07-21 にAPI経由で success を確認。
+
+## 2026-08-05: 4回目の却下と、その後の修正
+
+### 却下（submission 1382263747144662）
+理由は前回と同じ定型文だが、指摘の中で**唯一ずっと未対応だったのが「アプリUIの言語として英語を使用する」**。
+英語キャプションを付けても画面自体が日本語だったため、審査官が操作内容を読めず
+「E2E体験が実証されていない」と判定され続けていたと判断。
+
+### 修正内容（すべて本番反映済み）
+1. **審査導線の英語UI化**（最重要）
+   - i18nの器（LangProvider/dict）はあったが、画面側で t() が未適用だった
+     （Dashboard 0箇所 / AIGenerate 0箇所 …）。そのため ?lang=en を付けても日本語のままだった。
+   - Dashboard / AIGenerate / ThreadsConnect / CommentManager / PostAnalytics /
+     DashboardLayout / PageBreadcrumb / ProjectLinksManager / PWAInstallBanner に t() を適用。
+   - dict.ts を約450語まで拡充。審査導線の未翻訳は0件（検証スクリプトで確認）。
+   - 数値・時刻・日付も英語ロケール追従（1.9万→18.9K / 9時→9:00 / 8月1日→Aug 1）。
+2. **ブラウザ言語での自動判定**（これが無いと審査官に英語UIが届かない）
+   - 審査官は ?lang=en を付けずにログインするため、URLパラメータ頼みでは意味がなかった。
+   - navigator.language / languages を見て、日本語以外なら英語UIで初期表示する。
+   - 優先順位: ?lang= > localStorage(設定画面での選択) > ブラウザ言語 > ja
+3. **Metaアプリ設定のURLを正規ドメインへ**
+   - プライバシーポリシー / 利用規約 / データ削除URL が Coolifyの仮ドメイン
+     （g89zg5s4u6xr08gp2b0dptcn.163.44.103.9.sslip.io）のままだった。到達性はあったが、
+     サイトURL(threads-studio.com)と不整合で不審に見えるため threads-studio.com/... に統一。
+
+### 点検して問題なかったもの
+- Threads側コールバック（リダイレクト/アンインストール/削除）は元から threads-studio.com で正しい
+- 審査用アカウント meta-review@threads-studio.com / ThreadsReview2026! でログイン成功
+- 審査用アカウントのThreadsトークンは 2026-09-21 まで有効（審査20日をカバー）
+- アプリアイコン・カテゴリ・データ使用状況の確認 すべて設定済み
+- threads_basic の「公開待ち」はアクション不要（承認済み・API 11.2k回成功中）
+
+### 次回録画の必須条件
+- **?lang=en を付けたURLで撮る**（英語ブラウザなら自動英語だが、確実性のため付ける）
+- 審査用アカウント(749)でログインするところから撮る
