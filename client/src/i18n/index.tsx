@@ -26,12 +26,20 @@ const STORAGE_KEY = "appLang";
 
 function getInitialLang(): Lang {
   try {
-    // URLに ?lang=en があれば最優先（審査用リンクをそのまま英語で開ける）
+    // ① URLに ?lang=en があれば最優先（審査用リンクをそのまま英語で開ける）
     const params = new URLSearchParams(window.location.search);
     const q = params.get("lang");
     if (q === "en" || q === "ja") return q;
+    // ② ユーザーが設定画面で選んだ言語
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === "en" || stored === "ja") return stored;
+    // ③ ブラウザの言語設定に従う。
+    //    日本語以外のブラウザ（Meta審査担当者の環境を含む）では英語UIで表示する。
+    //    日本のユーザーは navigator.language が ja-JP のため、これまで通り日本語のまま。
+    const nav = [navigator.language, ...(navigator.languages || [])].filter(Boolean);
+    if (nav.length > 0 && !nav.some((l) => String(l).toLowerCase().startsWith("ja"))) {
+      return "en";
+    }
   } catch {
     // ignore
   }
