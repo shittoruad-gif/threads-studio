@@ -295,6 +295,20 @@ export default function ThreadsConnect() {
           <strong>{t('連携の前に：')}</strong> {t('連携したいアカウントでThreads（Instagram）にログインできる状態にしておいてください。')}
         </p>
       </div>
+      {/* 手順書への導線。担当者が資料を送らなくても、利用者が自分で開けるようにする。 */}
+      <div className="mb-4 text-sm">
+        <a
+          href="/threads-setup-guide"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-800 dark:text-emerald-400"
+        >
+          {t('うまくいかない方へ：設定手順を最初から見る')}
+        </a>
+        <span className="text-muted-foreground ml-1">
+          {t('（Facebookアカウントの作成から順に説明しています）')}
+        </span>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
         {[
           {

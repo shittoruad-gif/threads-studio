@@ -59,7 +59,13 @@ export default function AgencyClients() {
 
   const copyIssued = async () => {
     if (!issued) return;
-    const text = `Threads Studio ログイン情報\nURL: ${window.location.origin}/login\nメールアドレス: ${issued.email}\nパスワード: ${issued.password}`;
+    const text =
+      `Threads Studio ログイン情報\n` +
+      `URL: ${window.location.origin}/login\n` +
+      `メールアドレス: ${issued.email}\n` +
+      `パスワード: ${issued.password}\n\n` +
+      `■ Threads連携の設定手順（Facebookアカウントの作成から説明しています）\n` +
+      `${window.location.origin}/threads-setup-guide`;
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -124,6 +130,7 @@ export default function AgencyClients() {
             <div>URL: {window.location.origin}/login</div>
             <div>{t("メールアドレス")}: {issued.email}</div>
             <div>{t("パスワード")}: {issued.password}</div>
+            <div>{t("設定手順")}: {window.location.origin}/threads-setup-guide</div>
           </div>
           <div className="flex gap-2 mt-3">
             <Button size="sm" onClick={copyIssued} className="bg-emerald-600 hover:bg-emerald-700 text-white">

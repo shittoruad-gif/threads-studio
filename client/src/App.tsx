@@ -37,6 +37,7 @@ const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const Referral = lazy(() => import("./pages/Referral"));
 const AgencyClients = lazy(() => import("./pages/AgencyClients"));
+const ThreadsSetupGuide = lazy(() => import("./pages/ThreadsSetupGuide"));
 const CommentManager = lazy(() => import("./pages/CommentManager"));
 const PostAnalytics = lazy(() => import("./pages/PostAnalytics"));
 const AdminPresets = lazy(() => import("./pages/AdminPresets"));
@@ -114,6 +115,7 @@ function Router() {
       <Route path="/verify-email" component={VerifyEmail} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/guide" component={Guide} />
+      <Route path="/threads-setup-guide" component={ThreadsSetupGuide} />
       <Route path="/try" component={TryGenerate} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />

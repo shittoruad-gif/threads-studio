@@ -575,13 +575,24 @@ export default function Settings() {
             <KeyRound className="w-5 h-5 text-indigo-600" />
             <h2 className="text-lg font-semibold text-foreground">自分のMetaアプリで連携する（上級者向け）</h2>
           </div>
-          <p className="text-xs text-muted-foreground mb-4">
+          <p className="text-xs text-muted-foreground mb-3">
             通常はこの設定は不要です。ご自身でMetaのアプリを作って登録すると、その資格情報でThreadsに接続します。
             {ownApp?.configured && (
               <span className="ml-1 font-medium text-indigo-700">
                 現在このアカウントは自分のアプリ（ID: {ownApp.appId}）で連携する設定です。
               </span>
             )}
+          </p>
+          <p className="text-xs mb-4">
+            <a
+              href="/threads-setup-guide"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-800"
+            >
+              Metaアプリの作り方（画像つきの手順書）を開く
+            </a>
+            <span className="text-muted-foreground ml-1">— Facebookアカウントの作成から順に説明しています</span>
           </p>
 
           {!byoaOpen && !ownApp?.configured ? (
