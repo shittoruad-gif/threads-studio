@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Settings as SettingsIcon, Sparkles, Bell, User, CreditCard, AlertTriangle, Save, Loader2, Moon, Sun, Palette, LogOut } from "lucide-react";
+import { Settings as SettingsIcon, Sparkles, Bell, User, CreditCard, AlertTriangle, Save, Loader2, Moon, Sun, Palette, LogOut, KeyRound, Copy, Check } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +32,39 @@ export default function Settings() {
   const { isLarge, setFontScale } = useFontScale();
   const { lang, setLang } = useLang();
   const utils = trpc.useUtils();
+
+  // ── BYOA（自分のMetaアプリで連携）─────────────────────────────
+  const { data: ownApp } = trpc.threads.getOwnApp.useQuery(undefined, { enabled: !!user });
+  const [byoaOpen, setByoaOpen] = useState(false);
+  const [byoaAppId, setByoaAppId] = useState("");
+  const [byoaSecret, setByoaSecret] = useState("");
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const setOwnApp = trpc.threads.setOwnApp.useMutation({
+    onSuccess: () => {
+      toast.success("自分のMetaアプリを登録しました。次回のThreads連携から使われます");
+      setByoaSecret("");
+      utils.threads.getOwnApp.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "登録に失敗しました"),
+  });
+  const clearOwnApp = trpc.threads.clearOwnApp.useMutation({
+    onSuccess: () => {
+      toast.success("自分のMetaアプリの登録を解除しました");
+      setByoaAppId("");
+      setByoaSecret("");
+      utils.threads.getOwnApp.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "解除に失敗しました"),
+  });
+  const copyText = async (key: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 1500);
+    } catch {
+      toast.error("コピーできませんでした。長押しで選択してコピーしてください");
+    }
+  };
 
   // Auto-post settings from API
   const { data: autoPostSettings, isLoading: settingsLoading } = trpc.autoPost.getSettings.useQuery(undefined, {
@@ -534,6 +567,105 @@ export default function Settings() {
               </button>
             </div>
           </div>
+        </Card>
+
+        {/* ── 自分のMetaアプリで連携（BYOA）── */}
+        <Card className="p-6">
+          <div className="flex items-center gap-2 mb-2">
+            <KeyRound className="w-5 h-5 text-indigo-600" />
+            <h2 className="text-lg font-semibold text-foreground">自分のMetaアプリで連携する（上級者向け）</h2>
+          </div>
+          <p className="text-xs text-muted-foreground mb-4">
+            通常はこの設定は不要です。ご自身でMetaのアプリを作って登録すると、その資格情報でThreadsに接続します。
+            {ownApp?.configured && (
+              <span className="ml-1 font-medium text-indigo-700">
+                現在このアカウントは自分のアプリ（ID: {ownApp.appId}）で連携する設定です。
+              </span>
+            )}
+          </p>
+
+          {!byoaOpen && !ownApp?.configured ? (
+            <Button variant="outline" onClick={() => setByoaOpen(true)}>
+              設定する
+            </Button>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground space-y-2">
+                <p className="font-medium text-foreground">Metaのアプリ作成時に、次の3つのURLを登録してください</p>
+                {[
+                  { key: "redirect", label: "リダイレクトURL（コールバック）", value: ownApp?.redirectUri ?? "" },
+                  { key: "deauth", label: "アンインストールのコールバックURL", value: ownApp?.deauthorizeUri ?? "" },
+                  { key: "delete", label: "データ削除のコールバックURL", value: ownApp?.deleteUri ?? "" },
+                ].map((row) => (
+                  <div key={row.key} className="flex items-center gap-2">
+                    <span className="w-56 shrink-0">{row.label}</span>
+                    <code className="flex-1 min-w-0 truncate rounded bg-background px-2 py-1 text-[11px]">{row.value}</code>
+                    <button
+                      type="button"
+                      onClick={() => copyText(row.key, row.value)}
+                      className="shrink-0 rounded p-1 hover:bg-background"
+                      aria-label="コピー"
+                    >
+                      {copiedKey === row.key
+                        ? <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label className="text-sm">ThreadsアプリID</Label>
+                  <Input
+                    value={byoaAppId}
+                    onChange={(e) => setByoaAppId(e.target.value)}
+                    placeholder={ownApp?.appId ?? "例: 1234567890123456"}
+                    inputMode="numeric"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">Threadsアプリシークレット</Label>
+                  <Input
+                    type="password"
+                    value={byoaSecret}
+                    onChange={(e) => setByoaSecret(e.target.value)}
+                    placeholder={ownApp?.configured ? "登録済み（変更する場合のみ入力）" : "Meta画面の「表示」で確認できます"}
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                シークレットは暗号化して保存し、画面には二度と表示されません。
+              </p>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => setOwnApp.mutate({ appId: byoaAppId.trim(), appSecret: byoaSecret.trim() })}
+                  disabled={setOwnApp.isPending || !byoaAppId.trim() || !byoaSecret.trim()}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  {setOwnApp.isPending ? "保存中..." : "保存する"}
+                </Button>
+                {ownApp?.configured && (
+                  <Button
+                    variant="outline"
+                    onClick={() => clearOwnApp.mutate()}
+                    disabled={clearOwnApp.isPending}
+                    className="border-red-300 text-red-600 hover:bg-red-50"
+                  >
+                    {clearOwnApp.isPending ? "解除中..." : "登録を解除して通常の連携に戻す"}
+                  </Button>
+                )}
+                {!ownApp?.configured && (
+                  <Button variant="ghost" onClick={() => setByoaOpen(false)}>キャンセル</Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                保存したら「Threads連携」で接続をやり直すと、この設定が反映されます。
+              </p>
+            </div>
+          )}
         </Card>
 
         {/* ── プラン ── */}

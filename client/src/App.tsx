@@ -36,6 +36,7 @@ const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const Referral = lazy(() => import("./pages/Referral"));
+const AgencyClients = lazy(() => import("./pages/AgencyClients"));
 const CommentManager = lazy(() => import("./pages/CommentManager"));
 const PostAnalytics = lazy(() => import("./pages/PostAnalytics"));
 const AdminPresets = lazy(() => import("./pages/AdminPresets"));
@@ -95,6 +96,7 @@ function DashboardRoutes() {
         <Route path="/admin/hit-posts" component={AdminHitPosts} />
         <Route path="/ai-templates" component={AITemplates} />
         <Route path="/referral" component={Referral} />
+        <Route path="/agency-clients" component={AgencyClients} />
         <Route path="/settings" component={Settings} />
       </Switch>
     </DashboardLayout>
@@ -184,6 +186,9 @@ function Router() {
         {() => <DashboardRoutes />}
       </Route>
       <Route path="/referral">
+        {() => <DashboardRoutes />}
+      </Route>
+      <Route path="/agency-clients">
         {() => <DashboardRoutes />}
       </Route>
       <Route path="/settings">

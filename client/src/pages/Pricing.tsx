@@ -192,7 +192,8 @@ export default function Pricing() {
   };
 
   // キャンペーンプランはカードとして直接表示しない（コード適用時に通常カードの価格を切替）
-  const plans = Object.values(PLANS).filter((p) => !p.isCampaign);
+  // agency_client（代理店が発行するクライアント枠）は購入対象ではないので料金表に出さない
+  const plans = Object.values(PLANS).filter((p) => !p.isCampaign && p.id !== 'agency_client');
 
   return (
     <div className="min-h-screen bg-muted/50">

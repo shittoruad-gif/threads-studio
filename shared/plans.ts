@@ -209,7 +209,31 @@ export const PLANS: Record<string, PlanConfig> = {
       hasApiAccess: true,
     },
   },
+
+  // ═══════ 代理店が発行したクライアント用アカウント ═══════
+  // 代理店プラン(¥55,000)に内包されるため、クライアント側の課金は発生しない
+  // （priceMonthly: 0 = 料金ページには出さない。決済リンクも持たない）。
+  // 代理店が管理画面から発行し、クライアントは自分のIDでログインして自店舗を運用する。
+  // 機能はプロプラン相当（1アカウント・自分の店舗を回すのに必要十分な範囲）。
+  agency_client: {
+    id: 'agency_client',
+    name: '代理店クライアント',
+    description: '代理店から発行されたアカウント（料金は代理店の契約に含まれます）',
+    priceMonthly: 0,
+    features: {
+      maxProjects: 3,
+      maxThreadsAccounts: 1,
+      maxAutoPostsPerDay: 3,
+      maxScheduledPosts: -1,
+      maxAiGenerations: -1,
+      hasPrioritySupport: false,
+      hasApiAccess: false,
+    },
+  },
 };
+
+/** 代理店1契約あたりに発行できるクライアントIDの上限 */
+export const AGENCY_CLIENT_LIMIT = 30;
 
 export const PLAN_IDS = Object.keys(PLANS) as Array<keyof typeof PLANS>;
 

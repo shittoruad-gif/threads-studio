@@ -21,6 +21,27 @@ export interface ThreadsAuthConfig {
   scope?: string[];
 }
 
+/**
+ * Threadsアプリの資格情報（App ID / Secret）。
+ *
+ * BYOA（Bring Your Own App）方式：ユーザーが自分で作成したMetaアプリの
+ * App ID/Secret を渡すと、その資格情報で認証・トークン交換を行う。
+ * 未指定（null/undefined）のときは弊社アプリの ENV.threadsAppId / Secret を使う。
+ *
+ * これにより、弊社アプリがMeta審査未承認でも、ユーザーは自分のアプリで
+ * 自分のThreadsアカウントに対して全権限（審査不要）を使える。
+ */
+export interface ThreadsAppCreds {
+  appId: string;
+  appSecret: string;
+}
+
+/** creds が無ければ弊社アプリの ENV を返す（既存挙動と互換）。 */
+function resolveCreds(creds?: ThreadsAppCreds | null): ThreadsAppCreds {
+  if (creds && creds.appId && creds.appSecret) return creds;
+  return { appId: ENV.threadsAppId, appSecret: ENV.threadsAppSecret };
+}
+
 export interface ThreadsTokenResponse {
   access_token: string;
   token_type: string;
@@ -48,7 +69,7 @@ export interface ThreadsAuthUrlOptions {
 /**
  * Generate OAuth authorization URL
  */
-export function getThreadsAuthUrl(config: ThreadsAuthConfig, options: ThreadsAuthUrlOptions = {}): string {
+export function getThreadsAuthUrl(config: ThreadsAuthConfig, options: ThreadsAuthUrlOptions = {}, creds?: ThreadsAppCreds | null): string {
   const defaultScopes = [
     "threads_basic",
     "threads_content_publish",
@@ -72,7 +93,7 @@ export function getThreadsAuthUrl(config: ThreadsAuthConfig, options: ThreadsAut
   const scopes = config.scope || defaultScopes;
 
   const params = new URLSearchParams({
-    client_id: ENV.threadsAppId,
+    client_id: resolveCreds(creds).appId,
     redirect_uri: config.redirectUri,
     scope: scopes.join(","),
     response_type: "code",
@@ -96,11 +117,13 @@ export function getThreadsAuthUrl(config: ThreadsAuthConfig, options: ThreadsAut
  */
 export async function exchangeCodeForToken(
   code: string,
-  redirectUri: string
+  redirectUri: string,
+  creds?: ThreadsAppCreds | null
 ): Promise<ThreadsTokenResponse> {
+  const c = resolveCreds(creds);
   const params = new URLSearchParams({
-    client_id: ENV.threadsAppId,
-    client_secret: ENV.threadsAppSecret,
+    client_id: c.appId,
+    client_secret: c.appSecret,
     grant_type: "authorization_code",
     redirect_uri: redirectUri,
     code,
@@ -142,11 +165,12 @@ export async function exchangeCodeForToken(
  * Exchange short-lived token for long-lived token (60 days)
  */
 export async function exchangeForLongLivedToken(
-  shortLivedToken: string
+  shortLivedToken: string,
+  creds?: ThreadsAppCreds | null
 ): Promise<ThreadsLongLivedTokenResponse> {
   const params = new URLSearchParams({
     grant_type: "th_exchange_token",
-    client_secret: ENV.threadsAppSecret,
+    client_secret: resolveCreds(creds).appSecret,
     access_token: shortLivedToken,
   });
 

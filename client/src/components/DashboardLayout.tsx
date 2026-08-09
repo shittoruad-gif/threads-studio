@@ -72,6 +72,10 @@ const accountMenuItems: MenuItem[] = [
   { icon: HelpCircle, label: "よくある質問", path: "/faq" },
 ];
 
+const agencyMenuItems: MenuItem[] = [
+  { icon: Users, label: "クライアント管理", path: "/agency-clients" },
+];
+
 const adminMenuItems: MenuItem[] = [
   { icon: Users, label: "ユーザー管理", path: "/admin/users", adminOnly: true },
   { icon: CreditCard, label: "クーポン管理", path: "/admin/coupons", adminOnly: true },
@@ -114,6 +118,10 @@ export default function DashboardLayout({
     undefined,
     { enabled: !!user }
   );
+
+  // 代理店プラン契約者だけに「クライアント管理」を出す
+  const { data: agencyInfo } = trpc.agency.listClients.useQuery(undefined, { enabled: !!user });
+  const isAgency = !!agencyInfo?.isAgency;
 
   // Compute badge values
   const dynamicBadges = useMemo(() => {
@@ -313,6 +321,7 @@ export default function DashboardLayout({
         {renderMenuSection("メイン", mainMenuItems, collapsed)}
         {renderMenuSection("コンテンツ", contentMenuItems, collapsed)}
         {renderMenuSection("アカウント", accountMenuItems, collapsed)}
+        {isAgency && renderMenuSection("代理店", agencyMenuItems, collapsed)}
         {user?.role === "admin" &&
           renderMenuSection("管理者", adminMenuItems, collapsed)}
       </div>

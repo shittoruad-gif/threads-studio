@@ -326,6 +326,21 @@ async function startServer() {
           if (existing) {
             await db.updateSubscription(existing.id, { status: 'canceled' });
           }
+          // ★代理店プランの解約は、その代理店が発行したクライアントIDも連鎖停止する。
+          //   （代理店契約に内包されている利用枠なので、契約が切れたら使えなくする）
+          if ((existing?.planId ?? matchedPlanId) === 'agency') {
+            try {
+              const clients = await db.listAgencyClients(user.id);
+              for (const c of clients) {
+                await db.setAgencyClientActive(c.id, false);
+              }
+              if (clients.length > 0) {
+                console.log(`[Univapay Webhook] 代理店解約→クライアント${clients.length}件を停止: agency=${user.id}`);
+              }
+            } catch (e) {
+              console.error('[Univapay Webhook] agency client suspend error:', e);
+            }
+          }
           // キャンペーンプランの3回課金完了による自動終了か、通常解約かを判定。
           // どちらも canceled=フリーに戻る挙動だが、キャンペーン終了時は
           // 「継続するには通常プラン登録を」と案内メールを送る（Q2=A方針）。

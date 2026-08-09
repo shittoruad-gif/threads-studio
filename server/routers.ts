@@ -1596,6 +1596,43 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
 
   // ============ Threads Account Management ============
   threads: router({
+    // ── BYOA（自分のMetaアプリで連携する）設定 ─────────────────────
+    // 弊社アプリがMeta審査未承認でも、利用者が自分で作ったアプリなら
+    // 自分のThreadsアカウントに対して審査なしで全権限を使える。
+    getOwnApp: protectedProcedure.query(async ({ ctx }) => {
+      const user = await db.getUserById(ctx.user.id);
+      const origin = ENV.threadsRedirectBaseUrl || 'https://threads-studio.com';
+      return {
+        // Secretは返さない（設定済みかどうかだけ返す）
+        appId: user?.threadsAppId ?? null,
+        configured: !!(user?.threadsAppId && user?.threadsAppSecretEnc),
+        // Meta側に登録してもらう必要がある値（画面にそのまま出す）
+        redirectUri: `${origin}/threads-connect`,
+        deauthorizeUri: `${origin}/api/threads/deauthorize`,
+        deleteUri: `${origin}/api/threads/data-deletion`,
+      };
+    }),
+
+    setOwnApp: protectedProcedure
+      .input(z.object({
+        appId: z.string().trim().regex(/^\d{10,20}$/, 'アプリIDは10〜20桁の数字です'),
+        appSecret: z.string().trim().min(16, 'アプリシークレットが短すぎます').max(200),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.setUserThreadsAppCreds(ctx.user.id, {
+          appId: input.appId,
+          appSecret: input.appSecret,
+        });
+        console.log(`[BYOA] user=${ctx.user.id} set own Threads app: ${input.appId}`);
+        return { success: true };
+      }),
+
+    clearOwnApp: protectedProcedure.mutation(async ({ ctx }) => {
+      await db.setUserThreadsAppCreds(ctx.user.id, null);
+      console.log(`[BYOA] user=${ctx.user.id} cleared own Threads app`);
+      return { success: true };
+    }),
+
     // List connected accounts
     list: protectedProcedure.query(async ({ ctx }) => {
       const accounts = await db.getThreadsAccountsByUserId(ctx.user.id);
@@ -1630,12 +1667,16 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         // Use frontend route /threads-connect directly as redirect_uri
         // This avoids dependency on /api/threads/callback server route which may not work in production
         const redirectUri = `${origin}/threads-connect`;
-        console.log('[Threads OAuth] Generated redirect_uri:', redirectUri, 'forceReauth:', input?.forceReauth);
+        // BYOA: 自分のMetaアプリを登録していればそちらの資格情報で認証する
+        const byoa = await db.getUserThreadsAppCreds(ctx.user.id);
+        console.log('[Threads OAuth] Generated redirect_uri:', redirectUri, 'forceReauth:', input?.forceReauth, 'byoa:', !!byoa);
         return {
           authUrl: getThreadsAuthUrl(
             { redirectUri },
             { forceReauth: input?.forceReauth },
+            byoa,
           ),
+          usingOwnApp: !!byoa,
         };
       }),
 
@@ -1655,10 +1696,12 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           || `${ctx.req.headers['x-forwarded-proto'] || ctx.req.protocol}://${ctx.req.headers['x-forwarded-host'] || ctx.req.get('host')}`;
         const redirectUri = `${origin}/threads-connect`;
         console.log('[Threads OAuth] Token exchange redirect_uri:', redirectUri);
-        const shortLivedToken = await exchangeCodeForToken(input.code, redirectUri);
-        
+        // BYOA: 認証URL生成時と同じ資格情報でトークン交換する（食い違うと invalid_client になる）
+        const byoaCreds = await db.getUserThreadsAppCreds(ctx.user.id);
+        const shortLivedToken = await exchangeCodeForToken(input.code, redirectUri, byoaCreds);
+
         // Exchange for long-lived token (60 days)
-        const longLivedToken = await exchangeForLongLivedToken(shortLivedToken.access_token);
+        const longLivedToken = await exchangeForLongLivedToken(shortLivedToken.access_token, byoaCreds);
         
         // Get user profile
         const profile = await getThreadsProfile(longLivedToken.access_token);
@@ -2301,6 +2344,104 @@ ${input.commentText}
   }),
 
   // ============ Monitor Feedback ============
+  // ============ 代理店プラン：クライアントID発行 ============
+  // 代理店(¥55,000/月)が契約すると、自社のクライアントごとにログインIDを発行できる。
+  // 発行されたIDは代理店契約に内包されるため、クライアント側の決済は発生しない。
+  agency: router({
+    /** 代理店本人かどうか＋発行済みクライアント一覧 */
+    listClients: protectedProcedure.query(async ({ ctx }) => {
+      const sub = await db.getSubscriptionByUserId(ctx.user.id);
+      const planId = resolveEffectivePlanId(sub?.planId, sub?.status);
+      const isAgency = planId === 'agency';
+      if (!isAgency) return { isAgency: false as const, clients: [], limit: 0, used: 0 };
+
+      const { AGENCY_CLIENT_LIMIT } = await import('../shared/plans');
+      const clients = await db.listAgencyClients(ctx.user.id);
+      // 各クライアントの現在の有効/停止状態も返す
+      const withStatus = await Promise.all(clients.map(async (c) => {
+        const s = await db.getSubscriptionByUserId(c.id);
+        return { ...c, active: s?.status === 'active' };
+      }));
+      return {
+        isAgency: true as const,
+        clients: withStatus,
+        limit: AGENCY_CLIENT_LIMIT,
+        used: clients.length,
+      };
+    }),
+
+    /** クライアント用アカウントを発行する。パスワードは代理店が決めて本人に渡す。 */
+    createClient: protectedProcedure
+      .input(z.object({
+        email: z.string().email('メールアドレスの形式が正しくありません'),
+        password: z.string().min(10, 'パスワードは10文字以上にしてください').max(200),
+        name: z.string().max(100).optional(),
+        storeName: z.string().max(255).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const sub = await db.getSubscriptionByUserId(ctx.user.id);
+        if (resolveEffectivePlanId(sub?.planId, sub?.status) !== 'agency') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '代理店プランのご契約が必要です。' });
+        }
+        const { AGENCY_CLIENT_LIMIT } = await import('../shared/plans');
+        const used = await db.countAgencyClients(ctx.user.id);
+        if (used >= AGENCY_CLIENT_LIMIT) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `発行できるクライアントIDは${AGENCY_CLIENT_LIMIT}件までです。不要なIDを停止してからお試しください。`,
+          });
+        }
+        const email = input.email.trim().toLowerCase();
+        const existing = await db.getUserByEmail(email);
+        if (existing) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'このメールアドレスは既に登録されています。' });
+        }
+        const { hashPassword } = await import('./auth-helpers');
+        const passwordHash = await hashPassword(input.password);
+        const created = await db.createAgencyClient({
+          agencyUserId: ctx.user.id,
+          email,
+          passwordHash,
+          name: input.name?.trim() || null,
+          storeName: input.storeName?.trim() || null,
+        });
+        console.log(`[Agency] user=${ctx.user.id} issued client account: ${created.id} (${email})`);
+        return { success: true, clientId: created.id, email };
+      }),
+
+    /** クライアントの利用を停止/再開する */
+    setClientActive: protectedProcedure
+      .input(z.object({ clientUserId: z.number(), active: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const sub = await db.getSubscriptionByUserId(ctx.user.id);
+        if (resolveEffectivePlanId(sub?.planId, sub?.status) !== 'agency') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '代理店プランのご契約が必要です。' });
+        }
+        // 自分が発行したクライアント以外は操作させない
+        if (!(await db.isAgencyClientOf(ctx.user.id, input.clientUserId))) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'このアカウントは操作できません。' });
+        }
+        await db.setAgencyClientActive(input.clientUserId, input.active);
+        return { success: true };
+      }),
+
+    /** クライアントのパスワードを再設定する（本人が忘れた場合に代理店が再発行） */
+    resetClientPassword: protectedProcedure
+      .input(z.object({ clientUserId: z.number(), password: z.string().min(10).max(200) }))
+      .mutation(async ({ ctx, input }) => {
+        const sub = await db.getSubscriptionByUserId(ctx.user.id);
+        if (resolveEffectivePlanId(sub?.planId, sub?.status) !== 'agency') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '代理店プランのご契約が必要です。' });
+        }
+        if (!(await db.isAgencyClientOf(ctx.user.id, input.clientUserId))) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'このアカウントは操作できません。' });
+        }
+        const { hashPassword } = await import('./auth-helpers');
+        await db.updateUserPassword(input.clientUserId, await hashPassword(input.password));
+        return { success: true };
+      }),
+  }),
+
   monitor: router({
     // Submit feedback (monitor users only)
     submitFeedback: protectedProcedure

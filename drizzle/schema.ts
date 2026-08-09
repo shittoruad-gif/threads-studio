@@ -50,6 +50,16 @@ export const users = mysqlTable("users", {
   isMonitor: boolean("isMonitor").default(false).notNull(),
   // 適用中のキャンペーン種別（クーポンで出し分け）: 'seminar' | 'monitor' | null
   campaignTier: varchar("campaignTier", { length: 20 }),
+  // ── BYOA（Bring Your Own App）: 利用者自身のMetaアプリでThreads連携する ──
+  //   弊社アプリがMeta審査未承認でも、自分で作ったアプリなら自分のアカウントに
+  //   対して審査なしで全権限が使える。両方セットされているときだけ有効。
+  //   Secretは encryption.ts で暗号化して保存する（平文で持たない）。
+  threadsAppId: varchar("threadsAppId", { length: 64 }),
+  threadsAppSecretEnc: text("threadsAppSecretEnc"),
+  // ── 代理店プラン: クライアントへ個別IDを発行する ──
+  //   代理店が発行したクライアントアカウントには、この列に代理店のuserIdが入る。
+  //   代理店本人は null。代理店が解約されると配下クライアントも利用停止になる。
+  parentAgencyUserId: int("parentAgencyUserId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

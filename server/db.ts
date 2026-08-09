@@ -199,6 +199,38 @@ export async function getUserById(userId: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+/**
+ * BYOA: このユーザーが自分のMetaアプリを登録していればその資格情報を返す。
+ * 未登録なら null（呼び出し側は弊社アプリのENVにフォールバックする）。
+ * Secretは暗号化保存しているので復号して返す。復号に失敗したら未設定扱い。
+ */
+export async function getUserThreadsAppCreds(
+  userId: number,
+): Promise<{ appId: string; appSecret: string } | null> {
+  const user = await getUserById(userId);
+  if (!user?.threadsAppId || !user?.threadsAppSecretEnc) return null;
+  try {
+    return { appId: user.threadsAppId, appSecret: decrypt(user.threadsAppSecretEnc) };
+  } catch (e) {
+    console.error(`[BYOA] failed to decrypt threads app secret for user ${userId}:`, e);
+    return null;
+  }
+}
+
+/** BYOA設定の保存。secret は暗号化して格納。null を渡すと連携を解除する。 */
+export async function setUserThreadsAppCreds(
+  userId: number,
+  creds: { appId: string; appSecret: string } | null,
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users)
+    .set(creds
+      ? { threadsAppId: creds.appId, threadsAppSecretEnc: encrypt(creds.appSecret) }
+      : { threadsAppId: null, threadsAppSecretEnc: null })
+    .where(eq(users.id, userId));
+}
+
 export async function updateUserOnboardingCompleted(userId: number, completed: boolean) {
   const db = await getDb();
   if (!db) return;
@@ -1769,6 +1801,104 @@ export async function createEmailUser(email: string, passwordHash: string, name?
   await db.insert(users).values(user);
 
   return await getUserByEmail(email);
+}
+
+// ─────────────────────────────────────────────────────────────
+// 代理店プラン: クライアントへ個別ID（ログイン）を発行する
+// 代理店が発行したアカウントは users.parentAgencyUserId に代理店のIDを持つ。
+// クライアント側のプランは 'agency_client'（代理店の契約に内包＝個別課金なし）。
+// ─────────────────────────────────────────────────────────────
+
+/** 代理店が発行したクライアント一覧（新しい順）。パスワード等の秘匿列は返さない。 */
+export async function listAgencyClients(agencyUserId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({
+    id: users.id,
+    email: users.email,
+    name: users.name,
+    storeName: users.storeName,
+    createdAt: users.createdAt,
+    lastSignedIn: users.lastSignedIn,
+    autoPostEnabled: users.autoPostEnabled,
+  })
+    .from(users)
+    .where(eq(users.parentAgencyUserId, agencyUserId))
+    .orderBy(desc(users.createdAt));
+  return rows;
+}
+
+/** 代理店配下のクライアント数（上限判定に使う） */
+export async function countAgencyClients(agencyUserId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows = await db.select({ id: users.id })
+    .from(users)
+    .where(eq(users.parentAgencyUserId, agencyUserId));
+  return rows.length;
+}
+
+/**
+ * 代理店がクライアント用アカウントを作成する。
+ * 通常の新規登録と違い、メール認証を済ませた状態で作り、
+ * サブスクリプションは 'agency_client' プランの active として即付与する
+ * （クライアント側に決済は発生しない＝代理店の契約に内包）。
+ */
+export async function createAgencyClient(params: {
+  agencyUserId: number;
+  email: string;
+  passwordHash: string;
+  name?: string | null;
+  storeName?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const user: InsertUser = {
+    openId: `email_${params.email}`,
+    email: params.email,
+    name: params.name || null,
+    storeName: params.storeName || null,
+    passwordHash: params.passwordHash,
+    authProvider: 'email',
+    loginMethod: 'email',
+    emailVerified: true,          // 代理店が本人確認する前提なので確認済みで発行
+    isDemoMode: false,
+    parentAgencyUserId: params.agencyUserId,
+    lastSignedIn: new Date(),
+  };
+  await db.insert(users).values(user);
+
+  const created = await getUserByEmail(params.email);
+  if (!created) throw new Error("クライアントアカウントの作成に失敗しました");
+
+  await createSubscription({
+    userId: created.id,
+    planId: 'agency_client',
+    status: 'active',
+    // 代理店契約に内包されるため決済IDは持たない
+  } as any);
+
+  return created;
+}
+
+/** 代理店が発行したクライアントか検証する（他人のアカウントを操作させない） */
+export async function isAgencyClientOf(agencyUserId: number, clientUserId: number): Promise<boolean> {
+  const target = await getUserById(clientUserId);
+  return !!target && target.parentAgencyUserId === agencyUserId;
+}
+
+/** クライアントの利用を停止/再開する（サブスクのstatusで制御） */
+export async function setAgencyClientActive(clientUserId: number, active: boolean): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(subscriptions)
+    .set({ status: active ? 'active' : 'canceled' })
+    .where(eq(subscriptions.userId, clientUserId));
+  // 停止中は自動投稿も止める（課金されていない状態で投稿し続けないように）
+  await db.update(users)
+    .set({ autoPostEnabled: active })
+    .where(eq(users.id, clientUserId));
 }
 
 export async function getUserByEmail(email: string) {
