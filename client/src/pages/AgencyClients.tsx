@@ -59,13 +59,21 @@ export default function AgencyClients() {
 
   const copyIssued = async () => {
     if (!issued) return;
+    // そのままメール／LINEに貼って送れる案内文にする
+    const o = window.location.origin;
     const text =
-      `Threads Studio ログイン情報\n` +
-      `URL: ${window.location.origin}/login\n` +
+      `このたびはお申し込みいただきありがとうございます。\n` +
+      `Threads自動投稿サービスのアカウントをご用意しましたので、下記よりご利用ください。\n\n` +
+      `■ はじめにお読みください（5分ほどで読めます）\n` +
+      `${o}/welcome\n\n` +
+      `■ ログイン情報\n` +
+      `URL: ${o}/login\n` +
       `メールアドレス: ${issued.email}\n` +
-      `パスワード: ${issued.password}\n\n` +
+      `パスワード: ${issued.password}\n` +
+      `※ログイン後、設定画面からパスワードの変更をおすすめします\n\n` +
       `■ Threads連携の設定手順（Facebookアカウントの作成から説明しています）\n` +
-      `${window.location.origin}/threads-setup-guide`;
+      `${o}/threads-setup-guide\n\n` +
+      `ご不明な点がございましたら、お気軽にご連絡ください。`;
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -130,12 +138,14 @@ export default function AgencyClients() {
             <div>URL: {window.location.origin}/login</div>
             <div>{t("メールアドレス")}: {issued.email}</div>
             <div>{t("パスワード")}: {issued.password}</div>
-            <div>{t("設定手順")}: {window.location.origin}/threads-setup-guide</div>
           </div>
+          <p className="text-xs text-emerald-800 mt-2">
+            {t("下のボタンで、案内文（はじめにお読みください・ログイン情報・設定手順）をまとめてコピーできます。そのままメールやLINEに貼ってお送りください。")}
+          </p>
           <div className="flex gap-2 mt-3">
             <Button size="sm" onClick={copyIssued} className="bg-emerald-600 hover:bg-emerald-700 text-white">
               {copied ? <Check className="w-4 h-4 mr-1" /> : <Copy className="w-4 h-4 mr-1" />}
-              {t("コピー")}
+              {t("案内文をまとめてコピー")}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setIssued(null)}>{t("閉じる")}</Button>
           </div>
