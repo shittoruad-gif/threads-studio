@@ -232,8 +232,17 @@ export const PLANS: Record<string, PlanConfig> = {
   },
 };
 
-/** 代理店1契約あたりに発行できるクライアントIDの上限 */
-export const AGENCY_CLIENT_LIMIT = 30;
+/**
+ * 代理店1契約あたりに発行できるクライアントIDの上限。
+ *
+ * 100に設定した根拠（2026-08-06 実データで試算）:
+ *  - AI原価は制約にならない。gemini-2.5-flash 使用で 1クライアント約100円/月
+ *    （自動投稿3回/日＝月90投稿・1投稿あたりLLM3回）。100社でも約1万円で、
+ *    代理店売上¥55,000に対して十分な粗利が残る。300社でも黒字。
+ *  - 真の制約はVPSの処理能力（メモリ3.8GBに15アプリ同居・空き数百MB）。
+ *    ここを超えて増やす場合はサーバー増強とセットで行うこと。
+ */
+export const AGENCY_CLIENT_LIMIT = 100;
 
 export const PLAN_IDS = Object.keys(PLANS) as Array<keyof typeof PLANS>;
 
