@@ -1854,10 +1854,16 @@ export async function createAgencyClient(params: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
+  // ★セッションJWTは openId / appId / name がすべて非空でないと無効になる
+  //   （sdk.verifySession の必須フィールド検証）。name が空だとログイン直後に
+  //   401 になるため、未入力なら店舗名→メールのローカル部の順で必ず埋める。
+  const displayName =
+    params.name?.trim() || params.storeName?.trim() || params.email.split('@')[0];
+
   const user: InsertUser = {
     openId: `email_${params.email}`,
     email: params.email,
-    name: params.name || null,
+    name: displayName,
     storeName: params.storeName || null,
     passwordHash: params.passwordHash,
     authProvider: 'email',

@@ -170,11 +170,16 @@ class SDKServer {
     openId: string,
     options: { expiresInMs?: number; name?: string } = {}
   ): Promise<string> {
+    // ★name は verifySession で「非空」が必須。ここで空のまま発行すると、
+    //   ログイン自体は成功するのに次のリクエストで必ず401になる
+    //   （名前未設定のユーザーがログインできない不具合の原因）。
+    //   表示名が無い場合は openId をフォールバックにして必ず埋める。
+    const name = options.name?.trim() || openId;
     return this.signSession(
       {
         openId,
         appId: ENV.appId,
-        name: options.name || "",
+        name,
       },
       options
     );
