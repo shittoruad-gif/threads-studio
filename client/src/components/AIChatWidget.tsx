@@ -62,12 +62,14 @@ export function AIChatWidget() {
 
   if (!isOpen) {
     return (
+      // ラベル付きピル型。モニター用フィードバックボタン（緑・右下）と重ならない
+      // よう、スマホではその上（bottom-[132px]）に配置する（フィードバックは76px起点）。
       <Button
         onClick={() => setIsOpen(true)}
-        size="lg"
-        className="fixed bottom-24 right-6 rounded-full w-14 h-14 shadow-lg z-50"
+        className="fixed bottom-[132px] right-4 sm:bottom-24 sm:right-6 rounded-full h-11 px-4 shadow-lg z-50 gap-2"
       >
-        <MessageCircle className="w-6 h-6" />
+        <MessageCircle className="w-5 h-5" />
+        <span className="text-sm font-medium">AIに相談</span>
       </Button>
     );
   }

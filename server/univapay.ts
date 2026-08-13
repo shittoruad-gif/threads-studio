@@ -2,6 +2,9 @@
  * Univapay API wrapper for subscription management
  * Using REST API directly (no official SDK available)
  */
+// ★require('crypto')はESMバンドルで実行時に落ちて検証が常にfalseになるため、
+//   必ず静的importを使うこと（2026-08-14 本番のWebhook 400で発覚）。
+import { createHmac, timingSafeEqual } from "crypto";
 
 const UNIVAPAY_API_URL = 'https://api.univapay.com';
 const UNIVAPAY_JWT_TOKEN = process.env.UNIVAPAY_JWT_TOKEN!;
@@ -215,11 +218,10 @@ export function verifyWebhookAuthToken(
   if (!expectedToken || !headerValue) return false;
   const candidate = headerValue.replace(/^Bearer\s+/i, '').trim();
   try {
-    const crypto = require('crypto');
     const a = Buffer.from(candidate, 'utf8');
     const b = Buffer.from(expectedToken, 'utf8');
     if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
+    return timingSafeEqual(a, b);
   } catch {
     return false;
   }
@@ -244,9 +246,7 @@ export function verifyWebhookSignature(
   }
 
   try {
-    const crypto = require("crypto");
-    const expectedSignature = crypto
-      .createHmac("sha256", secret)
+    const expectedSignature = createHmac("sha256", secret)
       .update(payload, "utf8")
       .digest("hex");
 
@@ -256,7 +256,7 @@ export function verifyWebhookSignature(
 
     if (sigBuffer.length !== expectedBuffer.length) return false;
 
-    return crypto.timingSafeEqual(sigBuffer, expectedBuffer);
+    return timingSafeEqual(sigBuffer, expectedBuffer);
   } catch (error) {
     console.error("[UniVaPay] Webhook signature verification error:", error);
     return false;
