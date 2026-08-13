@@ -3,6 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { toPublicErrorMessage, stripRawUrls } from "../shared/sanitize";
+import { CONCEPT_DESIGN_PROMPT } from "../shared/conceptDesign";
 import { z } from "zod";
 import * as db from "./db";
 import { ENV } from "./_core/env";
@@ -3671,7 +3672,8 @@ ${input.commentText}
 - 名前: ${ctx.user.name || '未設定'}
 - メール: ${ctx.user.email || '未設定'}${projectContext}
 
-常に親切で具体的なアドバイスを心がけてください。`;
+常に親切で具体的なアドバイスを心がけてください。
+${CONCEPT_DESIGN_PROMPT}`;
 
         // Call LLM
         const { invokeLLM } = await import('./_core/llm');
