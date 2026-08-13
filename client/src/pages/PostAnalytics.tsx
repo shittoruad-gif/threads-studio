@@ -21,6 +21,7 @@ import { useLocation } from "wouter";
 import { useLang } from "@/i18n";
 import { toast } from "sonner";
 import { useState } from "react";
+import { useThreadsAccount } from "@/components/ThreadsAccountSwitcher";
 import {
   BarChart,
   Bar,
@@ -37,9 +38,11 @@ import {
 export default function PostAnalytics() {
   const { t, lang } = useLang();
   const [, setLocation] = useLocation();
-  const { data: analyticsData, isLoading, refetch } = trpc.stats.postAnalytics.useQuery();
+  // ヘッダーの切替UIで選択中の連携アカウント（分析をこのアカウントに絞る）
+  const { selectedAccountId } = useThreadsAccount();
+  const { data: analyticsData, isLoading, refetch } = trpc.stats.postAnalytics.useQuery({ accountId: selectedAccountId });
   const { data: inquiryData } = trpc.stats.inquiryStats.useQuery();
-  const { data: hitPostsData } = trpc.stats.hitPosts.useQuery();
+  const { data: hitPostsData } = trpc.stats.hitPosts.useQuery({ accountId: selectedAccountId });
   const fetchAnalytics = trpc.stats.fetchAndStoreAnalytics.useMutation({
     onSuccess: (data) => {
       toast.success(`${data.fetchedCount}${t('件の投稿データを取得しました')}`);

@@ -57,6 +57,7 @@ export async function fetchAndStoreAnalyticsForUser(userId: number): Promise<num
         const insights = await getThreadsPostInsights(account.accessToken, post.id);
         await upsertPostAnalytics({
           userId,
+          threadsAccountId: account.id,
           threadsPostId: post.id,
           postContent: post.text || null,
           postPermalink: post.permalink || null,

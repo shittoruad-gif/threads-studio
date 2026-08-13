@@ -26,6 +26,7 @@ import { ArrowLeft, Calendar, CheckCircle2, CheckSquare, Clock, XCircle, Loader2
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { translatePostError } from "@/lib/postErrors";
+import { useThreadsAccount } from "@/components/ThreadsAccountSwitcher";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -33,6 +34,8 @@ type StatusFilter = "all" | "awaiting_approval" | "pending" | "posted" | "failed
 
 export default function PostHistory() {
   const [, setLocation] = useLocation();
+  // ヘッダーの切替UIで選択中の連携アカウント（一覧をこのアカウントに絞る）
+  const { selectedAccountId } = useThreadsAccount();
   const [page, setPage] = useState(1);
   // URL の ?status=pending 等で初期フィルタを受ける（ダッシュボードの「予約投稿を管理」から予約中を直接開く）
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
@@ -50,7 +53,7 @@ export default function PostHistory() {
   const [editTarget, setEditTarget] = useState<{ id: number; content: string; projectId?: string } | null>(null);
   const editProjectId = editTarget?.projectId;
 
-  const { data: scheduledPosts, isLoading, refetch } = trpc.scheduledPost.list.useQuery();
+  const { data: scheduledPosts, isLoading, refetch } = trpc.scheduledPost.list.useQuery({ accountId: selectedAccountId });
   const cancelPost = trpc.scheduledPost.cancel.useMutation({
     onSuccess: () => {
       toast.success('予約投稿をキャンセルしました');

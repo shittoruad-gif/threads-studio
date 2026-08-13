@@ -12,6 +12,24 @@ import * as couponService from "./coupon";
 import { PLANS, TRIAL_DAYS, getPlan, resolveEffectivePlanId } from "../shared/plans";
 import { TRPCError } from "@trpc/server";
 
+// ── アカウント切替用の共通部品 ─────────────────────────────
+// ヘッダーの切替UIで選んだ連携アカウントに、各画面のデータを絞るための入力。
+// 未指定（nullish）は従来どおり全アカウント合算。
+const accountFilterInput = z.object({ accountId: z.number().nullish() }).optional();
+
+/** accountId が本人の連携アカウントであることを確認して返す（IDOR対策）。未指定は undefined。 */
+async function resolveOwnedAccountId(
+  userId: number,
+  accountId: number | null | undefined,
+): Promise<number | undefined> {
+  if (accountId == null) return undefined;
+  const account = await db.getThreadsAccountById(accountId);
+  if (!account || account.userId !== userId) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'アカウントが見つかりません。' });
+  }
+  return accountId;
+}
+
 // Global rate limit store for tryGenerate
 declare global {
   var __tryGenerateRateLimit: Map<string, number[]> | undefined;
@@ -2182,10 +2200,13 @@ ${input.commentText}
 
   // ============ Scheduled Posts ============
   scheduledPost: router({
-    // List scheduled posts
-    list: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getScheduledPostsByUserId(ctx.user.id);
-    }),
+    // List scheduled posts（accountId指定でそのアカウントの投稿だけに絞る）
+    list: protectedProcedure
+      .input(accountFilterInput)
+      .query(async ({ ctx, input }) => {
+        const accountId = await resolveOwnedAccountId(ctx.user.id, input?.accountId);
+        return await db.getScheduledPostsByUserId(ctx.user.id, accountId);
+      }),
 
     // Create scheduled post
     create: protectedProcedure
@@ -2738,9 +2759,12 @@ ${input.commentText}
   // ============ Statistics Management ============
   stats: router({
     // Get user statistics
-    getUserStats: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getUserStats(ctx.user.id);
-    }),
+    getUserStats: protectedProcedure
+      .input(accountFilterInput)
+      .query(async ({ ctx, input }) => {
+        const accountId = await resolveOwnedAccountId(ctx.user.id, input?.accountId);
+        return await db.getUserStats(ctx.user.id, accountId);
+      }),
 
     // Get popular templates
     getPopularTemplates: publicProcedure
@@ -2749,17 +2773,23 @@ ${input.commentText}
         return await db.getPopularTemplates(input.limit);
       }),
 
-    // Get post analytics for the current user
-    postAnalytics: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getPostAnalyticsWithEngagement(ctx.user.id);
-    }),
+    // Get post analytics for the current user（accountId指定でそのアカウントに絞る）
+    postAnalytics: protectedProcedure
+      .input(accountFilterInput)
+      .query(async ({ ctx, input }) => {
+        const accountId = await resolveOwnedAccountId(ctx.user.id, input?.accountId);
+        return await db.getPostAnalyticsWithEngagement(ctx.user.id, accountId);
+      }),
 
     // Identify hit posts (above average engagement)
-    hitPosts: protectedProcedure.query(async ({ ctx }) => {
-      const { posts, avgEngagement } = await db.getPostAnalyticsWithEngagement(ctx.user.id);
-      const hitPosts = posts.filter(p => p.engagement > avgEngagement);
-      return { hitPosts, avgEngagement };
-    }),
+    hitPosts: protectedProcedure
+      .input(accountFilterInput)
+      .query(async ({ ctx, input }) => {
+        const accountId = await resolveOwnedAccountId(ctx.user.id, input?.accountId);
+        const { posts, avgEngagement } = await db.getPostAnalyticsWithEngagement(ctx.user.id, accountId);
+        const hitPosts = posts.filter(p => p.engagement > avgEngagement);
+        return { hitPosts, avgEngagement };
+      }),
 
     // Fetch and store analytics from Threads API for a user's posts
     fetchAndStoreAnalytics: protectedProcedure.mutation(async ({ ctx }) => {
@@ -2879,8 +2909,11 @@ ${input.commentText}
     }),
 
     // フォロワー推移（日次スナップショットの合計。ダッシュボードのミニグラフ用）
-    followerTrend: protectedProcedure.query(async ({ ctx }) => {
-      const trend = await db.getFollowerTrend(ctx.user.id, 14);
+    followerTrend: protectedProcedure
+      .input(accountFilterInput)
+      .query(async ({ ctx, input }) => {
+      const accountId = await resolveOwnedAccountId(ctx.user.id, input?.accountId);
+      const trend = await db.getFollowerTrend(ctx.user.id, 14, accountId);
       const latest = trend.length > 0 ? trend[trend.length - 1].followers : 0;
       // 7日前（無ければ最古）との差分
       const baseIdx = Math.max(0, trend.length - 8);
@@ -3777,9 +3810,10 @@ ${CONCEPT_DESIGN_PROMPT}`;
       }),
 
     getHistory: protectedProcedure
-      .input(z.object({ limit: z.number().optional().default(20) }))
+      .input(z.object({ limit: z.number().optional().default(20), accountId: z.number().nullish() }))
       .query(async ({ ctx, input }) => {
-        return await db.getAutoPostHistory(ctx.user.id, input.limit);
+        const accountId = await resolveOwnedAccountId(ctx.user.id, input.accountId);
+        return await db.getAutoPostHistory(ctx.user.id, input.limit, accountId);
       }),
 
     // Manual trigger for testing

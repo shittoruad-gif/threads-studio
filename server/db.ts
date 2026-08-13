@@ -583,13 +583,15 @@ export async function createScheduledPost(data: InsertScheduledPost): Promise<vo
   await db.insert(scheduledPosts).values(data);
 }
 
-export async function getScheduledPostsByUserId(userId: number): Promise<ScheduledPost[]> {
+export async function getScheduledPostsByUserId(userId: number, threadsAccountId?: number): Promise<ScheduledPost[]> {
   const db = await getDb();
   if (!db) return [];
 
   return await db.select()
     .from(scheduledPosts)
-    .where(eq(scheduledPosts.userId, userId))
+    .where(threadsAccountId != null
+      ? and(eq(scheduledPosts.userId, userId), eq(scheduledPosts.threadsAccountId, threadsAccountId))
+      : eq(scheduledPosts.userId, userId))
     .orderBy(desc(scheduledPosts.scheduledAt));
 }
 
@@ -879,14 +881,20 @@ export async function isTemplateFavorited(userId: number, templateId: number): P
 
 // ============ Statistics Functions ============
 
-export async function getUserStats(userId: number) {
+export async function getUserStats(userId: number, threadsAccountId?: number) {
   const db = await getDb();
   if (!db) return null;
+
+  // 投稿系の集計はアカウント指定があればそのアカウントに絞る
+  // （プロジェクト数・連携アカウント数はユーザー全体の値のまま）
+  const postScope = threadsAccountId != null
+    ? and(eq(scheduledPosts.userId, userId), eq(scheduledPosts.threadsAccountId, threadsAccountId))!
+    : eq(scheduledPosts.userId, userId);
 
   // Get total posts count
   const totalPosts = await db.select({ count: sql<number>`count(*)` })
     .from(scheduledPosts)
-    .where(eq(scheduledPosts.userId, userId));
+    .where(postScope);
 
   // Get posts by status
   const postsByStatus = await db.select({
@@ -894,7 +902,7 @@ export async function getUserStats(userId: number) {
     count: sql<number>`count(*)`
   })
     .from(scheduledPosts)
-    .where(eq(scheduledPosts.userId, userId))
+    .where(postScope)
     .groupBy(scheduledPosts.status);
 
   // Get monthly posts (last 6 months)
@@ -904,7 +912,7 @@ export async function getUserStats(userId: number) {
   })
     .from(scheduledPosts)
     .where(and(
-      eq(scheduledPosts.userId, userId),
+      postScope,
       sql`${scheduledPosts.scheduledAt} >= DATE_SUB(NOW(), INTERVAL 6 MONTH)`
     ))
     .groupBy(sql`DATE_FORMAT(${scheduledPosts.scheduledAt}, '%Y-%m')`)
@@ -2429,14 +2437,16 @@ export async function updateAutoPostSettings(userId: number, settings: { autoPos
 /**
  * Get recent auto-generated scheduled posts for a user
  */
-export async function getAutoPostHistory(userId: number, limit: number = 20) {
+export async function getAutoPostHistory(userId: number, limit: number = 20, threadsAccountId?: number) {
   const database = await getDb();
   if (!database) return [];
 
   return database
     .select()
     .from(scheduledPosts)
-    .where(eq(scheduledPosts.userId, userId))
+    .where(threadsAccountId != null
+      ? and(eq(scheduledPosts.userId, userId), eq(scheduledPosts.threadsAccountId, threadsAccountId))
+      : eq(scheduledPosts.userId, userId))
     .orderBy(desc(scheduledPosts.createdAt))
     .limit(limit);
 }
@@ -2549,6 +2559,8 @@ export async function upsertPostAnalytics(data: InsertPostAnalytics): Promise<vo
     .values(data)
     .onDuplicateKeyUpdate({
       set: {
+        // 既存行にもアカウント帰属を書き込む（列追加以前の行のバックフィルを兼ねる）
+        ...(data.threadsAccountId != null ? { threadsAccountId: data.threadsAccountId } : {}),
         impressions: data.impressions,
         likes: data.likes,
         replies: data.replies,
@@ -2571,13 +2583,15 @@ export async function getPostAnalyticsByUserId(userId: number): Promise<PostAnal
     .orderBy(desc(postAnalytics.fetchedAt));
 }
 
-export async function getPostAnalyticsWithEngagement(userId: number) {
+export async function getPostAnalyticsWithEngagement(userId: number, threadsAccountId?: number) {
   const db = await getDb();
   if (!db) return { posts: [], avgEngagement: 0 };
 
   const posts = await db.select()
     .from(postAnalytics)
-    .where(eq(postAnalytics.userId, userId))
+    .where(threadsAccountId != null
+      ? and(eq(postAnalytics.userId, userId), eq(postAnalytics.threadsAccountId, threadsAccountId))
+      : eq(postAnalytics.userId, userId))
     .orderBy(desc(postAnalytics.postedAt));
 
   // Calculate engagement for each post: likes + replies + reposts
@@ -2620,6 +2634,7 @@ export async function upsertFollowerSnapshot(data: {
 export async function getFollowerTrend(
   userId: number,
   days: number = 14,
+  threadsAccountId?: number,
 ): Promise<{ capturedOn: string; followers: number }[]> {
   const db = await getDb();
   if (!db) return [];
@@ -2628,7 +2643,9 @@ export async function getFollowerTrend(
     followers: sql<number>`SUM(${followerSnapshots.followersCount})`,
   })
     .from(followerSnapshots)
-    .where(eq(followerSnapshots.userId, userId))
+    .where(threadsAccountId != null
+      ? and(eq(followerSnapshots.userId, userId), eq(followerSnapshots.threadsAccountId, threadsAccountId))
+      : eq(followerSnapshots.userId, userId))
     .groupBy(followerSnapshots.capturedOn)
     .orderBy(desc(followerSnapshots.capturedOn))
     .limit(days);

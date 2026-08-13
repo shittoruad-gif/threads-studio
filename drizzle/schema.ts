@@ -640,6 +640,9 @@ export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
 export const postAnalytics = mysqlTable("postAnalytics", {
   id: int("id").primaryKey().autoincrement(),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // どの連携アカウントの投稿か（アカウント切替でデータを絞るため）。
+  // 2026-08-14追加のためそれ以前の行はNULL（複数アカウントの既存行は帰属不明）。
+  threadsAccountId: int("threadsAccountId"),
   threadsPostId: varchar("threadsPostId", { length: 255 }).notNull(),
   postContent: text("postContent"), // Snapshot of the post text
   postPermalink: text("postPermalink"),

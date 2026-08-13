@@ -33,9 +33,20 @@ export function useThreadsAccount() {
   return useContext(ThreadsAccountContext);
 }
 
+// 切替の選択をリロード・画面遷移をまたいで保持するためのキー
+const SELECTED_ACCOUNT_KEY = 'selected-threads-account-id';
+
 export function ThreadsAccountProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
-  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const [selectedAccountId, setSelectedAccountIdState] = useState<number | null>(() => {
+    const saved = localStorage.getItem(SELECTED_ACCOUNT_KEY);
+    return saved ? Number(saved) || null : null;
+  });
+  const setSelectedAccountId = (id: number | null) => {
+    setSelectedAccountIdState(id);
+    if (id === null) localStorage.removeItem(SELECTED_ACCOUNT_KEY);
+    else localStorage.setItem(SELECTED_ACCOUNT_KEY, String(id));
+  };
 
   const { data: accounts, isLoading } = trpc.threads.list.useQuery(
     undefined,

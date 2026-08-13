@@ -58,7 +58,7 @@ import { SetupProgress } from '@/components/SetupProgress';
 const AIChatWidget = lazy(() =>
   import('@/components/AIChatWidget').then((m) => ({ default: m.AIChatWidget })),
 );
-import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
+import ThreadsAccountSwitcher, { useThreadsAccount } from '@/components/ThreadsAccountSwitcher';
 import WeeklyCalendarView from '@/components/WeeklyCalendarView';
 import ErrorGuide from '@/components/ErrorGuide';
 import PinnedPostRecommendation from '@/components/PinnedPostRecommendation';
@@ -66,6 +66,8 @@ import PinnedPostRecommendation from '@/components/PinnedPostRecommendation';
 export default function Dashboard() {
   const { t } = useLang();
   const { user, isAuthenticated, loading, logout } = useAuth();
+  // ヘッダーの切替UIで選択中の連携アカウント（投稿・統計をこのアカウントに絞る）
+  const { selectedAccountId } = useThreadsAccount();
   const [location, setLocation] = useLocation();
   const [couponModalOpen, setCouponModalOpen] = useState(false);
   // 解約アンケート（解約実行の前に理由を1タップで聞く）
@@ -179,7 +181,7 @@ export default function Dashboard() {
   );
 
   const { data: stats } = trpc.stats.getUserStats.useQuery(
-    undefined,
+    { accountId: selectedAccountId },
     { enabled: isAuthenticated }
   );
 
@@ -189,7 +191,7 @@ export default function Dashboard() {
   );
 
   // フォロワー推移（日次スナップショット。データが2日分たまると表示）
-  const { data: followerTrend } = trpc.stats.followerTrend.useQuery();
+  const { data: followerTrend } = trpc.stats.followerTrend.useQuery({ accountId: selectedAccountId });
   // プロフィール診断（せっかく見られても予約に落ちない「受け皿の穴」をチェック）
   const { data: profileAudit } = trpc.stats.profileAudit.useQuery(undefined, { enabled: isAuthenticated });
   const { data: aiUsage } = trpc.subscription.getAiUsage.useQuery(
@@ -207,9 +209,9 @@ export default function Dashboard() {
     { enabled: isAuthenticated }
   );
 
-  // Scheduled posts for calendar
+  // Scheduled posts for calendar（切替中のアカウントに絞る）
   const { data: scheduledPosts } = trpc.scheduledPost.list.useQuery(
-    undefined,
+    { accountId: selectedAccountId },
     { enabled: isAuthenticated }
   );
 
@@ -227,7 +229,7 @@ export default function Dashboard() {
   );
 
   const { data: autoPostHistory } = trpc.autoPost.getHistory.useQuery(
-    { limit: 5 },
+    { limit: 5, accountId: selectedAccountId },
     { enabled: isAuthenticated }
   );
 
