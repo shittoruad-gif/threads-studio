@@ -1411,7 +1411,8 @@ export default function Dashboard() {
               {t("ご利用開始ありがとうございます。Threads集客のほかに、ご興味のあるものがあれば教えてください（複数OK・スキップも可能）。今後のご案内の参考にさせていただきます。")}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2.5 max-h-[52vh] overflow-y-auto pr-1">
+          {/* スマホはリストを低めに抑え、スキップ/回答ボタンが最初から見える高さにする */}
+          <div className="space-y-2.5 max-h-[32vh] sm:max-h-[52vh] overflow-y-auto pr-1">
             <p className="text-xs font-medium text-muted-foreground">{t("気になるものを選んでください（複数OK）")}</p>
             {RELATED_SERVICES.map((opt) => {
               const on = surveyInterests.includes(opt.label);
@@ -1445,7 +1446,7 @@ export default function Dashboard() {
             />
           </div>
           {/* 登録メールへの案内送付（デフォルトON） */}
-          <label className="flex items-start gap-2.5 rounded-lg bg-muted/40 px-3 py-2.5 cursor-pointer">
+          <label className="flex shrink-0 items-start gap-2.5 rounded-lg bg-muted/40 px-3 py-2.5 cursor-pointer">
             <Checkbox
               checked={surveySendInfo}
               onCheckedChange={(v) => setSurveySendInfo(v === true)}

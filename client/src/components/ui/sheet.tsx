@@ -85,7 +85,8 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sheet-header"
-      className={cn("flex flex-col gap-1.5 p-4", className)}
+      // shrink-0: dialog.tsxと同じ潰れ→重なり対策（flex-colの親で高さ超過時）
+      className={cn("flex shrink-0 flex-col gap-1.5 p-4", className)}
       {...props}
     />
   );
@@ -95,7 +96,7 @@ function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sheet-footer"
-      className={cn("mt-auto flex flex-col gap-2 p-4", className)}
+      className={cn("mt-auto flex shrink-0 flex-col gap-2 p-4", className)}
       {...props}
     />
   );

@@ -128,7 +128,10 @@ function DialogContent({
           // so action buttons (Save / Cancel / Submit) at the bottom are always
           // reachable on small screens. Without this, content taller than the
           // viewport silently runs off the bottom and users can't submit forms.
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 flex flex-col w-full max-w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
+          // *:shrink-0 — 直下の子は潰さない。flex-col+max-hで中身が入り切らない
+          // とき、子が押し潰されるとはみ出したテキストが下の要素に重なって描画
+          // される（スマホ実機で発生）。縮める代わりに外側スクロールに逃がす。
+          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 flex flex-col w-full max-w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto *:shrink-0 translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
           className
         )}
         onEscapeKeyDown={handleEscapeKeyDown}
@@ -153,7 +156,10 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2 text-center sm:text-left", className)}
+      // shrink-0: DialogContentはflex-col+max-h。中身が画面より高いときに
+      // ヘッダーが押し潰されると、はみ出したテキストが下の要素に重なって
+      // 描画される（スマホ実機で発生）。潰さず外側スクロールに逃がす。
+      className={cn("flex shrink-0 flex-col gap-2 text-center sm:text-left", className)}
       {...props}
     />
   );
@@ -164,7 +170,7 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        "flex shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end",
         className
       )}
       {...props}
