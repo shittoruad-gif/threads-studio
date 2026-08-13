@@ -229,6 +229,7 @@ export const dict: Record<string, string> = {
   "連携解除": "Disconnect",
   "このアカウントで自動投稿する店舗": "Store this account auto-posts for",
   "全店舗を日替わりで投稿（指定なし）": "Rotate all stores daily (not specified)",
+  "全店舗を日替わりで投稿": "Rotate all stores daily",
   "複数店舗を運用する場合、このアカウント＝この店舗、と指定すると内容の取り違えを防げます。": "If you run multiple stores, pinning this account to one store prevents posts from being mixed up.",
   "フォロワー": "Followers",
   "フォロー中": "Following",

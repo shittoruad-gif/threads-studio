@@ -387,8 +387,11 @@ export default function ThreadsConnect() {
                   <p className="text-muted-foreground/60 text-sm truncate">ID: {account.threadsUserId}</p>
                 </div>
               </div>
-              {/* モバイルは2列グリッドで整列、sm以上は横並び（折返し・はみ出し防止） */}
-              <div className="grid grid-cols-2 sm:flex gap-2 sm:flex-wrap sm:justify-end shrink-0 [&>button]:w-full sm:[&>button]:w-auto">
+              {/* モバイルは2列グリッドで整列、sm以上は横並び。
+                  shadcn Buttonは whitespace-nowrap 既定のため、長い日本語ラベルが
+                  枠からはみ出す（実機で報告あり）。whitespace-normal + h-auto で
+                  ボタン内折返しを許可し、どの幅でも収まるようにする。 */}
+              <div className="grid grid-cols-2 sm:flex gap-2 sm:flex-wrap sm:justify-end shrink-0 [&>button]:w-full sm:[&>button]:w-auto [&>button]:whitespace-normal [&>button]:h-auto [&>button]:min-h-8 [&>button]:py-1.5 [&>button]:leading-snug">
                 <Button
                   variant="outline"
                   size="sm"
@@ -397,8 +400,8 @@ export default function ThreadsConnect() {
                   disabled={refreshToken.isPending}
                   title={t("同じアカウントのまま、接続の有効期限を60日延長します")}
                 >
-                  <ShieldCheck className={`w-4 h-4 mr-1.5 ${refreshToken.isPending ? 'animate-spin' : ''}`} />
-                  {t("接続を更新（期限を延長）")}
+                  <ShieldCheck className={`w-4 h-4 mr-1.5 shrink-0 ${refreshToken.isPending ? 'animate-spin' : ''}`} />
+                  {t("接続を更新")}
                 </Button>
                 <Button
                   variant="outline"
@@ -451,7 +454,7 @@ export default function ThreadsConnect() {
                   disabled={setDefaultProject.isPending}
                   className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground text-sm"
                 >
-                  <option value="">{t("全店舗を日替わりで投稿（指定なし）")}</option>
+                  <option value="">{t("全店舗を日替わりで投稿")}</option>
                   {projectList.map((p) => (
                     <option key={p.id} value={p.id}>
                       {(p as any).storeName || p.title}
