@@ -94,14 +94,13 @@ export default function Dashboard() {
     { enabled: isAuthenticated }
   );
 
-  useEffect(() => {
-    if (setupData && setupData.setupStep !== null && setupData.setupStep < 5) {
-      const timer = setTimeout(() => {
-        setSetupWizardOpen(true);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [setupData]);
+  // ★旧SetupWizardの自動表示は廃止（2026-08-13）。
+  //   ウィザードのSTEP1が「渋谷区の整体院デモプロジェクト」を自動作成してしまい、
+  //   ①プロジェクトが出来るためカウンセリング自動誘導（下のuseEffect）が発火しない
+  //   ②ダミーの実績数字（年間1000名等）が残り事故のもと
+  //   になっていた（滝本さんアカウントで実害）。登録後の最初の一歩は
+  //   「プロジェクト0件 → /ai-counseling へ自動誘導」の一本に統一する。
+  void setupData;
 
   // Show onboarding tour for new users (after setup wizard)
   // Check both server flag and localStorage for first-visit detection
