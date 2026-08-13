@@ -188,6 +188,44 @@ export async function getSubscription(subscriptionId: string) {
 }
 
 /**
+ * Get transaction token details (メールアドレスの取得に使う)
+ *
+ * Webhookペイロードのmetadataには氏名・電話しか入らないケースがあるため、
+ * transaction_token_id からトークンを引いてメールを特定する（実ペイロードで確認済み）。
+ */
+export async function getTransactionToken(tokenId: string) {
+  if (!tokenId) throw new Error('tokenId is required');
+  return await univapayRequest(
+    `/stores/${UNIVAPAY_STORE_ID}/tokens/${tokenId}`,
+    'GET'
+  );
+}
+
+/**
+ * Verify webhook auth token (UnivaPayの実方式)
+ *
+ * UnivaPayのWebhookはHMAC署名ではなく、Webhook登録時のauth_tokenを
+ * Authorizationヘッダに載せて送ってくる（storeのwebhook設定で確認済み）。
+ * 「Bearer xxx」形式と生トークンの両方を受け付け、タイミングセーフに比較する。
+ */
+export function verifyWebhookAuthToken(
+  headerValue: string,
+  expectedToken: string
+): boolean {
+  if (!expectedToken || !headerValue) return false;
+  const candidate = headerValue.replace(/^Bearer\s+/i, '').trim();
+  try {
+    const crypto = require('crypto');
+    const a = Buffer.from(candidate, 'utf8');
+    const b = Buffer.from(expectedToken, 'utf8');
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Verify webhook signature
  */
 export function verifyWebhookSignature(

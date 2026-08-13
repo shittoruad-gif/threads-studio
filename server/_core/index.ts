@@ -175,14 +175,21 @@ async function startServer() {
           (req.headers['x-univapay-webhook-signature'] as string) ||
           (req.headers['univapay-signature'] as string) ||
           '';
+        // ★UnivaPayの実方式: Webhook登録時のauth_tokenがAuthorizationヘッダで届く
+        //   （HMAC署名は送られない。storeのwebhook設定実物で確認済み 2026-08-14）。
+        const authHeader = (req.headers['authorization'] as string) || '';
 
         // 署名シークレットが設定されている場合のみ厳格検証。
+        // auth_token一致（実方式）または HMAC一致（将来の保険）のどちらかで通す。
         // 未設定（テスト導入初期）は警告して通す（実ペイロード収集のため）。
         if (secret) {
-          const { verifyWebhookSignature } = await import('../univapay');
-          const ok = verifyWebhookSignature(rawBody, sig, secret);
+          const { verifyWebhookSignature, verifyWebhookAuthToken } = await import('../univapay');
+          const ok =
+            verifyWebhookAuthToken(authHeader, secret) ||
+            verifyWebhookAuthToken(sig, secret) ||
+            verifyWebhookSignature(rawBody, sig, secret);
           if (!ok) {
-            console.warn('[Univapay Webhook] 署名検証失敗。リクエストを拒否');
+            console.warn('[Univapay Webhook] 認証検証失敗。リクエストを拒否');
             return res.status(400).json({ error: 'invalid signature' });
           }
         } else {
@@ -237,7 +244,31 @@ async function startServer() {
           }
           return null;
         };
-        const email = findEmail(event);
+        let email = findEmail(event);
+
+        // ★メールがペイロードに無い場合のフォールバック。
+        //   リンクフォーム決済の実ペイロードはmetadataに氏名・電話しか入らず、
+        //   メールはtransaction_tokenの中にしかない（滝本さんの実決済で確認）。
+        //   transaction_token_id からトークンを引いてメールを特定する。
+        if (!email) {
+          const tokenId: string | null =
+            data?.transaction_token_id ??
+            data?.subscription?.transaction_token_id ??
+            data?.charge?.transaction_token_id ??
+            null;
+          if (tokenId) {
+            try {
+              const { getTransactionToken } = await import('../univapay');
+              const token = await getTransactionToken(tokenId);
+              if (token?.email && String(token.email).includes('@')) {
+                email = String(token.email);
+                console.log(`[Univapay Webhook] メールをトークンから特定: ${email}`);
+              }
+            } catch (e) {
+              console.error('[Univapay Webhook] トークン照会失敗:', e);
+            }
+          }
+        }
 
         // ── 金額抽出 ──────────────────────────────────────────────
         // 7日トライアル設定では「初回=カード登録(課金¥0)」「8日目以降=プラン額」。
@@ -296,27 +327,34 @@ async function startServer() {
 
         if (!email) {
           console.warn('[Univapay Webhook] メール特定不可。手動確認が必要（生ログ参照）');
-          // 200で返す（Univapayのリトライ嵐回避）。運用者に通知。
-          try {
-            const { notifyOwner } = await import('./notification');
-            await notifyOwner({
-              title: 'Univapay webhook: ユーザ特定不可',
-              content: `event=${eventType} status=${status} amount=${amount}\n生: ${JSON.stringify(event).slice(0, 1500)}`,
-            });
-          } catch {}
+          // 200で返す（Univapayのリトライ嵐回避）。
+          // ★共用ストアのため、Threads Studioのプラン金額に一致する決済のみ通知。
+          if (matchedPlanId) {
+            try {
+              const { notifyOwner } = await import('./notification');
+              await notifyOwner({
+                title: 'Univapay webhook: ユーザ特定不可',
+                content: `event=${eventType} status=${status} amount=${amount}\n生: ${JSON.stringify(event).slice(0, 1500)}`,
+              });
+            } catch {}
+          }
           return res.json({ received: true, note: 'email not found' });
         }
 
         const user = await db.getUserByEmail(email);
         if (!user) {
           console.warn(`[Univapay Webhook] 未登録メール: ${email}（決済したがアプリ未登録の可能性）`);
-          try {
-            const { notifyOwner } = await import('./notification');
-            await notifyOwner({
-              title: 'Univapay webhook: 決済メールがアプリ未登録',
-              content: `email=${email} event=${eventType} amount=${amount}\nアプリ登録メールと一致しません。手動対応が必要かもしれません。`,
-            });
-          } catch {}
+          // ★UnivaPayストアは他事業（LP制作・Keiro等）と共用のため、Threads Studioの
+          //   プラン金額に一致しない決済は他事業のもの＝通知しない（ノイズ防止）。
+          if (matchedPlanId) {
+            try {
+              const { notifyOwner } = await import('./notification');
+              await notifyOwner({
+                title: 'Univapay webhook: 決済メールがアプリ未登録',
+                content: `email=${email} event=${eventType} amount=${amount}\nアプリ登録メールと一致しません。手動対応が必要かもしれません。`,
+              });
+            } catch {}
+          }
           return res.json({ received: true, note: 'user not found for email' });
         }
 
