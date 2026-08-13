@@ -764,4 +764,18 @@ export const dict: Record<string, string> = {
   "公式HP": "Website",
   "その他": "Other",
   "左の「投稿の目的を選ぶ」から目的を選んで、": "Pick a goal under \"Choose the goal of your post\" on the left, then",
+  // ── 初心者向けセットアップチェックリスト（SetupChecklist）──
+  "はじめての設定": "Getting started",
+  "上から順番に進めるだけで、毎日の自動投稿が始まります。": "Just follow the steps from top to bottom to start daily auto-posting.",
+  "お店のThreadsアカウントをこのアプリにつなぎます。": "Connect your store's Threads account to this app.",
+  "連携画面を開く": "Open connection screen",
+  "お店のことをAIに教える": "Tell the AI about your store",
+  "チャットの質問に答えるだけです（10〜15分）。答えた内容だけを使って投稿が作られます。": "Just answer the chat questions (10-15 min). Posts are created only from what you share.",
+  "入力を始める": "Start now",
+  "ONにすると、毎日おすすめの時間帯にAIが自動で投稿します。": "When ON, the AI posts automatically every day at recommended times.",
+  "ONにする": "Turn ON",
+  "設定中...": "Saving...",
+  "初期設定はすべて完了しています": "Initial setup is complete",
+  "あとは自動投稿におまかせください。投稿の内容や予定は「投稿予定・履歴」でいつでも確認できます。": "Auto-posting will take it from here. You can check upcoming and past posts anytime in \"Post Schedule & History\".",
+  "投稿予定を確認する": "View post schedule",
 };

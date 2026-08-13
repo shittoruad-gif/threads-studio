@@ -32,6 +32,7 @@ import { toast } from 'sonner';
 import { getLoginUrl } from '@/const';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import CouponModal from '@/components/CouponModal';
+import SetupChecklist from '@/components/SetupChecklist';
 import {
   Dialog,
   DialogContent,
@@ -446,65 +447,15 @@ export default function Dashboard() {
           </Badge>
         </div>
 
-        {/* New User Getting Started Guide */}
-        {(!threadsAccounts || threadsAccounts.length === 0) && (!projectCount || projectCount === 0) && (
-          <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-6">
-            <h2 className="text-lg font-bold text-foreground mb-2">{t("🚀 はじめましょう！")}</h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              {t("Threads Studioを使って、AIが自動でThreads投稿を生成・公開します。以下の3ステップで始められます。")}
-            </p>
-            <div className="grid sm:grid-cols-3 gap-4">
-              <div className="bg-white rounded-lg p-4 border border-blue-100">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">1</div>
-                  <span className="font-medium text-foreground text-sm">{t("プランを選択")}</span>
-                </div>
-                <p className="text-xs text-muted-foreground mb-3">{t("利用目的に合ったプランを選んで始めましょう")}</p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full border-blue-300 text-blue-700 hover:bg-blue-50"
-                  onClick={() => setLocation('/pricing')}
-                >
-                  <CreditCard className="w-3 h-3 mr-1" />
-                  {t("プランを見る")}
-                </Button>
-              </div>
-              <div className="bg-white rounded-lg p-4 border border-blue-100">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">2</div>
-                  <span className="font-medium text-foreground text-sm">{t("Threads連携")}</span>
-                </div>
-                <p className="text-xs text-muted-foreground mb-3">{t("Threadsアカウントを接続して投稿を自動化")}</p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full border-blue-300 text-blue-700 hover:bg-blue-50"
-                  onClick={() => setLocation('/threads-connect')}
-                >
-                  <Link2 className="w-3 h-3 mr-1" />
-                  {t("連携する")}
-                </Button>
-              </div>
-              <div className="bg-white rounded-lg p-4 border border-blue-100">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">3</div>
-                  <span className="font-medium text-foreground text-sm">{t("店舗情報を登録")}</span>
-                </div>
-                <p className="text-xs text-muted-foreground mb-3">{t("業種・地域・強みを入力すればAIが投稿を生成")}</p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full border-blue-300 text-blue-700 hover:bg-blue-50"
-                  onClick={() => setLocation('/ai-project-create')}
-                >
-                  <FileText className="w-3 h-3 mr-1" />
-                  {t("登録する")}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* 初心者向け「次にやること」チェックリスト（順番固定・実データ連動） */}
+        <SetupChecklist
+          threadsConnected={!!threadsAccounts && threadsAccounts.length > 0}
+          hasProject={!!projectCount && projectCount > 0}
+          autoPostOn={!!autoPostSettings?.autoPostEnabled}
+          onNavigate={setLocation}
+          onEnableAutoPost={() => updateAutoPost.mutate({ autoPostEnabled: true })}
+          enablingAutoPost={updateAutoPost.isPending}
+        />
 
         {/* Hero: Auto Post + Stats Row */}
         <div className="grid lg:grid-cols-3 gap-4 mb-6">
@@ -1140,54 +1091,7 @@ export default function Dashboard() {
         <ProjectExplanation />
 
         {/* Quick Start Card */}
-        {(!projectCount || projectCount === 0 || !threadsAccounts || threadsAccounts.length === 0) && (
-          <div className="mt-8 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-6 border-2 border-emerald-200">
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="w-8 h-8 text-emerald-600" />
-              <h3 className="font-semibold text-foreground text-lg">{t("最初の投稿を生成しましょう！")}</h3>
-            </div>
-            <p className="text-muted-foreground text-sm mb-4">
-              {t("3ステップで簡単に始められます")}
-            </p>
-            <div className="grid md:grid-cols-3 gap-4 mb-4">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">1</div>
-                <div>
-                  <p className="text-foreground text-sm font-medium">{t("プロジェクト作成")}</p>
-                  <p className="text-muted-foreground text-xs">{t("業種を選ぶだけで自動入力")}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">2</div>
-                <div>
-                  <p className="text-foreground text-sm font-medium">{t("Threads連携")}</p>
-                  <p className="text-muted-foreground text-xs">{t("ガイドに沿って簡単連携")}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">3</div>
-                <div>
-                  <p className="text-foreground text-sm font-medium">{t("AI生成")}</p>
-                  <p className="text-muted-foreground text-xs">{t("プリセットから選んで生成")}</p>
-                </div>
-              </div>
-            </div>
-            <Button
-              onClick={() => {
-                if (!projectCount || projectCount === 0) {
-                  setLocation('/ai-project-create');
-                } else if (!threadsAccounts || threadsAccounts.length === 0) {
-                  setLocation('/threads-connect');
-                } else {
-                  setLocation('/ai-project-create');
-                }
-              }}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              {!projectCount || projectCount === 0 ? t('プロジェクトを作成') : !threadsAccounts || threadsAccounts.length === 0 ? t('Threadsを連携') : t('AI生成を開始')}
-            </Button>
-          </div>
-        )}
+        {/* 旧「最初の投稿を生成しましょう」カードは、最上部のSetupChecklistに統合済み（手順の二重表示・順序食い違いの解消） */}
 
         {/* Threads集客ガイド */}
         <div className="mt-8 bg-gradient-to-br from-emerald-900 to-teal-900 rounded-xl p-6 text-white mb-8">

@@ -50,7 +50,8 @@ interface MenuItem {
 // itself decides whether to auto-redirect to the user's existing project or
 // to /ai-project-create — that way returning users skip the chat/form.
 const mainMenuItems: MenuItem[] = [
-  { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
+  // 初心者向けにモバイル下タブと同じ「ホーム」に統一（「ダッシュボード」は横文字で伝わらない）
+  { icon: LayoutDashboard, label: "ホーム", path: "/dashboard" },
   { icon: Sparkles, label: "AI投稿生成", path: "/ai-generate", badge: "NEW" },
   { icon: History, label: "作成した投稿の履歴", path: "/ai-history", badgeKey: "ai-history" },
   { icon: FileText, label: "保存したひな形", path: "/ai-templates" },
