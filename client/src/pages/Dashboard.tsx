@@ -23,6 +23,7 @@ import {
   Clock,
   Users,
   BarChart3,
+  CheckCircle2,
   Sparkles,
   History,
   Gift,
@@ -462,6 +463,50 @@ export default function Dashboard() {
           <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-sm px-3 py-1 shrink-0 self-start">
             {subscription?.plan?.name ? t(subscription.plan.name) : t('無料プラン')}
           </Badge>
+        </div>
+
+        {/* ★よく使う操作への大きな入口（メニューを探さなくても1タップで届くように） */}
+        <div className="mb-6 grid grid-cols-2 gap-3">
+          <button
+            onClick={() => setLocation('/post-history?status=awaiting_approval')}
+            className="flex flex-col items-start gap-1 rounded-xl border-2 border-emerald-300 bg-emerald-50 p-4 text-left transition-colors hover:bg-emerald-100 dark:bg-emerald-950/20"
+          >
+            <span className="flex items-center gap-1.5 font-bold text-foreground">
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+              {t('投稿を確認する')}
+            </span>
+            <span className="text-xs text-muted-foreground leading-snug">{t('承認待ちの投稿を見て公開します')}</span>
+          </button>
+          <button
+            onClick={() => setLocation('/ai-generate')}
+            className="flex flex-col items-start gap-1 rounded-xl border-2 border-border bg-card p-4 text-left transition-colors hover:bg-muted/50"
+          >
+            <span className="flex items-center gap-1.5 font-bold text-foreground">
+              <Sparkles className="h-5 w-5 shrink-0 text-amber-500" />
+              {t('投稿を作る')}
+            </span>
+            <span className="text-xs text-muted-foreground leading-snug">{t('AIが投稿を作ります（固定投稿もここ）')}</span>
+          </button>
+          <button
+            onClick={goEditInfo}
+            className="flex flex-col items-start gap-1 rounded-xl border-2 border-border bg-card p-4 text-left transition-colors hover:bg-muted/50"
+          >
+            <span className="flex items-center gap-1.5 font-bold text-foreground">
+              <Pencil className="h-5 w-5 shrink-0 text-blue-500" />
+              {t('お店の情報')}
+            </span>
+            <span className="text-xs text-muted-foreground leading-snug">{t('メニューや強みを直します')}</span>
+          </button>
+          <button
+            onClick={() => setLocation('/post-analytics')}
+            className="flex flex-col items-start gap-1 rounded-xl border-2 border-border bg-card p-4 text-left transition-colors hover:bg-muted/50"
+          >
+            <span className="flex items-center gap-1.5 font-bold text-foreground">
+              <BarChart3 className="h-5 w-5 shrink-0 text-violet-500" />
+              {t('反応を見る')}
+            </span>
+            <span className="text-xs text-muted-foreground leading-snug">{t('どの投稿が見られたか分かります')}</span>
+          </button>
         </div>
 
         {/* 毎回表示の操作ガイド（オフ切替可）。毎日の運用手順を1画面目で思い出せるように */}

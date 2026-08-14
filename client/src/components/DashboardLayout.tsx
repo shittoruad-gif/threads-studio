@@ -29,6 +29,9 @@ import {
   CreditCard,
   MessageCircle,
   Flame,
+  ChevronDown,
+  ChevronUp,
+  Pencil,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -49,28 +52,37 @@ interface MenuItem {
 // Sidebar "AI投稿生成" links to /ai-generate (no project= param). The page
 // itself decides whether to auto-redirect to the user's existing project or
 // to /ai-project-create — that way returning users skip the chat/form.
+// ★メニューは「使う頻度」で3段に整理する（2026-08-15）。
+//   機能を平らに全部並べると、毎日使う承認や固定投稿作成が埋もれて
+//   「どこを使えばいいか分からない」状態になっていたため。
+//   毎日 → ときどき → その他（既定で折りたたみ）の順。
 const mainMenuItems: MenuItem[] = [
   // 初心者向けにモバイル下タブと同じ「ホーム」に統一（「ダッシュボード」は横文字で伝わらない）
   { icon: LayoutDashboard, label: "ホーム", path: "/dashboard" },
-  { icon: Sparkles, label: "AI投稿生成", path: "/ai-generate", badge: "NEW" },
-  { icon: History, label: "作成した投稿の履歴", path: "/ai-history", badgeKey: "ai-history" },
-  { icon: FileText, label: "保存したひな形", path: "/ai-templates" },
+  { icon: Calendar, label: "投稿の確認・予定", path: "/post-history" },
+  { icon: Sparkles, label: "AI投稿を作る", path: "/ai-generate" },
 ];
 
 const contentMenuItems: MenuItem[] = [
-  { icon: FileText, label: "投稿テンプレート集", path: "/templates" },
-  { icon: FolderOpen, label: "ライブラリ", path: "/library" },
+  { icon: BarChart3, label: "投稿分析", path: "/post-analytics", badgeKey: "analytics" },
+  { icon: MessageCircle, label: "コメント管理", path: "/comment-manager", badgeKey: "comments" },
+  { icon: Pencil, label: "お店の情報を修正", path: "/ai-counseling" },
+  { icon: Link2, label: "Threads連携", path: "/threads-connect" },
 ];
 
 const accountMenuItems: MenuItem[] = [
-  { icon: Link2, label: "Threads連携", path: "/threads-connect" },
-  { icon: Calendar, label: "投稿履歴・予約", path: "/post-history" },
-  { icon: MessageCircle, label: "コメント管理", path: "/comment-manager", badgeKey: "comments" },
-  { icon: BarChart3, label: "投稿分析", path: "/post-analytics", badgeKey: "analytics" },
-  { icon: Gift, label: "紹介プログラム", path: "/referral" },
-  { icon: Settings, label: "設定", path: "/settings" },
   // クライアントが迷わない実運用マニュアル（毎日やること・承認・修正手順）を最優先で見せる
   { icon: BookOpen, label: "使い方マニュアル", path: "/manual" },
+  { icon: Settings, label: "設定", path: "/settings" },
+];
+
+// 使用頻度が低い機能。既定で折りたたみ、必要な人だけ開く。
+const moreMenuItems: MenuItem[] = [
+  { icon: History, label: "作成した投稿の履歴", path: "/ai-history", badgeKey: "ai-history" },
+  { icon: FileText, label: "保存したひな形", path: "/ai-templates" },
+  { icon: FileText, label: "投稿テンプレート集", path: "/templates" },
+  { icon: FolderOpen, label: "ライブラリ", path: "/library" },
+  { icon: Gift, label: "紹介プログラム", path: "/referral" },
   { icon: HelpCircle, label: "よくある質問", path: "/faq" },
 ];
 
@@ -96,6 +108,13 @@ export default function DashboardLayout({
   const { t } = useLang();
   const [location, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // 「その他の機能」の開閉（既定は閉じる。開いた状態は記憶する）
+  const [moreOpen, setMoreOpen] = useState(() => {
+    try { return localStorage.getItem('sidebar-more-open') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('sidebar-more-open', moreOpen ? '1' : '0'); } catch { /* ignore */ }
+  }, [moreOpen]);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const isMobile = useIsMobile();
 
@@ -324,9 +343,22 @@ export default function DashboardLayout({
 
       {/* Menu */}
       <div className="flex-1 overflow-y-auto py-4">
-        {renderMenuSection("メイン", mainMenuItems, collapsed)}
-        {renderMenuSection("コンテンツ", contentMenuItems, collapsed)}
-        {renderMenuSection("アカウント", accountMenuItems, collapsed)}
+        {renderMenuSection("毎日つかう", mainMenuItems, collapsed)}
+        {renderMenuSection("ときどき見る・直す", contentMenuItems, collapsed)}
+        {renderMenuSection("ヘルプ・設定", accountMenuItems, collapsed)}
+        {/* その他（既定で閉じる）。使う人だけが開けばよい機能をここにまとめる */}
+        {!collapsed && (
+          <div className="px-3 mb-4">
+            <button
+              onClick={() => setMoreOpen((v) => !v)}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <span>{t("その他の機能")}</span>
+              {moreOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        )}
+        {moreOpen && renderMenuSection("", moreMenuItems, collapsed)}
         {isAgency && renderMenuSection("代理店", agencyMenuItems, collapsed)}
         {user?.role === "admin" &&
           renderMenuSection("管理者", adminMenuItems, collapsed)}
