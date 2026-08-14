@@ -1232,7 +1232,7 @@ export default function Dashboard() {
               <Button
                 size="sm"
                 className="mt-3 w-full bg-emerald-500 hover:bg-emerald-400 text-white border-0 text-xs"
-                onClick={() => setLocation('/ai-project-create')}
+                onClick={() => setLocation('/ai-generate')}
               >
                 <Sparkles className="w-3 h-3 mr-1" />
                 {t("AI投稿を生成する")}
@@ -1243,8 +1243,11 @@ export default function Dashboard() {
 
         {/* Quick Actions - Top 4 */}
         <div className="mt-8 grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* /ai-generate は既存プロジェクトへ自動で入る（無ければ新規作成へ）。
+              直接 /ai-project-create に飛ばすと既存ユーザーに空のカウンセリングが
+              表示され「入力が消えた」ように見えるため必ずこちらを経由する */}
           <button
-            onClick={() => setLocation('/ai-project-create')}
+            onClick={() => setLocation('/ai-generate')}
             className="bg-background p-6 rounded-xl text-left hover:shadow-md transition-all border border-border group relative overflow-hidden"
             data-tour="ai-generate"
           >

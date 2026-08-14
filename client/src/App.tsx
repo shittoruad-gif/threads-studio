@@ -40,6 +40,7 @@ const Referral = lazy(() => import("./pages/Referral"));
 const AgencyClients = lazy(() => import("./pages/AgencyClients"));
 const ThreadsSetupGuide = lazy(() => import("./pages/ThreadsSetupGuide"));
 const ThreadsInviteGuide = lazy(() => import("./pages/ThreadsInviteGuide"));
+const ThreadsManual = lazy(() => import("./pages/ThreadsManual"));
 const ClientWelcome = lazy(() => import("./pages/ClientWelcome"));
 const CommentManager = lazy(() => import("./pages/CommentManager"));
 const PostAnalytics = lazy(() => import("./pages/PostAnalytics"));
@@ -121,6 +122,7 @@ function Router() {
       <Route path="/guide" component={Guide} />
       <Route path="/threads-setup-guide" component={ThreadsSetupGuide} />
       <Route path="/threads-invite-guide" component={ThreadsInviteGuide} />
+      <Route path="/manual" component={ThreadsManual} />
       <Route path="/welcome" component={ClientWelcome} />
       <Route path="/try" component={TryGenerate} />
       <Route path="/privacy" component={Privacy} />

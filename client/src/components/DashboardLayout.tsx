@@ -69,7 +69,8 @@ const accountMenuItems: MenuItem[] = [
   { icon: BarChart3, label: "投稿分析", path: "/post-analytics", badgeKey: "analytics" },
   { icon: Gift, label: "紹介プログラム", path: "/referral" },
   { icon: Settings, label: "設定", path: "/settings" },
-  { icon: BookOpen, label: "使い方ガイド", path: "/guide" },
+  // クライアントが迷わない実運用マニュアル（毎日やること・承認・修正手順）を最優先で見せる
+  { icon: BookOpen, label: "使い方マニュアル", path: "/manual" },
   { icon: HelpCircle, label: "よくある質問", path: "/faq" },
 ];
 

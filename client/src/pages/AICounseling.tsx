@@ -107,15 +107,18 @@ export default function AICounseling() {
   // /ai-counseling を引数なしで開いたが既にプロジェクトがある場合は、
   // 真っ白な新規入力ではなく既存の回答を開く（「入力が消えた」ように見える誤解の防止。
   // 2026-08-14 滝本さんで実際に発生）。新店舗の追加は /ai-project-create 経由なので影響しない。
-  const { data: existingProjects } = trpc.project.list.useQuery(undefined, {
-    enabled: isNew && window.location.pathname === '/ai-counseling',
-  });
+  const { data: existingProjects } = trpc.project.list.useQuery(undefined, { enabled: isNew });
   useEffect(() => {
     if (!isNew || window.location.pathname !== '/ai-counseling') return;
     if (existingProjects && existingProjects.length > 0) {
       window.location.replace(`/ai-counseling?project=${existingProjects[0].id}`);
     }
   }, [existingProjects, isNew]);
+  // /ai-project-create（新店舗の追加）に既存ユーザーが迷い込んだ場合の案内。
+  // 空の入力欄を見て「保存した内容が消えた」と誤解されるのを防ぐ。
+  const strayedIntoCreate =
+    isNew && window.location.pathname === '/ai-project-create' &&
+    !!existingProjects && existingProjects.length > 0;
 
   // 下書きから復元したことを一度だけ知らせる
   useEffect(() => {
@@ -310,6 +313,22 @@ export default function AICounseling() {
 
   return (
     <div className="container max-w-2xl py-6 px-4 space-y-4">
+      {/* 既存ユーザーが「新店舗追加」画面に迷い込んだときの案内（入力が消えたと誤解させない） */}
+      {strayedIntoCreate && (
+        <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-bold text-amber-900">ここは「新しい店舗を追加する」画面です</p>
+          <p className="mt-1 text-sm text-amber-800 leading-relaxed">
+            保存済みのお店の情報は消えていません。登録済みの内容を確認・修正する場合は、下のボタンからどうぞ。
+          </p>
+          <Button
+            size="sm"
+            className="mt-3 w-full sm:w-auto bg-emerald-600 text-white hover:bg-emerald-700"
+            onClick={() => { window.location.href = `/ai-counseling?project=${existingProjects![0].id}`; }}
+          >
+            保存済みのお店の情報をひらく
+          </Button>
+        </div>
+      )}
       {/* ヘッダー */}
       <div className="flex items-center justify-between">
         <Button
