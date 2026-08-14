@@ -191,6 +191,28 @@ export async function getSubscription(subscriptionId: string) {
 }
 
 /**
+ * ストアの全サブスク一覧（管理画面「契約・メール」用）
+ */
+export async function listStoreSubscriptions(limit: number = 100) {
+  const result = await univapayRequest(
+    `/stores/${UNIVAPAY_STORE_ID}/subscriptions?limit=${limit}`,
+    'GET'
+  );
+  return result?.items ?? [];
+}
+
+/**
+ * 決済リンク一覧（リンクIDから「何の商品の契約か」を表示するため）
+ */
+export async function listCheckoutLinks(limit: number = 100) {
+  const result = await univapayRequest(
+    `/checkout/links?limit=${limit}`,
+    'GET'
+  );
+  return result?.items ?? [];
+}
+
+/**
  * Get transaction token details (メールアドレスの取得に使う)
  *
  * Webhookペイロードのmetadataには氏名・電話しか入らないケースがあるため、

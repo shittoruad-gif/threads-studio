@@ -36,9 +36,24 @@ function getFromEmail(): string {
  * Send an email via Resend
  */
 export async function sendEmail(payload: EmailPayload): Promise<boolean> {
+  // 送信結果を管理画面「契約・メール」用に記録する（記録失敗は送信に影響させない）
+  const log = async (status: 'sent' | 'failed' | 'skipped', error?: string) => {
+    try {
+      const db = await import('../db');
+      await db.insertEmailLog({
+        toEmail: payload.to,
+        subject: payload.subject,
+        body: payload.html,
+        status,
+        error: error ?? null,
+      });
+    } catch { /* ログ失敗は無視 */ }
+  };
+
   const resend = getResend();
   if (!resend) {
     console.log("[Email] Skipped - RESEND_API_KEY not configured");
+    await log('skipped', 'RESEND_API_KEY not configured');
     return false;
   }
 
@@ -52,13 +67,16 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
 
     if (error) {
       console.warn("[Email] Failed to send:", error);
+      await log('failed', JSON.stringify(error).slice(0, 1000));
       return false;
     }
 
     console.log(`[Email] Sent to ${payload.to}: ${payload.subject}`);
+    await log('sent');
     return true;
   } catch (err) {
     console.warn("[Email] Error:", err);
+    await log('failed', String(err).slice(0, 1000));
     return false;
   }
 }

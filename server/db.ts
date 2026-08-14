@@ -27,7 +27,8 @@ import {
   jobRuns, JobRun,
   followerSnapshots, hitPostArchive, HitPostArchive, cancellationFeedback,
   hiddenItems, contentInterestSurvey, ContentInterestSurvey,
-  regionalRefPosts, RegionalRefPost
+  regionalRefPosts, RegionalRefPost,
+  emailLogs, EmailLog, InsertEmailLog
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { PLANS } from '../shared/plans';
@@ -2939,3 +2940,28 @@ export async function updateMonitorFeedbackStatus(id: number, status: string, ad
   return true;
 }
 
+
+// ==================== 送信メールログ ====================
+
+/** 送信メールを記録する（失敗しても呼び出し元のメール送信は妨げない） */
+export async function insertEmailLog(data: InsertEmailLog): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    await db.insert(emailLogs).values(data);
+  } catch (e) {
+    console.error('[EmailLog] 記録失敗:', e);
+  }
+}
+
+/** 送信メールログ一覧（新しい順）。search指定で宛先メールを部分一致で絞る */
+export async function listEmailLogs(limit: number = 100, search?: string): Promise<EmailLog[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const base = db.select().from(emailLogs);
+  const rows = search && search.trim()
+    ? await base.where(sql`${emailLogs.toEmail} LIKE ${'%' + search.trim() + '%'}`)
+        .orderBy(desc(emailLogs.createdAt)).limit(limit)
+    : await base.orderBy(desc(emailLogs.createdAt)).limit(limit);
+  return rows;
+}

@@ -30,6 +30,7 @@ const AIGenerate = lazy(() => import("./pages/AIGenerate"));
 const AICounseling = lazy(() => import("./pages/AICounseling"));
 const AIStyleCalibration = lazy(() => import("./pages/AIStyleCalibration"));
 const AdminCoupons = lazy(() => import("./pages/AdminCoupons"));
+const AdminBilling = lazy(() => import("./pages/AdminBilling"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const AITemplates = lazy(() => import("./pages/AITemplates"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
@@ -93,6 +94,7 @@ function DashboardRoutes() {
         <Route path="/ai-style-calibration" component={AIStyleCalibration} />
         <Route path="/ai-history" component={AIHistory} />
         <Route path="/admin/coupons" component={AdminCoupons} />
+        <Route path="/admin/billing" component={AdminBilling} />
         <Route path="/admin/users" component={AdminUsers} />
         <Route path="/admin/presets" component={AdminPresets} />
         <Route path="/admin/feedback" component={AdminFeedback} />
@@ -174,6 +176,9 @@ function Router() {
         {() => <DashboardRoutes />}
       </Route>
       <Route path="/admin/coupons">
+        {() => <DashboardRoutes />}
+      </Route>
+      <Route path="/admin/billing">
         {() => <DashboardRoutes />}
       </Route>
       <Route path="/admin/users">

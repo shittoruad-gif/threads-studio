@@ -2924,6 +2924,88 @@ ${input.commentText}
 
   // ============ Admin Management ============
   admin: router({
+    // ── 契約・課金一覧（UnivaPayストア直結・管理者のみ）────────────
+    // ストアは他事業と共用のため全契約を出し、リンク説明で「何の契約か」を表示。
+    // アプリ登録ユーザーとはメールで突き合わせ、二重契約（同一メールで複数の
+    // 有効サブスク）には警告フラグを立てる。
+    univapayContracts: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '管理者権限が必要です。' });
+      }
+      const univapay = await import('./univapay');
+      const [subs, links] = await Promise.all([
+        univapay.listStoreSubscriptions(100),
+        univapay.listCheckoutLinks(100).catch(() => []),
+      ]);
+      const linkDesc = new Map<string, string>();
+      for (const l of links) linkDesc.set(l.id, l.description || '');
+
+      // トークン照会でメールを解決（同時8件まで・失敗は無視）
+      const rows: any[] = [];
+      const queue = [...subs];
+      const workers = Array.from({ length: 8 }, async () => {
+        while (queue.length > 0) {
+          const s = queue.shift();
+          if (!s) break;
+          let email: string | null = null;
+          try {
+            const token = await univapay.getTransactionToken(s.transaction_token_id);
+            email = token?.email ?? null;
+          } catch { /* 古いトークン等は取得不可 */ }
+          rows.push({
+            id: s.id,
+            amount: s.amount,
+            status: s.status,
+            createdOn: s.created_on,
+            nextPaymentDate: s.next_payment?.due_date ?? null,
+            payerName: s.metadata?.['univapay-name'] ?? null,
+            email,
+            linkDescription: linkDesc.get(s.metadata?.['univapay-link-id']) ?? null,
+          });
+        }
+      });
+      await Promise.all(workers);
+
+      // アプリユーザーとの突き合わせ＋二重契約検知
+      const activeByEmail = new Map<string, number>();
+      for (const r of rows) {
+        if (r.email && (r.status === 'current' || r.status === 'unpaid' || r.status === 'suspended')) {
+          activeByEmail.set(r.email, (activeByEmail.get(r.email) ?? 0) + 1);
+        }
+      }
+      for (const r of rows) {
+        r.duplicateWarning = !!(r.email && (activeByEmail.get(r.email) ?? 0) >= 2 &&
+          (r.status === 'current' || r.status === 'unpaid' || r.status === 'suspended'));
+        if (r.email) {
+          const user = await db.getUserByEmail(r.email);
+          if (user) {
+            const sub = await db.getSubscriptionByUserId(user.id);
+            r.appUser = { id: user.id, name: user.name, planId: sub?.planId ?? null, planStatus: sub?.status ?? null };
+          } else {
+            r.appUser = null;
+          }
+        } else {
+          r.appUser = null;
+        }
+      }
+      // 新しい契約順
+      rows.sort((a, b) => String(b.createdOn).localeCompare(String(a.createdOn)));
+      return rows;
+    }),
+
+    // ── 送信メールログ（管理者のみ）────────────────────────────
+    emailLogs: protectedProcedure
+      .input(z.object({
+        search: z.string().optional(),
+        limit: z.number().min(1).max(500).default(100),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '管理者権限が必要です。' });
+        }
+        return await db.listEmailLogs(input.limit, input.search);
+      }),
+
     // 全ユーザー横断ヒット投稿アーカイブ（プロンプト改善の学習素材。管理者のみ）
     listHitPostArchive: protectedProcedure
       .input(z.object({

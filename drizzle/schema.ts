@@ -690,3 +690,24 @@ export const monitorFeedback = mysqlTable("monitorFeedback", {
 
 export type MonitorFeedback = typeof monitorFeedback.$inferSelect;
 export type InsertMonitorFeedback = typeof monitorFeedback.$inferInsert;
+
+// ==================== 送信メールログ ====================
+// アプリから顧客へ送ったメールの記録（管理画面「契約・メール」で閲覧）。
+// sendEmail() が成功・失敗を問わず1通ごとに残す。過去分（この機能追加以前）は無い。
+export const emailLogs = mysqlTable("email_logs", {
+  id: int("id").primaryKey().autoincrement(),
+  toEmail: varchar("toEmail", { length: 320 }).notNull(),
+  subject: varchar("subject", { length: 500 }).notNull(),
+  // 送信したHTML本文（管理画面でそのまま表示する）
+  body: text("body"),
+  status: mysqlEnum("status", ["sent", "failed", "skipped"]).notNull(),
+  // 失敗時のエラー内容
+  error: text("error"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  toEmailIdx: index("email_logs_to_email_idx").on(table.toEmail),
+  createdAtIdx: index("email_logs_created_at_idx").on(table.createdAt),
+}));
+
+export type EmailLog = typeof emailLogs.$inferSelect;
+export type InsertEmailLog = typeof emailLogs.$inferInsert;

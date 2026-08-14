@@ -79,6 +79,7 @@ const agencyMenuItems: MenuItem[] = [
 
 const adminMenuItems: MenuItem[] = [
   { icon: Users, label: "ユーザー管理", path: "/admin/users", adminOnly: true },
+  { icon: CreditCard, label: "契約・メール", path: "/admin/billing", adminOnly: true },
   { icon: CreditCard, label: "クーポン管理", path: "/admin/coupons", adminOnly: true },
   { icon: Sliders, label: "プリセット管理", path: "/admin/presets", adminOnly: true },
   { icon: MessageCircle, label: "フィードバック", path: "/admin/feedback", adminOnly: true },
