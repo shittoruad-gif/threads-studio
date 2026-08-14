@@ -68,8 +68,8 @@ export async function hasUserUsedCoupon(userId: number, couponId: number): Promi
  */
 const SEMINAR_PRICE_CODES = new Set<string>([
   'SEMINAR2026',
-  'OHKI2026',    // 大木真也
-  'SASAKI2026',  // 佐々木達也
+  'OHKI2026',    // 大木慎也
+  'SASAKI2026',  // 佐々木竜也
 ]);
 
 /**

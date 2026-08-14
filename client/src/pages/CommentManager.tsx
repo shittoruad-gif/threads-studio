@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, MessageCircle, Send, Sparkles, RefreshCw, User, Copy, Check } from 'lucide-react';
 import ThreadsAccountSwitcher, { useThreadsAccount } from '@/components/ThreadsAccountSwitcher';
+import PageGuide from '@/components/PageGuide';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -163,6 +164,12 @@ export default function CommentManager() {
           <ThreadsAccountSwitcher />
         </div>
       </div>
+
+      <PageGuide steps={[
+        <>返信したいコメントの<b>「AI返信を生成」</b>を押します</>,
+        <>出てきた候補をタップで選び、必要なら文章を手直しします</>,
+        <><b>「投稿する」</b>を押すとThreadsに返信されます</>,
+      ]} />
 
       {isLoading ? (
         <div className="flex items-center justify-center min-h-[400px]">

@@ -789,4 +789,10 @@ export const dict: Record<string, string> = {
   "昼12時前後": "Around noon",
   "朝7〜10時": "7-10am",
   "※114アカウント・12.9万投稿の実測データ": "*Based on data from 114 accounts / 129k posts",
+  // ── 画面ごとの操作ガイド（PageGuide）──
+  "この画面の使い方": "How to use this screen",
+  "表示しない": "Hide",
+  "操作ガイドを表示": "Show guide",
+  "くわしい使い方マニュアルを見る": "Open the full manual",
+  "全画面の操作ガイドを非表示にします（いつでも戻せます）": "Hide guides on all screens (you can bring them back anytime)",
 };

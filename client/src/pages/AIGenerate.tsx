@@ -4,6 +4,7 @@ import { useLang } from '@/i18n';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { ArrowLeft, ArrowRight, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, EyeOff, RotateCcw, FileEdit, Smartphone, Send, Link2, ChevronDown, Settings2, AlertCircle } from 'lucide-react';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
+import PageGuide from '@/components/PageGuide';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -677,6 +678,12 @@ export default function AIGenerate() {
         )}
 
         {/* カウンセリング済みのとき：内容の確認・修正導線 */}
+        <PageGuide steps={[
+          <><b>「投稿の目的を選ぶ」</b>から1つタップします（迷ったら「予約・LINE登録を増やしたい」）</>,
+          <><b>「AI投稿を生成」</b>を押して10〜30秒待ちます</>,
+          <>内容を確認して<b>「今すぐThreadsに投稿」</b>、または<b>「投稿を予約する」</b>で日時指定</>,
+        ]} />
+
         {/* truncateだとスマホで「カ...」だけになるため、短いラベル＋折返し許可にしている */}
         {projectId && counselingState && counselingState.counseledAt && (
           <div className="mb-6 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5">

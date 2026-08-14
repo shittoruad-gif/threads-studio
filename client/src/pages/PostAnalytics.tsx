@@ -22,6 +22,7 @@ import { useLang } from "@/i18n";
 import { toast } from "sonner";
 import { useState } from "react";
 import { useThreadsAccount } from "@/components/ThreadsAccountSwitcher";
+import PageGuide from "@/components/PageGuide";
 import {
   BarChart,
   Bar,
@@ -254,6 +255,12 @@ export default function PostAnalytics() {
             </Button>
           </div>
         </div>
+
+        <PageGuide steps={[
+          <>右上の<b>「最新データを取得」</b>を押して数字を最新にします</>,
+          <>合計の数字と<b>「当たり投稿 TOP3」</b>を見ます（週1回で十分です）</>,
+          <>良かった投稿は<b>「文体のお手本に追加」</b>を押すと、AIがその書き方を真似します</>,
+        ]} />
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20">

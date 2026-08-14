@@ -24,6 +24,7 @@ import { Link2, Unlink, AlertCircle, Plus, User, RefreshCw, Users, ShieldCheck, 
 import { useLocation } from 'wouter';
 import { toast } from 'sonner';
 import { getLoginUrl } from '@/const';
+import PageGuide from '@/components/PageGuide';
 import { useEffect, useState, useRef } from 'react';
 
 export default function ThreadsConnect() {
@@ -271,6 +272,12 @@ export default function ThreadsConnect() {
           {t('Threadsアカウントを連携して、直接投稿できるようになります')}
         </p>
       </div>
+
+      <PageGuide steps={[
+        <>接続には<b>60日の有効期限</b>があります。期限が近づくと黄色いお知らせが出ます</>,
+        <>お知らせが出たら<b>「接続を更新」</b>を押すだけで60日延長されます</>,
+        <>直らないときだけ<b>「接続をやり直す」</b>→Threadsの画面で<b>「許可」</b>（パソコン推奨）</>,
+      ]} />
 
       {/* PC推奨バナー（全ユーザー・初回から表示）。スマホではThreadsアプリの横取り等で
           「このページは存在しません」に飛ぶ事例があるため、まずPCを強く推奨する。 */}

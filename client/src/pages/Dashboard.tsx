@@ -35,6 +35,7 @@ import { getLoginUrl } from '@/const';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import CouponModal from '@/components/CouponModal';
 import SetupChecklist from '@/components/SetupChecklist';
+import PageGuide from '@/components/PageGuide';
 import {
   Dialog,
   DialogContent,
@@ -455,6 +456,13 @@ export default function Dashboard() {
             {subscription?.plan?.name ? t(subscription.plan.name) : t('無料プラン')}
           </Badge>
         </div>
+
+        {/* 毎回表示の操作ガイド（オフ切替可）。毎日の運用手順を1画面目で思い出せるように */}
+        <PageGuide steps={[
+          <>毎日やることは1つ：下の<b>「予約・履歴」</b>→<b>「承認待ち」</b>→内容を見て<b>「承認して投稿」</b>（約1分）</>,
+          <>週1回、<b>「投稿分析」</b>で数字と<b>「コメント管理」</b>の返信を確認します</>,
+          <>お店の情報が変わったら<b>「登録情報を修正」</b>から直します（次の投稿から反映）</>,
+        ]} />
 
         {/* 初心者向け「次にやること」チェックリスト（順番固定・実データ連動） */}
         <SetupChecklist

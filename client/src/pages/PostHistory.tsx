@@ -27,6 +27,7 @@ import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { translatePostError } from "@/lib/postErrors";
 import { useThreadsAccount } from "@/components/ThreadsAccountSwitcher";
+import PageGuide from "@/components/PageGuide";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -278,6 +279,12 @@ export default function PostHistory() {
             ダッシュボードに戻る
           </Button>
         </div>
+
+        <PageGuide steps={[
+          <>上の<b>「承認待ち」</b>をタップして、公開前の投稿を確認します</>,
+          <>内容がよければ緑の<b>「承認して投稿」</b>を押します（これで公開されます）</>,
+          <>直したいときは<b>「編集」</b>→書き換えて<b>「保存」</b>→<b>「承認して投稿」</b>。やめたいときは<b>「キャンセル」</b></>,
+        ]} />
 
         <Card className="glass-card mb-6">
           <CardHeader>
