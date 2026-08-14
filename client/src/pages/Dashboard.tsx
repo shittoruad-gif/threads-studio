@@ -368,8 +368,13 @@ export default function Dashboard() {
           if (!threadsAccounts || threadsAccounts.length === 0) return null;
           const now = Date.now();
           const DAY = 1000 * 60 * 60 * 24;
-          const expired = threadsAccounts.filter((a: any) => a.tokenExpiresAt && new Date(a.tokenExpiresAt).getTime() <= now);
-          const expiringSoon = threadsAccounts.filter((a: any) => {
+          // ★切替中のアカウントだけを判定する（別アカウントの期限切れで
+          //   今見ているアカウントに赤い警告が出る混乱を防ぐ）
+          const targetAccounts: any[] = selectedAccountId
+            ? threadsAccounts.filter((a: any) => a.id === selectedAccountId)
+            : threadsAccounts;
+          const expired = targetAccounts.filter((a: any) => a.tokenExpiresAt && new Date(a.tokenExpiresAt).getTime() <= now);
+          const expiringSoon = targetAccounts.filter((a: any) => {
             if (!a.tokenExpiresAt) return false;
             const d = (new Date(a.tokenExpiresAt).getTime() - now) / DAY;
             return d > 0 && d <= 7;
@@ -493,6 +498,13 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">
                     {autoPostSettings?.autoPostEnabled ? t('AIが毎日自動で投稿を生成・公開中') : t('自動投稿はOFFです')}
                   </p>
+                  {/* 自動投稿のON/OFF・頻度・承認モードはユーザー単位の設定で、
+                      アカウントを切り替えても共通。誤解を避けるため明示する */}
+                  {threadsAccounts && threadsAccounts.length > 1 && (
+                    <p className="text-xs text-muted-foreground/80 mt-0.5">
+                      {t('※このON/OFFは連携中の全アカウント共通です')}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-3 shrink-0">
@@ -538,8 +550,9 @@ export default function Dashboard() {
                   : 'bg-orange-100 text-orange-700'
               }`}>
                 <Link2 className="w-3 h-3" />
+                {/* ★いま表示しているアカウント名を出す（全体件数だと切替が伝わらない） */}
                 {threadsAccounts && threadsAccounts.length > 0
-                  ? `${t('Threads連携済（')}${threadsAccounts.length}${t('アカウント）')}`
+                  ? (selectedAccount ? `@${selectedAccount.threadsUsername}` : `${t('Threads連携済（')}${threadsAccounts.length}${t('アカウント）')}`)
                   : t('Threads未連携')}
               </div>
               <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full ${
@@ -556,7 +569,11 @@ export default function Dashboard() {
 
             {/* Token expiry warning */}
             {threadsAccounts && threadsAccounts.length > 0 && (() => {
-              const soonestExpiry = threadsAccounts
+              // ★切替中のアカウントの期限を表示（全アカウントの最短ではなく）
+              const scope: any[] = selectedAccountId
+                ? threadsAccounts.filter((a: any) => a.id === selectedAccountId)
+                : threadsAccounts;
+              const soonestExpiry = scope
                 .filter((a: any) => a.tokenExpiresAt)
                 .map((a: any) => new Date(a.tokenExpiresAt).getTime())
                 .sort((a: number, b: number) => a - b)[0];
@@ -798,6 +815,9 @@ export default function Dashboard() {
                   {autoPostSettings.autoPostRequireApproval
                     ? t('自動で作られた投稿は「承認待ち」に入り、あなたが内容を確認して承認するまで公開されません。安心して運用できます。')
                     : t('現在、自動で作られた投稿は確認なしでそのまま公開されます。オンにすると、公開前にあなたが1件ずつ内容をチェックできます。')}
+                  {threadsAccounts && threadsAccounts.length > 1 && (
+                    <span className="block mt-1 text-muted-foreground/80">{t('※この設定は連携中の全アカウント共通です')}</span>
+                  )}
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">

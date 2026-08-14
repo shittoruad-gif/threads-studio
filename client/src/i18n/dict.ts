@@ -789,6 +789,8 @@ export const dict: Record<string, string> = {
   "昼12時前後": "Around noon",
   "朝7〜10時": "7-10am",
   "※114アカウント・12.9万投稿の実測データ": "*Based on data from 114 accounts / 129k posts",
+  "※このON/OFFは連携中の全アカウント共通です": "*This ON/OFF applies to all connected accounts",
+  "※この設定は連携中の全アカウント共通です": "*This setting applies to all connected accounts",
   // ── 画面ごとの操作ガイド（PageGuide）──
   "この画面の使い方": "How to use this screen",
   "表示しない": "Hide",
