@@ -59,9 +59,10 @@ export default function PageGuide({ steps }: { steps: React.ReactNode[] }) {
         {steps.map((s, i) => <li key={i}>{s}</li>)}
       </ol>
       <button
-        className="mt-3 text-xs font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-800 dark:text-emerald-400"
+        className="mt-3 inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-50 dark:bg-transparent dark:text-emerald-400"
         onClick={() => setLocation('/manual')}
       >
+        <BookOpen className="h-3.5 w-3.5 shrink-0" />
         {t('くわしい使い方マニュアルを見る')}
       </button>
     </div>
