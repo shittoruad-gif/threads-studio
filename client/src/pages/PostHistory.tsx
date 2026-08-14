@@ -608,7 +608,8 @@ export default function PostHistory() {
                       >
                         <ChevronLeft className="w-4 h-4" />
                       </Button>
-                      <span className="text-sm text-muted-foreground px-2">
+                      {/* whitespace-nowrap必須：無いと「1 / 8」が1文字ずつ縦積みになる */}
+                      <span className="text-sm text-muted-foreground px-2 whitespace-nowrap">
                         {page} / {totalPages}
                       </span>
                       <Button

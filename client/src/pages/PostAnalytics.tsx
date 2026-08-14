@@ -236,10 +236,13 @@ export default function PostAnalytics() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          {/* スマホでは2ボタンが横に並びきらず「最新データを取得」が画面外で
+              切れていた。狭い幅では各ボタンを均等幅にして収める。 */}
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             {posts.length > 0 && (
               <Button
                 variant="outline"
+                className="flex-1 sm:flex-none"
                 onClick={handleExportCSV}
               >
                 <Download className="w-4 h-4 mr-2" />
@@ -249,7 +252,7 @@ export default function PostAnalytics() {
             <Button
               onClick={() => fetchAnalytics.mutate()}
               disabled={fetchAnalytics.isPending}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              className="flex-1 sm:flex-none bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               {fetchAnalytics.isPending ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
