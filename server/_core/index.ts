@@ -365,6 +365,15 @@ async function startServer() {
         const existing = await db.getSubscriptionByUserId(user.id);
 
         if (isCanceled) {
+          // ★同一メールで複数サブスクがあり得る（二重契約の整理・旧契約の解約等）。
+          //   イベントのサブスクIDがアプリに記録されたIDと食い違う場合、それは
+          //   「別契約」の解約通知なので、アプリの契約は触らない
+          //   （2026-08-14 滝本さんの旧契約解約で新契約まで解約扱いになった事故の再発防止）。
+          if (existing?.univapaySubscriptionId && univapaySubId &&
+              existing.univapaySubscriptionId !== univapaySubId) {
+            console.log(`[Univapay Webhook] 別契約の解約通知を無視: user=${user.id} event.sub=${univapaySubId} app.sub=${existing.univapaySubscriptionId}`);
+            return res.json({ received: true, note: 'canceled event for a different subscription' });
+          }
           if (existing) {
             await db.updateSubscription(existing.id, { status: 'canceled' });
           }
@@ -412,6 +421,14 @@ async function startServer() {
             console.log(`[Univapay Webhook] サブスク解約: user=${user.id}`);
           }
         } else if (isFailed) {
+          // ★別契約（サブスクID不一致）の失敗通知は無視。
+          //   同一メールで他サービス・旧契約の決済失敗が来ても、アプリの契約を
+          //   past_dueにしたり督促メールを送ったりしない。
+          if (existing?.univapaySubscriptionId && univapaySubId &&
+              existing.univapaySubscriptionId !== univapaySubId) {
+            console.log(`[Univapay Webhook] 別契約の決済失敗通知を無視: user=${user.id} event.sub=${univapaySubId} app.sub=${existing.univapaySubscriptionId}`);
+            return res.json({ received: true, note: 'failed event for a different subscription' });
+          }
           // ── 決済失敗フォローアップ（dunning）──────────────────────
           // 失敗回数を加算し、初回失敗日時（猶予期間の起点）を記録する。
           // Webhook再送による二重カウントは課金イベントIDで防ぐ。
@@ -449,6 +466,22 @@ async function startServer() {
             });
           } catch (e) { console.error('[Univapay Webhook] 決済失敗フォロー処理エラー:', e); }
         } else if (isPaidCharge) {
+          // ★アプリの契約が正常稼働中（active）で、イベントのサブスクIDが別物の場合は
+          //   並行契約（二重契約・他サービス）の課金。上書きせず運用者に通知だけする。
+          //   （アプリ側が canceled/past_due 等なら「新契約への切替」とみなして通常処理へ）
+          if (existing?.univapaySubscriptionId && univapaySubId &&
+              existing.univapaySubscriptionId !== univapaySubId &&
+              existing.status === 'active') {
+            console.warn(`[Univapay Webhook] 別契約の課金を検知（二重契約の可能性）: user=${user.id} event.sub=${univapaySubId} app.sub=${existing.univapaySubscriptionId} amount=${amount}`);
+            try {
+              const { notifyOwner } = await import('./notification');
+              await notifyOwner({
+                title: '⚠️ Univapay: 同一メールで別サブスクの課金（二重契約の可能性）',
+                content: `顧客: ${user.name ?? user.email} <${email}>\n課金額: ${amount != null ? '¥' + amount.toLocaleString('ja-JP') : '不明'}\nイベントのサブスクID: ${univapaySubId}\nアプリ記録のサブスクID: ${existing.univapaySubscriptionId}\nUnivaPay管理画面で契約状況の確認をおすすめします。`,
+              });
+            } catch {}
+            return res.json({ received: true, note: 'paid charge for a different subscription (parallel contract)' });
+          }
           // ── 実課金成功（金額>0）→ active 化 ──
           // プランは「金額一致 → 既存プラン維持」の順。どちらも不明なら誤付与を避けて保留通知。
           const planId = matchedPlanId ?? existing?.planId ?? null;
