@@ -3025,16 +3025,8 @@ ${input.commentText}
       });
       await Promise.all(workers);
 
-      // アプリユーザーとの突き合わせ＋二重契約検知
-      const activeByEmail = new Map<string, number>();
+      // アプリユーザーとの突き合わせ
       for (const r of rows) {
-        if (r.email && (r.status === 'current' || r.status === 'unpaid' || r.status === 'suspended')) {
-          activeByEmail.set(r.email, (activeByEmail.get(r.email) ?? 0) + 1);
-        }
-      }
-      for (const r of rows) {
-        r.duplicateWarning = !!(r.email && (activeByEmail.get(r.email) ?? 0) >= 2 &&
-          (r.status === 'current' || r.status === 'unpaid' || r.status === 'suspended'));
         if (r.email) {
           const user = await db.getUserByEmail(r.email);
           if (user) {
@@ -3047,9 +3039,28 @@ ${input.commentText}
           r.appUser = null;
         }
       }
+
+      // ★Threads Studio関連の契約だけに絞る（ストアは他事業と共用のため、
+      //   広告代行・Keiro・コンサル等の契約は表示しない。三上さん指示 2026-08-15）。
+      //   判定: 【Threads】決済リンク経由、またはアプリ登録ユーザーのメールと一致。
+      const tsRows = rows.filter((r) =>
+        String(r.linkDescription ?? '').includes('【Threads】') || r.appUser,
+      );
+
+      // 二重契約検知（Threads関連の中で、同一メールに複数の有効契約）
+      const activeByEmail = new Map<string, number>();
+      for (const r of tsRows) {
+        if (r.email && (r.status === 'current' || r.status === 'unpaid' || r.status === 'suspended')) {
+          activeByEmail.set(r.email, (activeByEmail.get(r.email) ?? 0) + 1);
+        }
+      }
+      for (const r of tsRows) {
+        r.duplicateWarning = !!(r.email && (activeByEmail.get(r.email) ?? 0) >= 2 &&
+          (r.status === 'current' || r.status === 'unpaid' || r.status === 'suspended'));
+      }
       // 新しい契約順
-      rows.sort((a, b) => String(b.createdOn).localeCompare(String(a.createdOn)));
-      return rows;
+      tsRows.sort((a, b) => String(b.createdOn).localeCompare(String(a.createdOn)));
+      return tsRows;
     }),
 
     // ── 送信メールログ（管理者のみ）────────────────────────────

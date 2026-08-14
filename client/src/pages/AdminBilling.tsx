@@ -76,7 +76,7 @@ export default function AdminBilling() {
         <TabsContent value="contracts">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">
-              UnivaPayストア直結（他事業の契約も含む）。「契約内容」は決済リンクの説明文です。
+              Threads Studio関連の契約のみ表示（【Threads】決済リンク経由＋アプリ登録ユーザーの契約）。「契約内容」は決済リンクの説明文です。
             </p>
             <Button size="sm" variant="outline" onClick={() => contracts.refetch()} disabled={contracts.isFetching}>
               {contracts.isFetching ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
@@ -138,7 +138,7 @@ export default function AdminBilling() {
             </div>
           )}
           <p className="mt-2 text-xs text-muted-foreground">
-            ⚠️ 黄色の行＝同一メールで複数の有効契約（二重契約の可能性）。「アプリ契約」はThreads Studio内の契約記録です（他事業の契約は「未登録」と表示されます）。
+            ⚠️ 黄色の行＝同一メールで複数の有効契約（二重契約の可能性）。「アプリ契約」はThreads Studio内の契約記録です。
           </p>
         </TabsContent>
 
