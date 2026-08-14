@@ -126,18 +126,19 @@ export default function WeeklyCalendarView({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
+        {/* スマホでは横並びだと日付が縦1文字ずつに潰れるため、縦積み＋nowrapにする */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Calendar className="w-5 h-5 text-emerald-600" />
-            週間カレンダー
+            <Calendar className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span className="whitespace-nowrap">週間カレンダー</span>
           </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={goToPreviousWeek} className="h-8 w-8">
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <Button variant="ghost" size="icon" onClick={goToPreviousWeek} className="h-8 w-8 shrink-0">
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <button
               onClick={goToToday}
-              className="text-sm font-medium text-foreground/80 hover:text-emerald-600 transition-colors px-2"
+              className="text-sm font-medium text-foreground/80 hover:text-emerald-600 transition-colors px-2 whitespace-nowrap"
             >
               {weekLabel}
             </button>
@@ -225,23 +226,23 @@ export default function WeeklyCalendarView({
           })}
         </div>
 
-        {/* Legend */}
-        <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 rounded-full bg-blue-500" />
+        {/* Legend（狭い幅で「予約済/み」のような途中折れをさせない） */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1 whitespace-nowrap">
+            <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
             <span>予約済み</span>
           </div>
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 rounded-full bg-green-500" />
+          <div className="flex items-center gap-1 whitespace-nowrap">
+            <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
             <span>投稿済み</span>
           </div>
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 rounded-full bg-red-500" />
+          <div className="flex items-center gap-1 whitespace-nowrap">
+            <div className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
             <span>失敗</span>
           </div>
           {autoPostEnabled && (
-            <div className="flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-muted-foreground/60" />
+            <div className="flex items-center gap-1 whitespace-nowrap">
+              <Sparkles className="w-3 h-3 text-muted-foreground/60 shrink-0" />
               <span>自動生成</span>
             </div>
           )}

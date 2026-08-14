@@ -455,7 +455,8 @@ export default function DashboardLayout({
         <SubscriptionAlertBanner />
 
         {/* Page Content。スマホでは下部タブバーに隠れないよう余白を多めに確保 */}
-        <main className="p-4 pb-28 sm:p-6 sm:pb-6 lg:p-8">{children}</main>
+        {/* pb-44: 下タブ(64px)＋右下のフローティングボタン2つが最下部のボタンを隠さない余白 */}
+        <main className="p-4 pb-44 sm:p-6 sm:pb-6 lg:p-8">{children}</main>
       </div>
 
       {/* スマホ用 下部タブバー — 主要4機能を常時1タップで。年配の方でも迷わない導線 */}

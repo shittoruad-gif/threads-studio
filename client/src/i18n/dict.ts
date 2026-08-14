@@ -778,4 +778,15 @@ export const dict: Record<string, string> = {
   "初期設定はすべて完了しています": "Initial setup is complete",
   "あとは自動投稿におまかせください。投稿の内容や予定は「投稿予定・履歴」でいつでも確認できます。": "Auto-posting will take it from here. You can check upcoming and past posts anytime in \"Post Schedule & History\".",
   "投稿予定を確認する": "View post schedule",
+  // ── ホーム簡素化・スマホQA修正（2026-08-14）──
+  "詳しいデータ・その他の機能を見る": "Show detailed data & more",
+  "詳しいデータを閉じる": "Hide detailed data",
+  "契約プラン": "Subscription",
+  "お店の情報は入力済み": "Store info completed",
+  "15時台": "Around 3pm",
+  "21時台": "Around 9pm",
+  "22〜23時": "10-11pm",
+  "昼12時前後": "Around noon",
+  "朝7〜10時": "7-10am",
+  "※114アカウント・12.9万投稿の実測データ": "*Based on data from 114 accounts / 129k posts",
 };

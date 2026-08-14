@@ -677,11 +677,12 @@ export default function AIGenerate() {
         )}
 
         {/* カウンセリング済みのとき：内容の確認・修正導線 */}
+        {/* truncateだとスマホで「カ...」だけになるため、短いラベル＋折返し許可にしている */}
         {projectId && counselingState && counselingState.counseledAt && (
           <div className="mb-6 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5">
             <p className="text-sm text-emerald-800 flex items-center gap-2 min-w-0">
               <Check className="h-4 w-4 shrink-0" />
-              <span className="truncate">{t("カウンセリング済み — 入力内容はいつでも修正できます")}</span>
+              <span className="leading-snug">{t("お店の情報は入力済み")}</span>
             </p>
             <Button
               variant="outline"

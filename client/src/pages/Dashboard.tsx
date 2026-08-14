@@ -16,6 +16,8 @@ import {
   LogOut,
   Home,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   HelpCircle,
   FolderOpen,
   Clock,
@@ -70,6 +72,10 @@ export default function Dashboard() {
   const { selectedAccountId } = useThreadsAccount();
   const [location, setLocation] = useLocation();
   const [couponModalOpen, setCouponModalOpen] = useState(false);
+  // ホームの「詳しいデータ」折りたたみ（スマホの縦長・ごちゃつき対策。開閉を記憶）
+  const [showDetails, setShowDetails] = useState(() => {
+    try { return localStorage.getItem('dashboard-details-open') === '1'; } catch { return false; }
+  });
   // 解約アンケート（解約実行の前に理由を1タップで聞く）
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState<string>('');
@@ -433,9 +439,10 @@ export default function Dashboard() {
         <PinnedPostRecommendation />
 
         {/* Welcome + Plan Badge */}
-        <div className="mb-6 flex items-center justify-between gap-3">
+        {/* スマホでtruncateすると「ようこそ...」と名前が消えるため、縦積み＋折返しにする */}
+        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-foreground truncate">{t('ようこそ、')}{user?.name || t('ユーザー')}{t('さん')}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-snug">{t('ようこそ、')}{user?.name || t('ユーザー')}{t('さん')}</h1>
             <p className="text-muted-foreground text-sm mt-1">
               {!threadsAccounts || threadsAccounts.length === 0
                 ? t('まずはThreadsを連携して、投稿の自動化を始めましょう')
@@ -444,7 +451,7 @@ export default function Dashboard() {
                   : t('準備OK！自動投稿をONにすると毎日自動で投稿されます')}
             </p>
           </div>
-          <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-sm px-3 py-1 shrink-0">
+          <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-sm px-3 py-1 shrink-0 self-start">
             {subscription?.plan?.name ? t(subscription.plan.name) : t('無料プラン')}
           </Badge>
         </div>
@@ -624,20 +631,21 @@ export default function Dashboard() {
           </div>
 
           {/* Stats Column */}
-          <div className="flex flex-col gap-4 min-w-0">
-            <div className="flex-1 flex flex-col justify-center bg-background rounded-xl p-4 border border-border">
+          {/* スマホは縦に3枚並べず、コンパクトな横3列にする（縦長対策） */}
+          <div className="grid grid-cols-3 gap-2 lg:flex lg:flex-col lg:gap-4 min-w-0">
+            <div className="lg:flex-1 flex flex-col justify-center bg-background rounded-xl p-3 lg:p-4 border border-border">
               <p className="text-muted-foreground text-xs mb-1">{t("総投稿数")}</p>
-              <p className="text-2xl font-bold text-foreground">{stats?.totalPosts || 0}</p>
+              <p className="text-xl lg:text-2xl font-bold text-foreground">{stats?.totalPosts || 0}</p>
             </div>
-            <div className="flex-1 flex flex-col justify-center bg-background rounded-xl p-4 border border-border">
+            <div className="lg:flex-1 flex flex-col justify-center bg-background rounded-xl p-3 lg:p-4 border border-border">
               <p className="text-muted-foreground text-xs mb-1">{t("予約中")}</p>
-              <p className="text-2xl font-bold text-foreground">
+              <p className="text-xl lg:text-2xl font-bold text-foreground">
                 {stats?.postsByStatus?.find((s: any) => s.status === 'pending')?.count || 0}
               </p>
             </div>
-            <div className="flex-1 flex flex-col justify-center bg-background rounded-xl p-4 border border-border">
+            <div className="lg:flex-1 flex flex-col justify-center bg-background rounded-xl p-3 lg:p-4 border border-border">
               <p className="text-muted-foreground text-xs mb-1">{t("今月のAI生成")}</p>
-              <p className="text-2xl font-bold text-foreground">
+              <p className="text-xl lg:text-2xl font-bold text-foreground">
                 {aiUsage?.count || 0}
                 {aiUsage?.limit && aiUsage.limit > 0 && (
                   <span className="text-muted-foreground/60 text-sm font-normal">/{aiUsage.limit}</span>
@@ -769,9 +777,10 @@ export default function Dashboard() {
           }`}>
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <div className="min-w-0 flex-1">
-                <p className="text-sm sm:text-base font-bold text-foreground flex items-center gap-2">
+                {/* flexだとラベル折返し時に「オン」が縦1文字に潰れるため、インラインで続ける */}
+                <p className="text-sm sm:text-base font-bold text-foreground leading-snug">
                   {t("🛡 投稿前チェック（承認モード）：")}
-                  <span className={autoPostSettings.autoPostRequireApproval ? 'text-emerald-700' : 'text-amber-700'}>
+                  <span className={`whitespace-nowrap ${autoPostSettings.autoPostRequireApproval ? 'text-emerald-700' : 'text-amber-700'}`}>
                     {autoPostSettings.autoPostRequireApproval ? t('オン') : t('オフ')}
                   </span>
                 </p>
@@ -794,6 +803,22 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* ── ここから下は「詳しいデータ」。最初は閉じてホームを1〜2画面に収める ── */}
+        <div className="mb-8">
+          <Button
+            variant="outline"
+            className="w-full justify-center"
+            onClick={() => {
+              const next = !showDetails;
+              setShowDetails(next);
+              try { localStorage.setItem('dashboard-details-open', next ? '1' : '0'); } catch { /* ignore */ }
+            }}
+          >
+            {showDetails ? t('詳しいデータを閉じる') : t('詳しいデータ・その他の機能を見る')}
+            {showDetails ? <ChevronUp className="ml-1 w-4 h-4" /> : <ChevronDown className="ml-1 w-4 h-4" />}
+          </Button>
+        </div>
+        {showDetails && (<>
         {/* Usage Progress Section */}
         {subscription?.plan && (
           <div className="bg-background rounded-xl p-6 border border-border mb-8">
@@ -892,10 +917,11 @@ export default function Dashboard() {
         <div className="grid lg:grid-cols-3 gap-6 mb-8">
           {/* Subscription Status */}
           <div className="lg:col-span-2 bg-background rounded-xl p-6 border border-border">
-            <div className="flex items-center justify-between mb-6">
+            {/* スマホで見出しが途中折れ＋バッジが浮くのを防ぐ（折返し許可・nowrap見出し） */}
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
               <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                <Crown className="w-5 h-5 text-emerald-600" />
-                {t("サブスクリプション")}
+                <Crown className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span className="whitespace-nowrap">{t("契約プラン")}</span>
               </h2>
               {getStatusBadge(subscription?.status || 'free')}
             </div>
@@ -1109,29 +1135,30 @@ export default function Dashboard() {
                 <Clock className="w-4 h-4 text-yellow-300" />
                 {t("推奨投稿時間帯")}
               </h3>
+              {/* 実測データ（114アカウント・12.9万投稿の分析）と同期。自動投稿の時刻設定とも一致させる */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-emerald-100">{t("20〜22時")}</span>
+                  <span className="text-sm text-emerald-100">{t("15時台")}</span>
                   <span className="text-yellow-300 text-xs font-bold">{t("★★★★★ 最高")}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-emerald-100">{t("23時前後")}</span>
+                  <span className="text-sm text-emerald-100">{t("21時台")}</span>
                   <span className="text-yellow-300 text-xs font-bold">{t("★★★★★ 最高")}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-emerald-100">{t("16〜17時")}</span>
+                  <span className="text-sm text-emerald-100">{t("22〜23時")}</span>
                   <span className="text-yellow-200 text-xs font-bold">{t("★★★★ 高い")}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-emerald-100">{t("12〜15時")}</span>
-                  <span className="text-emerald-200 text-xs">{t("★★★ 普通")}</span>
+                  <span className="text-sm text-emerald-100">{t("昼12時前後")}</span>
+                  <span className="text-emerald-300 text-xs">{t("★★ 低い")}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-emerald-100">{t("6〜11時")}</span>
+                  <span className="text-sm text-emerald-100">{t("朝7〜10時")}</span>
                   <span className="text-emerald-300 text-xs">{t("★★ 低い")}</span>
                 </div>
               </div>
-              <p className="text-emerald-300 text-xs mt-3">{t("※実績データに基づく分析")}</p>
+              <p className="text-emerald-300 text-xs mt-3">{t("※114アカウント・12.9万投稿の実測データ")}</p>
             </div>
             {/* 強ジャンル */}
             <div className="bg-white/10 rounded-lg p-4">
@@ -1295,6 +1322,7 @@ export default function Dashboard() {
             <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-emerald-600 mt-2 transition-colors" />
           </button>
         </div>
+        </>)}
       </div>
 
       {/* Coupon Modal */}

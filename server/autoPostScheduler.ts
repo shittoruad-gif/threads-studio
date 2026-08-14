@@ -10,6 +10,7 @@ import cron from "node-cron";
 import * as db from "./db";
 import { getPlan } from "../shared/plans";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
+import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { stripRawUrls } from "../shared/sanitize";
 import { invokeLLM } from "./_core/llm";
 import { nanoid } from "nanoid";
@@ -77,6 +78,29 @@ const CONVERSATION_ENDING_ADDENDUM = `
 【この投稿は会話型】この投稿だけは、最後を「具体的で答えやすい小さい問いかけ」1行で締めてよい。
 例:「クーラー26度は暑いし25度は寒い。この1度、どうしてますか」のように、読者が一言で答えられる具体的な質問。
 「〜だと思いませんか？」のような漠然とした同意求めは禁止。やわらかい敬語で。`;
+
+// 季節ズレ防止：LLMは「今日がいつか」を知らないため、8月に梅雨ネタを書く事故が
+// 実際に起きた（2026-08-14 三上さん指摘）。JSTの今日の日付と今月の季節ネタを
+// 明示し、時期外れの季節話題を禁止する。
+function seasonContextJST(): string {
+  const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const y = jst.getUTCFullYear();
+  const m = jst.getUTCMonth() + 1;
+  const d = jst.getUTCDate();
+  const season = (m === 12 || m <= 2) ? '冬' : m <= 5 ? '春' : m <= 8 ? '夏' : '秋';
+  const offSeason =
+    season === '夏' ? '梅雨・花粉・年末年始・冬の冷え'
+    : season === '春' ? '猛暑・お盆・年末年始・雪'
+    : season === '秋' ? '梅雨・猛暑・花粉・年始'
+    : '梅雨・猛暑・お盆・花粉';
+  const topics = (SEASONAL_TOPICS[m] ?? []).map((t) => t.label).join('・');
+  return `
+
+【今日の日付と季節（厳守）】
+- 今日は${y}年${m}月${d}日（季節：${season}）。投稿は必ず「今の季節」に合わせること。
+- 今の時期に合わない季節の話題（例：${offSeason}）は絶対に書かない。
+- 季節に触れる場合は、今月の一般的な話題（${topics}）の範囲から選ぶ。具体的なイベント名・日付・数値を推測で足さない。`;
+}
 
 // 人間化リライト（2パス目）で除去したいAI定型表現。
 // 機械チェック用：リライト後もこれらが残っていたらログに残す（品質モニタリング）。
@@ -340,6 +364,7 @@ async function generateAutoPost(
       messages: [{
         role: 'user',
         content: prompt + AUTO_POST_STYLE_ADDENDUM
+          + seasonContextJST()
           + (CONVERSATION_POST_TYPES.has(postType) ? CONVERSATION_ENDING_ADDENDUM : ''),
       }],
       response_format: JSON_SCHEMA,
