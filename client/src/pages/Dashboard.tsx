@@ -465,48 +465,30 @@ export default function Dashboard() {
           </Badge>
         </div>
 
-        {/* ★よく使う操作への大きな入口（メニューを探さなくても1タップで届くように） */}
+        {/* ★よく使う操作への大きな入口（メニューを探さなくても1タップで届くように）。
+            スマホ375pxでは1枚162px幅なので、アイコンは見出しの上に置いて
+            見出しが途中で折れないようにする。高さも揃える。 */}
         <div className="mb-6 grid grid-cols-2 gap-3">
-          <button
-            onClick={() => setLocation('/post-history?status=awaiting_approval')}
-            className="flex flex-col items-start gap-1 rounded-xl border-2 border-emerald-300 bg-emerald-50 p-4 text-left transition-colors hover:bg-emerald-100 dark:bg-emerald-950/20"
-          >
-            <span className="flex items-center gap-1.5 font-bold text-foreground">
-              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
-              {t('投稿を確認する')}
-            </span>
-            <span className="text-xs text-muted-foreground leading-snug">{t('承認待ちの投稿を見て公開します')}</span>
-          </button>
-          <button
-            onClick={() => setLocation('/ai-generate')}
-            className="flex flex-col items-start gap-1 rounded-xl border-2 border-border bg-card p-4 text-left transition-colors hover:bg-muted/50"
-          >
-            <span className="flex items-center gap-1.5 font-bold text-foreground">
-              <Sparkles className="h-5 w-5 shrink-0 text-amber-500" />
-              {t('投稿を作る')}
-            </span>
-            <span className="text-xs text-muted-foreground leading-snug">{t('AIが投稿を作ります（固定投稿もここ）')}</span>
-          </button>
-          <button
-            onClick={goEditInfo}
-            className="flex flex-col items-start gap-1 rounded-xl border-2 border-border bg-card p-4 text-left transition-colors hover:bg-muted/50"
-          >
-            <span className="flex items-center gap-1.5 font-bold text-foreground">
-              <Pencil className="h-5 w-5 shrink-0 text-blue-500" />
-              {t('お店の情報')}
-            </span>
-            <span className="text-xs text-muted-foreground leading-snug">{t('メニューや強みを直します')}</span>
-          </button>
-          <button
-            onClick={() => setLocation('/post-analytics')}
-            className="flex flex-col items-start gap-1 rounded-xl border-2 border-border bg-card p-4 text-left transition-colors hover:bg-muted/50"
-          >
-            <span className="flex items-center gap-1.5 font-bold text-foreground">
-              <BarChart3 className="h-5 w-5 shrink-0 text-violet-500" />
-              {t('反応を見る')}
-            </span>
-            <span className="text-xs text-muted-foreground leading-snug">{t('どの投稿が見られたか分かります')}</span>
-          </button>
+          {[
+            { icon: CheckCircle2, color: 'text-emerald-600', title: '投稿を確認する', desc: '承認待ちの投稿を見て公開します', onClick: () => setLocation('/post-history?status=awaiting_approval'), primary: true },
+            { icon: Sparkles, color: 'text-amber-500', title: '投稿を作る', desc: 'AIが投稿を作ります（固定投稿もここ）', onClick: () => setLocation('/ai-generate') },
+            { icon: Pencil, color: 'text-blue-500', title: 'お店の情報', desc: 'メニューや強みを直します', onClick: goEditInfo },
+            { icon: BarChart3, color: 'text-violet-500', title: '反応を見る', desc: 'どの投稿が見られたか分かります', onClick: () => setLocation('/post-analytics') },
+          ].map(({ icon: Icon, color, title, desc, onClick, primary }) => (
+            <button
+              key={title}
+              onClick={onClick}
+              className={`flex h-full flex-col items-start gap-1.5 rounded-xl border-2 p-4 text-left transition-colors ${
+                primary
+                  ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20'
+                  : 'border-border bg-card hover:bg-muted/50'
+              }`}
+            >
+              <Icon className={`h-6 w-6 shrink-0 ${color}`} />
+              <span className="font-bold text-foreground leading-snug">{t(title)}</span>
+              <span className="text-xs text-muted-foreground leading-snug">{t(desc)}</span>
+            </button>
+          ))}
         </div>
 
         {/* 毎回表示の操作ガイド（オフ切替可）。毎日の運用手順を1画面目で思い出せるように */}
