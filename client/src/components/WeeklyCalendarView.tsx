@@ -204,7 +204,9 @@ export default function WeeklyCalendarView({
                           {format(parseISO(post.scheduledAt), 'HH:mm')}
                         </span>
                       </div>
-                      <p className="line-clamp-2 text-[12px]">
+                      {/* 本文プレビューは狭い列だと1文字ずつ縦積みになるため、
+                          スマホでは出さない（本文はtitle属性と一覧画面で読める） */}
+                      <p className="hidden sm:line-clamp-2 sm:block text-[12px]">
                         {post.postContent.slice(0, 30)}
                         {post.postContent.length > 30 ? '...' : ''}
                       </p>
@@ -212,11 +214,17 @@ export default function WeeklyCalendarView({
                   ))}
 
                   {/* Auto-post placeholder */}
+                  {/* 1日あたり約40pxしかないため、スマホではラベル文字が
+                      1文字ずつ縦に潰れて読めなかった。狭い幅ではアイコンのみ、
+                      広い幅でだけ文字を出す（意味はtitle属性で補う）。 */}
                   {showAutoSlot && (
-                    <div className="rounded px-1.5 py-1 border border-dashed border-border bg-muted/50 text-[12px] text-muted-foreground/60">
-                      <div className="flex items-center gap-1">
-                        <Sparkles className="w-2.5 h-2.5" />
-                        <span>自動生成予定</span>
+                    <div
+                      className="rounded px-1 py-1 border border-dashed border-border bg-muted/50 text-[12px] text-muted-foreground/60"
+                      title="自動生成予定"
+                    >
+                      <div className="flex items-center justify-center gap-1 sm:justify-start">
+                        <Sparkles className="w-3 h-3 shrink-0" />
+                        <span className="hidden sm:inline whitespace-nowrap">自動生成予定</span>
                       </div>
                     </div>
                   )}

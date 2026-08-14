@@ -399,7 +399,10 @@ export default function PostHistory() {
                   {paginatedPosts.map((post) => (
                     <Card key={post.id} className="glass hover-lift">
                       <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-4">
+                        {/* スマホでは横並びにするとボタン列に幅を取られ、
+                            本文が1px幅まで潰れて読めなくなっていた。
+                            狭い画面では縦積み（本文→ボタン）にする。 */}
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-start justify-between gap-3 sm:gap-4">
                           {post.status === 'pending' && (
                             <button
                               onClick={() => toggleSelect(post.id)}
@@ -493,7 +496,9 @@ export default function PostHistory() {
                             )}
                           </div>
 
-                          <div className="flex flex-col gap-1">
+                          {/* スマホは2列グリッド（1列だと「内容を修正」が1文字ずつ縦に潰れる）。
+                              PCは従来どおり縦1列。 */}
+                          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-col sm:gap-1 [&_button]:whitespace-nowrap [&>button]:w-full sm:[&>button]:w-auto">
                           {post.status === 'awaiting_approval' && (
                             <>
                               <Button

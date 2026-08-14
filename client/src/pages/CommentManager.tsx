@@ -139,9 +139,10 @@ export default function CommentManager() {
   return (
     <div className="container max-w-6xl py-8">
       <PageBreadcrumb items={breadcrumbItems} />
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">{t('コメント管理')}</h1>
+      {/* スマホでは横並びだと切替UI(最小180px)が画面外へはみ出すため縦積みにする */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-8">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2">{t('コメント管理')}</h1>
           <p className="text-muted-foreground">
             {t('投稿へのコメントにAIで返信を生成・投稿できます')}
             {selectedAccount && (
@@ -151,17 +152,18 @@ export default function CommentManager() {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <Button
             variant="outline"
             size="sm"
+            className="shrink-0"
             onClick={() => refetch()}
             disabled={isLoading}
           >
             <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
             {t('更新')}
           </Button>
-          <ThreadsAccountSwitcher />
+          <ThreadsAccountSwitcher compact className="min-w-0 flex-1 sm:flex-none" />
         </div>
       </div>
 

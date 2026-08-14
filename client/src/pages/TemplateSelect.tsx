@@ -43,12 +43,13 @@ export default function TemplateSelect() {
     <div className="min-h-screen relative overflow-hidden">
       {/* Header Navigation */}
       <header className="absolute top-0 left-0 right-0 z-50 p-4">
-        <div className="container flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-primary" />
-            <span className="font-semibold text-lg">Threads Studio</span>
+        {/* スマホではロゴ＋ボタン2つが横に並びきらず画面外へはみ出すため折返す */}
+        <div className="container flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Sparkles className="w-5 h-5 text-primary shrink-0" />
+            <span className="font-semibold text-lg truncate">Threads Studio</span>
           </div>
-          <nav className="flex items-center gap-3">
+          <nav className="flex items-center gap-1 sm:gap-3">
             <Button
               variant="ghost"
               className="text-muted-foreground hover:text-foreground"
