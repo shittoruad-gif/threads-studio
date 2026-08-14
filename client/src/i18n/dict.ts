@@ -790,6 +790,13 @@ export const dict: Record<string, string> = {
   "朝7〜10時": "7-10am",
   "※114アカウント・12.9万投稿の実測データ": "*Based on data from 114 accounts / 129k posts",
   "※このON/OFFは連携中の全アカウント共通です": "*This ON/OFF applies to all connected accounts",
+  // ── 固定投稿の入口 ──
+  "固定投稿を作る": "Create a pinned post",
+  "固定投稿モードにする": "Switch to pinned-post mode",
+  "通常の投稿に戻す": "Back to normal post",
+  "プロフィールの一番上に固定する「お店の入口」。LINE登録や予約に最もつながる投稿です。まだの方はこれから作りましょう。": "The post pinned at the top of your profile — your storefront. It converts best for LINE signups and bookings.",
+  "いま固定投稿モードです。下の「AI投稿を生成」を押すと、プロフィールに固定する用の投稿ができます。": "Pinned-post mode is on. Press \"Generate AI post\" below to create a post for your profile.",
+  "固定投稿をAIで作る（3分）": "Create it with AI (3 min)",
   "※この設定は連携中の全アカウント共通です": "*This setting applies to all connected accounts",
   // ── 画面ごとの操作ガイド（PageGuide）──
   "この画面の使い方": "How to use this screen",

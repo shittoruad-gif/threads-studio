@@ -696,6 +696,7 @@ export default function AIGenerate() {
 
         {/* カウンセリング済みのとき：内容の確認・修正導線 */}
         <PageGuide steps={[
+          <>プロフィールに固定する投稿を作るなら、黄色い枠の<b>「固定投稿モードにする」</b>を押します</>,
           <><b>「投稿の目的を選ぶ」</b>から1つタップします（迷ったら「予約・LINE登録を増やしたい」）</>,
           <><b>「AI投稿を生成」</b>を押して10〜30秒待ちます</>,
           <>内容を確認して<b>「今すぐThreadsに投稿」</b>、または<b>「投稿を予約する」</b>で日時指定</>,
@@ -763,6 +764,44 @@ export default function AIGenerate() {
                     </ol>
                   </div>
                 )}
+                {/* ★固定投稿の入口（従来は「詳細設定」の中に隠れていて見つけられなかった）。
+                    プロフィール最上部に固定する最重要投稿なので、常に見える位置に置く。 */}
+                <div className={`p-4 rounded-lg border-2 ${postType === 'pinned' ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/20' : 'border-amber-200 bg-amber-50/50 dark:bg-amber-950/10'}`}>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-foreground flex items-center gap-1.5">
+                        📌 {t("固定投稿を作る")}
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
+                        {postType === 'pinned'
+                          ? t("いま固定投稿モードです。下の「AI投稿を生成」を押すと、プロフィールに固定する用の投稿ができます。")
+                          : t("プロフィールの一番上に固定する「お店の入口」。LINE登録や予約に最もつながる投稿です。まだの方はこれから作りましょう。")}
+                      </p>
+                    </div>
+                    <div className="shrink-0">
+                      {postType === 'pinned' ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full sm:w-auto border-amber-400 text-amber-800 hover:bg-amber-100"
+                          onClick={() => setPostType('hook_tree')}
+                        >
+                          {t("通常の投稿に戻す")}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white"
+                          onClick={() => setPostType('pinned')}
+                        >
+                          <Pin className="w-4 h-4 mr-1" />
+                          {t("固定投稿モードにする")}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 {/* プリセット選択ボタン */}
                 <div className="p-4 bg-muted rounded-lg">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -2675,7 +2714,12 @@ function ProjectAutoPicker() {
   // directly) wouldn't pick up the new project. Fall through to a real
   // browser navigation in that case.
   const goToProject = (projectId: string) => {
-    window.location.href = `/ai-generate?project=${projectId}`;
+    // ★postType等のパラメータを引き継ぐ。
+    //   ホームの「固定投稿をAIで作る」は /ai-generate?postType=pinned で来るため、
+    //   ここで落とすと固定投稿モードが解除されてしまう（実際に発生していた）。
+    const params = new URLSearchParams(window.location.search);
+    params.set('project', projectId);
+    window.location.href = `/ai-generate?${params.toString()}`;
   };
 
   // Auto-redirect for the single-project case so the user doesn't even

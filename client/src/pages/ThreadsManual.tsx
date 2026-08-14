@@ -131,6 +131,23 @@ export default function ThreadsManual() {
         </Section>
 
         <Section
+          badge="最初にやると効果が高い"
+          title="「固定投稿」を1本作っておく"
+          lede="プロフィールの一番上に固定する投稿です。投稿を見た人が最後に行き着く「お店の入口」で、LINE登録や予約に最もつながります。1回作れば当分そのままでOKです。"
+        >
+          <ol className="list-decimal space-y-2 pl-5">
+            <li>画面下の <Ui>AI投稿</Ui> をタップします</li>
+            <li>上のほうにある黄色い枠の <Ui>固定投稿モードにする</Ui> を押します</li>
+            <li><Ui>AI投稿を生成</Ui> を押して、できた文章を確認します（LINEのURLなどは自動で入ります）</li>
+            <li><Ui>今すぐThreadsに投稿</Ui> で公開します</li>
+            <li>Threadsアプリを開き、その投稿の <Ui>…</Ui> から <Ui>プロフィールに固定</Ui> を選びます</li>
+          </ol>
+          <Note>
+            ホーム画面に「まず『固定投稿』を作りましょう」と出ているときは、そのボタンからでも同じ画面に進めます。
+          </Note>
+        </Section>
+
+        <Section
           badge="④ お店の情報を直したいとき"
           title="「登録情報を修正」から直す"
           lede="メニュー・料金・強み・営業時間などが変わったときはここで直します。次の自動投稿から反映されます。"

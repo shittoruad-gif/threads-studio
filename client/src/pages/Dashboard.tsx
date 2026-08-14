@@ -786,7 +786,7 @@ export default function Dashboard() {
                       className="ml-2 text-xs text-emerald-700 underline"
                       onClick={() => setLocation('/ai-generate?postType=pinned')}
                     >
-                      {t("AIで作る（3分）")}
+                      {t("固定投稿をAIで作る（3分）")}
                     </button>
                   )}
                 </div>
