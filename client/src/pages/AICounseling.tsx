@@ -60,17 +60,67 @@ function formatAnswerForReview(q: CounselingQuestion, value: string): string {
  *  - 選択肢チップ・例文・「なし」ショートカットで答えやすく
  *  - 全問終わったら projectt.saveCounseling で一括保存
  */
+// ── 入力途中の自動下書き ─────────────────────────────────────────
+// カウンセリングは完了時に初めてサーバー保存されるため、途中でリロードや
+// エラーが起きると入力が全て消えていた（2026-08-14 柿本さんで実際に発生・
+// 復元不能だった）。入力のたびにlocalStorageへ保存し、次回訪問時に復元する。
+const COUNSELING_DRAFT_KEY = 'counseling-draft-v1';
+type CounselingDraft = {
+  projectId: string;
+  answers: Partial<CounselingAnswers>;
+  stepIndex: number;
+  savedAt: number;
+};
+function loadCounselingDraft(): CounselingDraft | null {
+  try {
+    const raw = localStorage.getItem(COUNSELING_DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as CounselingDraft;
+    if (!d?.projectId || !d?.answers) return null;
+    // 7日より古い下書きは使わない
+    if (Date.now() - (d.savedAt ?? 0) > 7 * 24 * 60 * 60 * 1000) return null;
+    // 中身が空なら無視
+    if (!Object.values(d.answers).some((v) => v && String(v).trim())) return null;
+    return d;
+  } catch {
+    return null;
+  }
+}
+
 export default function AICounseling() {
   const [, setLocation] = useLocation();
   // ?project= があれば既存プロジェクトの修正。無ければ新規（IDを発行し、保存時に作成）。
   const isNew = useMemo(() => !new URL(window.location.href).searchParams.get('project'), []);
+  // 新規のときだけ下書きを見る（既存プロジェクトの修正はサーバー保存値が正）
+  const draft = useMemo(() => (isNew ? loadCounselingDraft() : null), [isNew]);
   const projectId = useMemo(() => {
     const url = new URL(window.location.href);
-    return url.searchParams.get('project') || nanoid();
+    return url.searchParams.get('project') || draft?.projectId || nanoid();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [stepIndex, setStepIndex] = useState(0);
-  const [answers, setAnswers] = useState<Partial<CounselingAnswers>>({});
+  const [stepIndex, setStepIndex] = useState(() =>
+    draft ? Math.min(draft.stepIndex ?? 0, COUNSELING_QUESTIONS.length - 1) : 0
+  );
+  const [answers, setAnswers] = useState<Partial<CounselingAnswers>>(draft?.answers ?? {});
+
+  // 下書きから復元したことを一度だけ知らせる
+  useEffect(() => {
+    if (draft) toast.info('前回の入力途中の内容を復元しました（続きから進められます）');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 入力のたびに自動保存（新規カウンセリングのみ）
+  useEffect(() => {
+    if (!isNew) return;
+    if (!Object.values(answers).some((v) => v && String(v).trim())) return;
+    try {
+      localStorage.setItem(
+        COUNSELING_DRAFT_KEY,
+        JSON.stringify({ projectId, answers, stepIndex, savedAt: Date.now() } satisfies CounselingDraft)
+      );
+    } catch { /* 容量超過等は無視（保存できないだけ） */ }
+  }, [answers, stepIndex, isNew, projectId]);
   // 'questions' = 1問ずつ回答 / 'review' = 全回答の一覧（修正可）
   const [view, setView] = useState<'questions' | 'review'>('questions');
   // レビューから1問だけ修正中か（修正後はレビューへ戻す）
@@ -109,6 +159,8 @@ export default function AICounseling() {
       utils.project.get.invalidate({ id: projectId });
       utils.project.count.invalidate();
       utils.project.list.invalidate();
+      // 保存が完了したので下書きは消す
+      try { localStorage.removeItem(COUNSELING_DRAFT_KEY); } catch { /* ignore */ }
       toast.success(isNew ? 'お店の情報を登録しました' : 'カウンセリング結果を保存しました');
       // 初回はスタイル校正へ誘導。修正（既にカウンセリング済み）の場合は生成画面へ戻す。
       if (counselingData?.counseledAt) {
