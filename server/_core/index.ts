@@ -282,6 +282,10 @@ async function startServer() {
           (/subscription/.test(eventType) ? toNum(data?.amount) : null);
         const chargeAmount =
           toNum(data?.charge?.amount) ??
+          // ★実ペイロード（charge_finishedイベント）は charged_amount / requested_amount で届く
+          //   （2026-08-14 滝本さんの実課金9,800円が「未分類イベント」に落ちたのを修正）
+          toNum(data?.charged_amount) ??
+          toNum(data?.requested_amount) ??
           (/charge/.test(eventType) ? toNum(data?.amount) : null) ??
           toNum(data?.money?.amount);
         const anyAmount = toNum(data?.amount) ?? toNum(event?.amount);
