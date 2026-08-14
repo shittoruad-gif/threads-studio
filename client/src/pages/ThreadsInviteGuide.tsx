@@ -142,7 +142,7 @@ export default function ThreadsInviteGuide() {
             <div className="rounded-lg border border-border bg-card p-4">
               <p className="mb-2 text-[0.95rem] font-bold text-foreground">C. まだ登録していない方</p>
               <p className="mb-3 text-[0.88rem] text-muted-foreground">
-                メールアドレスとパスワードを決めて登録すると、7日間の無料トライアルが始まります（期間内に解約すれば費用はかかりません）。
+                メールアドレスとパスワードを決めて登録します。登録だけでは料金はかかりません（料金プランのお申し込みは、担当者からのご案内に沿って別途行います）。
               </p>
               <GoButton href="/register">無料で始める（新規登録）</GoButton>
             </div>
