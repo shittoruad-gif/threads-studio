@@ -1089,13 +1089,15 @@ export async function saveAiGenerationHistory(params: {
   return Number(result[0].insertId);
 }
 
-export async function getAiGenerationHistory(userId: number, limit: number = 50, offset: number = 0) {
+export async function getAiGenerationHistory(userId: number, limit: number = 50, offset: number = 0, projectId?: string) {
   const db = await getDb();
   if (!db) return [];
 
   return await db.select()
     .from(aiGenerationHistory)
-    .where(eq(aiGenerationHistory.userId, userId))
+    .where(projectId
+      ? and(eq(aiGenerationHistory.userId, userId), eq(aiGenerationHistory.projectId, projectId))
+      : eq(aiGenerationHistory.userId, userId))
     .orderBy(desc(aiGenerationHistory.createdAt))
     .limit(limit)
     .offset(offset);
@@ -1107,15 +1109,17 @@ export async function getAiGenerationHistory(userId: number, limit: number = 50,
  * for new users — the pinned profile post is the highest-CV element of a
  * Threads funnel, so we want users to build it before anything else.
  */
-export async function hasGeneratedPinnedPost(userId: number): Promise<boolean> {
+export async function hasGeneratedPinnedPost(userId: number, projectId?: string): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
 
+  // projectId指定時はその店舗の固定投稿だけを数える（固定投稿はアカウント＝店舗ごとに必要）
   const rows = await db.select({ id: aiGenerationHistory.id })
     .from(aiGenerationHistory)
     .where(and(
       eq(aiGenerationHistory.userId, userId),
       eq(aiGenerationHistory.postType, 'pinned'),
+      ...(projectId ? [eq(aiGenerationHistory.projectId, projectId)] : []),
     ))
     .limit(1);
   return rows.length > 0;
@@ -1149,13 +1153,15 @@ export async function deleteAiGenerationHistory(id: number, userId: number): Pro
   return result[0].affectedRows > 0;
 }
 
-export async function countAiGenerationHistory(userId: number): Promise<number> {
+export async function countAiGenerationHistory(userId: number, projectId?: string): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
 
   const result = await db.select({ count: sql<number>`count(*)` })
     .from(aiGenerationHistory)
-    .where(eq(aiGenerationHistory.userId, userId));
+    .where(projectId
+      ? and(eq(aiGenerationHistory.userId, userId), eq(aiGenerationHistory.projectId, projectId))
+      : eq(aiGenerationHistory.userId, userId));
 
   return result[0]?.count ?? 0;
 }
@@ -2964,4 +2970,50 @@ export async function listEmailLogs(limit: number = 100, search?: string): Promi
         .orderBy(desc(emailLogs.createdAt)).limit(limit)
     : await base.orderBy(desc(emailLogs.createdAt)).limit(limit);
   return rows;
+}
+
+// ==================== 投稿の切り口◯✕フィードバック ====================
+
+/** 切り口ごとの◯✕集計（angle→{good,bad}）。自動投稿の重み付け選択に使う。
+ *  ★店舗（projectId）単位で絞る：複数店舗ユーザーで店舗Aの好みが店舗Bに混入しないように */
+export async function getAngleFeedbackStats(userId: number, projectId?: string): Promise<Record<string, { good: number; bad: number }>> {
+  const db = await getDb();
+  if (!db) return {};
+  const rows = await db.select({
+    angle: scheduledPosts.angle,
+    rating: scheduledPosts.clientRating,
+    count: sql<number>`count(*)`,
+  })
+    .from(scheduledPosts)
+    .where(and(
+      eq(scheduledPosts.userId, userId),
+      ...(projectId ? [eq(scheduledPosts.projectId, projectId)] : []),
+      sql`${scheduledPosts.angle} IS NOT NULL`,
+      sql`${scheduledPosts.clientRating} IS NOT NULL`,
+    ))
+    .groupBy(scheduledPosts.angle, scheduledPosts.clientRating);
+  const stats: Record<string, { good: number; bad: number }> = {};
+  for (const r of rows) {
+    if (!r.angle || !r.rating) continue;
+    if (!stats[r.angle]) stats[r.angle] = { good: 0, bad: 0 };
+    stats[r.angle][r.rating as 'good' | 'bad'] += Number(r.count);
+  }
+  return stats;
+}
+
+/** ◯（good）/✕（bad）が付いた投稿本文のサンプルを新しい順に返す（プロンプトの好み学習用）。
+ *  ★店舗（projectId）単位で絞る：別店舗の投稿文が「このお店の好み」として混入しないように */
+export async function getRatedPostSamples(userId: number, rating: 'good' | 'bad', limit: number = 3, projectId?: string): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({ content: scheduledPosts.postContent })
+    .from(scheduledPosts)
+    .where(and(
+      eq(scheduledPosts.userId, userId),
+      ...(projectId ? [eq(scheduledPosts.projectId, projectId)] : []),
+      eq(scheduledPosts.clientRating, rating),
+    ))
+    .orderBy(desc(scheduledPosts.ratedAt))
+    .limit(limit);
+  return rows.map((r) => r.content).filter((c): c is string => !!c);
 }

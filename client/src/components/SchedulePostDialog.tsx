@@ -32,10 +32,12 @@ export function SchedulePostDialog({ open, onOpenChange, projectId, postContent 
 
   const { data: accounts } = trpc.threads.list.useQuery();
 
-  // Auto-select account from global context
+  // Auto-select account from global context.
+  // ★開くたびにヘッダーの切替へ同期する（前回開いたときの選択が残って
+  //   「切り替えたのに旧アカウントへ予約」される事故を防ぐ）
   useEffect(() => {
-    if (globalAccountId && !selectedAccountId) {
-      setSelectedAccountId(globalAccountId.toString());
+    if (open) {
+      setSelectedAccountId(globalAccountId ? globalAccountId.toString() : '');
     }
   }, [globalAccountId, open]);
 

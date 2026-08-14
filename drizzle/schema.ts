@@ -363,6 +363,11 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   threadsAccountId: int("threadsAccountId").notNull().references(() => threadsAccounts.id, { onDelete: "cascade" }),
   scheduledAt: timestamp("scheduledAt").notNull(),
   status: mysqlEnum("status", ["pending", "processing", "posted", "failed", "canceled", "awaiting_approval"]).default("pending").notNull(),
+  // 自動投稿の「切り口」ID（shared/postAngles.ts）。手動投稿はnull
+  angle: varchar("angle", { length: 50 }),
+  // クライアントの◯✕評価（good=いい/bad=違う）。切り口の重み付け学習に使う
+  clientRating: mysqlEnum("clientRating", ["good", "bad"]),
+  ratedAt: timestamp("ratedAt"),
   // 投稿の生成元：manual=ユーザーが手動で予約 / auto=自動投稿エンジンが生成。
   // 「予約中」が手動か自動か区別がつかない混乱を解消するため。
   source: mysqlEnum("source", ["manual", "auto"]).default("manual").notNull(),

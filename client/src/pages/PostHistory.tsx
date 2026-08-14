@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { translatePostError } from "@/lib/postErrors";
 import { useThreadsAccount } from "@/components/ThreadsAccountSwitcher";
 import PageGuide from "@/components/PageGuide";
+import { getAngle } from "@shared/postAngles";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -92,6 +93,16 @@ export default function PostHistory() {
     onError: (error) => {
       toast.error(error.message);
     },
+  });
+  // ◯✕フィードバック（切り口の好み学習）。承認・キャンセルとは独立
+  const ratePost = trpc.scheduledPost.rate.useMutation({
+    onSuccess: (_data, vars) => {
+      if (vars.rating === 'good') toast.success('「いい」と記録しました。この方向性が増えます');
+      else if (vars.rating === 'bad') toast.success('「違う」と記録しました。この方向性は減らします');
+      else toast.success('評価を取り消しました');
+      refetch();
+    },
+    onError: (error) => toast.error(error.message),
   });
   const editPost = trpc.scheduledPost.editContent.useMutation({
     onSuccess: () => {
@@ -284,6 +295,7 @@ export default function PostHistory() {
           <>上の<b>「承認待ち」</b>をタップして、公開前の投稿を確認します</>,
           <>内容がよければ緑の<b>「承認して投稿」</b>を押します（これで公開されます）</>,
           <>直したいときは<b>「編集」</b>→書き換えて<b>「保存」</b>→<b>「承認して投稿」</b>。やめたいときは<b>「キャンセル」</b></>,
+          <>投稿の下の<b>「◯ いい」「✕ 違う」</b>を押すと、AIが好みを学んで方向性を調整します</>,
         ]} />
 
         <Card className="glass-card mb-6">
@@ -412,6 +424,11 @@ export default function PostHistory() {
                               >
                                 {(post as any).source === 'auto' ? '自動' : '手動'}
                               </Badge>
+                              {(post as any).angle && getAngle((post as any).angle) && (
+                                <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200">
+                                  {getAngle((post as any).angle)!.label}
+                                </Badge>
+                              )}
                               <span className="text-sm text-muted-foreground">
                                 {formatDate(post.scheduledAt)}
                               </span>
@@ -444,6 +461,35 @@ export default function PostHistory() {
                             })()}
                             {post.errorMessage && post.status !== 'failed' && (
                               <p className="text-xs text-amber-600 break-words">{translatePostError(post.errorMessage).title}</p>
+                            )}
+
+                            {/* ◯✕フィードバック：自動投稿の「切り口」の好みをAIに教える */}
+                            {(post as any).source === 'auto' && post.status !== 'canceled' && (
+                              <div className="flex flex-wrap items-center gap-2 pt-1">
+                                <span className="text-xs text-muted-foreground">この方向性は：</span>
+                                <button
+                                  onClick={() => ratePost.mutate({ postId: post.id, rating: (post as any).clientRating === 'good' ? null : 'good' })}
+                                  disabled={ratePost.isPending}
+                                  className={`rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
+                                    (post as any).clientRating === 'good'
+                                      ? 'bg-emerald-600 text-white border-emerald-600'
+                                      : 'border-border text-muted-foreground hover:border-emerald-400 hover:text-emerald-700'
+                                  }`}
+                                >
+                                  ◯ いい
+                                </button>
+                                <button
+                                  onClick={() => ratePost.mutate({ postId: post.id, rating: (post as any).clientRating === 'bad' ? null : 'bad' })}
+                                  disabled={ratePost.isPending}
+                                  className={`rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
+                                    (post as any).clientRating === 'bad'
+                                      ? 'bg-red-500 text-white border-red-500'
+                                      : 'border-border text-muted-foreground hover:border-red-400 hover:text-red-600'
+                                  }`}
+                                >
+                                  ✕ 違う
+                                </button>
+                              </div>
                             )}
                           </div>
 

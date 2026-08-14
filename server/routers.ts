@@ -1219,19 +1219,36 @@ ${optionsText}`;
       .input(z.object({
         limit: z.number().optional().default(50),
         offset: z.number().optional().default(0),
+        // 切替中アカウントの既定店舗に絞る（アカウント切替追随）
+        accountId: z.number().nullish(),
       }))
       .query(async ({ ctx, input }) => {
-        const history = await db.getAiGenerationHistory(ctx.user.id, input.limit, input.offset);
-        const total = await db.countAiGenerationHistory(ctx.user.id);
+        const accountId = await resolveOwnedAccountId(ctx.user.id, input.accountId);
+        let projectId: string | undefined;
+        if (accountId != null) {
+          const account = await db.getThreadsAccountById(accountId);
+          projectId = (account as any)?.defaultProjectId ?? undefined;
+        }
+        const history = await db.getAiGenerationHistory(ctx.user.id, input.limit, input.offset, projectId);
+        const total = await db.countAiGenerationHistory(ctx.user.id, projectId);
         return { history, total };
       }),
 
     // Has the user generated their 固定投稿 (pinned profile post) yet?
     // Used by the dashboard to surface a "create your pinned post first"
     // recommendation banner when this returns false.
+    // 固定投稿はアカウント（＝店舗）ごとに必要なため、accountId指定時は
+    // そのアカウントの既定店舗の固定投稿だけを数える。
     hasPinnedPost: protectedProcedure
-      .query(async ({ ctx }) => {
-        const has = await db.hasGeneratedPinnedPost(ctx.user.id);
+      .input(accountFilterInput)
+      .query(async ({ ctx, input }) => {
+        const accountId = await resolveOwnedAccountId(ctx.user.id, input?.accountId);
+        let projectId: string | undefined;
+        if (accountId != null) {
+          const account = await db.getThreadsAccountById(accountId);
+          projectId = (account as any)?.defaultProjectId ?? undefined;
+        }
+        const has = await db.hasGeneratedPinnedPost(ctx.user.id, projectId);
         return { hasPinnedPost: has };
       }),
 
@@ -2275,6 +2292,26 @@ ${input.commentText}
         return { success: true };
       }),
 
+    // ◯✕フィードバック（切り口の好み学習）。
+    // good=◯いい / bad=✕違う / null=評価を取り消し。
+    // 評価は投稿の公開/非公開に影響しない（承認・キャンセルとは独立）。
+    rate: protectedProcedure
+      .input(z.object({
+        postId: z.number(),
+        rating: z.enum(['good', 'bad']).nullable(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const post = await db.getScheduledPostById(input.postId);
+        if (!post || post.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Post not found' });
+        }
+        await db.updateScheduledPost(input.postId, {
+          clientRating: input.rating,
+          ratedAt: input.rating ? new Date() : null,
+        } as any);
+        return { success: true };
+      }),
+
     // Approve an auto-generated post that is awaiting approval.
     // 承認すると status を pending にし、次回の投稿実行で公開される。
     // 公開時刻が既に過ぎていれば直近の実行タイミングで投稿される。
@@ -2804,10 +2841,20 @@ ${input.commentText}
     }),
 
     // プロフィール診断：リーチが予約につながる「受け皿」3点チェック
-    profileAudit: protectedProcedure.query(async ({ ctx }) => {
+    profileAudit: protectedProcedure
+      .input(accountFilterInput)
+      .query(async ({ ctx, input }) => {
+      const accountId = await resolveOwnedAccountId(ctx.user.id, input?.accountId);
       const projects = await db.getUserProjects(ctx.user.id);
-      const project = projects?.[0];
       const accounts = await db.getThreadsAccountsByUserId(ctx.user.id).catch(() => []);
+      // ★アカウント切替追随：指定アカウントの既定店舗＋そのアカウントのbioだけで診断する
+      //   （別アカウントのbioに地域名があるだけで合格になる誤判定を防ぐ）
+      const selectedAccount: any = accountId != null
+        ? accounts.find((a: any) => a.id === accountId)
+        : accounts[0];
+      const project = (selectedAccount?.defaultProjectId
+        ? projects?.find((p: any) => p.id === selectedAccount.defaultProjectId)
+        : undefined) ?? projects?.[0];
 
       // ① 予約/LINEリンクの登録
       let linksOk = false;
@@ -2822,16 +2869,15 @@ ${input.commentText}
         .split(/[都道府県市区町村\s　]/)
         .map((s: string) => s.trim())
         .filter((s: string) => s.length >= 2);
-      const bios = accounts.map((a: any) => a.biography || '').join(' ');
-      const bioAreaOk = accounts.length > 0 && areaTokens.length > 0
+      const bios = String(selectedAccount?.biography || '');
+      const bioAreaOk = !!selectedAccount && areaTokens.length > 0
         ? areaTokens.some((t: string) => bios.includes(t))
         : false;
 
-      // ③ 固定投稿（お店の入口）を作ったことがあるか
+      // ③ 固定投稿（お店の入口）を作ったことがあるか（この店舗のもの）
       let pinnedOk = false;
       try {
-        const history = await db.getAiGenerationHistory(ctx.user.id, 100);
-        pinnedOk = (history || []).some((h: any) => h.postType === 'pinned');
+        pinnedOk = await db.hasGeneratedPinnedPost(ctx.user.id, (project as any)?.id);
       } catch { pinnedOk = false; }
 
       return {
@@ -2848,10 +2894,23 @@ ${input.commentText}
     // 自動投稿のコメントで案内した合言葉ごとのLINE受信数をKeiroから取得し、
     // 「その合言葉を最後に案内した投稿」に紐付けて投稿別の問い合わせ数を返す。
     // プロジェクトにKeiro連携（keiroHitsUrl/Key）が未設定なら enabled:false を返しUIは非表示。
-    inquiryStats: protectedProcedure.query(async ({ ctx }) => {
+    inquiryStats: protectedProcedure
+      .input(accountFilterInput)
+      .query(async ({ ctx, input }) => {
       const { INQUIRY_KEYWORDS, inquiryKeywordForPost } = await import("../shared/inquiryKeywords");
+      const accountId = await resolveOwnedAccountId(ctx.user.id, input?.accountId);
       const projects = await db.getUserProjects(ctx.user.id);
-      const project: any = (projects || []).find((p: any) => p.keiroHitsUrl && p.keiroHitsKey);
+      // ★アカウント切替追随：切替中アカウントの既定店舗がKeiro連携済みならそれを優先
+      let project: any = undefined;
+      if (accountId != null) {
+        const account = await db.getThreadsAccountById(accountId);
+        const pid = (account as any)?.defaultProjectId;
+        if (pid) {
+          const p: any = (projects || []).find((x: any) => x.id === pid);
+          if (p?.keiroHitsUrl && p?.keiroHitsKey) project = p;
+        }
+      }
+      if (!project) project = (projects || []).find((p: any) => p.keiroHitsUrl && p.keiroHitsKey);
       if (!project) return { enabled: false as const };
 
       const DAYS = 30;

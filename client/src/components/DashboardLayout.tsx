@@ -34,7 +34,7 @@ import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
-import ThreadsAccountSwitcher from "./ThreadsAccountSwitcher";
+import ThreadsAccountSwitcher, { useThreadsAccount } from "./ThreadsAccountSwitcher";
 import { trpc } from "@/lib/trpc";
 
 interface MenuItem {
@@ -104,17 +104,20 @@ export default function DashboardLayout({
     undefined,
     { enabled: !!user }
   );
-  const firstAccountId = threadsAccounts?.[0]?.id;
+  // ★バッジも切替中アカウントに追随させる（先頭アカウント固定だと
+  //   「バッジは3件なのに開くと別アカウントのコメント」という食い違いが起きる）
+  const { selectedAccountId } = useThreadsAccount();
+  const badgeAccountId = selectedAccountId ?? threadsAccounts?.[0]?.id;
 
   // Fetch comments for badge (only if account exists)
   const { data: commentsData } = trpc.threads.getComments.useQuery(
-    { accountId: firstAccountId!, limit: 50 },
-    { enabled: !!firstAccountId, refetchInterval: 5 * 60 * 1000 }
+    { accountId: badgeAccountId!, limit: 50 },
+    { enabled: !!badgeAccountId, refetchInterval: 5 * 60 * 1000 }
   );
 
-  // Fetch AI history for unfavorited count
+  // Fetch AI history for unfavorited count（切替中アカウントの店舗に絞る）
   const { data: aiHistoryData } = trpc.project.getAiHistory.useQuery(
-    { limit: 20, offset: 0 },
+    { limit: 20, offset: 0, accountId: selectedAccountId },
     { enabled: !!user }
   );
   const { data: favoritesData } = trpc.favorite.list.useQuery(

@@ -5,6 +5,7 @@ import { Pin, ArrowRight, X, Sparkles } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
 import { useAuth } from '@/_core/hooks/useAuth';
+import { useThreadsAccount } from '@/components/ThreadsAccountSwitcher';
 
 const DISMISS_KEY = 'pinned-post-recommendation-dismissed';
 
@@ -25,18 +26,22 @@ const DISMISS_KEY = 'pinned-post-recommendation-dismissed';
 export function PinnedPostRecommendation() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
+  // ★固定投稿はアカウント（店舗）ごとに必要。判定・非表示記憶ともアカウント単位にする
+  const { selectedAccountId, selectedAccount } = useThreadsAccount();
+  const dismissKey = `${DISMISS_KEY}:${selectedAccountId ?? 'default'}`;
   const [dismissed, setDismissed] = useState(true); // start hidden to avoid flash
 
-  // Hydrate dismiss state from localStorage on mount
+  // Hydrate dismiss state from localStorage on mount / account switch.
+  // 旧キー（アカウントID無し）で閉じていた既存ユーザーにも再表示しない（互換フォールバック）
   useEffect(() => {
-    const stored = localStorage.getItem(DISMISS_KEY);
+    const stored = localStorage.getItem(dismissKey) ?? localStorage.getItem(DISMISS_KEY);
     setDismissed(stored === 'true');
-  }, []);
+  }, [dismissKey]);
 
   // Only fire the queries when actually logged in. Unauthenticated calls
   // surface as 401s in tRPC and can race with the auth flow during initial
   // hydration, causing transient render issues.
-  const { data, isLoading } = trpc.project.hasPinnedPost.useQuery(undefined, {
+  const { data, isLoading } = trpc.project.hasPinnedPost.useQuery({ accountId: selectedAccountId }, {
     enabled: isAuthenticated,
   });
   const { data: projects } = trpc.project.list.useQuery(undefined, {
@@ -48,13 +53,14 @@ export function PinnedPostRecommendation() {
 
   const handleDismiss = () => {
     setDismissed(true);
-    localStorage.setItem(DISMISS_KEY, 'true');
+    localStorage.setItem(dismissKey, 'true');
   };
 
   const handleStart = () => {
-    const firstProject = projects?.[0];
-    if (firstProject) {
-      window.location.href = `/ai-generate?project=${firstProject.id}&postType=pinned`;
+    // 切替中アカウントの既定店舗を最優先（別店舗の固定投稿を作らせない）
+    const targetId = selectedAccount?.defaultProjectId ?? projects?.[0]?.id;
+    if (targetId) {
+      window.location.href = `/ai-generate?project=${targetId}&postType=pinned`;
     } else {
       toast.info('まずはプロジェクト（お店の情報）を登録しましょう');
       setLocation('/ai-project-create');

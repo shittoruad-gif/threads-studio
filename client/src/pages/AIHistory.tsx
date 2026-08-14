@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Loader2, Trash2, Copy, Calendar, RefreshCw, Search, Heart, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
-import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
+import ThreadsAccountSwitcher, { useThreadsAccount } from '@/components/ThreadsAccountSwitcher';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -64,7 +64,9 @@ export default function AIHistory() {
   const [cloneResults, setCloneResults] = useState<any[] | null>(null);
   const [cloneOriginalTitle, setCloneOriginalTitle] = useState('');
 
-  const { data, isLoading, refetch } = trpc.project.getAiHistory.useQuery({ limit: 50, offset: 0 });
+  // ヘッダーの切替UIで選択中のアカウントの店舗に絞る（切替追随）
+  const { selectedAccountId } = useThreadsAccount();
+  const { data, isLoading, refetch } = trpc.project.getAiHistory.useQuery({ limit: 50, offset: 0, accountId: selectedAccountId });
   const { data: favoritesData, refetch: refetchFavorites } = trpc.favorite.list.useQuery();
   const toggleFavoriteMutation = trpc.favorite.toggle.useMutation({
     onSuccess: (data) => {

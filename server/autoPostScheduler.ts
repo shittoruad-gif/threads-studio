@@ -11,6 +11,7 @@ import * as db from "./db";
 import { getPlan } from "../shared/plans";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
+import { pickAngle } from "../shared/postAngles";
 import { stripRawUrls } from "../shared/sanitize";
 import { invokeLLM } from "./_core/llm";
 import { nanoid } from "nanoid";
@@ -63,12 +64,21 @@ const AUTO_POST_STYLE_ADDENDUM = `
 - 全部説明しようとする（原因→理由→解決→行動まで1投稿に詰める）。人間は言い切って終わる。
 - です・ます の機械的な連続。「〜なんです」「〜ですよね」を混ぜ、体言止めも使う。
 - 主語と述語がねじれた文（「Moveactは、体って変わらないですよね」等）は絶対に書かない。
+- 教科書のようにきれいに整いすぎた文。人間の投稿には少しの脱線・言い直し・つぶやきが混ざる。
 
-【お手本の形（冒頭に数字・短く言い切る・1文ずつ改行）】
+【人のぬくもり（毎回必ず入れる）】AI感を消す最重要ルール：
+- **絵文字を1〜3個**、感情が動く場所に自然に入れる（😊💦✨🙌😅など。文末に機械的に並べない・毎回同じ絵文字にしない・3個を超えない）。
+- **「！」を1〜2箇所**、本当に気持ちが動くところで使う（全部の文に付けない）。
+- **自分の実感をひとこと**入れる：「正直」「個人的には」「これは本当に多いです」のような、書き手の体温が伝わる一言。
+- 冷たく事務的なトーンで終わらせない。最後の一文はやわらかく（絵文字か「！」か話し言葉で）。
+
+【お手本の形（冒頭に数字・短く言い切る・1文ずつ改行・ぬくもりあり）】
 運動が続かない人の共通点、3つあります。
 
 頑張りすぎ・完璧主義・ひとりでやる。
-マシンが支えてくれるピラティスは、この3つ全部いらないんです。`;
+正直、これ全部当てはまる方すごく多いです😅
+
+マシンが支えてくれるピラティスは、この3つ全部いらないんです！`;
 
 // 会話型（あるある・共感・Q&A）にだけ許可する締めの追加指示。
 // リーチ型は言い切りで終わるが、会話型は返信をもらうのが目的なので
@@ -159,13 +169,18 @@ async function naturalizeContent(text: string): Promise<string> {
 - 禁止フレーズ：「してみませんか」「がおすすめです」「いかがですか」「安心してください」「ぜひ」「と思われがちですが」
 - 締めの問いかけは、やわらかい敬語の短い一言（「同じ方いませんか？」）。
 - 主語と述語がねじれた文を書かない。書き直した文は必ず声に出して自然か確認する。
-- 絵文字は最大1個。無くてもいい。
 
-【お手本の形（1文ずつ改行・文の途中では切らない）】
+【ぬくもりのルール（冷たくしない）】
+- **元の文にある絵文字は消さない**。無ければ、感情が動く場所に**1〜3個**自然に足す（😊💦✨🙌😅など。文末に機械的に並べない）。
+- 「！」を1〜2箇所、本当に気持ちが動くところに残す/足す。
+- 「正直」「個人的には」のような書き手の実感がある一言は削らない。
+- 事務的・教科書的なトーンに直しすぎない。整いすぎた文はAIっぽく見える。
+
+【お手本の形（1文ずつ改行・文の途中では切らない・ぬくもりあり）】
 玉島で運動が続かない…と諦めていませんか？
 
-無理して頑張るから続かないんです。
-マシンが動きを支えてくれるので、運動が苦手な人ほど合ってます。
+無理して頑張るから続かないんです💦
+マシンが動きを支えてくれるので、運動が苦手な人ほど合ってます！
 
 同じ悩みの方、いませんか？
 
@@ -296,6 +311,37 @@ async function generateAutoPost(
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
   const purpose = PURPOSES[purposeIndex % PURPOSES.length];
 
+  // ★切り口の多様化：◯✕フィードバックで重み付けした切り口をランダムに1つ選ぶ。
+  //   ◯が付いた切り口は出やすく、✕が付いた切り口は出にくくなる（完全にゼロにはしない）。
+  let angle: ReturnType<typeof pickAngle> | null = null;
+  let preferenceNote = '';
+  try {
+    // ★店舗（project）単位で学習：複数店舗ユーザーで別店舗の好みを混ぜない
+    const stats = await db.getAngleFeedbackStats(userId, project.id);
+    angle = pickAngle(stats);
+    // ◯✕が付いた実例をプロンプトに注入して「このお店の好み」を学習させる
+    const [liked, disliked] = await Promise.all([
+      db.getRatedPostSamples(userId, 'good', 2, project.id),
+      db.getRatedPostSamples(userId, 'bad', 2, project.id),
+    ]);
+    if (liked.length > 0 || disliked.length > 0) {
+      preferenceNote = '\n\n【このお店の好み（オーナーの◯✕評価より・厳守）】';
+      if (liked.length > 0) {
+        preferenceNote += '\n- オーナーが「いい」と評価した投稿の方向性（雰囲気・切り口を参考にする。丸写しはしない）:\n' +
+          liked.map((s) => `  「${String(s).replace(/\s+/g, ' ').slice(0, 120)}」`).join('\n');
+      }
+      if (disliked.length > 0) {
+        preferenceNote += '\n- オーナーが「違う」と評価した投稿の方向性（この系統の書き方・切り口を避ける）:\n' +
+          disliked.map((s) => `  「${String(s).replace(/\s+/g, ' ').slice(0, 120)}」`).join('\n');
+      }
+    }
+  } catch (e) {
+    console.error('[AutoPost] angle selection failed (fallback to none):', e);
+  }
+  const angleNote = angle
+    ? `\n\n【今回の切り口（厳守）】\n- 今回は「${angle.label}」の切り口で書くこと：${angle.hint}\n- 毎回同じ書き出し・同じ構成にならないよう、この切り口らしい入り方にする。`
+    : '';
+
   try {
     // Auto-posts also reuse the user's registered URL set so LINE/予約 links
     // appear in the right slots automatically.
@@ -365,6 +411,8 @@ async function generateAutoPost(
         role: 'user',
         content: prompt + AUTO_POST_STYLE_ADDENDUM
           + seasonContextJST()
+          + angleNote
+          + preferenceNote
           + (CONVERSATION_POST_TYPES.has(postType) ? CONVERSATION_ENDING_ADDENDUM : ''),
       }],
       response_format: JSON_SCHEMA,
@@ -466,7 +514,9 @@ async function generateAutoPost(
       // ★承認モードON時は awaiting_approval で作成し、ユーザーが承認するまで投稿しない
       status: requireApproval ? 'awaiting_approval' : 'pending',
       source: 'auto',
-    });
+      // 使った切り口を記録（◯✕評価と組み合わせて好み学習に使う）
+      angle: angle?.id ?? null,
+    } as any);
 
     // ★#3 自動投稿は手動AI生成の月間枠(maxAiGenerations)を消費しない。
     //   料金表記「AI投稿生成 ◯回/月」は手動生成の回数を指す。自動投稿でこれを

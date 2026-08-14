@@ -12,6 +12,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
+import { useThreadsAccount } from '@/components/ThreadsAccountSwitcher';
 import { cn } from '@/lib/utils';
 import ProjectLinksManager from '@/components/ProjectLinksManager';
 import {
@@ -108,12 +109,24 @@ export default function AICounseling() {
   // 真っ白な新規入力ではなく既存の回答を開く（「入力が消えた」ように見える誤解の防止。
   // 2026-08-14 滝本さんで実際に発生）。新店舗の追加は /ai-project-create 経由なので影響しない。
   const { data: existingProjects } = trpc.project.list.useQuery(undefined, { enabled: isNew });
+  // ★切替中アカウントの既定店舗を最優先で開く（アカウント切替追随）。
+  //   アカウント読込中に誤って[0]へ飛ばないよう、読込完了を待つ。
+  const { selectedAccount: counselingAccount, isLoading: accountsLoading } = useThreadsAccount();
+  const resolveTargetProjectId = (): string | null => {
+    if (!existingProjects || existingProjects.length === 0) return null;
+    const pid = counselingAccount?.defaultProjectId;
+    if (pid && existingProjects.some((p: any) => p.id === pid)) return pid;
+    return existingProjects[0].id;
+  };
   useEffect(() => {
     if (!isNew || window.location.pathname !== '/ai-counseling') return;
-    if (existingProjects && existingProjects.length > 0) {
-      window.location.replace(`/ai-counseling?project=${existingProjects[0].id}`);
+    if (accountsLoading) return;
+    const target = resolveTargetProjectId();
+    if (target) {
+      window.location.replace(`/ai-counseling?project=${target}`);
     }
-  }, [existingProjects, isNew]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingProjects, isNew, accountsLoading, counselingAccount?.defaultProjectId]);
   // /ai-project-create（新店舗の追加）に既存ユーザーが迷い込んだ場合の案内。
   // 空の入力欄を見て「保存した内容が消えた」と誤解されるのを防ぐ。
   const strayedIntoCreate =
@@ -323,7 +336,7 @@ export default function AICounseling() {
           <Button
             size="sm"
             className="mt-3 w-full sm:w-auto bg-emerald-600 text-white hover:bg-emerald-700"
-            onClick={() => { window.location.href = `/ai-counseling?project=${existingProjects![0].id}`; }}
+            onClick={() => { const t2 = resolveTargetProjectId(); if (t2) window.location.href = `/ai-counseling?project=${t2}`; }}
           >
             保存済みのお店の情報をひらく
           </Button>

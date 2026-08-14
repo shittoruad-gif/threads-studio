@@ -40,9 +40,9 @@ export default function PostAnalytics() {
   const { t, lang } = useLang();
   const [, setLocation] = useLocation();
   // ヘッダーの切替UIで選択中の連携アカウント（分析をこのアカウントに絞る）
-  const { selectedAccountId } = useThreadsAccount();
+  const { selectedAccountId, selectedAccount } = useThreadsAccount();
   const { data: analyticsData, isLoading, refetch } = trpc.stats.postAnalytics.useQuery({ accountId: selectedAccountId });
-  const { data: inquiryData } = trpc.stats.inquiryStats.useQuery();
+  const { data: inquiryData } = trpc.stats.inquiryStats.useQuery({ accountId: selectedAccountId });
   const { data: hitPostsData } = trpc.stats.hitPosts.useQuery({ accountId: selectedAccountId });
   const fetchAnalytics = trpc.stats.fetchAndStoreAnalytics.useMutation({
     onSuccess: (data) => {
@@ -91,7 +91,12 @@ export default function PostAnalytics() {
     const projects = projectList || [];
     if (projects.length === 0) { toast.error(t('プロジェクトがありません')); return; }
     if (projects.length === 1) { doPromote(projects[0] as any, content.trim()); return; }
-    setPromoteContent(content.trim()); // 複数ある場合は選択ダイアログ
+    // ★切替中アカウントの既定店舗があればそこへ即追加（別店舗への取り違え防止）
+    const accountProject = selectedAccount?.defaultProjectId
+      ? projects.find((p: any) => p.id === selectedAccount.defaultProjectId)
+      : undefined;
+    if (accountProject) { doPromote(accountProject as any, content.trim()); return; }
+    setPromoteContent(content.trim()); // 紐づけが無い場合のみ選択ダイアログ
   };
 
   const posts = analyticsData?.posts ?? [];

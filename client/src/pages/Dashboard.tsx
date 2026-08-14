@@ -70,7 +70,7 @@ export default function Dashboard() {
   const { t } = useLang();
   const { user, isAuthenticated, loading, logout } = useAuth();
   // ヘッダーの切替UIで選択中の連携アカウント（投稿・統計をこのアカウントに絞る）
-  const { selectedAccountId } = useThreadsAccount();
+  const { selectedAccountId, selectedAccount } = useThreadsAccount();
   const [location, setLocation] = useLocation();
   const [couponModalOpen, setCouponModalOpen] = useState(false);
   // ホームの「詳しいデータ」折りたたみ（スマホの縦長・ごちゃつき対策。開閉を記憶）
@@ -165,7 +165,9 @@ export default function Dashboard() {
   const { data: dashProjects } = trpc.project.list.useQuery(undefined, { enabled: isAuthenticated });
   const firstProjectId = dashProjects?.[0]?.id;
   const goEditInfo = () => {
-    if (firstProjectId) setLocation(`/ai-counseling?project=${firstProjectId}`);
+    // 切替中アカウントの既定店舗を最優先（複数店舗で別の店の情報を開かないように）
+    const targetProjectId = selectedAccount?.defaultProjectId ?? firstProjectId;
+    if (targetProjectId) setLocation(`/ai-counseling?project=${targetProjectId}`);
     else setLocation('/ai-generate');
   };
 
@@ -200,7 +202,7 @@ export default function Dashboard() {
   // フォロワー推移（日次スナップショット。データが2日分たまると表示）
   const { data: followerTrend } = trpc.stats.followerTrend.useQuery({ accountId: selectedAccountId });
   // プロフィール診断（せっかく見られても予約に落ちない「受け皿の穴」をチェック）
-  const { data: profileAudit } = trpc.stats.profileAudit.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: profileAudit } = trpc.stats.profileAudit.useQuery({ accountId: selectedAccountId }, { enabled: isAuthenticated });
   const { data: aiUsage } = trpc.subscription.getAiUsage.useQuery(
     undefined,
     { enabled: isAuthenticated }

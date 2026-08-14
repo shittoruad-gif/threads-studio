@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { useLang } from '@/i18n';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -115,6 +115,23 @@ export default function AIGenerate() {
   const evaluateMutation = trpc.project.evaluateOptions.useMutation();
   const [isGeneratingSingle, setIsGeneratingSingle] = useState(false);
   const { selectedAccount, selectedAccountId, accounts: connectedAccounts } = useThreadsAccount();
+
+  // ★アカウント切替に生成対象の店舗を追随させる。
+  //   マウント直後は動かさない（履歴・テンプレ等の明示的なproject指定を壊さない）。
+  //   ユーザーがヘッダーで切り替えた瞬間だけ、そのアカウントの既定店舗へ移動する。
+  //   ※このページはwindow.location.searchを直接読むため再マウントが必要＝hrefで遷移。
+  const prevAccountIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    const prev = prevAccountIdRef.current;
+    prevAccountIdRef.current = selectedAccountId;
+    if (prev === null || selectedAccountId === null || prev === selectedAccountId) return;
+    const current = new URL(window.location.href).searchParams.get('project');
+    const target = selectedAccount?.defaultProjectId;
+    if (current && target && target !== current) {
+      window.location.href = `/ai-generate?project=${target}`;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAccountId]);
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const publishNow = trpc.threads.post.useMutation({
     onSuccess: () => {
@@ -2663,14 +2680,23 @@ function ProjectAutoPicker() {
 
   // Auto-redirect for the single-project case so the user doesn't even
   // see this picker — the whole point is "just take me to AI generation".
+  // ★複数「アカウント」運用のときだけ、切替中アカウントの既定店舗へ直行する（切替追随）。
+  //   アカウント1つ×店舗2つの構成では従来どおりピッカーを出す
+  //   （無条件リダイレクトだと既定でない店舗に手動生成できなくなるため）。
+  const { selectedAccount: pickerAccount, accounts: pickerAccounts } = useThreadsAccount();
   useEffect(() => {
     if (!projects) return;
+    const accountProjectId = pickerAccount?.defaultProjectId;
+    if (pickerAccounts.length > 1 && accountProjectId && projects.some((p: any) => p.id === accountProjectId)) {
+      goToProject(accountProjectId);
+      return;
+    }
     if (projects.length === 0) {
       setLocation('/ai-project-create');
     } else if (projects.length === 1) {
       goToProject(projects[0].id);
     }
-  }, [projects, setLocation]);
+  }, [projects, setLocation, pickerAccount?.defaultProjectId, pickerAccounts.length]);
 
   if (isLoading || !projects || projects.length <= 1) {
     return (

@@ -19,6 +19,9 @@ interface ThreadsAccountInfo {
   threadsUserId: string;
   profilePictureUrl: string | null;
   tokenExpiresAt: Date | string | null;
+  // このアカウントの既定店舗（プロジェクト）。アカウント切替時に
+  // プロジェクト依存の画面（カウンセリング・AI生成等）をこの店舗へ追随させる
+  defaultProjectId: string | null;
 }
 
 const ThreadsAccountContext = createContext<ThreadsAccountContextType>({
