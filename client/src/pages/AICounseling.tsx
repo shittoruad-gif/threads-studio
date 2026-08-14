@@ -104,6 +104,19 @@ export default function AICounseling() {
   );
   const [answers, setAnswers] = useState<Partial<CounselingAnswers>>(draft?.answers ?? {});
 
+  // /ai-counseling を引数なしで開いたが既にプロジェクトがある場合は、
+  // 真っ白な新規入力ではなく既存の回答を開く（「入力が消えた」ように見える誤解の防止。
+  // 2026-08-14 滝本さんで実際に発生）。新店舗の追加は /ai-project-create 経由なので影響しない。
+  const { data: existingProjects } = trpc.project.list.useQuery(undefined, {
+    enabled: isNew && window.location.pathname === '/ai-counseling',
+  });
+  useEffect(() => {
+    if (!isNew || window.location.pathname !== '/ai-counseling') return;
+    if (existingProjects && existingProjects.length > 0) {
+      window.location.replace(`/ai-counseling?project=${existingProjects[0].id}`);
+    }
+  }, [existingProjects, isNew]);
+
   // 下書きから復元したことを一度だけ知らせる
   useEffect(() => {
     if (draft) toast.info('前回の入力途中の内容を復元しました（続きから進められます）');
