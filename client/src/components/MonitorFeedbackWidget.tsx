@@ -144,15 +144,16 @@ export default function MonitorFeedbackWidget({ bottomOffset = false }: { bottom
           </div>
         </div>
       ) : (
-        // ラベル付きピル型。AIアシスタントボタン（オレンジ・この上に浮く）と
-        // 見分けがつくよう文字を出す
+        // ★スマホは丸アイコンのみ（本文の上にかぶる面積を減らす）。
+        //   PCではラベル付きピルのまま。色でAIアシスタント（オレンジ）と区別できる。
         <button
           onClick={() => setIsOpen(true)}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full h-11 px-4 flex items-center gap-2 shadow-lg hover:shadow-xl transition-all hover:scale-105 group"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full h-12 w-12 sm:h-11 sm:w-auto sm:px-4 flex items-center justify-center sm:gap-2 shadow-lg hover:shadow-xl transition-all hover:scale-105 group"
           title="ご質問・ご要望"
+          aria-label="ご質問・ご要望"
         >
           <MessageSquarePlus className="h-5 w-5 group-hover:rotate-12 transition-transform" />
-          <span className="text-sm font-medium">ご要望</span>
+          <span className="hidden sm:inline text-sm font-medium">ご要望</span>
         </button>
       )}
     </div>

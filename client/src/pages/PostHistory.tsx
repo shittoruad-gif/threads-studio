@@ -466,10 +466,12 @@ export default function PostHistory() {
                               <p className="text-xs text-amber-600 break-words">{translatePostError(post.errorMessage).title}</p>
                             )}
 
-                            {/* ◯✕フィードバック：自動投稿の「切り口」の好みをAIに教える */}
+                            {/* ◯✕フィードバック：自動投稿の「切り口」の好みをAIに教える。
+                                ラベルとボタンを同じ行にすると375pxで「✕違う」だけ次行に
+                                落ちて不揃いになるため、ラベルは独立行にしている */}
                             {(post as any).source === 'auto' && post.status !== 'canceled' && (
                               <div className="flex flex-wrap items-center gap-2 pt-1">
-                                <span className="text-xs text-muted-foreground">この方向性は：</span>
+                                <span className="w-full text-xs text-muted-foreground sm:w-auto">この方向性は：</span>
                                 <button
                                   onClick={() => ratePost.mutate({ postId: post.id, rating: (post as any).clientRating === 'good' ? null : 'good' })}
                                   disabled={ratePost.isPending}

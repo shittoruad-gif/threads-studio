@@ -485,7 +485,8 @@ export default function Dashboard() {
               }`}
             >
               <Icon className={`h-6 w-6 shrink-0 ${color}`} />
-              <span className="font-bold text-foreground leading-snug">{t(title)}</span>
+              {/* 375pxでは1枚162px幅。16pxだと「投稿を確認する」が2行に折れるため15pxに */}
+              <span className="font-bold text-foreground leading-snug text-[15px] sm:text-base">{t(title)}</span>
               <span className="text-xs text-muted-foreground leading-snug">{t(desc)}</span>
             </button>
           ))}

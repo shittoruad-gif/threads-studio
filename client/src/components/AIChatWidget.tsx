@@ -62,14 +62,18 @@ export function AIChatWidget() {
 
   if (!isOpen) {
     return (
-      // ラベル付きピル型。モニター用フィードバックボタン（緑・右下）と重ならない
-      // よう、スマホではその上（bottom-[132px]）に配置する（フィードバックは76px起点）。
+      // モニター用フィードバックボタン（緑・右下）と重ならないよう、スマホでは
+      // その上（bottom-[130px]）に配置する（フィードバックは76px起点）。
+      // ★スマホは丸アイコンのみ。ラベル付きピルだと本文の上に大きくかぶさり、
+      //   ガイドの「表示しない」等が押せなくなっていた（2026-08-15 目視で確認）。
       <Button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-[132px] right-4 sm:bottom-24 sm:right-6 rounded-full h-11 px-4 shadow-lg z-50 gap-2"
+        aria-label="AIに相談"
+        title="AIに相談"
+        className="fixed bottom-[130px] right-4 sm:bottom-24 sm:right-6 rounded-full h-12 w-12 p-0 sm:h-11 sm:w-auto sm:px-4 shadow-lg z-50 sm:gap-2"
       >
         <MessageCircle className="w-5 h-5" />
-        <span className="text-sm font-medium">AIに相談</span>
+        <span className="hidden sm:inline text-sm font-medium">AIに相談</span>
       </Button>
     );
   }
