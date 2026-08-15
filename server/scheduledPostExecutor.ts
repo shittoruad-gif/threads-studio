@@ -233,6 +233,8 @@ export async function executePendingPosts() {
         await db.updateScheduledPost(post.id, {
           status: 'posted',
           postedAt: now,
+          // 実績学習用：どの切り口の投稿がどれだけ見られたかを後から突き合わせる
+          publishedThreadsPostId: result.id,
         });
 
         executed++;
@@ -301,6 +303,7 @@ export async function executePendingPosts() {
           await db.updateScheduledPost(post.id, {
             status: 'posted',
             postedAt: now,
+            publishedThreadsPostId: error.rootId,
             errorMessage: `メイン投稿は公開済みですが、続きの投稿が一部失敗しました（${error.message}）。重複投稿を避けるため再試行は行いません。`,
           });
           executed++;

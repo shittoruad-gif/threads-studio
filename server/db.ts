@@ -3001,6 +3001,81 @@ export async function getAngleFeedbackStats(userId: number, projectId?: string):
   return stats;
 }
 
+/**
+ * 直近に作成された「承認待ち」投稿を返す（自動投稿の直後案内メール用）。
+ * 生成した本人の分だけ・作成時刻で絞るので、過去の未承認分は混ざらない。
+ */
+export async function getRecentAwaitingApprovalPosts(
+  userId: number,
+  sinceMinutes: number = 30,
+): Promise<ScheduledPost[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const since = new Date(Date.now() - sinceMinutes * 60 * 1000);
+  return await db.select()
+    .from(scheduledPosts)
+    .where(and(
+      eq(scheduledPosts.userId, userId),
+      eq(scheduledPosts.status, 'awaiting_approval'),
+      gte(scheduledPosts.createdAt, since),
+    ))
+    .orderBy(scheduledPosts.scheduledAt);
+}
+
+/**
+ * 切り口ごとの「実際の伸び」を集計する（実績学習）。
+ *
+ * 予約投稿(scheduledPosts.publishedThreadsPostId)と実測値(postAnalytics)を
+ * 突き合わせ、切り口ごとの平均インプレッションと全体平均を返す。
+ * クライアントが◯✕を押さなくても、結果そのものから学習できるようにするのが目的。
+ *
+ * 注意：公開直後の投稿は数字が伸びきっていないため、
+ * 公開から24時間未満のものは集計から除く。
+ */
+export async function getAnglePerformanceStats(
+  userId: number,
+  projectId?: string,
+): Promise<{ perAngle: Record<string, { avgImpressions: number; count: number }>; overallAvg: number }> {
+  const db = await getDb();
+  if (!db) return { perAngle: {}, overallAvg: 0 };
+
+  const rows = await db.select({
+    angle: scheduledPosts.angle,
+    impressions: postAnalytics.impressions,
+  })
+    .from(scheduledPosts)
+    .innerJoin(postAnalytics, and(
+      eq(postAnalytics.threadsPostId, scheduledPosts.publishedThreadsPostId),
+      eq(postAnalytics.userId, scheduledPosts.userId),
+    ))
+    .where(and(
+      eq(scheduledPosts.userId, userId),
+      ...(projectId ? [eq(scheduledPosts.projectId, projectId)] : []),
+      sql`${scheduledPosts.angle} IS NOT NULL`,
+      sql`${scheduledPosts.publishedThreadsPostId} IS NOT NULL`,
+      sql`${scheduledPosts.postedAt} < DATE_SUB(NOW(), INTERVAL 24 HOUR)`,
+    ));
+
+  const sums: Record<string, { total: number; count: number }> = {};
+  let grandTotal = 0;
+  let grandCount = 0;
+  for (const r of rows) {
+    if (!r.angle) continue;
+    const imp = Number(r.impressions) || 0;
+    if (!sums[r.angle]) sums[r.angle] = { total: 0, count: 0 };
+    sums[r.angle].total += imp;
+    sums[r.angle].count += 1;
+    grandTotal += imp;
+    grandCount += 1;
+  }
+
+  const perAngle: Record<string, { avgImpressions: number; count: number }> = {};
+  for (const [angle, v] of Object.entries(sums)) {
+    perAngle[angle] = { avgImpressions: Math.round(v.total / v.count), count: v.count };
+  }
+  return { perAngle, overallAvg: grandCount > 0 ? Math.round(grandTotal / grandCount) : 0 };
+}
+
 /** ◯（good）/✕（bad）が付いた投稿本文のサンプルを新しい順に返す（プロンプトの好み学習用）。
  *  ★店舗（projectId）単位で絞る：別店舗の投稿文が「このお店の好み」として混入しないように */
 export async function getRatedPostSamples(userId: number, rating: 'good' | 'bad', limit: number = 3, projectId?: string): Promise<string[]> {

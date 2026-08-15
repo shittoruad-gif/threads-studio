@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { useState } from "react";
 import { useThreadsAccount } from "@/components/ThreadsAccountSwitcher";
 import PageGuide from "@/components/PageGuide";
+import AngleLearningCard from "@/components/AngleLearningCard";
 import {
   BarChart,
   Bar,
@@ -372,6 +373,9 @@ export default function PostAnalytics() {
             {/* Overview Tab */}
             {activeTab === "overview" && (
               <div className="space-y-6">
+                {/* どの型が効いているか（自動投稿の学習結果） */}
+                <AngleLearningCard />
+
                 {/* Engagement Trend Chart */}
                 <Card className="glass-card">
                   <CardHeader>

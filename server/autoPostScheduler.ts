@@ -331,7 +331,10 @@ async function generateAutoPost(
   try {
     // ★店舗（project）単位で学習：複数店舗ユーザーで別店舗の好みを混ぜない
     const stats = await db.getAngleFeedbackStats(userId, project.id);
-    angle = pickAngle(stats);
+    // ★実績学習：実際に見られた回数（インプレッション）でも重みを補正する。
+    //   クライアントが◯✕を押さなくても、結果そのものから伸びる型が増えていく。
+    const perf = await db.getAnglePerformanceStats(userId, project.id);
+    angle = pickAngle(stats, Math.random, perf);
     // ◯✕が付いた実例をプロンプトに注入して「このお店の好み」を学習させる
     const [liked, disliked] = await Promise.all([
       db.getRatedPostSamples(userId, 'good', 2, project.id),
@@ -691,6 +694,27 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
 
         // Update rotation indices
         await db.updateUserAutoPostIndices(user.id, typeIdx, purposeIdx);
+
+        // ★承認モードONのユーザーには、作成した直後に1通だけまとめて案内する。
+        //   予定時刻を過ぎるまで気づけず投稿がゼロになる、という事故を防ぐため。
+        //   メール内で本文を読み、そのまま承認できる（ログイン不要）。
+        if (user.autoPostRequireApproval) {
+          try {
+            const fresh = await db.getRecentAwaitingApprovalPosts(user.id, 30);
+            const owner = fresh.length > 0 ? await db.getUserById(user.id) : null;
+            if (fresh.length > 0 && owner?.email) {
+              const { sendApprovalDigestEmail } = await import('./approvalEmail');
+              await sendApprovalDigestEmail({
+                to: owner.email,
+                userId: user.id,
+                posts: fresh.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt })),
+              });
+              console.log(`[AutoPost] 承認依頼メール送信: user=${user.id} ${fresh.length}件`);
+            }
+          } catch (e) {
+            console.error(`[AutoPost] 承認依頼メール送信失敗 user=${user.id}:`, e);
+          }
+        }
 
       } catch (error) {
         console.error(`[AutoPost] Error processing user ${user.id}:`, error);

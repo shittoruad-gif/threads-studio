@@ -50,6 +50,14 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
     } catch { /* ログ失敗は無視 */ }
   };
 
+  // ★QA安全モード：本番スナップショットを載せたローカル環境から
+  //   実在のお客様へメールが飛ぶ事故を防ぐ（QA_SAFE_MODE=1 のとき送信しない）。
+  if (process.env.QA_SAFE_MODE === '1') {
+    console.log(`[Email] QA_SAFE_MODE のため送信しません: to=${payload.to} subject=${payload.subject}`);
+    await log('skipped', 'QA_SAFE_MODE');
+    return false;
+  }
+
   const resend = getResend();
   if (!resend) {
     console.log("[Email] Skipped - RESEND_API_KEY not configured");

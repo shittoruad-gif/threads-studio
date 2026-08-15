@@ -374,6 +374,9 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   // 追い投稿：この値があるときは新規投稿ではなく、このThreads投稿IDへの
   // 「返信」として公開する（自分の投稿へのひとこと追加＝再浮上ブースト）。
   replyToThreadsId: varchar("replyToThreadsId", { length: 255 }),
+  // 公開後のThreads投稿ID。postAnalytics と突き合わせて
+  // 「どの切り口が実際に伸びたか」を学習するために使う。
+  publishedThreadsPostId: varchar("publishedThreadsPostId", { length: 255 }),
   postedAt: timestamp("postedAt"),
   errorMessage: text("errorMessage"),
   // Store the post content snapshot at scheduling time

@@ -27,6 +27,7 @@ import {
   updateUserLastCommentCheck,
 } from "./db";
 import { sendEmail } from "./_core/notification";
+import { sendApprovalDigestEmail } from "./approvalEmail";
 
 /** JSTの 'YYYY-MM-DD' を返す */
 function jstDateString(d: Date = new Date()): string {
@@ -167,7 +168,6 @@ export async function runApprovalReminderJob(): Promise<void> {
     byUser.set(post.userId, list);
   }
 
-  const base = process.env.APP_BASE_URL || "https://threads-studio.com";
   for (const [userId, posts] of Array.from(byUser.entries())) {
     try {
       // 投稿時刻を「翌日の同時刻」へスライド（承認後に過去時刻で即投稿になるのを防ぐ）
@@ -176,19 +176,17 @@ export async function runApprovalReminderJob(): Promise<void> {
         const next = new Date(post.scheduledAt);
         while (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1);
         await updateScheduledPostTime(post.id, next);
+        // メールに載せる時刻がスライド前のままにならないよう手元も更新する
+        post.scheduledAt = next;
       }
       const user = await getUserById(userId);
       if (!user?.email) continue;
-      await sendEmail({
+      // メール内で本文を読み、その場で承認できる形に（放置による投稿ゼロを防ぐ）
+      await sendApprovalDigestEmail({
         to: user.email,
-        subject: `【Threads Studio】承認待ちの投稿が ${posts.length} 件あります`,
-        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
-          <h2>承認待ちの投稿があります</h2>
-          <p>自動作成された投稿 <strong>${posts.length}件</strong> が、承認されないまま予定時刻を過ぎていました。</p>
-          <p>投稿時刻は翌日に自動調整しました。内容をご確認のうえ、承認すると投稿されます（不要な投稿はキャンセルできます）。</p>
-          <a href="${base}/post-history?status=awaiting_approval" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0;">承認待ちを確認する</a>
-          <p style="color:#9ca3af;font-size:12px;">承認モードをオフにすると、確認なしで自動投稿されるようになります（設定ページ）。</p>
-        </div>`,
+        userId,
+        posts: posts.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt })),
+        overdue: true,
       });
       console.log(`[DailyOps] 承認リマインド送信: user=${userId} ${posts.length}件`);
     } catch (e) {

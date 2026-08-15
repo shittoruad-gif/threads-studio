@@ -108,13 +108,41 @@ export function getAngle(id: string | null | undefined): PostAngle | undefined {
  * 重み = 1 + 0.6×◯ − 0.5×✕（下限0.1＝✕が続いた切り口もゼロにはしない。
  * 好みは変わるので、たまに出して再確認できる余地を残す）
  */
+export interface AnglePerformance {
+  /** 切り口ごとの実測平均インプレッションと母数 */
+  perAngle: Record<string, { avgImpressions: number; count: number }>;
+  /** 全切り口をならした平均インプレッション（比較の基準） */
+  overallAvg: number;
+}
+
+/**
+ * 実績（実際に何回見られたか）から重みの倍率を出す。
+ *
+ * 全体平均を1.0として、平均の2倍見られている切り口は最大1.8倍出やすく、
+ * 半分以下しか見られていない切り口は最大0.5倍まで出にくくなる。
+ * ただし母数が少ないうちは偶然のブレが大きいので、
+ * 3件で効き始め、8件で満額になるよう段階的に効かせる。
+ */
+function performanceMultiplier(angleId: string, perf?: AnglePerformance): number {
+  if (!perf || perf.overallAvg <= 0) return 1;
+  const p = perf.perAngle[angleId];
+  if (!p || p.count < 3) return 1;
+  const ratio = p.avgImpressions / perf.overallAvg;
+  const confidence = Math.min(1, (p.count - 2) / 6); // 3件=0.17 … 8件=1.0
+  const raw = Math.min(1.8, Math.max(0.5, ratio));
+  return 1 + (raw - 1) * confidence;
+}
+
 export function pickAngle(
   stats: Record<string, { good: number; bad: number }>,
   random: () => number = Math.random,
+  perf?: AnglePerformance,
 ): PostAngle {
   const weights = POST_ANGLES.map((a) => {
     const s = stats[a.id] ?? { good: 0, bad: 0 };
-    return Math.max(0.1, 1 + 0.6 * s.good - 0.5 * s.bad);
+    // 好み（◯✕）× 結果（実測インプレッション）の掛け合わせ
+    const preference = Math.max(0.1, 1 + 0.6 * s.good - 0.5 * s.bad);
+    return Math.max(0.05, preference * performanceMultiplier(a.id, perf));
   });
   const total = weights.reduce((sum, w) => sum + w, 0);
   let r = random() * total;

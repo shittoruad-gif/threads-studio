@@ -2841,6 +2841,44 @@ ${input.commentText}
         return { hitPosts, avgEngagement };
       }),
 
+    /**
+     * 切り口ごとの成績（実績学習の中身をクライアントに見せる）。
+     *
+     * 「どの型が効いているか」を数字で返し、AIが何を増やそうとしているかを
+     * 分かるようにする。◯✕の手動評価と、実測インプレッションの両方を含む。
+     */
+    anglePerformance: protectedProcedure
+      .input(accountFilterInput)
+      .query(async ({ ctx, input }) => {
+        const accountId = await resolveOwnedAccountId(ctx.user.id, input?.accountId);
+        // アカウントに店舗が紐付いていれば、その店舗の成績だけを見る
+        let projectId: string | undefined;
+        if (accountId) {
+          const account = await db.getThreadsAccountById(accountId);
+          projectId = (account as any)?.defaultProjectId || undefined;
+        }
+        const [perf, ratings] = await Promise.all([
+          db.getAnglePerformanceStats(ctx.user.id, projectId),
+          db.getAngleFeedbackStats(ctx.user.id, projectId),
+        ]);
+        const { POST_ANGLES } = await import("../shared/postAngles");
+        const rows = POST_ANGLES.map((a) => {
+          const p = perf.perAngle[a.id];
+          const r = ratings[a.id];
+          return {
+            id: a.id,
+            label: a.label,
+            avgImpressions: p?.avgImpressions ?? null,
+            count: p?.count ?? 0,
+            good: r?.good ?? 0,
+            bad: r?.bad ?? 0,
+          };
+        })
+          // 実績がある順 → 評価がある順で並べる（何も無い型は下に）
+          .sort((x, y) => (y.avgImpressions ?? -1) - (x.avgImpressions ?? -1) || (y.good + y.bad) - (x.good + x.bad));
+        return { rows, overallAvg: perf.overallAvg };
+      }),
+
     // Fetch and store analytics from Threads API for a user's posts
     fetchAndStoreAnalytics: protectedProcedure.mutation(async ({ ctx }) => {
       const accounts = await db.getThreadsAccountsByUserId(ctx.user.id);

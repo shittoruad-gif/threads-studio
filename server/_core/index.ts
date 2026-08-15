@@ -35,6 +35,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import * as db from "../db";
+import { createApprovalToken, verifyApprovalToken } from "../approvalToken";
 import { initTrialReminderScheduler } from "../trialReminder";
 import { initPaymentFollowUpScheduler } from "../paymentFollowUp";
 import { startTokenRefreshJob } from "../tokenRefreshJob";
@@ -976,6 +977,131 @@ async function startServer() {
 </html>`);
   });
 
+  /**
+   * メールから承認する導線（ログイン不要 / 署名付きトークン）。
+   *
+   * GET  … 投稿内容を表示して確認ボタンを出す（メールソフトのリンク先読みで
+   *        勝手に公開されないよう、GETでは状態を変えない）
+   * POST … 実際に承認 or 見送りを反映する
+   *
+   * トークンは1投稿・1操作にしか使えず、ログインセッションは発行しない。
+   */
+  const approvalPage = (title: string, body: string, tone: 'ok' | 'ng' = 'ok') => `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>${title} | Threads Studio</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px 16px;background:#f8fafc;color:#0f172a;
+       font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+       line-height:1.7;-webkit-text-size-adjust:100%}
+  .card{max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;
+        border-radius:16px;padding:24px 20px}
+  h1{font-size:19px;margin:0 0 12px;line-height:1.5;color:${tone === 'ok' ? '#065f46' : '#334155'}}
+  p{font-size:15px;margin:0 0 12px;color:#334155}
+  .post{white-space:pre-wrap;word-break:break-word;background:#f1f5f9;border-radius:12px;
+        padding:16px;font-size:15px;margin:16px 0;color:#0f172a}
+  .btn{display:block;width:100%;text-align:center;background:#10b981;color:#fff;border:0;
+       padding:16px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;
+       text-decoration:none;margin-top:8px}
+  .btn.sub{background:#fff;color:#64748b;border:1px solid #cbd5e1;font-weight:600}
+  .meta{font-size:13px;color:#64748b}
+  a.link{color:#0f766e}
+</style></head>
+<body><div class="card">${body}</div></body></html>`;
+
+  app.get('/api/post-approval', async (req, res) => {
+    const parsed = verifyApprovalToken(req.query.token);
+    if (!parsed) {
+      return res.status(400).send(approvalPage('リンクが無効です', `
+        <h1>このリンクは使えません</h1>
+        <p>リンクの有効期限が切れているか、URLが途中で切れている可能性があります。</p>
+        <p class="meta">お手数ですが、アプリにログインして投稿履歴から承認してください。</p>
+        <a class="btn" href="/post-history?status=awaiting_approval">アプリを開く</a>`, 'ng'));
+    }
+    const post = await db.getScheduledPostById(parsed.postId);
+    if (!post || post.userId !== parsed.userId) {
+      return res.status(404).send(approvalPage('投稿が見つかりません', `
+        <h1>投稿が見つかりませんでした</h1>
+        <p>削除された可能性があります。</p>
+        <a class="btn" href="/post-history">アプリを開く</a>`, 'ng'));
+    }
+    if (post.status !== 'awaiting_approval') {
+      const label = post.status === 'posted' ? 'すでに投稿済みです'
+        : post.status === 'canceled' ? 'この投稿は見送り済みです'
+        : post.status === 'pending' ? 'すでに承認済みです（投稿予定に入っています）'
+        : '対応の必要はありません';
+      return res.send(approvalPage('対応済みです', `
+        <h1>${label}</h1>
+        <p class="meta">この画面は閉じていただいて大丈夫です。</p>
+        <a class="btn" href="/post-history">投稿履歴を見る</a>`));
+    }
+
+    const when = post.scheduledAt
+      ? new Date(post.scheduledAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : null;
+    const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return res.send(approvalPage('投稿の確認', `
+      <h1>この内容で投稿しますか？</h1>
+      ${when ? `<p class="meta">投稿予定：${when}</p>` : ''}
+      <div class="post">${esc(post.postContent || '(本文なし)')}</div>
+      <form method="POST" action="/api/post-approval">
+        <input type="hidden" name="token" value="${createApprovalToken(post.id, post.userId, 'approve')}" />
+        <button class="btn" type="submit">この内容で投稿する</button>
+      </form>
+      <form method="POST" action="/api/post-approval">
+        <input type="hidden" name="token" value="${createApprovalToken(post.id, post.userId, 'skip')}" />
+        <button class="btn sub" type="submit">今回は見送る</button>
+      </form>
+      <p class="meta" style="margin-top:16px">文章を直したいときは
+        <a class="link" href="/post-history?status=awaiting_approval">アプリで編集</a>できます。</p>`));
+  });
+
+  app.post('/api/post-approval', express.urlencoded({ extended: false }), async (req, res) => {
+    const parsed = verifyApprovalToken(req.body?.token ?? req.query?.token);
+    if (!parsed) {
+      return res.status(400).send(approvalPage('リンクが無効です', `
+        <h1>このリンクは使えません</h1>
+        <p>有効期限が切れている可能性があります。アプリから承認してください。</p>
+        <a class="btn" href="/post-history?status=awaiting_approval">アプリを開く</a>`, 'ng'));
+    }
+    const post = await db.getScheduledPostById(parsed.postId);
+    if (!post || post.userId !== parsed.userId) {
+      return res.status(404).send(approvalPage('投稿が見つかりません', `
+        <h1>投稿が見つかりませんでした</h1>
+        <a class="btn" href="/post-history">アプリを開く</a>`, 'ng'));
+    }
+    if (post.status !== 'awaiting_approval') {
+      return res.send(approvalPage('対応済みです', `
+        <h1>この投稿はすでに対応済みです</h1>
+        <p class="meta">重ねて投稿されることはありません。</p>
+        <a class="btn" href="/post-history">投稿履歴を見る</a>`));
+    }
+
+    if (parsed.action === 'skip') {
+      await db.updateScheduledPost(post.id, { status: 'canceled' });
+      console.log(`[QuickApproval] skipped post=${post.id} user=${post.userId}`);
+      return res.send(approvalPage('見送りました', `
+        <h1>今回は見送りました</h1>
+        <p>この投稿は公開されません。次の投稿はこれまでどおり自動で作成されます。</p>
+        <a class="btn" href="/post-history">投稿履歴を見る</a>`));
+    }
+
+    // 予約時刻が過去なら直近の実行で公開されるよう現在時刻に寄せる（アプリ内の承認と同じ挙動）
+    const now = new Date();
+    const scheduledAt = post.scheduledAt && new Date(post.scheduledAt) > now ? undefined : now;
+    await db.updateScheduledPost(post.id, {
+      status: 'pending',
+      ...(scheduledAt ? { scheduledAt } : {}),
+    });
+    console.log(`[QuickApproval] approved post=${post.id} user=${post.userId}`);
+    return res.send(approvalPage('承認しました', `
+      <h1>承認しました</h1>
+      <p>この投稿は予定どおり公開されます。数分以内にThreadsへ反映されます。</p>
+      <a class="btn" href="/post-history">投稿履歴を見る</a>`));
+  });
+
   // Health check endpoint
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -1213,37 +1339,50 @@ async function startServer() {
   const { seedCoupons } = await import("../coupon");
   await seedCoupons();
   
-  // Start trial reminder scheduler
-  initTrialReminderScheduler();
-  initPaymentFollowUpScheduler();
-  
-  // Start scheduled post executor
-  const { startScheduledPostExecutor } = await import("../scheduledPostExecutor");
-  const stopPostExecutor = startScheduledPostExecutor();
+  // ★QA安全モード：本番スナップショットを載せたローカル環境で、
+  //   実在アカウントへの自動投稿・メール送信が走らないようにする。
+  const qaSafeMode = process.env.QA_SAFE_MODE === '1';
+  if (qaSafeMode) {
+    console.log('[Server] QA_SAFE_MODE=1: 自動投稿・定期ジョブは起動しません');
+  }
 
-  // Start auto-post scheduler (daily AI generation + scheduling)
-  const { startAutoPostScheduler } = await import("../autoPostScheduler");
-  startAutoPostScheduler();
+  let stopPostExecutor: () => void = () => {};
 
-  // Start weekly report scheduler (Monday 9:00 AM JST, pro+ users only)
-  const { startWeeklyReportScheduler } = await import("../weeklyReport");
-  startWeeklyReportScheduler();
+  if (!qaSafeMode) {
+    // Start trial reminder scheduler
+    initTrialReminderScheduler();
+    initPaymentFollowUpScheduler();
 
-  // Daily ops: analytics auto-fetch + follower snapshots + hit-post archive
-  // + overdue approval reminders
-  const { initDailyOpsSchedulers } = await import("../dailyOpsJobs");
-  initDailyOpsSchedulers();
+    // Start scheduled post executor
+    const { startScheduledPostExecutor } = await import("../scheduledPostExecutor");
+    stopPostExecutor = startScheduledPostExecutor();
+
+    // Start auto-post scheduler (daily AI generation + scheduling)
+    const { startAutoPostScheduler } = await import("../autoPostScheduler");
+    startAutoPostScheduler();
+
+    // Start weekly report scheduler (Monday 9:00 AM JST, pro+ users only)
+    const { startWeeklyReportScheduler } = await import("../weeklyReport");
+    startWeeklyReportScheduler();
+
+    // Daily ops: analytics auto-fetch + follower snapshots + hit-post archive
+    // + overdue approval reminders
+    const { initDailyOpsSchedulers } = await import("../dailyOpsJobs");
+    initDailyOpsSchedulers();
+  }
 
   // ★起動時キャッチアップ：デプロイ再起動でcron発火を跨いだ場合に
   //   その日の未実行ジョブを追い実行する（DB初期化が落ち着く60秒後）。
-  setTimeout(async () => {
-    try {
-      const { catchUpMissedJobs } = await import("../jobRunner");
-      await catchUpMissedJobs();
-    } catch (e) {
-      console.error("[JobRunner] 起動時キャッチアップ失敗:", e);
-    }
-  }, 60 * 1000);
+  if (!qaSafeMode) {
+    setTimeout(async () => {
+      try {
+        const { catchUpMissedJobs } = await import("../jobRunner");
+        await catchUpMissedJobs();
+      } catch (e) {
+        console.error("[JobRunner] 起動時キャッチアップ失敗:", e);
+      }
+    }, 60 * 1000);
+  }
 
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
@@ -1262,7 +1401,7 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
     // Start background token refresh job
-    startTokenRefreshJob();
+    if (!qaSafeMode) startTokenRefreshJob();
   });
 
   // Graceful shutdown handler
