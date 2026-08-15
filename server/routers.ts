@@ -933,6 +933,8 @@ export const appRouter = router({
         regionalRefIds: z.array(z.number()).max(3).optional(),
         purpose: z.enum(['cv', 'awareness', 'authority', 'fan']).optional(), // 投稿の目的
         tone: z.enum(['polite', 'casual', 'professional', 'energetic', 'storytelling']).optional(), // 口調
+        // 「いま伸びている型」から指定される切り口（shared/postAngles.ts のid）
+        angle: z.string().max(50).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         // Check AI generation feature
@@ -1042,11 +1044,22 @@ export const appRouter = router({
           ngWords,
         });
 
+        // 「いま伸びている型」から切り口が指定されていれば、その指示を末尾に足す
+        // （末尾の指示が最も守られやすい）。
+        let angleNote = '';
+        if (input.angle) {
+          const { getAngle } = await import('../shared/postAngles');
+          const a = getAngle(input.angle);
+          if (a) {
+            angleNote = `\n\n【今回の切り口（厳守）】\n- 「${a.label}」の切り口で書くこと：${a.hint}`;
+          }
+        }
+
         // Call LLM
         const { invokeLLM } = await import('./_core/llm');
         const response = await invokeLLM({
           messages: [
-            { role: 'user', content: prompt },
+            { role: 'user', content: prompt + angleNote },
           ],
           response_format: {
             type: 'json_schema',

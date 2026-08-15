@@ -68,6 +68,8 @@ export default function AIGenerate() {
   const projectId = searchParams.get('project');
   const historyId = searchParams.get('historyId');
   const templateId = searchParams.get('templateId');
+  // ホーム「いま伸びている型」→「この型で1本作る」から渡される切り口ID
+  const recommendedAngle = searchParams.get('angle');
   // Optional: ?postType=pinned lets the dashboard "create your pinned post"
   // CTA jump straight into pinned-post mode.
   const initialPostType = (searchParams.get('postType') as PostType | null) || 'hook_tree';
@@ -536,6 +538,8 @@ export default function AIGenerate() {
         regionalRefIds: regionalRefIds.length > 0 ? regionalRefIds : undefined,
         purpose: purpose || undefined,
         tone: tone || undefined,
+        // ホームの「いま伸びている型」から来た場合はその切り口で書かせる
+        angle: recommendedAngle || undefined,
       });
       setGeneratedPost(data as GeneratedPost);
       setEditedPost(data as GeneratedPost);

@@ -37,6 +37,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import CouponModal from '@/components/CouponModal';
 import SetupChecklist from '@/components/SetupChecklist';
 import PageGuide from '@/components/PageGuide';
+import PositiveWinnerTips from '@/components/PositiveWinnerTips';
 import {
   Dialog,
   DialogContent,
@@ -491,6 +492,9 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
+
+        {/* いま伸びている投稿の型（実際のThreads調査ベース・炎上型は除外） */}
+        <PositiveWinnerTips />
 
         {/* 毎回表示の操作ガイド（オフ切替可）。毎日の運用手順を1画面目で思い出せるように */}
         <PageGuide steps={[
