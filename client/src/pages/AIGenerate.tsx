@@ -343,9 +343,18 @@ export default function AIGenerate() {
       if (historyParams.projectId) {
         // Update URL with projectId
         const newParams = new URLSearchParams(window.location.search);
+        const hadProject = newParams.has('project');
         newParams.set('project', historyParams.projectId);
         newParams.delete('historyId');
-        window.history.replaceState({}, '', `${window.location.pathname}?${newParams.toString()}`);
+        const nextUrl = `${window.location.pathname}?${newParams.toString()}`;
+        if (!hadProject) {
+          // ?project= が無い状態（履歴の「再生成」から直接来た）では、
+          // このページは window.location.search を初期化時に一度読むだけなので
+          // replaceState では反映されない。実遷移させて履歴の店舗で開き直す。
+          window.location.href = nextUrl;
+          return;
+        }
+        window.history.replaceState({}, '', nextUrl);
       }
       if (historyParams.postType) {
         setPostType(historyParams.postType as PostType);
@@ -641,6 +650,16 @@ export default function AIGenerate() {
     }
   };
 
+  // 履歴の「再生成」やテンプレ読込は、そのデータが持つ店舗で開く必要がある。
+  // ここでピッカーに渡すと「切替中アカウントの既定店舗」で上書きされてしまうため、
+  // historyId / templateId があるときは読み込み完了（上のeffectが遷移）を待つ。
+  if (!projectId && (historyId || templateId)) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
   if (!projectId) {
     return <ProjectAutoPicker />;
   }
