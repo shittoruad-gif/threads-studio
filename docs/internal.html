@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>テスター招待方式 運用手順（社内・代理店用）</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 15mm; }
+  :root {
+    --ink: #13343B; --muted: #4C6B67; --teal: #0E8388; --teal-soft: #E6F2F3;
+    --rule: #DDE7E6; --warn: #8A5A2B; --warn-soft: #FCEBD9;
+    --stop: #A33B2E; --stop-soft: #FBEAE7;
+    --sans: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); font-family: var(--sans); font-size: 10pt; line-height: 1.72; }
+  h1 { font-size: 18pt; margin: 0 0 6pt; font-weight: 800; line-height: 1.4; }
+  .eyebrow { font-size: 8pt; letter-spacing: .16em; color: var(--teal); font-weight: 700; margin: 0 0 6pt; }
+  .lede { color: var(--muted); margin: 0 0 8pt; }
+  .hero { border-bottom: 1.5pt solid var(--ink); padding-bottom: 8pt; margin-bottom: 10pt; }
+  .internal {
+    display: inline-block; background: var(--stop); color: #fff; font-weight: 800;
+    font-size: 8.5pt; padding: 2pt 10pt; border-radius: 3pt; letter-spacing: .08em; margin-bottom: 6pt;
+  }
+  h2 { font-size: 13pt; margin: 12pt 0 5pt; font-weight: 800; break-after: avoid; }
+  .step { border: .75pt solid var(--rule); border-radius: 8pt; padding: 9pt 13pt; margin: 8pt 0; break-inside: avoid; }
+  .step .no { font-size: 8.5pt; font-weight: 800; letter-spacing: .12em; color: var(--teal); }
+  .step h3 { font-size: 12pt; margin: 2pt 0 5pt; font-weight: 800; }
+  ol { margin: 5pt 0; padding-left: 17pt; }
+  ul { margin: 5pt 0; padding-left: 17pt; }
+  li { margin-bottom: 2pt; }
+  .ui { display: inline-block; border: .75pt solid var(--rule); border-radius: 4pt; padding: 0 5pt; font-size: 9.3pt; background: #F6FAFA; }
+  .note { background: var(--warn-soft); border-left: 2.5pt solid #D8B978; padding: 7pt 11pt; margin: 8pt 0 0; font-size: 9.2pt; color: var(--warn); }
+  .stopbox { background: var(--stop-soft); border-left: 2.5pt solid var(--stop); padding: 7pt 11pt; margin: 8pt 0 0; font-size: 9.2pt; color: var(--stop); }
+  .pos { background: var(--teal-soft); border-radius: 6pt; padding: 10pt 13pt; margin: 10pt 0; font-size: 9.8pt; }
+  table { border-collapse: collapse; width: 100%; font-size: 9.3pt; margin: 6pt 0; }
+  th, td { border: .75pt solid var(--rule); padding: 4.5pt 8pt; text-align: left; vertical-align: top; }
+  th { background: #F6FAFA; font-weight: 700; white-space: nowrap; }
+  td { color: var(--muted); }
+  code { background: #F6FAFA; border: .75pt solid var(--rule); border-radius: 3pt; padding: 0 4pt; font-size: 9pt; }
+  footer { margin-top: 14pt; padding-top: 8pt; border-top: .75pt solid var(--rule); font-size: 8.5pt; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <span class="internal">社内・代理店用 — クライアントには渡さない</span>
+  <p class="eyebrow">THREADS STUDIO 運用手順</p>
+  <h1>テスター招待方式（②）の進め方</h1>
+  <p class="lede">Meta審査の結果を待たずにクライアントの利用を開始するための、招待する側の手順書です。クライアント側の作業は別紙「Threads連携 かんたんガイド」を渡してください。</p>
+</header>
+
+<div class="pos">
+  <b>この方式の位置づけ</b><br>
+  弊社アプリを開発モードのまま、クライアントのThreadsアカウントを「Threadsテスター」として登録して使ってもらう方式です。
+  <b>審査通過までのつなぎ</b>として少数のクライアントに使い、本格展開はBYOA方式（各自のMetaアプリ）または審査通過後の通常連携で行います。
+  審査に通れば招待は不要になり、既存の接続はそのまま正式運用に切り替わります（クライアント作業なし）。
+</div>
+
+<h2>招待の手順（1件あたり約2分）</h2>
+
+<div class="step">
+  <span class="no">手順 1</span>
+  <h3>クライアントのThreadsユーザー名を受け取る</h3>
+  <ul>
+    <li>別紙ガイドのSTEP 1で、クライアントからユーザー名（@の後ろの部分）が届きます</li>
+    <li>綴りをそのままコピーして使ってください（手打ちすると間違えやすい）</li>
+  </ul>
+</div>
+
+<div class="step">
+  <span class="no">手順 2</span>
+  <h3>Metaダッシュボードから招待を送る</h3>
+  <ol>
+    <li>developers.facebook.com にログインし、<span class="ui">マイアプリ</span> から <b>Threads Studio</b> を開きます</li>
+    <li>左メニューの <span class="ui">アプリの役割</span> → <span class="ui">役割</span> を開きます</li>
+    <li><span class="ui">メンバーを追加</span> を押します</li>
+    <li>役割の選択肢から <b>Threadsテスター</b> を選びます</li>
+    <li>クライアントのユーザー名を入力し（@は不要）、招待を送ります</li>
+  </ol>
+  <div class="stopbox">
+    <b>「テスター」と「Threadsテスター」は別物です。</b>必ず <b>Threadsテスター</b> を選んでください。
+    間違えるとクライアント側に招待が表示されません（過去に実際に詰まったポイントです）。
+  </div>
+</div>
+
+<div class="step">
+  <span class="no">手順 3</span>
+  <h3>クライアントに承諾を依頼する</h3>
+  <ul>
+    <li>「招待をお送りしました。ガイドのSTEP 2にお進みください」と連絡します</li>
+    <li>承諾されたかどうかは、同じ <span class="ui">アプリの役割</span> の画面のステータスで確認できます（承諾待ちの間は保留表示）</li>
+  </ul>
+</div>
+
+<div class="step">
+  <span class="no">手順 4</span>
+  <h3>接続を確認する</h3>
+  <ul>
+    <li>クライアントがガイドのSTEP 3（Threads Studioでの連携）まで終えたら、管理側でそのアカウントの連携状態と、翌日の自動投稿が動いたことを確認します</li>
+    <li>初回投稿の確認までがこの手順の完了条件です</li>
+  </ul>
+</div>
+
+<h2>運用ルール（必ず守る）</h2>
+<table>
+  <tr><th>ルール</th><th>理由</th></tr>
+  <tr><td><b>招待を出したら必ず記録する</b>（日付・クライアント名・ユーザー名・承諾状況）</td><td>テスター枠の上限は非公開のため、何件使っているかを常に把握しておく必要があります</td></tr>
+  <tr><td><b>少数運用にとどめる</b>。本格展開はBYOAか審査通過後に</td><td>テスト用の枠を本番利用に使う方式のため、大量発行はMetaに不自然と見なされるリスクがあります</td></tr>
+  <tr><td><b>不要になった招待・退会したクライアントは役割から削除する</b></td><td>枠の節約と、使っていないアカウントに権限を残さないため</td></tr>
+  <tr><td><b>この資料と招待画面はクライアントに見せない</b></td><td>ダッシュボードには他のクライアント名が表示されるため</td></tr>
+</table>
+
+<h2>うまくいかないときは</h2>
+<table>
+  <tr><th>症状</th><th>対処</th></tr>
+  <tr><td>クライアント側に招待が出ない</td><td>役割の選択が「Threadsテスター」になっているか確認。「テスター」を選んでいたら削除して招待し直す。ユーザー名の綴りも再確認</td></tr>
+  <tr><td>クライアントがアプリ内で承諾場所を見つけられない</td><td>現行UIは「設定 → その他の設定 → ウェブサイトのアクセス許可 → 招待」。それでも迷う場合はブラウザで threads.com/settings/website_permissions を開いてもらう（直URL・バージョン非依存）</td></tr>
+  <tr><td>承諾済みなのに連携でエラー</td><td>クライアントが別のThreadsアカウントで連携しようとしている可能性。連携時のログインアカウントを確認してもらう</td></tr>
+  <tr><td>審査に通った後はどうする？</td><td>何もしなくてよい。既存接続はそのまま有効。以降の新規クライアントは招待なしで連携できるようになる</td></tr>
+</table>
+
+<footer>Threads Studio ／ 株式会社しっとる　｜　社内・代理店限定資料（再配布不可）</footer>
+
+</body>
+</html>

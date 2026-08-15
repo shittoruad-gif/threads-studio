@@ -342,6 +342,9 @@ export const projects = mysqlTable("projects", {
   // 投稿に入れたくないワード（NGワード）。改行/カンマ/読点区切りのテキストで保持。
   // 生成プロンプトで禁止し、生成後に shared/ngwords.ts で機械的に除去して必ず含めないようにする。
   ngWords: text("ngWords"),
+  // 固定投稿ウィザードStep3の好みフィードバック。JSON。
+  // { dislikes: string[], updatedAt: string } 形式。AI生成プロンプトに反映する。
+  pinnedPostFeedback: text("pinnedPostFeedback"),
   // LINE問い合わせ計測（Keiro連携）。投稿別の合言葉ヒット数を集計するための
   // Keiro側 inquiry-hits エンドポイントURLとAPIキー。null=連携なし（計測セクション非表示）。
   keiroHitsUrl: text("keiroHitsUrl"),

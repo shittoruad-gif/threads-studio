@@ -125,6 +125,11 @@ export interface ThreadsPromptInput {
    *  - 認知系（trend/aruaru等）→ プロフ誘導を優先しURLは入れない
    */
   links?: ProjectLinkLite[];
+  /**
+   * 固定投稿ウィザードでユーザーが選んだ優先チャネル種別。
+   * 指定があれば links の並び順を操作し、そのタイプを cvChannel として採用させる。
+   */
+  preferredLinkType?: string;
   postType?: PostType;
   treeCount?: number; // 0 = 本文のみ, 1〜5 = ツリー投稿数
   usp?: string;       // USP（独自の強み）← 第13回追加
@@ -1159,7 +1164,7 @@ ${safe.customerWords ? `- お客さんが実際に使った言葉：${safe.custo
 ${safe.proof ? `- 実績/証拠：${safe.proof}` : ''}
 ${safe.link ? `- 誘導先：登録あり（★本文にURLは貼らず、「プロフィールのリンクから」「固定投稿にまとめています」の間接誘導にすること）` : ''}
 ${safe.trendWord ? `- トレンドワード：${safe.trendWord}` : ''}
-${formatLinksForPrompt(input.links, input.postType)}
+${formatLinksForPrompt(input.links, input.postType, input.preferredLinkType)}
 
 【投稿タイプ】
 ${postTypeDescription}${localNote}${trendNote}${seasonalNote}${regionalRefNote}${buzzNote}${ngWordsNote}${styleSamplesNote}
@@ -1207,7 +1212,7 @@ ${treeCount === 0 ? 'ツリーは使わず、本文のみで完結させてく�
  *  - その他: do NOT embed URLs directly. Refer the user to the固定投稿/
  *    プロフィール instead. Mentioning "プロフから△△へ" is fine.
  */
-function formatLinksForPrompt(links: ProjectLinkLite[] | undefined, postType: PostType | undefined): string {
+function formatLinksForPrompt(links: ProjectLinkLite[] | undefined, postType: PostType | undefined, preferredLinkType?: string): string {
   if (!links || links.length === 0) return '';
   const lines: string[] = ['', '【登録済みの誘導先（チャネル）】'];
   for (const l of links) {
@@ -1220,13 +1225,22 @@ function formatLinksForPrompt(links: ProjectLinkLite[] | undefined, postType: Po
   }
 
   // Per-type usage rule
-  const linePref = links.find(l => l.type === 'line');
-  const reservationPref = links.find(l => l.type === 'reservation');
-  const websitePref = links.find(l => l.type === 'website');
-
-  // メインの誘導チャネル（LINE優先→Web予約→公式HP→先頭）
-  const cvChannel = linePref ? 'LINE' : reservationPref ? 'Web予約' : websitePref ? '公式HP'
-    : ({ line: 'LINE', reservation: 'Web予約', website: '公式HP', instagram: 'Instagram', youtube: 'YouTube', other: '登録先' } as const)[links[0].type];
+  // ユーザーが固定投稿ウィザードで選んだ優先チャネルがあればそれを最優先
+  const TYPE_LABEL: Record<string, string> = {
+    line: 'LINE', reservation: 'Web予約', website: '公式HP',
+    instagram: 'Instagram', youtube: 'YouTube', other: '登録先',
+  };
+  let cvChannel: string;
+  if (preferredLinkType && links.some(l => l.type === preferredLinkType)) {
+    cvChannel = TYPE_LABEL[preferredLinkType] ?? preferredLinkType;
+  } else {
+    const linePref = links.find(l => l.type === 'line');
+    const reservationPref = links.find(l => l.type === 'reservation');
+    const websitePref = links.find(l => l.type === 'website');
+    // メインの誘導チャネル（LINE優先→Web予約→公式HP→先頭）
+    cvChannel = linePref ? 'LINE' : reservationPref ? 'Web予約' : websitePref ? '公式HP'
+      : TYPE_LABEL[links[0].type] ?? '登録先';
+  }
 
   // ★方針A（教科書準拠）：本文・CTAに生URLは一切貼らず、プロフィール／固定投稿への間接誘導に統一する。
   lines.push('', '【誘導ルール（必須・教科書準拠）】');

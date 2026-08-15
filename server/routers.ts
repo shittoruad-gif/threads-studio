@@ -708,6 +708,28 @@ export const appRouter = router({
         return { success: true, links: normalised };
       }),
 
+    // 固定投稿ウィザードStep3の好みフィードバックを保存する
+    savePinnedPostFeedback: protectedProcedure
+      .input(z.object({
+        projectId: z.string(),
+        // 「好みでない」理由のリスト（ユーザーが選んだチップ）
+        dislikes: z.array(z.string().max(50)).max(10),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const project = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+        }
+        const feedback = {
+          dislikes: input.dislikes,
+          updatedAt: new Date().toISOString(),
+        };
+        await db.updateProject(input.projectId, {
+          pinnedPostFeedback: JSON.stringify(feedback),
+        });
+        return { success: true };
+      }),
+
     // Get project count
     count: protectedProcedure.query(async ({ ctx }) => {
       return await db.countUserProjects(ctx.user.id);
@@ -935,6 +957,8 @@ export const appRouter = router({
         tone: z.enum(['polite', 'casual', 'professional', 'energetic', 'storytelling']).optional(), // 口調
         // 「いま伸びている型」から指定される切り口（shared/postAngles.ts のid）
         angle: z.string().max(50).optional(),
+        // 固定投稿ウィザードでユーザーが選んだ優先チャネル種別（line / reservation / website 等）
+        preferredLinkType: z.string().max(20).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         // Check AI generation feature
@@ -1018,6 +1042,7 @@ export const appRouter = router({
           styleSamples: (project as any).styleSamples || undefined,
           link: project.ctaLink || undefined,
           links: projectLinks.map(l => ({ type: l.type, label: l.label, url: l.url })),
+          preferredLinkType: input.preferredLinkType,
           postType: input.postType,
           treeCount: input.treeCount,
           usp: (project as any).usp || undefined,

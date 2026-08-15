@@ -38,6 +38,7 @@ import { triggerCelebration } from '@/components/Celebration';
 import ErrorGuide from '@/components/ErrorGuide';
 import ProjectLinksManager from '@/components/ProjectLinksManager';
 import TextareaWithEmoji from '@/components/TextareaWithEmoji';
+import PinnedPostWizard from '@/components/PinnedPostWizard';
 
 type PostType = 'hook_tree' | 'expertise' | 'local' | 'proof' | 'empathy' | 'story' | 'list' | 'offer' | 'enemy' | 'qa' | 'trend' | 'aruaru' | 'pinned';
 
@@ -744,7 +745,31 @@ export default function AIGenerate() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ★固定投稿ウィザード（postType === 'pinned' のときグリッドを丸ごと置き換え） */}
+        {postType === 'pinned' && projectId && project && (
+          <Card className="border-amber-300">
+            <CardContent className="pt-6">
+              <PinnedPostWizard
+                projectId={projectId}
+                project={project}
+                onComplete={(post) => {
+                  // ウィザード完了 → 編集画面にセット
+                  setGeneratedPost(post as any);
+                  setEditedPost(post as any);
+                  // 通常の編集フロー（グリッド表示）に戻す
+                  setPostType('hook_tree');
+                  // 直後に pinned モードの状態を保持しつつスクロール
+                  setTimeout(() => {
+                    document.getElementById('generated-post-section')?.scrollIntoView({ behavior: 'smooth' });
+                  }, 100);
+                }}
+                onCancel={() => setPostType('hook_tree')}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        <div className={`grid grid-cols-1 lg:grid-cols-2 gap-6 ${postType === 'pinned' ? 'hidden' : ''}`}>
           {/* 左側：設定エリア */}
           <div className="space-y-6 min-w-0">
             {/* 誘導用URL登録 — 1度設定すれば固定投稿/自動投稿で自動的に使い回される */}
@@ -1693,7 +1718,7 @@ export default function AIGenerate() {
           </div>
 
           {/* 右側：生成結果エリア */}
-          <div className="space-y-6 min-w-0">
+          <div id="generated-post-section" className="space-y-6 min-w-0">
             {editedPost ? (
               <>
                 {/* 生成完了→次の一手を明示 */}
