@@ -113,7 +113,6 @@ export default function PinnedPostWizard({
   );
   const [newLinkType, setNewLinkType] = useState<ProjectLinkType>('line');
   const [newLinkUrl, setNewLinkUrl] = useState('');
-  const [newLinkLabel, setNewLinkLabel] = useState('');
   const [showAddForm, setShowAddForm] = useState(links.length === 0);
   const [isSavingLinks, setIsSavingLinks] = useState(false);
 
@@ -148,14 +147,13 @@ export default function PinnedPostWizard({
       {
         id: genId(),
         type: newLinkType,
-        label: newLinkLabel.trim() || cfg.name,
+        label: cfg.name,
         url: newLinkUrl.trim(),
         isDefault: !links.some(l => l.type === newLinkType),
       },
     ]);
     setLinks(updated);
     setNewLinkUrl('');
-    setNewLinkLabel('');
     setShowAddForm(false);
   };
 
@@ -372,10 +370,7 @@ export default function PinnedPostWizard({
                   <button
                     key={type}
                     type="button"
-                    onClick={() => {
-                      setNewLinkType(type);
-                      setNewLinkLabel(cfg.name);
-                    }}
+                    onClick={() => setNewLinkType(type)}
                     className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-xs transition-colors ${
                       newLinkType === type
                         ? 'border-emerald-500 bg-emerald-100 dark:bg-emerald-900/40 font-semibold'
@@ -393,12 +388,6 @@ export default function PinnedPostWizard({
               value={newLinkUrl}
               onChange={e => setNewLinkUrl(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAddLink()}
-            />
-            <Input
-              placeholder={t("表示名（省略可）")}
-              value={newLinkLabel}
-              onChange={e => setNewLinkLabel(e.target.value)}
-              maxLength={40}
             />
             <div className="flex gap-2">
               <Button size="sm" onClick={handleAddLink} className="bg-emerald-600 hover:bg-emerald-700 text-white">
