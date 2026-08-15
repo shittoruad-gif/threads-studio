@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   ArrowRight, ArrowLeft, Sparkles, Loader2, ThumbsUp, ThumbsDown,
   Link as LinkIcon, Check, ExternalLink, AlertCircle, Plus, X,
+  HelpCircle, ChevronDown,
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
@@ -78,6 +79,41 @@ type DislikeReason = typeof DISLIKE_REASONS[number];
 const STEP_LABELS = ['URLを登録', '投稿を作成', '好みを学習'] as const;
 
 // ────────────────────────────────────────
+// URL取得方法ヘルプコンテンツ
+// ────────────────────────────────────────
+
+const URL_HELP: Partial<Record<ProjectLinkType, { title: string; steps: string[] }>> = {
+  line: {
+    title: '💬 LINE公式アカウントのURLを調べる方法',
+    steps: [
+      '① パソコンで https://manager.line.biz/ を開いてログインする',
+      '② 左のメニューから「アカウント設定」→「基本情報」をクリック',
+      '③「基本ID」（例: @abc12345）が表示されます',
+      '④ 同じ管理画面で「友だち追加ガイド」を開き、「招待URL」をコピー',
+      '⑤ コピーしたURL（例: https://lin.ee/xxxxx）をそのままここに貼り付けてください',
+    ],
+  },
+  reservation: {
+    title: '📅 Web予約ページのURLを調べる方法',
+    steps: [
+      '① ホットペッパービューティーなどの予約サービスにログインする',
+      '②「自分の店舗ページを見る」や「お店のページ」ボタンをタップ/クリック',
+      '③ 店舗ページが開いたら、画面上部の「アドレスバー」をタップ/クリック',
+      '④ URLが選択されたら「コピー」を押してそのままここに貼り付けてください',
+    ],
+  },
+  website: {
+    title: '🌐 公式ホームページのURLを調べる方法',
+    steps: [
+      '① スマホまたはパソコンでホームページを開く',
+      '② 画面上部の「アドレスバー」（URLが表示されている細長い欄）をタップ/クリック',
+      '③ URLが青くハイライトされたら「コピー」を選ぶ',
+      '④ そのままここに貼り付けてください',
+    ],
+  },
+};
+
+// ────────────────────────────────────────
 // Helper
 // ────────────────────────────────────────
 
@@ -115,6 +151,7 @@ export default function PinnedPostWizard({
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [showAddForm, setShowAddForm] = useState(links.length === 0);
   const [isSavingLinks, setIsSavingLinks] = useState(false);
+  const [showUrlHelp, setShowUrlHelp] = useState(false);
 
   // ── Step 2 state ──
   const [selectedLinkType, setSelectedLinkType] = useState<ProjectLinkType | null>(null);
@@ -370,7 +407,7 @@ export default function PinnedPostWizard({
                   <button
                     key={type}
                     type="button"
-                    onClick={() => setNewLinkType(type)}
+                    onClick={() => { setNewLinkType(type); setShowUrlHelp(false); }}
                     className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-xs transition-colors ${
                       newLinkType === type
                         ? 'border-emerald-500 bg-emerald-100 dark:bg-emerald-900/40 font-semibold'
@@ -389,6 +426,36 @@ export default function PinnedPostWizard({
               onChange={e => setNewLinkUrl(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAddLink()}
             />
+
+            {/* URLの取得方法ヘルプ（アコーディオン） */}
+            {URL_HELP[newLinkType] && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowUrlHelp(v => !v)}
+                  className="flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 py-1 transition-colors"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 shrink-0" />
+                  ？ URLの取得方法がわからない場合
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showUrlHelp ? 'rotate-180' : ''}`} />
+                </button>
+                {showUrlHelp && (
+                  <div className="mt-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 space-y-2">
+                    <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                      {URL_HELP[newLinkType]!.title}
+                    </p>
+                    <ol className="space-y-2">
+                      {URL_HELP[newLinkType]!.steps.map((step, i) => (
+                        <li key={i} className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+                          {step}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <Button size="sm" onClick={handleAddLink} className="bg-emerald-600 hover:bg-emerald-700 text-white">
                 <Plus className="w-4 h-4 mr-1" />
