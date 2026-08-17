@@ -250,9 +250,12 @@ export async function executePendingPosts() {
           try {
             const { inquiryKeywordForPost } = await import('../shared/inquiryKeywords');
             const inquiryCode = inquiryKeywordForPost(post.id);
+            // ★合言葉は業種を問わない言葉のみ（shared/inquiryKeywords.ts）。
+            //   店舗が扱っていないメニュー名を案内しないこと。
+            //   2行目に合言葉と同じ語を書くと重複して不自然になるため、内容を重ねない。
             const commentText =
               `気になった方は、プロフィールの固定投稿にある公式LINEから「${inquiryCode}」とメッセージしてください😊\n` +
-              `空き状況やご質問も、そのままトークでお答えします。`;
+              `そのままトークでご質問にお答えします。`;
             const { createAndPublishPost } = await import('./threadsPost');
             const reply = await createAndPublishPost({
               accessToken,
