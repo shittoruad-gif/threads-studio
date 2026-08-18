@@ -89,3 +89,18 @@ export function useLang(): LangContextValue {
   }
   return ctx;
 }
+
+/**
+ * Reactフックの外（toast通知・ユーティリティ関数など）から翻訳するための関数。
+ *
+ * コンポーネント内では useLang().t を使うこと。こちらは現在の言語設定を
+ * localStorage / URL / ブラウザ言語から都度判定するため、再レンダリングには追随しない。
+ * 「その瞬間に文字列を1回作る」用途にだけ使う。
+ */
+export function translate(ja: string): string {
+  try {
+    return getInitialLang() === "en" ? (dict[ja] ?? ja) : ja;
+  } catch {
+    return ja;
+  }
+}

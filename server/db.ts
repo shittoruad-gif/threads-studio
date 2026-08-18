@@ -3092,3 +3092,36 @@ export async function getRatedPostSamples(userId: number, rating: 'good' | 'bad'
     .limit(limit);
   return rows.map((r) => r.content).filter((c): c is string => !!c);
 }
+
+// ============================================================================
+// 固定投稿ウィザード通知バナー
+// ============================================================================
+
+/**
+ * ウィザード通知バナーを「確認済み」にする。
+ * ユーザーがバナーを閉じたときに呼び出す。
+ */
+export async function markWizardNotificationSeen(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(users)
+    .set({ wizardNotificationSeenAt: new Date() })
+    .where(eq(users.id, userId));
+}
+
+/**
+ * ウィザード通知バナーが未確認かどうかを返す。
+ * true = 未確認（バナーを表示すべき）
+ */
+export async function isWizardNotificationUnseen(userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .select({ wizardNotificationSeenAt: users.wizardNotificationSeenAt })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (rows.length === 0) return false;
+  return rows[0].wizardNotificationSeenAt === null;
+}

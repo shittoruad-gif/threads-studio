@@ -15,7 +15,10 @@ import { Sparkles, ThumbsUp, ThumbsDown } from 'lucide-react';
  * 投稿を混ぜると不当に低く評価されてしまうため）。
  */
 export default function AngleLearningCard() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  // 断片をつなぐと語順が崩れるので、数値を含む文は言語ごとに組み立てる
+  const viewsLabel = (n: number) => (lang === 'en' ? `${n.toLocaleString()} views` : `${n.toLocaleString()}回`);
+  const avgOfLabel = (n: number) => (lang === 'en' ? `average of ${n} posts` : `投稿${n}件の平均`);
   const { selectedAccountId } = useThreadsAccount();
   const { data } = trpc.stats.anglePerformance.useQuery({ accountId: selectedAccountId });
 
@@ -51,7 +54,9 @@ export default function AngleLearningCard() {
       <CardContent className="space-y-2">
         <p className="text-xs leading-relaxed text-muted-foreground">
           {t('投稿の「型」ごとの平均閲覧数です。よく見られている型を自動投稿が増やしていきます。')}
-          {overallAvg > 0 && ` ${t('全体の平均は')}${overallAvg.toLocaleString()}${t('回')}`}
+          {overallAvg > 0 && (lang === 'en'
+            ? ` Overall average: ${viewsLabel(overallAvg)}.`
+            : ` 全体の平均は${viewsLabel(overallAvg)}。`)}
         </p>
 
         <div className="space-y-2">
@@ -66,13 +71,12 @@ export default function AngleLearningCard() {
                   <span className="min-w-0 break-words text-sm font-bold text-foreground">{t(r.label)}</span>
                   {r.avgImpressions != null && (
                     <span className="shrink-0 text-sm font-bold tabular-nums text-foreground">
-                      {r.avgImpressions.toLocaleString()}
-                      <span className="ml-0.5 text-xs font-normal text-muted-foreground">{t('回')}</span>
+                      {viewsLabel(r.avgImpressions)}
                     </span>
                   )}
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                  {r.count > 0 && <span>{t('投稿')}{r.count}{t('件の平均')}</span>}
+                  {r.count > 0 && <span>{avgOfLabel(r.count)}</span>}
                   {r.good > 0 && (
                     <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
                       <ThumbsUp className="h-3 w-3 shrink-0" />{r.good}

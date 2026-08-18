@@ -820,4 +820,158 @@ export const dict: Record<string, string> = {
   "操作ガイドを表示": "Show guide",
   "くわしい使い方マニュアルを見る": "Open the full manual",
   "全画面の操作ガイドを非表示にします（いつでも戻せます）": "Hide guides on all screens (you can bring them back anytime)",
+
+  // ── 2026-08-18 追加分：8/5以降に足した機能の英訳 ──
+  // （Meta審査の指摘「アプリUIの言語として英語を使用する」への対応。
+  //   新機能を足すたびにここへ英訳を追加すること）
+
+  // ホーム：固定投稿のおすすめバナー
+  "最初に作るのがおすすめ": "Recommended first step",
+  "まず「固定投稿」を作りましょう": "Start by creating a pinned post",
+  "プロフィールの一番上に固定する「お店の入口」になる投稿です。": "This post is pinned at the top of your profile and works as the entrance to your store.",
+  "LINE登録のCV直結度が一番高い": "It has the strongest direct impact on LINE sign-ups",
+  "ので、これを作ってから他の投稿を始めると効果的です。": ", so creating it before other posts works best.",
+  "プロフィール訪問者を見込み顧客に変える「入口ページ」": "An entrance page that turns profile visitors into leads",
+  "LINE URLを直接貼ってOKな唯一の場所": "The only place where you can paste your LINE URL directly",
+  "1度作れば長期間使える（更新頻度は月1回程度でOK）": "Once created, it lasts a long time (updating about once a month is enough)",
+  "固定投稿をAIで作る": "Create a pinned post with AI",
+  "あとで": "Later",
+
+  // ホーム：いま伸びている投稿の型
+  "いま伸びている投稿の型": "Post formats that are working now",
+  "実際のThreadsを調べて、炎上せずに反応が取れている型をまとめました。": "We studied real Threads posts and collected formats that get engagement without controversy.",
+  "この型で1本作る": "Create a post with this format",
+  "反応は出るけど、使わない方がいい型": "Formats that get reactions but should be avoided",
+  "※ 自動投稿ではこれらを使わないようAIに指示済みです。": "Note: the AI is instructed not to use these in automatic posts.",
+
+  // 投稿分析：AIが学んでいること
+  "AIが学んでいること": "What the AI has learned",
+  "自動投稿が公開されると、どの型（切り口）が実際によく見られたかをここに表示します。成績の良い型は自動的に増えていきます。": "Once automatic posts are published, this shows which formats were actually viewed the most. Formats that perform well are used more often automatically.",
+  "投稿の「型」ごとの平均閲覧数です。よく見られている型を自動投稿が増やしていきます。": "Average views for each post format. Automatic posting increases the formats that get viewed more.",
+  "よく見られています": "Performing well",
+  "投稿履歴の◯✕でも好みを教えられます。数字と好みの両方をふまえて次の投稿を作ります。": "You can also teach your preference with the thumbs up/down in Post history. The next post reflects both the numbers and your preference.",
+
+  // 切り口（投稿の型）の名称
+  "数字・実績": "Numbers & results",
+  "あるある": "Relatable moments",
+  "お客様の声": "Customer voices",
+  "裏側・こだわり": "Behind the scenes",
+  "よくある誤解": "Common misconceptions",
+  "季節ネタ": "Seasonal topics",
+  "変化の物語": "Story of change",
+  "人柄・日常": "Personality & daily life",
+  "気づき・学び": "Insights & lessons",
+  "意外な事実": "Surprising facts",
+  "プロの小ワザ": "Pro tips",
+  "不安をほどく": "Easing worries",
+
+  // ポジティブに伸びている型（カード内）
+  "プロの小ワザを無料で渡す": "Give away a pro tip for free",
+  "「実は逆なんです」で安心させる": "Reassure with \"actually, it is the opposite\"",
+  "「やってみたらこう変わった」": "\"Here is what changed when I tried it\"",
+  "あるあるで共感を取る": "Build empathy with relatable moments",
+  "「〇〇は間違い」「〇〇な人は来ないでください」": "\"X is wrong\" / \"Do not come if you are X\"",
+  "「潰れそうです」「赤字です」と同情を引く": "Asking for sympathy with \"we are going under\"",
+  "自虐・体型を貶す表現": "Self-deprecation or body shaming",
+  "「放置すると危険」など不安を煽る断定": "Fear-mongering claims such as \"it is dangerous if ignored\"",
+
+  // Threads連携
+  "うまくいかない方へ：設定手順を最初から見る": "Having trouble? See the setup steps from the beginning",
+  "（Facebookアカウントの作成から順に説明しています）": "(Explained step by step, starting from creating a Facebook account)",
+
+  // サイドバーの区分・下部タブ
+  "代理店": "AGENCY",
+  "使い方マニュアル": "User Manual",
+  "契約・メール": "Contracts & Email",
+  "AIに相談": "Ask AI",
+
+  // ホームの操作ガイド（PageGuide）
+  "毎日やることは1つ：": "There is only one daily task: ",
+  "承認待ち": "Awaiting approval",
+  "承認して投稿": "Approve and publish",
+  "（約1分）": " (about 1 minute)",
+  "週1回、": "Once a week, check the numbers in ",
+  "で数字と": " and the replies in ",
+  "の返信を確認します": ".",
+  "お店の情報が変わったら": "When your store details change, update them from ",
+  "から直します（次の投稿から反映）": " (applied from the next post).",
+  "このおすすめを閉じる": "Dismiss this recommendation",
+  "まずはプロジェクト（お店の情報）を登録しましょう": "First, register your store information",
+
+  // Cookie同意バナー（審査担当者が最初に見る要素）
+  "当サイトでは、サービスの提供およびユーザー体験の向上のためにCookieを使用しています。サイトの利用を続けることで、": "This site uses cookies to provide our service and improve your experience. By continuing to use the site, you agree to our ",
+  "プライバシーポリシー": "Privacy Policy",
+  "に同意したものとみなされます。": ".",
+  "同意する": "Accept",
+
+  // 固定投稿ウィザードのお知らせバナー
+  "固定投稿の設定フローが新しくなりました": "The pinned post setup flow has been updated",
+  "店舗のURL（公式LINE・Web予約・HPなど）を登録すると、より効果的な固定投稿が自動生成されます。所要時間は約3分です。": "Register your store URLs (official LINE, web booking, website) and the app will generate a more effective pinned post. It takes about 3 minutes.",
+  "設定を確認する": "Review settings",
+
+  // マイルストーン通知
+  "おめでとう！初めての投稿が完成しました 🎉": "Congratulations! Your first post is ready 🎉",
+  "Threadsへの初投稿が完了しました！ 🎊": "Your first post has been published to Threads! 🎊",
+  "10投稿達成！集客効果が出始める頃です 💪": "10 posts published! This is when results usually start showing 💪",
+  "フォロワーが増えています！ 📈": "Your followers are growing! 📈",
+
+  // Threads連携画面の操作ガイド（審査録画の中心画面）
+  "接続には": "The connection is valid for ",
+  "60日の有効期限": "60 days",
+  "があります。期限が近づくと黄色いお知らせが出ます": ". A yellow notice appears when it is about to expire.",
+  "お知らせが出たら": "When the notice appears, just press ",
+  "を押すだけで60日延長されます": " to extend it by another 60 days.",
+  "直らないときだけ": "Only if that does not fix it, press ",
+  "→Threadsの画面で": ", then tap ",
+  "許可": "Allow",
+  "（パソコン推奨）": " on the Threads screen (a computer is recommended).",
+
+  // AI投稿生成画面の操作ガイド
+  "プロフィールに固定する投稿を作るなら、黄色い枠の": "To create a post pinned to your profile, press ",
+  "を押します": " in the yellow box.",
+  "から1つタップします（迷ったら「予約・LINE登録を増やしたい」）": " and tap one (if unsure, choose \"Get more bookings and LINE sign-ups\").",
+  "を押して10〜30秒待ちます": " and wait 10-30 seconds.",
+  "、または": ", or ",
+  "で日時指定": " to set a date and time.",
+
+  // コメント管理画面の操作ガイド
+  "返信したいコメントの": "On the comment you want to reply to, press ",
+  "出てきた候補をタップで選び、必要なら文章を手直しします": "Tap one of the suggestions and edit the wording if needed.",
+  "を押すとThreadsに返信されます": " to send the reply to Threads.",
+
+  // 投稿分析画面の操作ガイド
+  "右上の": "Press ",
+  "を押して数字を最新にします": " at the top right to refresh the numbers.",
+  "合計の数字と": "Check the totals and ",
+  "を見ます（週1回で十分です）": " (once a week is enough).",
+  "良かった投稿は": "For a post you liked, press ",
+  "を押すと、AIがその書き方を真似します": " and the AI will imitate that writing style.",
+
+  // 投稿履歴・予約画面の操作ガイド
+  "上の": "Tap ",
+  "をタップして、公開前の投稿を確認します": " above to review posts before they go live.",
+  "内容がよければ緑の": "If the text looks good, press the green ",
+  "を押します（これで公開されます）": " button to publish it.",
+  "直したいときは": "To edit, use ",
+  "。やめたいときは": ". To discard it, use ",
+  "投稿の下の": "Press ",
+  "◯ いい / ✕ 違う": "Good / Not right",
+  "を押すと、AIが好みを学んで方向性を調整します": " under a post and the AI learns your preference and adjusts.",
+
+  // 投稿履歴・予約画面
+  "投稿履歴・予約一覧": "Posts & schedule",
+  "投稿済み": "Published",
+  "CSVエクスポート": "Export CSV",
+  "自動": "Auto",
+  "手動": "Manual",
+  "投稿完了:": "Published:",
+  "この方向性は：": "This direction is:",
+  "◯ いい": "Good",
+  "✕ 違う": "Not right",
+  "「違う」と記録しました。この方向性は減らします": "Recorded as \"Not right\". This direction will be used less often.",
+
+  "履歴から削除": "Delete from history",
+  "履歴から削除しますか？": "Delete from history?",
+  "履歴から削除しました": "Deleted from history",
+  "予約投稿をキャンセルしました": "The scheduled post has been canceled",
 };

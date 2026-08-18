@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Cookie } from "lucide-react";
 import { Link } from "wouter";
+import { useLang } from "@/i18n";
 
 const COOKIE_CONSENT_KEY = "ts-cookie-consent";
 
 export function CookieConsent() {
+  const { t } = useLang();
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -30,12 +32,11 @@ export function CookieConsent() {
         <div className="flex items-start gap-3 flex-1">
           <Cookie className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
           <p className="text-sm text-muted-foreground">
-            当サイトでは、サービスの提供およびユーザー体験の向上のためにCookieを使用しています。
-            サイトの利用を続けることで、
+            {t("当サイトでは、サービスの提供およびユーザー体験の向上のためにCookieを使用しています。サイトの利用を続けることで、")}
             <Link href="/privacy">
-              <span className="text-primary hover:underline cursor-pointer">プライバシーポリシー</span>
+              <span className="text-primary hover:underline cursor-pointer">{t("プライバシーポリシー")}</span>
             </Link>
-            に同意したものとみなされます。
+            {t("に同意したものとみなされます。")}
           </p>
         </div>
         <Button
@@ -43,7 +44,7 @@ export function CookieConsent() {
           size="sm"
           className="bg-emerald-600 hover:bg-emerald-700 text-white whitespace-nowrap flex-shrink-0"
         >
-          同意する
+          {t("同意する")}
         </Button>
       </div>
     </div>

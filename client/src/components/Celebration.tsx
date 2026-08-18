@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
+import { translate as tr } from "@/i18n";
 
 // ============================================================
 // Celebration milestones configuration
@@ -116,7 +117,7 @@ export function triggerCelebration(key: MilestoneKey): void {
   localStorage.setItem(milestone.storageKey, "true");
 
   // Show toast with warm styling
-  toast.success(milestone.message, {
+  toast.success(tr(milestone.message), {
     duration: 5000,
     style: {
       background: "#fffbeb",

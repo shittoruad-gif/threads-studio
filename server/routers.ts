@@ -4188,6 +4188,28 @@ ${CONCEPT_DESIGN_PROMPT}`;
       }),
   }),
 
+  // ==================== アプリ内通知バナー ====================
+  notification: router({
+    /**
+     * 固定投稿ウィザード通知バナーが未確認かどうか返す。
+     * true = 未確認（バナーを表示すべき）
+     */
+    wizardUnseen: protectedProcedure
+      .query(async ({ ctx }) => {
+        const unseen = await db.isWizardNotificationUnseen(ctx.user.id);
+        return { unseen };
+      }),
+
+    /**
+     * 固定投稿ウィザード通知バナーを「確認済み」にする。
+     */
+    markWizardSeen: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        await db.markWizardNotificationSeen(ctx.user.id);
+        return { success: true };
+      }),
+  }),
+
 });
 
 export type AppRouter = typeof appRouter;

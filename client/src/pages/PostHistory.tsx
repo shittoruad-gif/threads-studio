@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { translatePostError } from "@/lib/postErrors";
 import { useThreadsAccount } from "@/components/ThreadsAccountSwitcher";
 import PageGuide from "@/components/PageGuide";
+import { useLang } from "@/i18n";
 import { getAngle } from "@shared/postAngles";
 
 const ITEMS_PER_PAGE = 20;
@@ -35,6 +36,7 @@ const ITEMS_PER_PAGE = 20;
 type StatusFilter = "all" | "awaiting_approval" | "pending" | "posted" | "failed" | "canceled";
 
 export default function PostHistory() {
+  const { t } = useLang();
   const [, setLocation] = useLocation();
   // ヘッダーの切替UIで選択中の連携アカウント（一覧をこのアカウントに絞る）
   const { selectedAccountId } = useThreadsAccount();
@@ -58,7 +60,7 @@ export default function PostHistory() {
   const { data: scheduledPosts, isLoading, refetch } = trpc.scheduledPost.list.useQuery({ accountId: selectedAccountId });
   const cancelPost = trpc.scheduledPost.cancel.useMutation({
     onSuccess: () => {
-      toast.success('予約投稿をキャンセルしました');
+      toast.success(t('予約投稿をキャンセルしました'));
       refetch();
     },
     onError: (error) => {
@@ -76,7 +78,7 @@ export default function PostHistory() {
   });
   const removePost = trpc.scheduledPost.remove.useMutation({
     onSuccess: () => {
-      toast.success('履歴から削除しました');
+      toast.success(t('履歴から削除しました'));
       refetch();
       setDeleteTargetId(null);
     },
@@ -98,7 +100,7 @@ export default function PostHistory() {
   const ratePost = trpc.scheduledPost.rate.useMutation({
     onSuccess: (_data, vars) => {
       if (vars.rating === 'good') toast.success('「いい」と記録しました。この方向性が増えます');
-      else if (vars.rating === 'bad') toast.success('「違う」と記録しました。この方向性は減らします');
+      else if (vars.rating === 'bad') toast.success(t('「違う」と記録しました。この方向性は減らします'));
       else toast.success('評価を取り消しました');
       refetch();
     },
@@ -120,12 +122,12 @@ export default function PostHistory() {
       case 'awaiting_approval':
         return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
           <Clock className="w-3 h-3 mr-1" />
-          承認待ち
+          {t('承認待ち')}
         </Badge>;
       case 'pending':
         return <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200">
           <Clock className="w-3 h-3 mr-1" />
-          予約中
+          {t('予約中')}
         </Badge>;
       case 'processing':
         return <Badge variant="outline" className="bg-yellow-50 text-yellow-600 border-yellow-200">
@@ -135,17 +137,17 @@ export default function PostHistory() {
       case 'posted':
         return <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
           <CheckCircle2 className="w-3 h-3 mr-1" />
-          投稿済み
+          {t('投稿済み')}
         </Badge>;
       case 'failed':
         return <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200">
           <XCircle className="w-3 h-3 mr-1" />
-          失敗
+          {t('失敗')}
         </Badge>;
       case 'canceled':
         return <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border">
           <XCircle className="w-3 h-3 mr-1" />
-          キャンセル
+          {t('キャンセル')}
         </Badge>;
       default:
         return null;
@@ -287,22 +289,22 @@ export default function PostHistory() {
         <div className="flex items-center justify-between mb-6 scale-in">
           <Button variant="ghost" className="glass hover-lift" onClick={() => setLocation("/dashboard")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            ダッシュボードに戻る
+            {t('ダッシュボードに戻る')}
           </Button>
         </div>
 
         <PageGuide steps={[
-          <>上の<b>「承認待ち」</b>をタップして、公開前の投稿を確認します</>,
-          <>内容がよければ緑の<b>「承認して投稿」</b>を押します（これで公開されます）</>,
-          <>直したいときは<b>「編集」</b>→書き換えて<b>「保存」</b>→<b>「承認して投稿」</b>。やめたいときは<b>「キャンセル」</b></>,
-          <>投稿の下の<b>「◯ いい」「✕ 違う」</b>を押すと、AIが好みを学んで方向性を調整します</>,
+          <>{t('上の')}<b>{t('承認待ち')}</b>{t('をタップして、公開前の投稿を確認します')}</>,
+          <>{t('内容がよければ緑の')}<b>{t('承認して投稿')}</b>{t('を押します（これで公開されます）')}</>,
+          <>{t('直したいときは')}<b>{t('編集')}</b>{' → '}<b>{t('保存')}</b>{' → '}<b>{t('承認して投稿')}</b>{t('。やめたいときは')}<b>{t('キャンセル')}</b></>,
+          <>{t('投稿の下の')}<b>{t('◯ いい / ✕ 違う')}</b>{t('を押すと、AIが好みを学んで方向性を調整します')}</>,
         ]} />
 
         <Card className="glass-card mb-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 gradient-text">
               <Calendar className="w-6 h-6" />
-              投稿履歴・予約一覧
+              {t('投稿履歴・予約一覧')}
             </CardTitle>
 
             {/* Status Filter */}
@@ -319,7 +321,7 @@ export default function PostHistory() {
                           : "bg-muted text-muted-foreground border border-border hover:bg-muted/80"
                       }`}
                     >
-                      {filter.label}
+                      {t(filter.label)}
                       <span className="ml-1 opacity-70">({filter.count})</span>
                     </button>
                   ) : null
@@ -347,7 +349,7 @@ export default function PostHistory() {
                   )}
                   <Button variant="outline" size="sm" onClick={handleExportCSV} className="h-9">
                     <Download className="w-4 h-4 mr-1.5" />
-                    CSVエクスポート
+                    {t('CSVエクスポート')}
                   </Button>
                 </div>
               </div>
@@ -425,11 +427,11 @@ export default function PostHistory() {
                                   ? 'bg-violet-50 text-violet-600 border-violet-200'
                                   : 'bg-muted/40 text-muted-foreground border-border'}
                               >
-                                {(post as any).source === 'auto' ? '自動' : '手動'}
+                                {(post as any).source === 'auto' ? t('自動') : t('手動')}
                               </Badge>
                               {(post as any).angle && getAngle((post as any).angle) && (
                                 <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200">
-                                  {getAngle((post as any).angle)!.label}
+                                  {t(getAngle((post as any).angle)!.label)}
                                 </Badge>
                               )}
                               <span className="text-sm text-muted-foreground">
@@ -443,7 +445,7 @@ export default function PostHistory() {
 
                             {post.postedAt && (
                               <p className="text-xs text-green-600">
-                                投稿完了: {formatDate(post.postedAt)}
+                                {t('投稿完了:')} {formatDate(post.postedAt)}
                               </p>
                             )}
 
@@ -471,7 +473,7 @@ export default function PostHistory() {
                                 落ちて不揃いになるため、ラベルは独立行にしている */}
                             {(post as any).source === 'auto' && post.status !== 'canceled' && (
                               <div className="flex flex-wrap items-center gap-2 pt-1">
-                                <span className="w-full text-xs text-muted-foreground sm:w-auto">この方向性は：</span>
+                                <span className="w-full text-xs text-muted-foreground sm:w-auto">{t('この方向性は：')}</span>
                                 <button
                                   onClick={() => ratePost.mutate({ postId: post.id, rating: (post as any).clientRating === 'good' ? null : 'good' })}
                                   disabled={ratePost.isPending}
@@ -481,7 +483,7 @@ export default function PostHistory() {
                                       : 'border-border text-muted-foreground hover:border-emerald-400 hover:text-emerald-700'
                                   }`}
                                 >
-                                  ◯ いい
+                                  {t('◯ いい')}
                                 </button>
                                 <button
                                   onClick={() => ratePost.mutate({ postId: post.id, rating: (post as any).clientRating === 'bad' ? null : 'bad' })}
@@ -492,7 +494,7 @@ export default function PostHistory() {
                                       : 'border-border text-muted-foreground hover:border-red-400 hover:text-red-600'
                                   }`}
                                 >
-                                  ✕ 違う
+                                  {t('✕ 違う')}
                                 </button>
                               </div>
                             )}
@@ -540,7 +542,7 @@ export default function PostHistory() {
                                 onClick={() => cancelPost.mutate({ postId: post.id })}
                                 disabled={cancelPost.isPending}
                               >
-                                キャンセル
+                                {t('キャンセル')}
                               </Button>
                             </>
                           )}
@@ -580,10 +582,10 @@ export default function PostHistory() {
                             size="sm"
                             className="text-red-600 hover:bg-red-50 hover:text-red-700"
                             onClick={() => setDeleteTargetId(post.id)}
-                            title="履歴から削除"
+                            title={t("履歴から削除")}
                           >
                             <Trash2 className="w-3 h-3 mr-1" />
-                            削除
+                            {t('削除')}
                           </Button>
                         </div>
                         </div>
@@ -596,7 +598,7 @@ export default function PostHistory() {
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
                     <p className="text-sm text-muted-foreground">
-                      {filteredPosts.length}件中 {(page - 1) * ITEMS_PER_PAGE + 1}〜{Math.min(page * ITEMS_PER_PAGE, filteredPosts.length)}件を表示
+                      {`${(page - 1) * ITEMS_PER_PAGE + 1}-${Math.min(page * ITEMS_PER_PAGE, filteredPosts.length)} / ${filteredPosts.length}`}
                     </p>
                     <div className="flex items-center gap-2">
                       <Button
@@ -672,7 +674,7 @@ export default function PostHistory() {
       <AlertDialog open={deleteTargetId !== null} onOpenChange={(open) => !open && setDeleteTargetId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>履歴から削除しますか？</AlertDialogTitle>
+            <AlertDialogTitle>{t('履歴から削除しますか？')}</AlertDialogTitle>
             <AlertDialogDescription>
               {(() => {
                 const target = scheduledPosts?.find(p => p.id === deleteTargetId);

@@ -720,10 +720,10 @@ export default function AIGenerate() {
 
         {/* カウンセリング済みのとき：内容の確認・修正導線 */}
         <PageGuide steps={[
-          <>プロフィールに固定する投稿を作るなら、黄色い枠の<b>「固定投稿モードにする」</b>を押します</>,
-          <><b>「投稿の目的を選ぶ」</b>から1つタップします（迷ったら「予約・LINE登録を増やしたい」）</>,
-          <><b>「AI投稿を生成」</b>を押して10〜30秒待ちます</>,
-          <>内容を確認して<b>「今すぐThreadsに投稿」</b>、または<b>「投稿を予約する」</b>で日時指定</>,
+          <>{t('プロフィールに固定する投稿を作るなら、黄色い枠の')}<b>{t('固定投稿モードにする')}</b>{t('を押します')}</>,
+          <><b>{t('投稿の目的を選ぶ')}</b>{t('から1つタップします（迷ったら「予約・LINE登録を増やしたい」）')}</>,
+          <><b>{t('AI投稿を生成')}</b>{t('を押して10〜30秒待ちます')}</>,
+          <>{t('内容を確認して')}<b>{t('今すぐThreadsに投稿')}</b>{t('、または')}<b>{t('投稿を予約する')}</b>{t('で日時指定')}</>,
         ]} />
 
         {/* truncateだとスマホで「カ...」だけになるため、短いラベル＋折返し許可にしている */}
@@ -1279,7 +1279,7 @@ export default function AIGenerate() {
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">{t("今月のAI生成回数")}</span>
                       <span className="font-medium">
-                        {aiUsage.count} / {aiUsage.limit === -1 ? '無制限' : aiUsage.limit === null ? '-' : `${aiUsage.limit}回`}
+                        {aiUsage.count} / {aiUsage.limit === -1 ? t('無制限') : aiUsage.limit === null ? '-' : `${aiUsage.limit}${t('回')}`}
                       </span>
                     </div>
                     {aiUsage.limit !== null && aiUsage.limit !== -1 && aiUsage.limit > 0 && (

@@ -67,6 +67,7 @@ import ThreadsAccountSwitcher, { useThreadsAccount } from '@/components/ThreadsA
 import WeeklyCalendarView from '@/components/WeeklyCalendarView';
 import ErrorGuide from '@/components/ErrorGuide';
 import PinnedPostRecommendation from '@/components/PinnedPostRecommendation';
+import { WizardNotificationBanner } from '@/components/WizardNotificationBanner';
 
 export default function Dashboard() {
   const { t } = useLang();
@@ -301,6 +302,9 @@ export default function Dashboard() {
   return (
     <div>
       <div className="max-w-5xl mx-auto">
+        {/* 固定投稿ウィザード通知バナー（確認済みにしたら非表示） */}
+        <WizardNotificationBanner />
+
         {/* Demo Mode Banner */}
         <DemoModeBanner />
 
@@ -498,9 +502,9 @@ export default function Dashboard() {
 
         {/* 毎回表示の操作ガイド（オフ切替可）。毎日の運用手順を1画面目で思い出せるように */}
         <PageGuide steps={[
-          <>毎日やることは1つ：下の<b>「予約・履歴」</b>→<b>「承認待ち」</b>→内容を見て<b>「承認して投稿」</b>（約1分）</>,
-          <>週1回、<b>「投稿分析」</b>で数字と<b>「コメント管理」</b>の返信を確認します</>,
-          <>お店の情報が変わったら<b>「登録情報を修正」</b>から直します（次の投稿から反映）</>,
+          <>{t('毎日やることは1つ：')}<b>{t('予約・履歴')}</b>{' → '}<b>{t('承認待ち')}</b>{' → '}<b>{t('承認して投稿')}</b>{t('（約1分）')}</>,
+          <>{t('週1回、')}<b>{t('投稿分析')}</b>{t('で数字と')}<b>{t('コメント管理')}</b>{t('の返信を確認します')}</>,
+          <>{t('お店の情報が変わったら')}<b>{t('登録情報を修正')}</b>{t('から直します（次の投稿から反映）')}</>,
         ]} />
 
         {/* 初心者向け「次にやること」チェックリスト（順番固定・実データ連動） */}

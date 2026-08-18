@@ -60,6 +60,8 @@ export const users = mysqlTable("users", {
   //   代理店が発行したクライアントアカウントには、この列に代理店のuserIdが入る。
   //   代理店本人は null。代理店が解約されると配下クライアントも利用停止になる。
   parentAgencyUserId: int("parentAgencyUserId"),
+  // 固定投稿ウィザード通知バナーを確認した日時。null=未確認（バナー表示）
+  wizardNotificationSeenAt: timestamp("wizardNotificationSeenAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

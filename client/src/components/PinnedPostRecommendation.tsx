@@ -6,6 +6,7 @@ import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { useThreadsAccount } from '@/components/ThreadsAccountSwitcher';
+import { useLang } from '@/i18n';
 
 const DISMISS_KEY = 'pinned-post-recommendation-dismissed';
 
@@ -24,6 +25,7 @@ const DISMISS_KEY = 'pinned-post-recommendation-dismissed';
  * once the user has generated at least one pinned post.
  */
 export function PinnedPostRecommendation() {
+  const { t } = useLang();
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   // ★固定投稿はアカウント（店舗）ごとに必要。判定・非表示記憶ともアカウント単位にする
@@ -62,7 +64,7 @@ export function PinnedPostRecommendation() {
     if (targetId) {
       window.location.href = `/ai-generate?project=${targetId}&postType=pinned`;
     } else {
-      toast.info('まずはプロジェクト（お店の情報）を登録しましょう');
+      toast.info(t('まずはプロジェクト（お店の情報）を登録しましょう'));
       setLocation('/ai-project-create');
     }
   };
@@ -77,7 +79,7 @@ export function PinnedPostRecommendation() {
       <button
         onClick={handleDismiss}
         className="absolute top-3 right-3 p-1 rounded hover:bg-amber-200/50 transition-colors text-amber-700"
-        aria-label="このおすすめを閉じる"
+        aria-label={t("このおすすめを閉じる")}
       >
         <X className="w-4 h-4" />
       </button>
@@ -90,25 +92,25 @@ export function PinnedPostRecommendation() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-bold text-amber-700 bg-amber-200 px-2 py-0.5 rounded uppercase tracking-wider">
-              最初に作るのがおすすめ
+              {t("最初に作るのがおすすめ")}
             </span>
             <Sparkles className="w-3.5 h-3.5 text-amber-600" />
           </div>
 
           <h3 className="text-lg font-bold text-amber-900 mb-2">
-            まず「固定投稿」を作りましょう
+            {t("まず「固定投稿」を作りましょう")}
           </h3>
 
           <p className="text-sm text-amber-900/80 mb-3 leading-relaxed">
-            プロフィールの一番上に固定する「お店の入口」になる投稿です。
+            {t("プロフィールの一番上に固定する「お店の入口」になる投稿です。")}
             <br />
-            <strong>LINE登録のCV直結度が一番高い</strong>ので、これを作ってから他の投稿を始めると効果的です。
+            <strong>{t("LINE登録のCV直結度が一番高い")}</strong>{t("ので、これを作ってから他の投稿を始めると効果的です。")}
           </p>
 
           <ul className="text-xs text-amber-900/70 mb-4 space-y-1">
-            <li>✓ プロフィール訪問者を見込み顧客に変える「入口ページ」</li>
-            <li>✓ LINE URLを直接貼ってOKな唯一の場所</li>
-            <li>✓ 1度作れば長期間使える（更新頻度は月1回程度でOK）</li>
+            <li>✓ {t("プロフィール訪問者を見込み顧客に変える「入口ページ」")}</li>
+            <li>✓ {t("LINE URLを直接貼ってOKな唯一の場所")}</li>
+            <li>✓ {t("1度作れば長期間使える（更新頻度は月1回程度でOK）")}</li>
           </ul>
 
           <div className="flex flex-wrap gap-2">
@@ -117,7 +119,7 @@ export function PinnedPostRecommendation() {
               className="bg-amber-600 hover:bg-amber-700 text-white shadow"
             >
               <Pin className="w-4 h-4 mr-1.5" />
-              固定投稿をAIで作る
+              {t("固定投稿をAIで作る")}
               <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
             <Button
@@ -125,7 +127,7 @@ export function PinnedPostRecommendation() {
               onClick={handleDismiss}
               className="text-amber-700 hover:bg-amber-100 hover:text-amber-900"
             >
-              あとで
+              {t("あとで")}
             </Button>
           </div>
         </div>
