@@ -1063,4 +1063,7 @@ export const dict: Record<string, string> = {
   "ログアウト中...": "Signing out...",
   "ログアウトに失敗しました": "Failed to sign out",
   "パスワードを変更しました": "Your password has been changed",
+
+  "予約中をすべて選択": "Select all scheduled",
+  "内容を修正": "Edit content",
 };

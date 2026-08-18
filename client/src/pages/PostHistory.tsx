@@ -368,7 +368,7 @@ export default function PostHistory() {
                   ) : (
                     <Square className="w-4 h-4" />
                   )}
-                  予約中をすべて選択
+                  {t('予約中をすべて選択')}
                 </button>
                 {selectedIds.size > 0 && (
                   <Button
@@ -533,7 +533,7 @@ export default function PostHistory() {
                                 onClick={() => setEditTarget({ id: post.id, content: post.postContent || '', projectId: (post as any).projectId })}
                               >
                                 <Pencil className="w-3 h-3 mr-1" />
-                                内容を修正
+                                {t('内容を修正')}
                               </Button>
                               <Button
                                 variant="outline"
