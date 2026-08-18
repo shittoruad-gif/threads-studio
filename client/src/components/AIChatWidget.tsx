@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { trpc } from "@/lib/trpc";
 import { MessageCircle, X, Minimize2, Maximize2, Send, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useLang } from "@/i18n";
 import { Streamdown } from "streamdown";
 
 interface Message {
@@ -16,6 +17,7 @@ interface Message {
 }
 
 export function AIChatWidget() {
+  const { t } = useLang();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [message, setMessage] = useState("");
@@ -35,7 +37,7 @@ export function AIChatWidget() {
       setMessage("");
     },
     onError: () => {
-      toast.error("メッセージの送信に失敗しました");
+      toast.error(t("メッセージの送信に失敗しました"));
     },
   });
 
@@ -68,12 +70,12 @@ export function AIChatWidget() {
       //   ガイドの「表示しない」等が押せなくなっていた（2026-08-15 目視で確認）。
       <Button
         onClick={() => setIsOpen(true)}
-        aria-label="AIに相談"
-        title="AIに相談"
+        aria-label={t("AIに相談")}
+        title={t("AIに相談")}
         className="fixed bottom-[130px] right-4 sm:bottom-24 sm:right-6 rounded-full h-12 w-12 p-0 sm:h-11 sm:w-auto sm:px-4 shadow-lg z-50 sm:gap-2"
       >
         <MessageCircle className="w-5 h-5" />
-        <span className="hidden sm:inline text-sm font-medium">AIに相談</span>
+        <span className="hidden sm:inline text-sm font-medium">{t("AIに相談")}</span>
       </Button>
     );
   }
@@ -84,7 +86,7 @@ export function AIChatWidget() {
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
             <MessageCircle className="w-5 h-5 text-primary" />
-            <span className="font-semibold">AIアシスタント</span>
+            <span className="font-semibold">{t("AIアシスタント")}</span>
           </div>
           <div className="flex gap-1">
             <Button
@@ -113,7 +115,7 @@ export function AIChatWidget() {
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
           <MessageCircle className="w-5 h-5 text-primary" />
-          <span className="font-semibold">AIアシスタント</span>
+          <span className="font-semibold">{t("AIアシスタント")}</span>
         </div>
         <div className="flex gap-1">
           <Button
@@ -139,9 +141,9 @@ export function AIChatWidget() {
           <div className="text-center text-muted-foreground py-8">
             <MessageCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p className="text-sm">
-              こんにちは！Threads投稿の作成や
+              {t("こんにちは！Threads投稿の作成や")}
               <br />
-              ツールの使い方についてお手伝いします。
+              {t("ツールの使い方についてお手伝いします。")}
             </p>
           </div>
         )}
@@ -187,7 +189,7 @@ export function AIChatWidget() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="メッセージを入力..."
+            placeholder={t("メッセージを入力...")}
             disabled={sendMessageMutation.isPending}
           />
           <Button
@@ -199,7 +201,7 @@ export function AIChatWidget() {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Enter で送信、Shift + Enter で改行
+          {t("Enter で送信、Shift + Enter で改行")}
         </p>
       </div>
     </Card>

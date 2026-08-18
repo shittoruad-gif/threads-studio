@@ -4,6 +4,7 @@ import { CheckCircle2, Circle, ArrowRight, AlertCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useLang } from "@/i18n";
 
 interface StatusItem {
   id: string;
@@ -15,6 +16,7 @@ interface StatusItem {
 }
 
 export function SetupProgress() {
+  const { t, lang } = useLang();
   const [, setLocation] = useLocation();
   const { isAuthenticated } = useAuth();
   const { data: projects } = trpc.project.list.useQuery();
@@ -116,11 +118,13 @@ export function SetupProgress() {
       <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 px-5 pt-5 pb-4">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="text-base font-bold text-foreground">セットアップ状況</h3>
+            <h3 className="text-base font-bold text-foreground">{t("セットアップ状況")}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
               {completedCount === totalCount
-                ? "すべて完了しました！"
-                : `あと${totalCount - completedCount}項目で準備完了です`}
+                ? t("すべて完了しました！")
+                : (lang === "en"
+                    ? `${totalCount - completedCount} step(s) left to finish setup`
+                    : `あと${totalCount - completedCount}項目で準備完了です`)}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -175,7 +179,7 @@ export function SetupProgress() {
                   : "text-foreground font-medium"
               }`}
             >
-              {item.label}
+              {t(item.label)}
             </span>
 
             {/* Action button */}
@@ -190,7 +194,7 @@ export function SetupProgress() {
                     : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
                 }`}
               >
-                {item.actionLabel}
+                {t(item.actionLabel ?? "")}
                 <ArrowRight className="w-3 h-3 ml-1" />
               </Button>
             )}
@@ -198,7 +202,7 @@ export function SetupProgress() {
             {/* Completed badge */}
             {item.completed && (
               <span className="text-xs text-emerald-600 font-medium flex-shrink-0">
-                完了
+                {t("完了")}
               </span>
             )}
           </div>
@@ -212,7 +216,7 @@ export function SetupProgress() {
             onClick={nextStep.action}
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-11"
           >
-            次にやること：{nextStep.label}
+            {t("次にやること")}: {t(nextStep.label)}
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         </div>

@@ -24,13 +24,13 @@ export default function Settings() {
       window.location.href = "/login";
     } catch {
       setLoggingOut(false);
-      toast.error("ログアウトに失敗しました");
+      toast.error(t("ログアウトに失敗しました"));
     }
   };
   const [, setLocation] = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { isLarge, setFontScale } = useFontScale();
-  const { lang, setLang } = useLang();
+  const { lang, setLang, t } = useLang();
   const utils = trpc.useUtils();
 
   // ── BYOA（自分のMetaアプリで連携）─────────────────────────────
@@ -134,7 +134,7 @@ export default function Settings() {
   // Password change mutation
   const changePassword = trpc.account.changePassword.useMutation({
     onSuccess: () => {
-      toast.success("パスワードを変更しました");
+      toast.success(t("パスワードを変更しました"));
       setCurrentPassword("");
       setNewPassword("");
     },
@@ -171,7 +171,7 @@ export default function Settings() {
 
   const planLabel = subscription?.planId
     ? subscription.planId === "pro"
-      ? "プロプラン"
+      ? t("プロプラン")
       : subscription.planId === "starter"
         ? "スタータープラン"
         : "無料プラン"
@@ -185,8 +185,8 @@ export default function Settings() {
           <SettingsIcon className="w-5 h-5 text-orange-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">設定</h1>
-          <p className="text-sm text-muted-foreground">投稿・アカウント・通知の設定を管理</p>
+          <h1 className="text-2xl font-bold text-foreground">{t("設定")}</h1>
+          <p className="text-sm text-muted-foreground">{t("投稿・アカウント・通知の設定を管理")}</p>
         </div>
       </div>
 
@@ -195,22 +195,22 @@ export default function Settings() {
         <Card className="p-6">
           <div className="flex items-center gap-2 mb-5">
             <Sparkles className="w-5 h-5 text-emerald-600" />
-            <h2 className="text-lg font-semibold text-foreground">投稿設定</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t("投稿設定")}</h2>
           </div>
 
           {settingsLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-emerald-500"></div>
-              <span className="ml-2 text-sm text-muted-foreground">設定を読み込み中...</span>
+              <span className="ml-2 text-sm text-muted-foreground">{t("設定を読み込み中...")}</span>
             </div>
           ) : (
             <div className="space-y-6">
               {/* Auto-post toggle */}
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-sm font-medium text-foreground">自動投稿</Label>
+                  <Label className="text-sm font-medium text-foreground">{t("自動投稿")}</Label>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    AIが自動で投稿を生成・公開します
+                    {t("AIが自動で投稿を生成・公開します")}
                   </p>
                 </div>
                 <Switch
@@ -223,10 +223,10 @@ export default function Settings() {
               {/* 公開前の承認モード */}
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-sm font-medium text-foreground">公開前に承認する</Label>
+                  <Label className="text-sm font-medium text-foreground">{t("公開前に承認する")}</Label>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    ONにすると、自動生成された投稿は「承認待ち」として保存され、<br className="hidden sm:inline" />
-                    あなたが内容を確認・承認するまで公開されません
+                    {t("ONにすると、自動生成された投稿は「承認待ち」として保存され、")}<br className="hidden sm:inline" />
+                    {t("あなたが内容を確認・承認するまで公開されません")}
                   </p>
                 </div>
                 <Switch
@@ -239,11 +239,11 @@ export default function Settings() {
               {/* トピックタグ自動付与 */}
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-sm font-medium text-foreground">投稿に「トピック」を自動でつける（おすすめ）</Label>
+                  <Label className="text-sm font-medium text-foreground">{t("投稿に「トピック」を自動でつける（おすすめ）")}</Label>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Threadsには投稿に「話題のラベル」をつける機能があります。ONにすると、
-                    お店の悩みワードや地域名を自動でつけて、<br className="hidden sm:inline" />
-                    フォロワー以外の「同じ話題を見ている人」にも届きやすくします
+                    {t("Threadsには投稿に「話題のラベル」をつける機能があります。ONにすると、")}
+                    {t("お店の悩みワードや地域名を自動でつけて、")}<br className="hidden sm:inline" />
+                    {t("フォロワー以外の「同じ話題を見ている人」にも届きやすくします")}
                   </p>
                 </div>
                 <Switch
@@ -256,11 +256,11 @@ export default function Settings() {
               {/* 追い投稿（セルフリプライ） */}
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-sm font-medium text-foreground">投稿の6時間後に「ひとこと」を自動追加（おすすめ）</Label>
+                  <Label className="text-sm font-medium text-foreground">{t("投稿の6時間後に「ひとこと」を自動追加（おすすめ）")}</Label>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    自動投稿の数時間後に、その投稿へ「気軽にコメントくださいね」などの
-                    やわらかい一言を自動で追加します。<br className="hidden sm:inline" />
-                    投稿がもう一度みんなの画面に表示されやすくなります（深夜は翌朝に自動調整）
+                    {t("自動投稿の数時間後に、その投稿へ「気軽にコメントくださいね」などの")}
+                    {t("やわらかい一言を自動で追加します。")}<br className="hidden sm:inline" />
+                    {t("投稿がもう一度みんなの画面に表示されやすくなります（深夜は翌朝に自動調整）")}
                   </p>
                 </div>
                 <Switch
@@ -273,7 +273,7 @@ export default function Settings() {
               {/* Frequency selection */}
               <div>
                 <Label className="text-sm font-medium text-foreground mb-2 block">
-                  投稿頻度（1日あたり）
+                  {t("投稿頻度（1日あたり）")}
                 </Label>
                 <RadioGroup
                   value={postFrequency}
@@ -284,9 +284,9 @@ export default function Settings() {
                   className="space-y-2"
                 >
                   {[
-                    { value: "daily", label: "1日1回", desc: "着実に認知を広げたい方に", min: 1 },
-                    { value: "twice_daily", label: "1日2回", desc: "朝と夕方に投稿で露出UP", min: 2 },
-                    { value: "three_daily", label: "1日3回", desc: "最大露出で一気に認知を拡大", min: 3 },
+                    { value: "daily", label: t("1日1回"), desc: t("着実に認知を広げたい方に"), min: 1 },
+                    { value: "twice_daily", label: t("1日2回"), desc: t("朝と夕方に投稿で露出UP"), min: 2 },
+                    { value: "three_daily", label: t("1日3回"), desc: t("最大露出で一気に認知を拡大"), min: 3 },
                   ].map((freq) => {
                     const maxPerDay = (subscription as any)?.plan?.features?.maxAutoPostsPerDay ?? 0;
                     const locked = maxPerDay < freq.min;
@@ -333,32 +333,32 @@ export default function Settings() {
         <Card className="p-6">
           <div className="flex items-center gap-2 mb-5">
             <User className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-foreground">アカウント設定</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t("アカウント設定")}</h2>
           </div>
 
           <div className="space-y-4">
             <div>
               <Label htmlFor="name" className="text-sm font-medium text-foreground">
-                名前
+                {t("名前")}
               </Label>
               <Input
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="表示名"
+                placeholder={t("表示名")}
                 className="mt-1"
               />
             </div>
 
             <div>
               <Label htmlFor="storeName" className="text-sm font-medium text-foreground">
-                店舗名・屋号
+                {t("店舗名・屋号")}
               </Label>
               <Input
                 id="storeName"
                 value={storeName}
                 onChange={(e) => setStoreName(e.target.value)}
-                placeholder="例：○○整体院"
+                placeholder={t("例：○○整体院")}
                 className="mt-1"
               />
             </div>
@@ -370,13 +370,13 @@ export default function Settings() {
                 disabled={updateProfile.isPending || !name.trim()}
               >
                 <Save className="w-4 h-4 mr-2" />
-                {updateProfile.isPending ? '保存中...' : '名前・店舗名を保存'}
+                {updateProfile.isPending ? t('保存中...') : t('名前・店舗名を保存')}
               </Button>
             </div>
 
             <div>
               <Label htmlFor="email" className="text-sm font-medium text-foreground">
-                メールアドレス
+                {t("メールアドレス")}
               </Label>
               <Input
                 id="email"
@@ -387,29 +387,29 @@ export default function Settings() {
                 className="mt-1"
                 disabled
               />
-              <p className="text-xs text-muted-foreground/60 mt-1">メールアドレスは変更できません（セミナー等のご案内にはこのアドレスを使用します）</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">{t("メールアドレスは変更できません（セミナー等のご案内にはこのアドレスを使用します）")}</p>
             </div>
 
             <div className="pt-2 border-t border-border/50">
               <Label className="text-sm font-medium text-foreground mb-1 block">
-                パスワード変更
+                {t("パスワード変更")}
               </Label>
               <div className="space-y-2">
                 <Input
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="現在のパスワード"
+                  placeholder={t("現在のパスワード")}
                 />
                 <div>
                   <Input
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="新しいパスワード（10文字以上）"
+                    placeholder={t("新しいパスワード（10文字以上）")}
                   />
                   <p className="text-xs text-muted-foreground/60 mt-1">
-                    10文字以上で、英字・数字・記号のうち2種類以上を含む必要があります
+                    {t("10文字以上で、英字・数字・記号のうち2種類以上を含む必要があります")}
                   </p>
                 </div>
               </div>
@@ -435,16 +435,16 @@ export default function Settings() {
                 changePassword.mutate({ currentPassword, newPassword });
               }}
             >
-              {changePassword.isPending ? "変更中..." : "パスワードを変更"}
+              {changePassword.isPending ? t("変更中...") : t("パスワードを変更")}
             </Button>
 
             {/* ログアウト */}
             <div className="pt-4 border-t border-border/50">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <Label className="text-sm font-medium text-foreground">ログアウト</Label>
+                  <Label className="text-sm font-medium text-foreground">{t("ログアウト")}</Label>
                   <p className="text-xs text-muted-foreground/60 mt-0.5">
-                    このアカウントからサインアウトします
+                    {t("このアカウントからサインアウトします")}
                   </p>
                 </div>
                 <Button
@@ -454,7 +454,7 @@ export default function Settings() {
                   className="shrink-0"
                 >
                   <LogOut className="w-4 h-4 mr-2" />
-                  {loggingOut ? "ログアウト中..." : "ログアウト"}
+                  {loggingOut ? t("ログアウト中...") : t("ログアウト")}
                 </Button>
               </div>
             </div>
@@ -465,16 +465,16 @@ export default function Settings() {
         <Card className="p-6">
           <div className="flex items-center gap-2 mb-5">
             <Bell className="w-5 h-5 text-amber-600" />
-            <h2 className="text-lg font-semibold text-foreground">通知設定</h2>
-            <span className="ml-1 px-2 py-0.5 text-[13px] font-medium rounded-full bg-muted text-muted-foreground">準備中</span>
+            <h2 className="text-lg font-semibold text-foreground">{t("通知設定")}</h2>
+            <span className="ml-1 px-2 py-0.5 text-[13px] font-medium rounded-full bg-muted text-muted-foreground">{t("準備中")}</span>
           </div>
 
           <div className="space-y-4 opacity-60">
             <div className="flex items-center justify-between">
               <div>
-                <Label className="text-sm font-medium text-foreground">週次レポートメール</Label>
+                <Label className="text-sm font-medium text-foreground">{t("週次レポートメール")}</Label>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  毎週月曜日に1週間の投稿実績をお届けします（近日対応）
+                  {t("毎週月曜日に1週間の投稿実績をお届けします（近日対応）")}
                 </p>
               </div>
               <Switch
@@ -486,9 +486,9 @@ export default function Settings() {
 
             <div className="flex items-center justify-between">
               <div>
-                <Label className="text-sm font-medium text-foreground">コメント通知</Label>
+                <Label className="text-sm font-medium text-foreground">{t("コメント通知")}</Label>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Threadsの投稿にコメントがあったら通知します（近日対応）
+                  {t("Threadsの投稿にコメントがあったら通知します（近日対応）")}
                 </p>
               </div>
               <Switch
@@ -504,14 +504,14 @@ export default function Settings() {
         <Card className="p-6">
           <div className="flex items-center gap-2 mb-5">
             <Palette className="w-5 h-5 text-indigo-600" />
-            <h2 className="text-lg font-semibold">表示設定</h2>
+            <h2 className="text-lg font-semibold">{t("表示設定")}</h2>
           </div>
 
           <div className="flex items-center justify-between">
             <div>
-              <Label className="text-sm font-medium">ダークモード</Label>
+              <Label className="text-sm font-medium">{t("ダークモード")}</Label>
               <p className="text-xs text-muted-foreground mt-0.5">
-                暗い配色に切り替えます（目の負担を軽減）
+                {t("暗い配色に切り替えます（目の負担を軽減）")}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -527,27 +527,27 @@ export default function Settings() {
           {/* 文字を大きく */}
           <div className="flex items-center justify-between pt-5 mt-5 border-t border-border/50">
             <div>
-              <Label className="text-sm font-medium">文字を大きくする</Label>
+              <Label className="text-sm font-medium">{t("文字を大きくする")}</Label>
               <p className="text-xs text-muted-foreground mt-0.5">
-                画面全体の文字を一回り大きく表示します（読みやすさ重視）
+                {t("画面全体の文字を一回り大きく表示します（読みやすさ重視）")}
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">小</span>
+              <span className="text-xs text-muted-foreground">{t("小")}</span>
               <Switch
                 checked={isLarge}
                 onCheckedChange={(v) => setFontScale(v ? "large" : "normal")}
               />
-              <span className="text-lg font-bold text-muted-foreground">大</span>
+              <span className="text-lg font-bold text-muted-foreground">{t("大")}</span>
             </div>
           </div>
 
           {/* 表示言語（日本語 / English）。審査用の英語スクリーンキャストを撮るときに使う */}
           <div className="flex items-center justify-between pt-5 mt-5 border-t border-border/50">
             <div>
-              <Label className="text-sm font-medium">表示言語 / Language</Label>
+              <Label className="text-sm font-medium">{t("表示言語 / Language")}</Label>
               <p className="text-xs text-muted-foreground mt-0.5">
-                日本語 / English（審査用の英語表示に切り替えられます）
+                {t("日本語 / English（審査用の英語表示に切り替えられます）")}
               </p>
             </div>
             <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
@@ -556,7 +556,7 @@ export default function Settings() {
                 onClick={() => setLang("ja")}
                 className={`px-3 py-1 text-sm rounded-md transition-colors ${lang === "ja" ? "bg-emerald-600 text-white" : "text-muted-foreground hover:bg-muted"}`}
               >
-                日本語
+                {t("日本語")}
               </button>
               <button
                 type="button"
@@ -573,10 +573,10 @@ export default function Settings() {
         <Card className="p-6">
           <div className="flex items-center gap-2 mb-2">
             <KeyRound className="w-5 h-5 text-indigo-600" />
-            <h2 className="text-lg font-semibold text-foreground">自分のMetaアプリで連携する（上級者向け）</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t("自分のMetaアプリで連携する（上級者向け）")}</h2>
           </div>
           <p className="text-xs text-muted-foreground mb-3">
-            通常はこの設定は不要です。ご自身でMetaのアプリを作って登録すると、その資格情報でThreadsに接続します。
+            {t("通常はこの設定は不要です。ご自身でMetaのアプリを作って登録すると、その資格情報でThreadsに接続します。")}
             {ownApp?.configured && (
               <span className="ml-1 font-medium text-indigo-700">
                 現在このアカウントは自分のアプリ（ID: {ownApp.appId}）で連携する設定です。
@@ -590,19 +590,19 @@ export default function Settings() {
               rel="noopener noreferrer"
               className="font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-800"
             >
-              Metaアプリの作り方（画像つきの手順書）を開く
+              {t("Metaアプリの作り方（画像つきの手順書）を開く")}
             </a>
-            <span className="text-muted-foreground ml-1">— Facebookアカウントの作成から順に説明しています</span>
+            <span className="text-muted-foreground ml-1">{t("— Facebookアカウントの作成から順に説明しています")}</span>
           </p>
 
           {!byoaOpen && !ownApp?.configured ? (
             <Button variant="outline" onClick={() => setByoaOpen(true)}>
-              設定する
+              {t("設定する")}
             </Button>
           ) : (
             <div className="space-y-4">
               <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground space-y-2">
-                <p className="font-medium text-foreground">Metaのアプリ作成時に、次の3つのURLを登録してください</p>
+                <p className="font-medium text-foreground">{t("Metaのアプリ作成時に、次の3つのURLを登録してください")}</p>
                 {[
                   { key: "redirect", label: "リダイレクトURL（コールバック）", value: ownApp?.redirectUri ?? "" },
                   { key: "deauth", label: "アンインストールのコールバックURL", value: ownApp?.deauthorizeUri ?? "" },
@@ -615,7 +615,7 @@ export default function Settings() {
                       type="button"
                       onClick={() => copyText(row.key, row.value)}
                       className="shrink-0 rounded p-1 hover:bg-background"
-                      aria-label="コピー"
+                      aria-label={t("コピー")}
                     >
                       {copiedKey === row.key
                         ? <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -627,7 +627,7 @@ export default function Settings() {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <Label className="text-sm">ThreadsアプリID</Label>
+                  <Label className="text-sm">{t("ThreadsアプリID")}</Label>
                   <Input
                     value={byoaAppId}
                     onChange={(e) => setByoaAppId(e.target.value)}
@@ -636,7 +636,7 @@ export default function Settings() {
                   />
                 </div>
                 <div>
-                  <Label className="text-sm">Threadsアプリシークレット</Label>
+                  <Label className="text-sm">{t("Threadsアプリシークレット")}</Label>
                   <Input
                     type="password"
                     value={byoaSecret}
@@ -647,7 +647,7 @@ export default function Settings() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                シークレットは暗号化して保存し、画面には二度と表示されません。
+                {t("シークレットは暗号化して保存し、画面には二度と表示されません。")}
               </p>
 
               <div className="flex flex-wrap gap-2">
@@ -669,11 +669,11 @@ export default function Settings() {
                   </Button>
                 )}
                 {!ownApp?.configured && (
-                  <Button variant="ghost" onClick={() => setByoaOpen(false)}>キャンセル</Button>
+                  <Button variant="ghost" onClick={() => setByoaOpen(false)}>{t("キャンセル")}</Button>
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                保存したら「Threads連携」で接続をやり直すと、この設定が反映されます。
+                {t("保存したら「Threads連携」で接続をやり直すと、この設定が反映されます。")}
               </p>
             </div>
           )}
@@ -683,12 +683,12 @@ export default function Settings() {
         <Card className="p-6">
           <div className="flex items-center gap-2 mb-5">
             <CreditCard className="w-5 h-5 text-purple-600" />
-            <h2 className="text-lg font-semibold text-foreground">プラン</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t("プラン")}</h2>
           </div>
 
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-foreground">現在のプラン</p>
+              <p className="text-sm font-medium text-foreground">{t("現在のプラン")}</p>
               <p className="text-lg font-bold text-emerald-700 mt-1">{planLabel}</p>
             </div>
             <Button
@@ -696,7 +696,7 @@ export default function Settings() {
               onClick={() => setLocation("/pricing")}
               className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
             >
-              プラン変更
+              {t("プラン変更")}
             </Button>
           </div>
         </Card>
@@ -705,51 +705,51 @@ export default function Settings() {
         <Card className="p-6 border-red-200">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="w-5 h-5 text-red-600" />
-            <h2 className="text-lg font-semibold text-red-700">アカウント削除</h2>
+            <h2 className="text-lg font-semibold text-red-700">{t("アカウント削除")}</h2>
           </div>
 
           {!showDeleteSection ? (
             <div>
               <p className="text-sm text-muted-foreground mb-3">
-                アカウントを削除すると、すべてのデータ（投稿履歴・プロジェクト・Threadsアカウント連携など）が完全に削除されます。この操作は取り消せません。
+                {t("アカウントを削除すると、すべてのデータ（投稿履歴・プロジェクト・Threadsアカウント連携など）が完全に削除されます。この操作は取り消せません。")}
               </p>
               <Button
                 variant="outline"
                 className="border-red-300 text-red-600 hover:bg-red-50"
                 onClick={() => setShowDeleteSection(true)}
               >
-                アカウント削除に進む
+                {t("アカウント削除に進む")}
               </Button>
             </div>
           ) : (
             <div className="space-y-4">
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-sm text-red-800 font-medium mb-2">以下の内容がすべて削除されます：</p>
+                <p className="text-sm text-red-800 font-medium mb-2">{t("以下の内容がすべて削除されます：")}</p>
                 <ul className="text-sm text-red-700 list-disc pl-5 space-y-1">
-                  <li>アカウント情報・メールアドレス</li>
-                  <li>すべてのプロジェクト・投稿コンテンツ</li>
-                  <li>予約投稿・投稿履歴</li>
-                  <li>Threadsアカウント連携情報</li>
-                  <li>サブスクリプション（自動キャンセルされます）</li>
+                  <li>{t("アカウント情報・メールアドレス")}</li>
+                  <li>{t("すべてのプロジェクト・投稿コンテンツ")}</li>
+                  <li>{t("予約投稿・投稿履歴")}</li>
+                  <li>{t("Threadsアカウント連携情報")}</li>
+                  <li>{t("サブスクリプション（自動キャンセルされます）")}</li>
                 </ul>
               </div>
 
               {/* email 認証ユーザはパスワードで確認、OAuth ユーザはメアド完全一致で確認 */}
               {(user as any)?.authProvider === 'email' ? (
                 <div>
-                  <Label className="text-sm text-foreground/80">パスワードを入力</Label>
+                  <Label className="text-sm text-foreground/80">{t("パスワードを入力")}</Label>
                   <Input
                     type="password"
                     value={deletePassword}
                     onChange={(e) => setDeletePassword(e.target.value)}
-                    placeholder="現在のパスワード"
+                    placeholder={t("現在のパスワード")}
                     className="mt-1"
                   />
                 </div>
               ) : (
                 <div>
                   <Label className="text-sm text-foreground/80">
-                    確認のため、ご自身のメールアドレスを入力してください
+                    {t("確認のため、ご自身のメールアドレスを入力してください")}
                   </Label>
                   <Input
                     type="email"
@@ -763,7 +763,7 @@ export default function Settings() {
 
               <div>
                 <Label className="text-sm text-foreground/80">
-                  確認のため <span className="font-mono font-bold">DELETE</span> と入力してください
+                  {t("確認のため")} <span className="font-mono font-bold">DELETE</span> {t("と入力してください")}
                 </Label>
                 <Input
                   value={deleteConfirmation}
@@ -782,7 +782,7 @@ export default function Settings() {
                     setDeleteConfirmation("");
                   }}
                 >
-                  キャンセル
+                  {t("キャンセル")}
                 </Button>
                 <Button
                   className="bg-red-600 hover:bg-red-700 text-white"
