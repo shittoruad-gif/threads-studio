@@ -9,6 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Star, Share, Plus, MoreVertical, Smartphone } from "lucide-react";
+import { useLang } from "@/i18n";
 
 // 端末の判定（案内文の出し分け用）。UA判定は完璧ではないが手順案内には十分。
 function detectPlatform(): "ios" | "android" | "desktop" {
@@ -26,6 +27,7 @@ function detectPlatform(): "ios" | "android" | "desktop" {
  *   端末に合わせた手順を分かりやすく案内する。
  */
 export function BookmarkButton() {
+  const { t } = useLang();
   const { isInstallable, isInstalled, install } = usePWAInstall();
   const [open, setOpen] = useState(false);
   const platform = detectPlatform();
@@ -56,7 +58,7 @@ export function BookmarkButton() {
         onClick={handleClick}
       >
         <Star className="w-4 h-4 mr-2 text-amber-500" />
-        この画面をすぐ開けるように保存
+        {t("この画面をすぐ開けるように保存")}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -64,10 +66,10 @@ export function BookmarkButton() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Smartphone className="w-5 h-5 text-emerald-600" />
-              ログイン画面を保存する方法
+              {t("ログイン画面を保存する方法")}
             </DialogTitle>
             <DialogDescription>
-              次からワンタップで開けるようになります。お使いの端末に合わせて操作してください。
+              {t("次からワンタップで開けるようになります。お使いの端末に合わせて操作してください。")}
             </DialogDescription>
           </DialogHeader>
 
@@ -76,15 +78,15 @@ export function BookmarkButton() {
               <ol className="space-y-3">
                 <li className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">1</span>
-                  <span>画面下の <Share className="inline w-4 h-4 mx-0.5 align-text-bottom" />（共有ボタン）を押します</span>
+                  <span>{t("画面下の")} <Share className="inline w-4 h-4 mx-0.5 align-text-bottom" />{t("（共有ボタン）を押します")}</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">2</span>
-                  <span>メニューを下にスクロールして <Plus className="inline w-4 h-4 mx-0.5 align-text-bottom" />「<b>ホーム画面に追加</b>」を選びます</span>
+                  <span>{t("メニューを下にスクロールして")} <Plus className="inline w-4 h-4 mx-0.5 align-text-bottom" />「<b>{t("ホーム画面に追加")}</b>{t("」を選びます")}</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">3</span>
-                  <span>右上の「<b>追加</b>」を押せば完了です</span>
+                  <span>{t("右上の「")}<b>{t("追加")}</b>{t("」を押せば完了です")}</span>
                 </li>
               </ol>
             )}
@@ -93,15 +95,15 @@ export function BookmarkButton() {
               <ol className="space-y-3">
                 <li className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">1</span>
-                  <span>画面右上の <MoreVertical className="inline w-4 h-4 mx-0.5 align-text-bottom" />（メニュー）を押します</span>
+                  <span>{t("画面右上の")} <MoreVertical className="inline w-4 h-4 mx-0.5 align-text-bottom" />{t("（メニュー）を押します")}</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">2</span>
-                  <span>「<b>ホーム画面に追加</b>」または「<b>アプリをインストール</b>」を選びます</span>
+                  <span>「<b>{t("ホーム画面に追加")}</b>{t("」または「")}<b>{t("アプリをインストール")}</b>{t("」を選びます")}</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">3</span>
-                  <span>「<b>追加</b>」を押せば完了です</span>
+                  <span>「<b>{t("追加")}</b>{t("」を押せば完了です")}</span>
                 </li>
               </ol>
             )}
@@ -109,11 +111,11 @@ export function BookmarkButton() {
             {platform === "desktop" && (
               <div className="space-y-2">
                 <p>
-                  キーボードで <b className="px-1.5 py-0.5 rounded bg-muted">{shortcut}</b> を押すと、
+                  {t("キーボードで")} <b className="px-1.5 py-0.5 rounded bg-muted">{shortcut}</b> を押すと、
                   この画面をお気に入り（ブックマーク）に保存できます。
                 </p>
                 <p className="text-muted-foreground text-xs">
-                  次回からはブラウザのお気に入り一覧からすぐ開けます。
+                  {t("次回からはブラウザのお気に入り一覧からすぐ開けます。")}
                 </p>
               </div>
             )}

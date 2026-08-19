@@ -1066,4 +1066,25 @@ export const dict: Record<string, string> = {
 
   "予約中をすべて選択": "Select all scheduled",
   "内容を修正": "Edit content",
+
+  // ── ログイン画面（審査担当者が最初に見る画面） ──
+  "ログインすると、このコードが自動で適用されます（モニターの方はこちらに入力してください）。": "The code is applied automatically when you log in.",
+  "お持ちの方はコードを入力": "Enter your code if you have one",
+
+  // ログイン画面の保存ヘルプ
+  "ログイン画面を保存する方法": "How to save the login screen",
+  "次からワンタップで開けるようになります。お使いの端末に合わせて操作してください。": "You can then open it with one tap. Follow the steps for your device.",
+  "画面下の": "At the bottom of the screen, tap ",
+  "（共有ボタン）を押します": " (the share button).",
+  "メニューを下にスクロールして": "Scroll down the menu and choose ",
+  "ホーム画面に追加": "Add to Home Screen",
+  "」を選びます": ".",
+  "右上の「": "Then press ",
+  "追加": "Add",
+  "」を押せば完了です": " at the top right to finish.",
+  "画面右上の": "At the top right of the screen, press ",
+  "（メニュー）を押します": " (the menu).",
+  "」または「": " or ",
+  "キーボードで": "On a keyboard, press ",
+  "次回からはブラウザのお気に入り一覧からすぐ開けます。": "Next time you can open it straight from your browser bookmarks.",
 };

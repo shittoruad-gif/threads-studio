@@ -147,7 +147,7 @@ export default function Login() {
               <Input
                 id="password"
                 type="password"
-                placeholder="パスワードを入力"
+                placeholder={t("パスワードを入力")}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -162,19 +162,19 @@ export default function Login() {
                 <>
                   <Label htmlFor="couponCode" className="flex items-center gap-1.5">
                     <Ticket className="h-3.5 w-3.5 text-emerald-600" />
-                    クーポン / モニターコード（任意）
+                    {t("クーポン / モニターコード（任意）")}
                   </Label>
                   <Input
                     id="couponCode"
                     type="text"
-                    placeholder="お持ちの方はコードを入力"
+                    placeholder={t("お持ちの方はコードを入力")}
                     value={couponCode}
                     onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                     disabled={loginMutation.isPending}
                     autoComplete="off"
                   />
                   <p className="text-xs text-muted-foreground">
-                    ログインすると、このコードが自動で適用されます（モニターの方はこちらに入力してください）。
+                    {t("ログインすると、このコードが自動で適用されます（モニターの方はこちらに入力してください）。")}
                   </p>
                 </>
               ) : (
@@ -184,7 +184,7 @@ export default function Login() {
                   className="text-xs text-primary hover:underline flex items-center gap-1"
                 >
                   <Ticket className="h-3.5 w-3.5" />
-                  クーポン / モニターコードをお持ちの方
+                  {t("クーポン / モニターコードをお持ちの方")}
                 </button>
               )}
             </div>
