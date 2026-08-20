@@ -1087,4 +1087,8 @@ export const dict: Record<string, string> = {
   "」または「": " or ",
   "キーボードで": "On a keyboard, press ",
   "次回からはブラウザのお気に入り一覧からすぐ開けます。": "Next time you can open it straight from your browser bookmarks.",
+
+  "商圏をうんと狭く言い切る": "Name a very small catchment area",
+  "「〇〇県の整体院です」より「〇〇駅から徒歩5分」のほうが新規数が伸びます。読んだ人が「うちの商圏だ」「通勤ルートだ」「仕事帰りに寄れる」と自分事にできるからです。広く拾うより狭く深く刺すほうが、単価もリピート率も上がります。（2026-08-20 実測・表示394回の投稿より）": "\"5 minutes from X station\" brings in more new customers than \"a clinic in X prefecture\". Readers can picture it as their own area, their commute, somewhere they can stop by after work. Reaching fewer people more deeply also raises spend per visit and repeat rate. (Measured 2026-08-20 from a post with 394 views.)",
+  "「県名や市名ではなく、駅名＋徒歩◯分」で言い切る → 読み手が思い浮かべる生活動線（通勤・買い物帰り）を1つ添える → 「狭い商圏だからこそできること」を一言。1行を短く、改行を多めに。": "State the nearest station and walking time instead of the prefecture or city, add one everyday route the reader will picture (commute, on the way home from shopping), then one line on what a small catchment lets you do. Keep lines short with frequent breaks.",
 };
