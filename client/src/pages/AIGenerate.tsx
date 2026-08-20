@@ -197,6 +197,24 @@ export default function AIGenerate() {
     },
     onError: (e) => toast.error(e.message),
   });
+  // ★商圏の狭い言い切りを既定にしたので、地元ワードが未設定なら
+  //   ボタンを押さなくても自動で地図から候補を取りに行く。
+  //   （取得したものは候補として表示するだけで、確定はユーザーが行う）
+  const autoFetchedAreaRef = useRef<string | null>(null);
+  useEffect(() => {
+    const area = editForm.area.trim();
+    if (!area) return;
+    if (editForm.localTerms.trim()) return;      // 既に入力済みなら邪魔しない
+    if (localSuggestions) return;                 // 取得済み
+    if (suggestLocalTerms.isPending) return;
+    if (autoFetchedAreaRef.current === area) return; // 同じエリアで二重に叩かない
+    autoFetchedAreaRef.current = area;
+    suggestLocalTerms.mutate({
+      area,
+      businessType: editForm.businessType.trim() || undefined,
+    });
+  }, [editForm.area, editForm.localTerms, editForm.businessType, localSuggestions, suggestLocalTerms]);
+
   const appendLocalTerm = (term: string) => {
     setEditForm((prev) => {
       const lines = prev.localTerms.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -1496,12 +1514,14 @@ export default function AIGenerate() {
                           >
                             {suggestLocalTerms.isPending
                               ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" />{t("検索中...")}</>
-                              : <><Search className="h-3 w-3 mr-1" />{t("地図から候補を取得")}</>}
+                              : <><Search className="h-3 w-3 mr-1" />{t("候補を取り直す")}</>}
                           </Button>
                         </div>
                         <p className="text-[13px] text-emerald-700">
-                          地図データから、近くの<strong>{t("実在する駅・町名")}</strong>を候補表示します（AIの推測は使わないので地名の捏造はありません）。
-                          目印（お店・施設など）は、ご自身が知っている<strong>{t("実在のもの")}</strong>を1行ずつ追記してください。
+                          {t("住所を入れると、地図データから近くの")}<strong>{t("実在する駅と所要時間")}</strong>{t("を自動で候補表示します（AIの推測は使わないので地名の捏造はありません）。")}
+                          <br />
+                          {t("所要時間は直線距離からの概算です。実際と違う場合は書き換えてください。")}
+                          {t("目印（お店・施設など）は、ご自身が知っている実在のものを1行ずつ追記してください。")}
                         </p>
 
                         {/* AI候補（タップで下の欄に追加） */}

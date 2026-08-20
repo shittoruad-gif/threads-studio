@@ -1091,4 +1091,11 @@ export const dict: Record<string, string> = {
   "商圏をうんと狭く言い切る": "Name a very small catchment area",
   "「〇〇県の整体院です」より「〇〇駅から徒歩5分」のほうが新規数が伸びます。読んだ人が「うちの商圏だ」「通勤ルートだ」「仕事帰りに寄れる」と自分事にできるからです。広く拾うより狭く深く刺すほうが、単価もリピート率も上がります。（2026-08-20 実測・表示394回の投稿より）": "\"5 minutes from X station\" brings in more new customers than \"a clinic in X prefecture\". Readers can picture it as their own area, their commute, somewhere they can stop by after work. Reaching fewer people more deeply also raises spend per visit and repeat rate. (Measured 2026-08-20 from a post with 394 views.)",
   "「県名や市名ではなく、駅名＋徒歩◯分」で言い切る → 読み手が思い浮かべる生活動線（通勤・買い物帰り）を1つ添える → 「狭い商圏だからこそできること」を一言。1行を短く、改行を多めに。": "State the nearest station and walking time instead of the prefecture or city, add one everyday route the reader will picture (commute, on the way home from shopping), then one line on what a small catchment lets you do. Keep lines short with frequent breaks.",
+
+  "候補を取り直す": "Refresh suggestions",
+  "住所を入れると、地図データから近くの": "Enter your address and we will suggest nearby ",
+  "実在する駅と所要時間": "real stations and travel times",
+  "を自動で候補表示します（AIの推測は使わないので地名の捏造はありません）。": " automatically from map data (no AI guessing, so place names are never invented).",
+  "所要時間は直線距離からの概算です。実際と違う場合は書き換えてください。": "Travel times are estimated from straight-line distance. Please correct them if they differ from reality.",
+  "目印（お店・施設など）は、ご自身が知っている実在のものを1行ずつ追記してください。": "For landmarks (shops, facilities), add real ones you know, one per line.",
 };
