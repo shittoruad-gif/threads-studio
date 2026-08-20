@@ -2,9 +2,10 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import ThreadPreview from "@/components/ThreadPreview";
 import {
-  Check, MapPin, Sparkles, MessageCircle, BarChart3, Clock, ArrowRight, Share2,
+  Check, MapPin, Sparkles, MessageCircle, BarChart3, Clock, ArrowRight, Share2, Eye, Heart, Lock,
 } from "lucide-react";
 import { useState } from "react";
+import { trpc } from "@/lib/trpc";
 
 /**
  * 未導入の方向けの紹介ページ（公開・ログイン不要）。
@@ -52,6 +53,94 @@ function Feature({ icon, title, children }: { icon: React.ReactNode; title: stri
       </div>
       <p className="text-sm leading-relaxed text-muted-foreground">{children}</p>
     </div>
+  );
+}
+
+
+/**
+ * 実際に反応が取れた投稿の一覧（自動更新）。
+ *
+ * 手で書いた作り話ではなく、本番で配信されて数字が出た投稿をそのまま出す。
+ * 新しく伸びた投稿が出れば自動で入れ替わるので、このページを書き直す必要はない。
+ * 店名・駅名・URLはサーバ側で伏せてから届く（server/showcase.ts）。
+ */
+function LiveExamples() {
+  const { data, isLoading } = trpc.showcase.list.useQuery(undefined, {
+    staleTime: 1000 * 60 * 30,
+  });
+  const items = data?.items ?? [];
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[0, 1].map((i) => (
+          <div key={i} className="h-32 animate-pulse rounded-xl border border-border bg-muted/40" />
+        ))}
+      </div>
+    );
+  }
+  if (items.length === 0) return null;
+
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {items.map((item, i) => (
+          <div key={i} className="flex flex-col rounded-xl border border-border bg-card p-4">
+            <p className="mb-3 text-[0.8rem] font-bold text-muted-foreground">{item.label}</p>
+
+            {/* 冒頭のさわりだけ見せる */}
+            <p className="whitespace-pre-wrap break-words text-[0.92rem] font-medium leading-relaxed text-foreground">
+              {item.excerpt}
+            </p>
+
+            {/* 続きは伏せる。読ませるのではなく「続きがある」ことだけ伝える */}
+            {item.hiddenChars > 0 && (
+              <div className="relative mt-2 flex-1">
+                <div aria-hidden className="select-none space-y-2 blur-[5px]" >
+                  {Array.from({ length: item.hiddenLines }).map((_, k) => (
+                    <div
+                      key={k}
+                      className="h-3 rounded bg-foreground/25"
+                      style={{ width: `${[96, 88, 72, 91][k % 4]}%` }}
+                    />
+                  ))}
+                </div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background/95 px-3 py-1 text-[0.72rem] font-bold text-muted-foreground shadow-sm">
+                    <Lock className="h-3 w-3" />
+                    続き{item.hiddenChars}文字は非公開
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-3 text-[0.8rem] text-muted-foreground">
+              <span className="inline-flex items-center gap-1 font-bold text-emerald-700 dark:text-emerald-400">
+                <Eye className="h-3.5 w-3.5" />
+                {item.impressions.toLocaleString()}回表示
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Heart className="h-3.5 w-3.5" />
+                {item.likes.toLocaleString()}
+              </span>
+              {item.replies > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  {item.replies.toLocaleString()}
+                </span>
+              )}
+              {item.postedAt && <span className="ml-auto">{item.postedAt.replace("-", "年")}月</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+        実際に配信された投稿と、その実測値です。数字は加工していません。
+        ご利用店舗が特定されないよう、アカウント名・店名・駅名・リンクは伏せています。
+        本文は冒頭のみの公開です。反応の大きい投稿が出るたび、この一覧は自動で入れ替わります。
+      </p>
+    </>
   );
 }
 
@@ -124,6 +213,28 @@ export default function Tour() {
               "気になる方は、プロフィールのリンクから公式LINEにご登録ください。\nかんたんな姿勢チェックをお送りしています。",
             ]}
           />
+        </section>
+
+        <section className="mb-12">
+          <h2 className="mb-2 text-[1.2rem] font-bold text-foreground">実際に反応が取れた投稿</h2>
+          <p className="mb-4 text-[0.95rem] leading-relaxed text-muted-foreground">
+            ご利用中の店舗で実際に配信され、反応が大きかった投稿です。
+          </p>
+          <LiveExamples />
+          <div className="mt-4 rounded-xl border border-border bg-muted/40 p-4">
+            <p className="mb-2 text-[0.95rem] font-bold text-foreground">
+              伸びるかどうかは、文章そのものではなく「条件」で決まります
+            </p>
+            <ul className="space-y-1.5 text-sm leading-relaxed text-muted-foreground">
+              <li>・その日どの型で書くか（同じ型を続けると伸びが落ちます）</li>
+              <li>・1行目を何文字で切るか、どこで改行するか</li>
+              <li>・そのお店の商圏を、どの粒度で言い切るか</li>
+              <li>・何時に出し、何時間後にひとことを足すか</li>
+            </ul>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              この判断を毎日続けるのが難しいところです。Threads Studioは、実際に出た数字を見ながらこの条件を自動で調整します。
+            </p>
+          </div>
         </section>
 
         <section className="mb-12">

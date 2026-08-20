@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, lte, gte, gt } from "drizzle-orm";
+import { eq, and, desc, sql, lte, gte, gt, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { encrypt, decrypt } from "./encryption";
 import {
@@ -2420,6 +2420,7 @@ export async function getAutoPostSettings(userId: number) {
       autoPostRequireApproval: users.autoPostRequireApproval,
       autoTopicTag: users.autoTopicTag,
       autoFollowUpEnabled: users.autoFollowUpEnabled,
+      showcaseOptOut: users.showcaseOptOut,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -2431,7 +2432,7 @@ export async function getAutoPostSettings(userId: number) {
 /**
  * Update user's auto-post settings
  */
-export async function updateAutoPostSettings(userId: number, settings: { autoPostEnabled?: boolean; autoPostFrequency?: "daily" | "twice_daily" | "three_daily"; autoPostRequireApproval?: boolean; autoTopicTag?: boolean; autoFollowUpEnabled?: boolean }) {
+export async function updateAutoPostSettings(userId: number, settings: { autoPostEnabled?: boolean; autoPostFrequency?: "daily" | "twice_daily" | "three_daily"; autoPostRequireApproval?: boolean; autoTopicTag?: boolean; autoFollowUpEnabled?: boolean; showcaseOptOut?: boolean }) {
   const database = await getDb();
   if (!database) return;
 
@@ -3124,4 +3125,87 @@ export async function isWizardNotificationUnseen(userId: number): Promise<boolea
     .limit(1);
   if (rows.length === 0) return false;
   return rows[0].wizardNotificationSeenAt === null;
+}
+
+/**
+ * 実例ショーケースの候補を取り出す（公開ページ /tour 用）。
+ *
+ * postAnalytics（実測の閲覧数・いいね）を軸に、投稿した本人の
+ * プロジェクト情報を添えて返す。伏せ字化に必要なためで、
+ * **その利用者が登録している全プロジェクトの店名・商圏を渡す**。
+ * 自動投稿は scheduledPosts 経由でどのプロジェクトの投稿か分かるが、
+ * 手動投稿は分からない。分からない側を切り捨てると実例がほぼ出ないため、
+ * 「その人に紐づく固有語はすべて伏せる」方針で安全側に寄せる。
+ *
+ * 掲載を拒否した利用者は SQL 段階で除外する。
+ * 最終的な掲載可否と伏せ字化は server/showcase.ts が行う。
+ */
+export async function getShowcaseCandidates(limit = 60) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const rows = await db
+    .select({
+      userId: postAnalytics.userId,
+      postContent: postAnalytics.postContent,
+      impressions: postAnalytics.impressions,
+      likes: postAnalytics.likes,
+      replies: postAnalytics.replies,
+      postedAt: postAnalytics.postedAt,
+    })
+    .from(postAnalytics)
+    .innerJoin(users, eq(users.id, postAnalytics.userId))
+    .where(and(eq(users.showcaseOptOut, false), gte(postAnalytics.impressions, 800)))
+    .orderBy(desc(postAnalytics.impressions))
+    .limit(limit);
+
+  if (rows.length === 0) return [];
+
+  // 候補を出した利用者のプロジェクトをまとめて引き、伏せ字用の語をユーザー単位で集約する
+  const userIds = Array.from(new Set(rows.map((r) => r.userId)));
+  const projectRows = await db
+    .select({
+      userId: projects.userId,
+      storeName: projects.storeName,
+      businessType: projects.businessType,
+      area: projects.area,
+      localTerms: projects.localTerms,
+    })
+    .from(projects)
+    .where(inArray(projects.userId, userIds));
+
+  const byUser = new Map<number, {
+    storeNames: string[]; localTerms: string[]; areas: string[];
+    businessType: string | null; area: string | null;
+  }>();
+  for (const p of projectRows) {
+    const cur = byUser.get(p.userId) ?? {
+      storeNames: [], localTerms: [], areas: [], businessType: null, area: null,
+    };
+    if (p.storeName) cur.storeNames.push(p.storeName);
+    if (p.localTerms) cur.localTerms.push(p.localTerms);
+    if (p.area) cur.areas.push(p.area);
+    // 表示ラベルは最初に見つかったものを使う（同一利用者の業種はほぼ同じ）
+    cur.businessType ??= p.businessType;
+    cur.area ??= p.area;
+    byUser.set(p.userId, cur);
+  }
+
+  return rows.map((r) => {
+    const agg = byUser.get(r.userId);
+    return {
+      postContent: r.postContent,
+      impressions: r.impressions,
+      likes: r.likes,
+      replies: r.replies,
+      postedAt: r.postedAt,
+      // 伏せ字対象は全プロジェクト分をまとめて渡す（多いほど安全側）
+      storeName: agg?.storeNames.join("\n") ?? null,
+      localTerms: [...(agg?.localTerms ?? []), ...(agg?.areas ?? [])].join("\n"),
+      businessType: agg?.businessType ?? null,
+      area: agg?.area ?? null,
+      showcaseOptOut: false,
+      ownerKey: r.userId,
+    };
+  });
 }

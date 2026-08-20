@@ -65,6 +65,9 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  // 実例ショーケース（/tour に匿名で掲載）の掲載拒否。
+  // 既定 false＝掲載可。利用規約で同意を得たうえで、設定からいつでも止められる。
+  showcaseOptOut: boolean("showcaseOptOut").default(false).notNull(),
 });
 
 export type User = typeof users.$inferSelect;

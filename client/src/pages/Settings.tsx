@@ -253,6 +253,23 @@ export default function Settings() {
                 />
               </div>
 
+              {/* 実例としての匿名掲載（利用規約 第11条） */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium text-foreground">{t("紹介ページに実例として匿名で載せる")}</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {t("反応が良かった投稿を、サービス紹介ページの実例として掲載します。")}
+                    {t("アカウント名・店名・駅名・URLはすべて伏せるため、お店が特定されることはありません。")}<br className="hidden sm:inline" />
+                    {t("OFFにすると掲載対象から外れます（利用規約 第11条）")}
+                  </p>
+                </div>
+                <Switch
+                  checked={!((autoPostSettings as any)?.showcaseOptOut ?? false)}
+                  onCheckedChange={(v) => updateAutoPost.mutate({ showcaseOptOut: !v } as any)}
+                  disabled={updateAutoPost.isPending}
+                />
+              </div>
+
               {/* 追い投稿（セルフリプライ） */}
               <div className="flex items-center justify-between">
                 <div>

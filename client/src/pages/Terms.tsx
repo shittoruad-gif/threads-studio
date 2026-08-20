@@ -25,7 +25,7 @@ export default function Terms() {
           <h1 className="text-3xl font-bold text-foreground">利用規約</h1>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-8">最終更新日：2026年6月15日</p>
+        <p className="text-sm text-muted-foreground mb-8">最終更新日：2026年8月20日</p>
 
         <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
           <section>
@@ -239,7 +239,34 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">第11条（規約の変更）</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">第11条（実績としての掲載）</h2>
+            <div className="space-y-3 text-muted-foreground leading-relaxed">
+              <p>
+                1. ユーザーは、本サービスを通じて投稿されたコンテンツおよびその投稿に関する数値（表示回数、いいね数、返信数等）を、
+                当社が本サービスの紹介・実績紹介の目的で、当社ウェブサイト、資料、広告その他の媒体に掲載することに同意するものとします。
+              </p>
+              <p>
+                2. 前項の掲載にあたり、当社は次の各号の措置を講じます。
+              </p>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>Threadsのアカウント名およびユーザー名を表示しないこと</li>
+                <li>登録された店舗名、所在地、最寄り駅その他の商圏に関する語句、URL、電話番号を投稿本文から削除または置き換えること</li>
+                <li>業種および都道府県は、個別のユーザーを特定できない粒度に一般化して表示すること</li>
+                <li>数値は実測値をそのまま用い、これを加工しないこと</li>
+              </ul>
+              <p>
+                3. ユーザーは、設定画面からいつでも掲載の停止を申し出ることができます。
+                停止の設定を行った場合、当社は当該ユーザーのコンテンツを速やかに掲載対象から除外します。
+                この設定は本サービスの利用に何ら影響しません。
+              </p>
+              <p>
+                4. 本条は、第10条第2項に定めるユーザーのコンテンツに対する著作権に影響を及ぼすものではありません。
+              </p>
+            </div>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold text-foreground mb-3">第12条（規約の変更）</h2>
             <p className="text-muted-foreground leading-relaxed">
               本規約は、必要に応じて変更される場合があります。
               変更後の規約は、本サービス上に掲載した時点で効力を生じるものとします。
@@ -247,7 +274,7 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">第12条（準拠法・管轄）</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">第13条（準拠法・管轄）</h2>
             <p className="text-muted-foreground leading-relaxed">
               本規約の解釈および適用は日本法に準拠するものとし、
               本サービスに関する紛争については、日本国内の裁判所を第一審の専属的合意管轄裁判所とします。

@@ -12,6 +12,7 @@ import * as couponService from "./coupon";
 import { PLANS, TRIAL_DAYS, getPlan, resolveEffectivePlanId } from "../shared/plans";
 import { TRPCError } from "@trpc/server";
 import { approvedLocalTerms } from './localGeo';
+import { buildShowcase, MIN_IMPRESSIONS } from './showcase';
 
 // ── アカウント切替用の共通部品 ─────────────────────────────
 // ヘッダーの切替UIで選んだ連携アカウントに、各画面のデータを絞るための入力。
@@ -40,6 +41,22 @@ declare global {
 
 export const appRouter = router({
   system: systemRouter,
+
+  /**
+   * 実例ショーケース（公開・ログイン不要）。
+   *
+   * /tour に「実際に反応が取れた投稿」を出すためのデータ。
+   * 本番で配信され数字が出た投稿だけを、店が特定できない形に伏せて返す。
+   * 新しく伸びた投稿が出れば自動で入れ替わるので、紹介ページを書き直す必要がない。
+   *
+   * 掲載を拒否したユーザー（users.showcaseOptOut）の投稿は showcase.ts 側で除外する。
+   */
+  showcase: router({
+    list: publicProcedure.query(async () => {
+      const rows = await db.getShowcaseCandidates();
+      return { items: buildShowcase(rows), minImpressions: MIN_IMPRESSIONS };
+    }),
+  }),
   
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
@@ -4079,7 +4096,7 @@ ${CONCEPT_DESIGN_PROMPT}`;
   autoPost: router({
     getSettings: protectedProcedure.query(async ({ ctx }) => {
       const settings = await db.getAutoPostSettings(ctx.user.id);
-      return settings || { autoPostEnabled: true, autoPostFrequency: 'daily', autoPostRequireApproval: false, autoTopicTag: true, autoFollowUpEnabled: true };
+      return settings || { autoPostEnabled: true, autoPostFrequency: 'daily', autoPostRequireApproval: false, autoTopicTag: true, autoFollowUpEnabled: true, showcaseOptOut: false };
     }),
 
     updateSettings: protectedProcedure
@@ -4089,6 +4106,8 @@ ${CONCEPT_DESIGN_PROMPT}`;
         autoPostRequireApproval: z.boolean().optional(),
         autoTopicTag: z.boolean().optional(),
         autoFollowUpEnabled: z.boolean().optional(),
+        // 実例ショーケース（/tour）への匿名掲載を止める。利用規約 第11条第3項
+        showcaseOptOut: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         await db.updateAutoPostSettings(ctx.user.id, input);
