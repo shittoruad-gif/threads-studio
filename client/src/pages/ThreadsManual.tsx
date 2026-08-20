@@ -38,6 +38,61 @@ function Section({ badge, title, lede, children }: { badge: string; title: strin
   );
 }
 
+/**
+ * 実際にThreadsへ公開された投稿の見え方を再現する部品。
+ *
+ * 「アプリで作った文章が、Threadsではどう並ぶのか」が想像できないという声が多いため、
+ * スクリーンショット画像ではなくHTMLで再現している（アプリを更新しても崩れず、
+ * スマホ幅でもそのまま読める）。
+ */
+function ThreadPreview({
+  handle,
+  posts,
+  reply,
+}: {
+  handle: string;
+  posts: string[];
+  reply?: { handle: string; text: string; ourReply: string };
+}) {
+  return (
+    <div className="my-4 overflow-hidden rounded-xl border border-border bg-[#0b0b0b] p-4 text-[0.9rem] leading-relaxed text-white">
+      <p className="mb-3 text-[0.75rem] font-bold tracking-wider text-white/40">THREADS での見え方</p>
+      {posts.map((text, i) => (
+        <div key={i} className="relative pb-4 pl-9">
+          <div className="absolute left-0 top-0 h-7 w-7 rounded-full bg-white/15" />
+          {i < posts.length - 1 && (
+            <div className="absolute left-[13px] top-8 h-[calc(100%-2rem)] w-px bg-white/15" />
+          )}
+          <p className="mb-1 text-[0.85rem] font-bold text-white">
+            {handle}
+            {i > 0 && <span className="ml-2 font-normal text-white/40">{i + 1}/{posts.length}</span>}
+          </p>
+          <p className="whitespace-pre-wrap break-words text-white/90">{text}</p>
+        </div>
+      ))}
+      {reply && (
+        <div className="mt-2 border-t border-white/10 pt-4">
+          <div className="relative pb-3 pl-9">
+            <div className="absolute left-0 top-0 h-7 w-7 rounded-full bg-white/15" />
+            <p className="mb-1 text-[0.85rem] font-bold text-white">{reply.handle}</p>
+            <p className="text-white/90">{reply.text}</p>
+          </div>
+          <div className="relative pl-9">
+            <div className="absolute left-0 top-0 h-7 w-7 rounded-full bg-emerald-500/40" />
+            <p className="mb-1 text-[0.85rem] font-bold text-white">
+              {handle}
+              <span className="ml-2 rounded bg-emerald-600 px-1.5 py-0.5 text-[0.7rem] font-bold">
+                アプリから返信
+              </span>
+            </p>
+            <p className="whitespace-pre-wrap break-words text-white/90">{reply.ourReply}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Faq({ q, children }: { q: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -151,6 +206,29 @@ export default function ThreadsManual() {
             <li>返信したいコメントの <Ui>AI返信を生成</Ui> を押します</li>
             <li>出てきた候補をタップで選び、必要なら手直しして <Ui>投稿する</Ui> を押します</li>
           </ol>
+          <ThreadPreview
+            handle="あなたのお店"
+            posts={["猫背が気になる方から、よくこう聞かれます。\n「もう歳だから戻らないですよね？」"]}
+            reply={{
+              handle: "お客様",
+              text: "気になります",
+              ourReply:
+                "コメントありがとうございます！\n実は、姿勢は何歳からでも変わるんです😊\nよければ一度ご相談ください。",
+            }}
+          />
+          <Note>
+            返信するとコメントに <Ui>返信済み</Ui> が付きます。
+            コメントに返すと、その投稿がもう一度表示されやすくなるので、
+            週1回まとめてで十分効果があります。
+          </Note>
+
+          <p className="mt-6 font-bold text-foreground">AIが何を学んだか見る</p>
+          <p className="text-sm text-muted-foreground">
+            投稿分析の画面に <Ui>AIが学んでいること</Ui> という欄があります。
+            「プロの小ワザ」「あるある」など投稿の型ごとに、実際に何回見られたかが並びます。
+            よく見られている型は、次からAIが自動的に増やしていきます。
+            見るだけでよく、操作は必要ありません。
+          </p>
         </Section>
 
         <Section
@@ -166,6 +244,46 @@ export default function ThreadsManual() {
             <li>すぐ出すなら <Ui>今すぐThreadsに投稿</Ui> → 確認画面で <Ui>投稿する</Ui>。
               時間を指定するなら <Ui>投稿を予約する</Ui> → 日時を選んで <Ui>予約する</Ui> → <Ui>確定する</Ui></li>
           </ol>
+
+          <p className="mt-6 mb-1 text-[0.95rem] font-bold text-foreground">実際にはこう投稿されます</p>
+          <p className="text-sm text-muted-foreground">
+            1回の投稿は、1本の文章と「続き」がつながった形（ツリー）で公開されます。
+            長い話でも読み手が追いやすく、最後まで読んだ人だけがLINEの案内にたどり着きます。
+          </p>
+          <ThreadPreview
+            handle="あなたのお店"
+            posts={[
+              "金光駅から徒歩6分の整体院です。\n\n猫背が気になる方から、よくこう聞かれます。\n「もう歳だから戻らないですよね？」",
+              "実は逆で、姿勢は何歳からでも変わります。\n\n固まっているのは骨ではなく、その周りの筋肉だからです😊",
+              "気になる方は、プロフィールのリンクから公式LINEにご登録ください。\nかんたんな姿勢チェックをお送りしています。",
+            ]}
+          />
+          <Note>
+            住所を「岡山県」ではなく <Ui>金光駅から徒歩6分</Ui> のように狭く書くほど、
+            読んだ人が「うちの近くだ」と気づいて反応が上がります。
+            この文言はアプリが提案するので、そのまま使うか直すかを選ぶだけです（後述）。
+          </Note>
+        </Section>
+
+        <Section
+          badge="アプリからの提案"
+          title="「この商圏で投稿してよいですか？」が出たら"
+          lede="ホーム画面に水色のカードが出ることがあります。お店の最寄り駅と、そこから何分かかるかを地図から調べて、投稿に使ってよいか確認するものです。"
+        >
+          <ol className="list-decimal space-y-2 pl-5">
+            <li>カードに出ている駅名と所要時間を見ます</li>
+            <li>合っていれば <Ui>この内容で投稿する</Ui> を押します。次の投稿から使われます</li>
+            <li>違っていれば <Ui>自分で直す</Ui> を押して、正しい時間に書き換えます</li>
+          </ol>
+          <Note>
+            所要時間は地図上の直線距離からの概算なので、実際とずれることがあります。
+            実際に「徒歩17分」と出たお店が、本当は「徒歩6分」だったこともありました。
+            <strong className="text-amber-900 dark:text-amber-200">確認して押していただくまで、この内容が投稿に使われることはありません。</strong>
+          </Note>
+          <p className="text-sm text-muted-foreground">
+            なお、お店に来ていただく業種ではない場合（ホームページ制作やオンラインのサービスなど）は、
+            駅からの距離を書いても意味がないため、このカードは出ません。
+          </p>
         </Section>
 
         <Section
