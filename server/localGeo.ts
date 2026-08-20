@@ -89,10 +89,12 @@ async function fetchStations(lat: number, lon: number): Promise<string[]> {
     .slice(0, 5)
     .map(([name, v]) => {
       const label = /駅$/.test(name) ? name : `${name}駅`;
+      const walk = walkMinutesLabel(v.dist);
       const lines = Array.from(v.lines);
-      if (lines.length === 0) return label;
-      const shown = lines.slice(0, 3).join('・') + (lines.length > 3 ? 'ほか' : '');
-      return `${label}（${shown}）`;
+      const base = lines.length === 0
+        ? label
+        : `${label}（${lines.slice(0, 3).join('・')}${lines.length > 3 ? 'ほか' : ''}）`;
+      return walk ? `${base} ${walk}` : base;
     });
 }
 
@@ -111,6 +113,30 @@ function dedupe(arr: string[], n: number): string[] {
  * エリア文字列から、実在の地元ワード候補を返す。
  * 取得できなければ空配列（UI 側は手入力にフォールバック）。
  */
+
+/**
+ * 直線距離（m）から「徒歩◯分」の概算ラベルを作る。
+ *
+ * ・不動産表示規約にならい 徒歩1分=80m で換算する（日本で通用する基準）。
+ * ・APIが返すのは駅までの「直線距離」なので、実際の道のりはこれより長い。
+ *   経験的な迂回係数 1.3 を掛けてから分に直す（過小表示を避けるため）。
+ * ・25分を超えるものは徒歩圏として案内する意味が薄いので分数を出さない
+ *   （その場合は駅名だけを候補にし、車で何分かは本人に入力してもらう）。
+ * ・あくまで概算なので必ず「約」を付ける。正確な値は本人が確認して上書きする前提。
+ */
+function walkMinutesLabel(straightMeters: number): string | null {
+  if (!Number.isFinite(straightMeters) || straightMeters <= 0 || straightMeters > 99000) return null;
+  const routeMeters = straightMeters * 1.3;
+  const walk = Math.ceil(routeMeters / 80);
+  if (walk <= 25) return `から徒歩約${walk}分`;
+
+  // 徒歩圏を超える駅は「車で約◯分」に切り替える（地方は車圏の店舗が多いため）。
+  // 一般道の平均を時速25km（＝約417m/分）として概算する。
+  const drive = Math.ceil(routeMeters / 417);
+  if (drive > 30) return null; // これ以上遠い駅は商圏の手がかりにならない
+  return `から車で約${drive}分`;
+}
+
 export async function fetchLocalTerms(area: string): Promise<LocalTermsResult> {
   const geo = await geocode(area);
   if (!geo) return { stations: [], nicknames: [], landmarks: [] };
