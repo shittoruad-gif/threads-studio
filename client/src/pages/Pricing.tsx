@@ -200,30 +200,31 @@ export default function Pricing() {
       {/* Header */}
       <header className="bg-background border-b border-border sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <button onClick={() => setLocation('/')} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-                <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
+          <div className="flex items-center justify-between gap-2 h-16">
+            <div className="flex shrink-0 items-center gap-3">
+              <button onClick={() => setLocation('/')} className="flex items-center gap-2 hover:opacity-80 transition-opacity sm:gap-3">
+                <div className="w-8 h-8 shrink-0 bg-emerald-500 rounded-lg flex items-center justify-center">
                   <Sparkles className="w-4 h-4 text-white" />
                 </div>
-                <span className="text-lg font-bold text-foreground">Threads Studio</span>
+                <span className="whitespace-nowrap text-base font-bold text-foreground sm:text-lg">Threads Studio</span>
               </button>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               <Button
                 variant="ghost"
                 size="sm"
                 className="text-muted-foreground hover:text-foreground/80"
                 onClick={() => setLocation('/')}
               >
-                <ArrowLeft className="w-4 h-4 mr-1" />
-                ホーム
+                {/* スマホ幅ではラベルを省き、ヘッダーが375pxを超えないようにする */}
+                <ArrowLeft className="w-4 h-4 sm:mr-1" />
+                <span className="hidden sm:inline">ホーム</span>
               </Button>
               {isAuthenticated && (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                  className="px-2 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50 sm:px-3 sm:text-sm"
                   onClick={() => setLocation('/dashboard')}
                 >
                   ダッシュボード
@@ -246,6 +247,16 @@ export default function Pricing() {
             <br />
             8日目から自動でお支払いが始まります。トライアル期間中はダッシュボードからいつでも解約でき、料金は発生しません。
           </p>
+          <div className="mt-6 mx-auto max-w-2xl rounded-xl border-2 border-emerald-300 bg-emerald-50 px-5 py-4 text-left dark:border-emerald-800 dark:bg-emerald-950/30">
+            <p className="text-[0.98rem] font-bold text-foreground">
+              おすすめは、1日3投稿のプロプランです
+            </p>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              Threadsは投稿ごとに「おすすめに載せるか」が決まります。投稿の回数が、そのままお客様と出会える回数です。
+              1日1回だと、その1本が外れた日は誰にも届きません。1日3回なら残りの2本が拾い、
+              反応の出やすい時間帯（お昼・夕方・夜）も同じ日に押さえられます。
+            </p>
+          </div>
         </div>
 
         {/* 限定キャンペーン適用中バナー（クーポン適用済みのモニターユーザーのみ表示） */}
@@ -281,7 +292,7 @@ export default function Pricing() {
                 {plan.popular && !isCurrentPlan(plan.id) && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                     <Badge className="bg-emerald-500 text-white border-0 px-4">
-                      人気
+                      おすすめ
                     </Badge>
                   </div>
                 )}
@@ -394,7 +405,7 @@ export default function Pricing() {
                       >
                         {plan.name}
                         {plan.popular && (
-                          <Badge className="ml-2 bg-emerald-500 text-white border-0 text-xs">人気</Badge>
+                          <Badge className="ml-2 bg-emerald-500 text-white border-0 text-xs">おすすめ</Badge>
                         )}
                       </th>
                     ))}
