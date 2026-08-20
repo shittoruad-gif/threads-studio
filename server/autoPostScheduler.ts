@@ -15,6 +15,7 @@ import { pickAngle } from "../shared/postAngles";
 import { stripRawUrls } from "../shared/sanitize";
 import { invokeLLM } from "./_core/llm";
 import { nanoid } from "nanoid";
+import { approvedLocalTerms } from './localGeo';
 
 // 自動投稿のローテーション。Threads講座の実測知見に合わせ、
 // 「共感・会話を生む短文型」を主力にし、売り込み色の強い型は頻度を絞る。
@@ -397,7 +398,7 @@ async function generateAutoPost(
       storeName: (project as any).storeName || undefined,
       businessType: project.businessType,
       area: project.area,
-      localTerms: (project as any).localTerms || undefined,
+      localTerms: approvedLocalTerms(project),
       styleSamples: (project as any).styleSamples || undefined,
       target: project.target,
       mainProblem: project.mainProblem,

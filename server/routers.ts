@@ -11,6 +11,7 @@ import bcrypt from "bcryptjs";
 import * as couponService from "./coupon";
 import { PLANS, TRIAL_DAYS, getPlan, resolveEffectivePlanId } from "../shared/plans";
 import { TRPCError } from "@trpc/server";
+import { approvedLocalTerms } from './localGeo';
 
 // ── アカウント切替用の共通部品 ─────────────────────────────
 // ヘッダーの切替UIで選んだ連携アカウントに、各画面のデータを絞るための入力。
@@ -654,6 +655,63 @@ export const appRouter = router({
     // OpenStreetMap（Nominatim+Overpass）の実データのみを返す。LLMの推測は使わない
     // （存在しない施設の捏造＝ハルシネーションを防ぐため）。
     // 取得した候補は最終的にユーザー本人が選択・編集して確定する前提。
+    /**
+     * 商圏の提案：まだ本人が確認していない店舗について、
+     * 「この商圏で運用してよいか」をアプリから提案するための情報を返す。
+     * 商圏を書く意味がない業種（Web制作等）は提案しない。
+     */
+    localAreaProposal: protectedProcedure
+      .input(z.object({ projectId: z.string().min(1) }))
+      .query(async ({ ctx, input }) => {
+        const project: any = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+        }
+        const { isLocalCatchmentBusiness } = await import('../shared/businessScope');
+        if (!isLocalCatchmentBusiness(project.businessType)) {
+          return { needed: false as const, reason: 'not_local_business' as const };
+        }
+        if (project.localTermsConfirmedAt) {
+          return { needed: false as const, reason: 'already_confirmed' as const };
+        }
+        // 既に自動取得済みならそれを提案。無ければ地図から取りに行く。
+        let terms: string[] = String(project.localTerms || '')
+          .split(/\r?\n/).map((t: string) => t.trim()).filter(Boolean);
+        if (terms.length === 0 && project.area) {
+          try {
+            const { fetchLocalTerms } = await import('./localGeo');
+            const r = await fetchLocalTerms(String(project.area));
+            terms = [...r.nicknames.slice(0, 1), ...r.stations.slice(0, 1)];
+          } catch { /* 取得失敗時は提案なし */ }
+        }
+        if (terms.length === 0) return { needed: false as const, reason: 'no_candidate' as const };
+        return {
+          needed: true as const,
+          projectId: project.id,
+          projectTitle: project.title ?? '',
+          area: project.area ?? '',
+          terms,
+        };
+      }),
+
+    /**
+     * 商圏の承認：本人が確認した内容で確定し、以降の投稿で使えるようにする。
+     */
+    confirmLocalTerms: protectedProcedure
+      .input(z.object({ projectId: z.string().min(1), terms: z.array(z.string().max(120)).max(10) }))
+      .mutation(async ({ ctx, input }) => {
+        const project: any = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+        }
+        const cleaned = input.terms.map((t) => t.trim()).filter(Boolean);
+        await db.updateProject(input.projectId, {
+          localTerms: cleaned.join('\n'),
+          localTermsConfirmedAt: new Date(),
+        } as any);
+        return { success: true, count: cleaned.length };
+      }),
+
     suggestLocalTerms: protectedProcedure
       .input(z.object({
         area: z.string().min(1).max(120),
@@ -1034,7 +1092,7 @@ export const appRouter = router({
           storeName: (project as any).storeName || undefined,
           businessType: project.businessType,
           area: project.area,
-          localTerms: (project as any).localTerms || undefined,
+          localTerms: approvedLocalTerms(project),
           target: project.target,
           mainProblem: project.mainProblem,
           strength: project.strength,
@@ -1164,7 +1222,7 @@ export const appRouter = router({
           metadata: JSON.stringify({
             businessType: project.businessType,
             area: project.area,
-            localTerms: (project as any).localTerms,
+            localTerms: approvedLocalTerms(project),
             target: project.target,
             mainProblem: project.mainProblem,
             strength: project.strength,

@@ -38,6 +38,7 @@ import CouponModal from '@/components/CouponModal';
 import SetupChecklist from '@/components/SetupChecklist';
 import PageGuide from '@/components/PageGuide';
 import PositiveWinnerTips from '@/components/PositiveWinnerTips';
+import LocalAreaProposalCard from '@/components/LocalAreaProposalCard';
 import {
   Dialog,
   DialogContent,
@@ -496,6 +497,9 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
+
+        {/* 商圏の提案（本人が承認するまで投稿には使わない） */}
+        <LocalAreaProposalCard />
 
         {/* いま伸びている投稿の型（実際のThreads調査ベース・炎上型は除外） */}
         <PositiveWinnerTips />

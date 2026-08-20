@@ -1098,4 +1098,13 @@ export const dict: Record<string, string> = {
   "を自動で候補表示します（AIの推測は使わないので地名の捏造はありません）。": " automatically from map data (no AI guessing, so place names are never invented).",
   "所要時間は直線距離からの概算です。実際と違う場合は書き換えてください。": "Travel times are estimated from straight-line distance. Please correct them if they differ from reality.",
   "目印（お店・施設など）は、ご自身が知っている実在のものを1行ずつ追記してください。": "For landmarks (shops, facilities), add real ones you know, one per line.",
+
+  // 商圏の提案カード
+  "この商圏で投稿してよいですか？": "Use this catchment area in your posts?",
+  "「駅から徒歩◯分」まで絞ると、読んだ人が「うちの近くだ」と気づいて新規の反応が上がります。地図から下の内容を見つけました。": "Naming the nearest station and walking time helps readers realise the shop is near them, which lifts response from new customers. We found the following from map data.",
+  "所要時間は地図上の直線距離からの概算です。実際と違う場合は「自分で直す」を押してください。": "Travel time is estimated from straight-line distance on the map. If it differs from reality, press \"Edit myself\".",
+  "この内容で投稿する": "Use this in my posts",
+  "自分で直す": "Edit myself",
+  "確認するまで、この内容は投稿には使われません。": "This will not be used in posts until you confirm it.",
+  "商圏を確定しました。次の投稿から使われます": "Catchment area saved. It will be used from your next post.",
 };

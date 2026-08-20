@@ -153,3 +153,16 @@ export async function fetchLocalTerms(area: string): Promise<LocalTermsResult> {
     landmarks: [], // 捏造防止のため自動候補なし（手入力）
   };
 }
+
+/**
+ * 投稿文に使ってよい商圏ワードを返す。
+ *
+ * アプリが地図から自動推定しただけの商圏（＝本人未承認）は返さない。
+ * 概算の徒歩分数がそのまま広告表示に出てしまうのを防ぐため、
+ * 「アプリが提案 → 本人が確認 → 運用に反映」の順を必ず通す。
+ */
+export function approvedLocalTerms(project: any): string | undefined {
+  if (!project?.localTerms) return undefined;
+  if (!project?.localTermsConfirmedAt) return undefined; // 未承認は使わない
+  return project.localTerms;
+}

@@ -313,6 +313,8 @@ export const projects = mysqlTable("projects", {
   // 地元の人に伝わる呼び方（最寄り駅・通称/町名・ランドマーク等）を改行区切りで保持。
   // AIが投稿ごとに使い分け、ローカル集客の精度を上げる。事実のみ（AI提案→本人確認で確定）。
   localTerms: text("localTerms"),
+  // 商圏（最寄り駅・徒歩分数）を本人が確認した日時。null=未承認で投稿には使わない
+  localTermsConfirmedAt: timestamp("localTermsConfirmedAt"),
   target: text("target"), // ターゲット
   mainProblem: text("mainProblem"), // 主な悩み
   strength: text("strength"), // 強み/特徴
