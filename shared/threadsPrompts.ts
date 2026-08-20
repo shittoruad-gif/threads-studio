@@ -19,6 +19,7 @@ export interface StylePreferenceLike {
 }
 
 import { sanitizeForPrompt } from './sanitize';
+import { isLocalCatchmentBusiness } from './businessScope';
 
 export type PostType =
   | 'hook_tree'   // 釣り×ツリー型（逆説で掴む）
@@ -448,6 +449,8 @@ function buildLiteSystemPrompt(opts: {
   counselingSection: string;
   adRegSection: string;
   styleSection: string;
+  /** 来店型の業種か。false のときは商圏（駅・徒歩分数）のルールを出さない */
+  isLocalBusiness: boolean;
 }): string {
   const { treeCount, tone, uspSection, n1Section, counselingSection, adRegSection, styleSection } = opts;
   const isTreePost = treeCount > 0;
@@ -472,14 +475,16 @@ ${adRegSection}${counselingSection}${styleSection}${uspSection}${n1Section}${ton
 - 1文ずつ改行する（「。」のあとは改行）。意味のかたまりごとに空行を入れる。
 - **1行は20〜25文字くらいまで**。長い文は途中で改行して短い行に割る。スマホで読んだとき
   横に流れず、目が上から下へ落ちていく形にする（実測で伸びている投稿はこの形）。
-- **【商圏の書き方・既定ルール】地域は必ず「いちばん狭い単位」で書く。**
+${opts.isLocalBusiness ? `- **【商圏の書き方・既定ルール】地域は必ず「いちばん狭い単位」で書く。**
   優先順位は 「最寄り駅＋徒歩/車◯分」＞「目印・通称（〇〇町、△△の向かい）」＞「市区町村」＞「県」。
   上位が入力情報にあるなら、**下位（県名・市名だけ）で済ませてはいけない**。
   例）×「岡山県の整体院です」 ○「新倉敷駅から車で7分の整体院です」
   理由：読み手が「うちの商圏だ」「通勤ルートだ」「仕事帰りに寄れる」と自分事にできるかで
   新規数が大きく変わる（実測）。広く拾うより狭く深く刺すほうが単価もリピート率も上がる。
   ただし**入力情報にある地名・駅名・目印だけ**を使い、無いものは絶対に作らない。
-  狭い手がかりが入力情報に一切無い場合のみ、市区町村までで止める。
+  狭い手がかりが入力情報に一切無い場合のみ、市区町村までで止める。` : `- **この業種は来店を伴わないため、駅からの距離や徒歩分数は書かない。**
+  代わりに「誰に向けた話か」を絞って自分事にしてもらう（例：「岡山県内で店舗をされている方へ」）。
+  対象がはっきりしているほど刺さる、という原則は商圏型と同じ。`}
 - 同じ語尾・同じ言い回しを連続させない。
 - 「しっかり」「ちゃんと」のような曖昧な副詞は具体例に置換するか省く。
 - ハッシュタグは絶対に使わない。hashtags は必ず空配列。
@@ -546,6 +551,8 @@ function buildSystemPrompt(
   stylePreference?: StylePreferenceLike | null,
 ): string {
   const isTreePost = treeCount > 0;
+  // 来店型の業種か（商圏＝駅・徒歩分数を書くべきか）
+  const isLocalBusiness = isLocalCatchmentBusiness(businessType);
 
   const uspSection = usp ? `\n【あなたのUSP（独自の強み）】\n${usp}\n- この強みを投稿に自然に反映させること。` : '';
   const n1Section = n1Customer ? `\n【N1分析：実在の顧客像】\n${n1Customer}\n- この人の言葉・感情・悩みをそのまま投稿に使うこと。架空のペルソナではなく、この実在の人物に刺さる文章を書く。` : '';
@@ -670,6 +677,7 @@ function buildSystemPrompt(
       treeCount, postType, usp, n1Customer, purpose, tone,
       uspSection, n1Section, counselingSection,
       adRegSection, styleSection,
+      isLocalBusiness,
     });
   }
 
@@ -1095,6 +1103,8 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
   // useThreadsKnowhow は counseling 内のフラグが優先（カウンセリング済みなら
   // ユーザの選択を尊重）。直接の input.useThreadsKnowhow も尊重する。
   // どちらも未指定ならデフォルト true。
+  // 来店型の業種か（商圏＝駅・徒歩分数を書くべきか）の判定。プロンプト全体で使う
+  const isLocalBusiness = isLocalCatchmentBusiness(safe.businessType);
   const useThreadsKnowhow = input.counseling?.useThreadsKnowhow !== undefined
     ? input.counseling.useThreadsKnowhow
     : (input.useThreadsKnowhow !== undefined ? input.useThreadsKnowhow : true);
@@ -1111,7 +1121,11 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
   // ★2026-08-20：商圏の狭い言い切りは「地域性タイプのときだけ」ではなく既定にする。
   //   実測（表示394回）で、県名より「駅＋徒歩◯分」のほうが新規の反応が明確に大きかった。
   //   地元ワードが登録されている店舗では、どの投稿タイプでも狭い商圏を使えるようにする。
-  const localNote = (input.postType === 'local' || localTermsList.length > 0)
+  //
+  //   ただし来店を伴わない業種（Web制作・広告運用・オンラインサービス等）では、
+  //   駅からの距離を書いても読み手の自分事化につながらないため適用しない。
+  //   そうした業種は「対象の絞り込み（例：岡山県内の店舗オーナー）」が自分事化の軸になる。
+  const localNote = isLocalBusiness && (input.postType === 'local' || localTermsList.length > 0)
     ? `\n\n【商圏の指示】\n- メイン投稿の本文中に、地元の人が自分事として感じる地域ワードを**1つ**自然に含めること。無理に詰め込まず、1文の中にさらっと置く。\n${
         localTermsList.length > 0
           ? `- ★地元で実際に使われている呼び方（このリストの中から選んで使う。1投稿に1〜2個。毎回違うものをローテーションし、長い住所「${safe.area}」をそのまま並べない）：\n${localTermsList.map((t) => `    ・${t}`).join('\n')}\n- これらは事実確認済みの呼び方。リストに無い駅名・地名・ランドマークを推測で作らないこと（誤った地名は地元の信頼を損なう）。\n- 例：「大元駅すぐの〜」「下中野エリアで〜にお悩みの方へ」のように、地元の人がピンとくる表現にする。`
