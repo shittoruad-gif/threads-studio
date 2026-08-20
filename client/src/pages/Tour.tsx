@@ -2,7 +2,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import ThreadPreview from "@/components/ThreadPreview";
 import {
-  Check, MapPin, Sparkles, MessageCircle, BarChart3, Clock, ArrowRight, Share2, Eye, Heart, Lock,
+  Check, MapPin, Sparkles, MessageCircle, BarChart3, Clock, ArrowRight, Share2, Eye, Heart, Lock, Zap,
 } from "lucide-react";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -181,6 +181,11 @@ export default function Tour() {
             お店の情報を一度だけ登録すれば、あとは毎日の投稿をAIが作って、反応の出やすい時間に公開します。
             オーナーがすることは、1日1分の確認だけです。確認すら不要にすることもできます。
           </p>
+          <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/30">
+            <span className="rounded-md bg-emerald-600 px-2 py-0.5 text-[0.72rem] font-bold text-white">おすすめ</span>
+            <span className="text-[0.95rem] font-bold text-foreground">1日3投稿のプロプラン 月額9,800円（税込）</span>
+            <span className="text-[0.85rem] text-muted-foreground">7日間無料でお試しいただけます</span>
+          </div>
         </header>
 
         <section className="mb-12">
@@ -307,11 +312,56 @@ export default function Tour() {
           </div>
         </section>
 
+        {/* おすすめプラン。1日3投稿を主役に置く */}
+        <section className="mb-12">
+          <h2 className="mb-2 text-[1.2rem] font-bold text-foreground">おすすめは、1日3投稿のプロプランです</h2>
+          <p className="mb-4 text-[0.95rem] leading-relaxed text-muted-foreground">
+            Threadsは投稿ごとに「おすすめに載せるか」が決まります。
+            つまり投稿の回数が、そのままお客様と出会える回数です。
+          </p>
+
+          <div className="overflow-hidden rounded-2xl border-2 border-emerald-500 bg-card">
+            <div className="flex items-center gap-2 bg-emerald-600 px-4 py-2 text-[0.8rem] font-bold text-white">
+              <Zap className="h-4 w-4" />
+              おすすめ
+            </div>
+            <div className="p-5">
+              <p className="text-[1.05rem] font-bold text-foreground">プロプラン</p>
+              <p className="mt-1 text-[2rem] font-bold leading-none text-foreground">
+                9,800<span className="ml-1 text-sm font-bold text-muted-foreground">円 / 月（税込）</span>
+              </p>
+              <ul className="mt-4 space-y-2 text-[0.95rem] text-foreground">
+                <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />自動投稿 1日3回</li>
+                <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />AIでの投稿作成 無制限</li>
+                <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />Threads連携 3アカウント</li>
+                <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />コメント返信・投稿分析</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <Feature icon={<Sparkles className="h-5 w-5" />} title="外れた日を他の投稿が拾う">
+              1日1回だと、その1本が外れた日は誰にも届きません。3回あれば残りの2本が届きます。
+            </Feature>
+            <Feature icon={<Clock className="h-5 w-5" />} title="生活時間の違う人に届く">
+              お昼に見る方、夕方の方、寝る前の方。1日3回なら、その全部を同じ日に押さえられます。
+            </Feature>
+            <Feature icon={<BarChart3 className="h-5 w-5" />} title="正解が見つかるのが3倍速い">
+              数字を見て次の型を決めるため、試せる回数が多いほど早くお店に合う型が見つかります。
+            </Feature>
+          </div>
+
+          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+            まず試したい方には、1日1回のライトプラン（月額4,980円）もご用意しています。
+            プランはいつでも変更・解約できます。表示回数はアカウントの状況や投稿内容によって変わり、成果を保証するものではありません。
+          </p>
+        </section>
+
         <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-900 dark:bg-emerald-950/30">
           <h2 className="mb-2 text-[1.2rem] font-bold text-foreground">まずは1本、無料で作ってみてください</h2>
           <p className="mb-4 text-[0.95rem] leading-relaxed text-muted-foreground">
             登録なしで、お店の情報を入れるだけで実際の投稿文を作れます。
-            出てきた文章を見てから、導入を判断していただけます。
+            出てきた文章を見てから、導入を判断していただけます。プロプランは7日間無料でお試しいただけます。
           </p>
           <div className="flex flex-wrap gap-3">
             <Button onClick={() => setLocation("/try")} className="bg-emerald-600 text-white hover:bg-emerald-700">
