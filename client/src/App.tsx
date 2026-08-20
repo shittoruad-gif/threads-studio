@@ -57,6 +57,7 @@ import { ThreadsAccountProvider } from "./components/ThreadsAccountSwitcher";
 import { PWAInstallBanner } from "./components/PWAInstallBanner";
 import { CelebrationProvider } from "./components/Celebration";
 import { CookieConsent } from "./components/CookieConsent";
+import Tour from "@/pages/Tour";
 
 /** 遅延ロード中のフォールバック（チラつき防止の控えめなスピナー） */
 function PageLoading() {
@@ -123,6 +124,7 @@ function Router() {
       <Route path="/threads-setup-guide" component={ThreadsSetupGuide} />
       <Route path="/threads-invite-guide" component={ThreadsInviteGuide} />
       <Route path="/manual" component={ThreadsManual} />
+      <Route path="/tour" component={Tour} />
       <Route path="/welcome" component={ClientWelcome} />
       <Route path="/try" component={TryGenerate} />
       <Route path="/privacy" component={Privacy} />
