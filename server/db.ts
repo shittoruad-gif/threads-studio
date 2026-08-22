@@ -2344,6 +2344,8 @@ export async function getAutoPostEligibleUsers() {
       autoPostRequireApproval: users.autoPostRequireApproval,
       lastAutoPostTypeIndex: users.lastAutoPostTypeIndex,
       lastAutoPurposeIndex: users.lastAutoPurposeIndex,
+      // 投稿の長さ設定（shared/postLength.ts）。生成時の上限と指示に使う
+      postLength: users.postLength,
     })
     .from(users)
     .innerJoin(subscriptions, eq(users.id, subscriptions.userId))
@@ -2421,6 +2423,7 @@ export async function getAutoPostSettings(userId: number) {
       autoTopicTag: users.autoTopicTag,
       autoFollowUpEnabled: users.autoFollowUpEnabled,
       showcaseOptOut: users.showcaseOptOut,
+      postLength: users.postLength,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -2432,7 +2435,7 @@ export async function getAutoPostSettings(userId: number) {
 /**
  * Update user's auto-post settings
  */
-export async function updateAutoPostSettings(userId: number, settings: { autoPostEnabled?: boolean; autoPostFrequency?: "daily" | "twice_daily" | "three_daily"; autoPostRequireApproval?: boolean; autoTopicTag?: boolean; autoFollowUpEnabled?: boolean; showcaseOptOut?: boolean }) {
+export async function updateAutoPostSettings(userId: number, settings: { autoPostEnabled?: boolean; autoPostFrequency?: "daily" | "twice_daily" | "three_daily"; autoPostRequireApproval?: boolean; autoTopicTag?: boolean; autoFollowUpEnabled?: boolean; showcaseOptOut?: boolean; postLength?: string }) {
   const database = await getDb();
   if (!database) return;
 

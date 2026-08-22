@@ -10,6 +10,7 @@ import cron from "node-cron";
 import * as db from "./db";
 import { getPlan } from "../shared/plans";
 import { buildCtaText } from "../shared/autoPostCta";
+import { charBudgetFor, resolvePostLength, POST_LENGTHS } from "../shared/postLength";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle } from "../shared/postAngles";
@@ -322,6 +323,7 @@ async function generateAutoPost(
   postingTimeIndex: number,
   requireApproval: boolean = false,
   bestHours: number[] | null = null,
+  postLength: string | null = null,
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
   const purpose = PURPOSES[purposeIndex % PURPOSES.length];
@@ -359,6 +361,9 @@ async function generateAutoPost(
   const angleNote = angle
     ? `\n\n【今回の切り口（厳守）】\n- 今回は「${angle.label}」の切り口で書くこと：${angle.hint}\n- 毎回同じ書き出し・同じ構成にならないよう、この切り口らしい入り方にする。`
     : '';
+
+  // 投稿の長さ指示（既定は短め。長めは本人が選んだときだけ）
+  const lengthNote = `\n\n【今回の長さ（厳守）】\n- ${POST_LENGTHS[resolvePostLength(postLength)].guide}`;
 
   try {
     // Auto-posts also reuse the user's registered URL set so LINE/予約 links
@@ -430,6 +435,7 @@ async function generateAutoPost(
         content: prompt + AUTO_POST_STYLE_ADDENDUM
           + seasonContextJST()
           + angleNote
+          + lengthNote
           + preferenceNote
           + (CONVERSATION_POST_TYPES.has(postType) ? CONVERSATION_ENDING_ADDENDUM : ''),
       }],
@@ -493,10 +499,12 @@ async function generateAutoPost(
     // ★読みやすさ予算（300字）を機械的に強制する。
     //   プロンプト指示をAIが超過した場合、文の途中でぶつ切りにせず
     //   段落単位で後ろから削る（CTAを付ける投稿ではCTA段落は保持）。
-    let fullContent = trimToBudget(mainText, ctaText || null, AUTO_POST_CHAR_BUDGET);
+    // 上限は利用者の「投稿の長さ」設定で決まる（既定=短め140字 / 長め300字）。
+    const charBudget = charBudgetFor(postLength);
+    let fullContent = trimToBudget(mainText, ctaText || null, charBudget);
     if (Array.from(fullContent).length < Array.from([mainText, ctaText].filter(Boolean).join('\n\n')).length) {
       console.warn(
-        `[AutoPost] Content trimmed to budget (${AUTO_POST_CHAR_BUDGET} chars) userId=${userId} projectId=${project.id}`,
+        `[AutoPost] Content trimmed to budget (${charBudget} chars) userId=${userId} projectId=${project.id}`,
       );
     }
 
@@ -679,6 +687,7 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
               i,
               user.autoPostRequireApproval ?? false,
               bestHours,
+              (user as any).postLength ?? null,
             );
 
             if (success) {

@@ -65,6 +65,8 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  // 投稿の長さ（'short'=既定 / 'long'=300字程度）。shared/postLength.ts
+  postLength: varchar("postLength", { length: 10 }).default("short").notNull(),
   // 実例ショーケース（/tour に匿名で掲載）の掲載拒否。
   // 既定 false＝掲載可。利用規約で同意を得たうえで、設定からいつでも止められる。
   showcaseOptOut: boolean("showcaseOptOut").default(false).notNull(),

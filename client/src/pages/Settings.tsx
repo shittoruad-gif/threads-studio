@@ -253,6 +253,37 @@ export default function Settings() {
                 />
               </div>
 
+              {/* 投稿の長さ（shared/postLength.ts） */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <Label className="text-sm font-medium text-foreground">{t("投稿の長さ")}</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {t("短めは50〜100字。実測でいちばん見られる長さです。")}<br className="hidden sm:inline" />
+                    {t("長めは250〜300字。悩みをじっくり書く型に向きますが、表示回数は落ちます。")}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-1 rounded-lg border border-border p-1">
+                  {(["short", "long"] as const).map((v) => {
+                    const active = ((autoPostSettings as any)?.postLength ?? "short") === v;
+                    return (
+                      <button
+                        key={v}
+                        type="button"
+                        disabled={updateAutoPost.isPending}
+                        onClick={() => updateAutoPost.mutate({ postLength: v } as any)}
+                        className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
+                          active
+                            ? "bg-emerald-600 text-white"
+                            : "text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {v === "short" ? t("短め") : t("長め")}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* 実例としての匿名掲載（利用規約 第11条） */}
               <div className="flex items-center justify-between">
                 <div>

@@ -4096,7 +4096,7 @@ ${CONCEPT_DESIGN_PROMPT}`;
   autoPost: router({
     getSettings: protectedProcedure.query(async ({ ctx }) => {
       const settings = await db.getAutoPostSettings(ctx.user.id);
-      return settings || { autoPostEnabled: true, autoPostFrequency: 'daily', autoPostRequireApproval: false, autoTopicTag: true, autoFollowUpEnabled: true, showcaseOptOut: false };
+      return settings || { autoPostEnabled: true, autoPostFrequency: 'daily', autoPostRequireApproval: false, autoTopicTag: true, autoFollowUpEnabled: true, showcaseOptOut: false, postLength: 'short' };
     }),
 
     updateSettings: protectedProcedure
@@ -4108,6 +4108,8 @@ ${CONCEPT_DESIGN_PROMPT}`;
         autoFollowUpEnabled: z.boolean().optional(),
         // 実例ショーケース（/tour）への匿名掲載を止める。利用規約 第11条第3項
         showcaseOptOut: z.boolean().optional(),
+        // 投稿の長さ（shared/postLength.ts）
+        postLength: z.enum(['short', 'long']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         await db.updateAutoPostSettings(ctx.user.id, input);
