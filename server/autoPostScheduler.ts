@@ -32,7 +32,7 @@ const POST_TYPES = [
 // 締め方は型で分ける: リーチ型は言い切り、会話型（aruaru/empathy/qa）のみ
 // 答えやすい小さい問いかけ可（実測: 漠然とした問いかけ締めは0.89倍で負け）。
 const CTA_POST_TYPES = new Set<string>(['offer', 'local']);
-const CONVERSATION_POST_TYPES = new Set<string>(['aruaru', 'empathy', 'qa']);
+const CONVERSATION_POST_TYPES = new Set<string>(['aruaru', 'empathy', 'qa', 'deep_worry']);
 
 const PURPOSES = ['cv', 'awareness', 'authority', 'fan'] as const;
 
