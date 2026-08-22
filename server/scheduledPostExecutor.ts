@@ -248,14 +248,24 @@ export async function executePendingPosts() {
         //   - 各キーワードにはLINE側（Keiro）の部分一致自動応答を用意しておくこと。
         if (post.source === 'auto' && !(post as any).replyToThreadsId) {
           try {
-            const { inquiryKeywordForPost } = await import('../shared/inquiryKeywords');
-            const inquiryCode = inquiryKeywordForPost(post.id);
-            // ★合言葉は業種を問わない言葉のみ（shared/inquiryKeywords.ts）。
-            //   店舗が扱っていないメニュー名を案内しないこと。
-            //   2行目に合言葉と同じ語を書くと重複して不自然になるため、内容を重ねない。
-            const commentText =
-              `気になった方は、プロフィールの固定投稿にある公式LINEから「${inquiryCode}」とメッセージしてください😊\n` +
-              `そのままトークでご質問にお答えします。`;
+            const { inquiryCommentText } = await import('../shared/inquiryKeywords');
+            const { parseProjectLinks } = await import('../shared/projectLinks');
+            const { isLocalCatchmentBusiness } = await import('../shared/businessScope');
+
+            // ★案内先は登録済みリンクから判断する。
+            //   公式LINEが登録されていなければコメント自体を出さない
+            //   （辿り着けない窓口へ誘導しない）。合言葉も業種で出し分け、
+            //   来店を伴わない事業者に「予約」「空き状況」と言わせない。
+            const links = parseProjectLinks((postProject as any)?.links || null);
+            const hasLineLink = links.some((l) => l.type === 'line' && !!l.url);
+            const commentText = inquiryCommentText(post.id, {
+              hasLineLink,
+              isLocalBusiness: isLocalCatchmentBusiness((postProject as any)?.businessType),
+            });
+            if (!commentText) {
+              console.log(`[Scheduled Post] inquiry comment skipped for post ${post.id} (公式LINE未登録)`);
+              throw new Error('__NO_LINE_LINK__');
+            }
             const { createAndPublishPost } = await import('./threadsPost');
             const reply = await createAndPublishPost({
               accessToken,
@@ -264,8 +274,9 @@ export async function executePendingPosts() {
               mediaType: 'TEXT',
               replyToId: result.id,
             });
-            console.log(`[Scheduled Post] Inquiry comment posted for post ${post.id} (code=${inquiryCode}, reply=${reply.id})`);
+            console.log(`[Scheduled Post] Inquiry comment posted for post ${post.id} (reply=${reply.id})`);
           } catch (e) {
+            if ((e as Error)?.message === '__NO_LINE_LINK__') { /* 案内先が無いので出さない（正常） */ } else
             // コメントは計測用の付加機能。失敗しても本体投稿は成功として扱う。
             console.error(`[Scheduled Post] inquiry comment failed for post ${post.id}:`, e);
           }

@@ -38,10 +38,51 @@ export const INQUIRY_KEYWORDS: readonly string[] = Array.from(
   new Set<string>([...ACTIVE_INQUIRY_KEYWORDS, ...LEGACY_INQUIRY_KEYWORDS]),
 );
 
-/** scheduledPosts.id から、その投稿のコメントで案内した合言葉を返す（決定的）。 */
-export function inquiryKeywordForPost(postId: number): string {
+/**
+ * 来店を伴わない業種（Web制作・広告運用・オンライン等）の合言葉。
+ *
+ * ACTIVE_INQUIRY_KEYWORDS には「予約」「空き状況」「アクセス」が含まれるが、
+ * これらは来店型の店舗にしか成立しない。B2Bの事業者アカウントで
+ * 「『予約』とメッセージしてください」と案内してしまう誤りが実際に起きた
+ * （2026-08-22 検出。株式会社しっとるのコメントで「予約」「空き状況」を案内）。
+ *
+ * 追加は末尾のみ・削除禁止（順番を変えると過去投稿との対応がずれる）。
+ */
+export const NON_LOCAL_INQUIRY_KEYWORDS = ['相談', '料金', '事例', '資料', '見積'] as const;
+
+/**
+ * scheduledPosts.id から、その投稿のコメントで案内した合言葉を返す（決定的）。
+ *
+ * @param postId  scheduledPosts.id
+ * @param isLocalBusiness 来店型の業種か。false なら来店前提の語を使わない
+ */
+export function inquiryKeywordForPost(postId: number, isLocalBusiness = true): string {
   if (postId >= KEYWORD_SWITCH_POST_ID) {
-    return ACTIVE_INQUIRY_KEYWORDS[postId % ACTIVE_INQUIRY_KEYWORDS.length];
+    const list = isLocalBusiness ? ACTIVE_INQUIRY_KEYWORDS : NON_LOCAL_INQUIRY_KEYWORDS;
+    return list[postId % list.length];
   }
   return LEGACY_INQUIRY_KEYWORDS[postId % LEGACY_INQUIRY_KEYWORDS.length];
+}
+
+/**
+ * 流入計測コメントの本文を作る。案内できる公式LINEが無ければ null（コメントしない）。
+ *
+ * 以前は「プロフィールの固定投稿にある公式LINEから」という固定文だった。
+ * 固定投稿にLINEが無い店舗や、そもそもLINEを持たない店舗でも同じ案内が出てしまい、
+ * 読んだ人がどこにも辿り着けない状態になっていた（2026-08-22 検出）。
+ *
+ * @param postId scheduledPosts.id
+ * @param opts.hasLineLink 公式LINEのリンクが登録されているか
+ * @param opts.isLocalBusiness 来店型の業種か
+ */
+export function inquiryCommentText(
+  postId: number,
+  opts: { hasLineLink: boolean; isLocalBusiness?: boolean },
+): string | null {
+  if (!opts.hasLineLink) return null;
+  const keyword = inquiryKeywordForPost(postId, opts.isLocalBusiness ?? true);
+  return (
+    `気になった方は、プロフィールのリンクにある公式LINEから「${keyword}」とメッセージしてください😊\n` +
+    `そのままトークでご質問にお答えします。`
+  );
 }
