@@ -386,6 +386,9 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   // 追い投稿：この値があるときは新規投稿ではなく、このThreads投稿IDへの
   // 「返信」として公開する（自分の投稿へのひとこと追加＝再浮上ブースト）。
   replyToThreadsId: varchar("replyToThreadsId", { length: 255 }),
+  // その投稿を作ったときの長さ設定（short/long）。A/Bテストの集計に使う。
+  // 設定は後から変わるため、投稿時点の条件をここに残す。
+  postLength: varchar("postLength", { length: 10 }),
   // 公開後のThreads投稿ID。postAnalytics と突き合わせて
   // 「どの切り口が実際に伸びたか」を学習するために使う。
   publishedThreadsPostId: varchar("publishedThreadsPostId", { length: 255 }),

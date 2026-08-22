@@ -10,7 +10,7 @@ import cron from "node-cron";
 import * as db from "./db";
 import { getPlan } from "../shared/plans";
 import { buildCtaText } from "../shared/autoPostCta";
-import { charBudgetFor, resolvePostLength, POST_LENGTHS } from "../shared/postLength";
+import { charBudgetFor, resolveWithAlternation, POST_LENGTHS } from "../shared/postLength";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle } from "../shared/postAngles";
@@ -363,7 +363,9 @@ async function generateAutoPost(
     : '';
 
   // 投稿の長さ指示（既定は短め。長めは本人が選んだときだけ）
-  const lengthNote = `\n\n【今回の長さ（厳守）】\n- ${POST_LENGTHS[resolvePostLength(postLength)].guide}`;
+  // 'alternate' のときは、日と枠の両方で短め/長めを交互にする（A/Bテスト）。
+  const effectiveLength = resolveWithAlternation(postLength, postingTimeIndex);
+  const lengthNote = `\n\n【今回の長さ（厳守）】\n- ${POST_LENGTHS[effectiveLength].guide}`;
 
   try {
     // Auto-posts also reuse the user's registered URL set so LINE/予約 links
@@ -500,7 +502,7 @@ async function generateAutoPost(
     //   プロンプト指示をAIが超過した場合、文の途中でぶつ切りにせず
     //   段落単位で後ろから削る（CTAを付ける投稿ではCTA段落は保持）。
     // 上限は利用者の「投稿の長さ」設定で決まる（既定=短め140字 / 長め300字）。
-    const charBudget = charBudgetFor(postLength);
+    const charBudget = charBudgetFor(effectiveLength);
     let fullContent = trimToBudget(mainText, ctaText || null, charBudget);
     if (Array.from(fullContent).length < Array.from([mainText, ctaText].filter(Boolean).join('\n\n')).length) {
       console.warn(
@@ -542,6 +544,8 @@ async function generateAutoPost(
       source: 'auto',
       // 使った切り口を記録（◯✕評価と組み合わせて好み学習に使う）
       angle: angle?.id ?? null,
+      // 使った長さ条件を記録（A/Bテストの集計に使う。設定は後から変わるため投稿側に残す）
+      postLength: effectiveLength,
     } as any);
 
     // ★#3 自動投稿は手動AI生成の月間枠(maxAiGenerations)を消費しない。

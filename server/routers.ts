@@ -4109,7 +4109,7 @@ ${CONCEPT_DESIGN_PROMPT}`;
         // 実例ショーケース（/tour）への匿名掲載を止める。利用規約 第11条第3項
         showcaseOptOut: z.boolean().optional(),
         // 投稿の長さ（shared/postLength.ts）
-        postLength: z.enum(['short', 'long']).optional(),
+        postLength: z.enum(['short', 'long', 'alternate']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         await db.updateAutoPostSettings(ctx.user.id, input);

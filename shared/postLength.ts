@@ -16,6 +16,12 @@
 
 export type PostLength = 'short' | 'long';
 
+/**
+ * 設定値。'alternate' は短め/長めを交互に出すA/Bテスト用。
+ * どちらが効くかを実データで決めるために使う。
+ */
+export type PostLengthSetting = PostLength | 'alternate';
+
 export const DEFAULT_POST_LENGTH: PostLength = 'short';
 
 export interface PostLengthConfig {
@@ -47,12 +53,44 @@ export const POST_LENGTHS: Record<PostLength, PostLengthConfig> = {
   },
 };
 
-/** 設定値を安全に解決する（未設定・不正値は既定へ） */
+/** 設定値を安全に解決する（未設定・不正値は既定へ）。'alternate' は resolveWithAlternation で解く */
 export function resolvePostLength(v: string | null | undefined): PostLength {
   return v === 'long' ? 'long' : DEFAULT_POST_LENGTH;
 }
 
-/** 設定に対応する上限文字数 */
+/**
+ * A/Bテスト時の割り当て。
+ *
+ * 「日」と「その日の何本目か」の両方で交互にする。
+ * 日だけで切り替えると、長めが常に同じ時間帯に当たってしまい、
+ * 時間帯の有利不利と混ざって結果が読めなくなる（15時と21時では表示回数が違う）。
+ *
+ * @param dayNumber JSTでの通日（1970-01-01からの日数）
+ * @param slotIndex その日の何本目か（0始まり）
+ */
+export function alternatedLength(dayNumber: number, slotIndex: number): PostLength {
+  return (dayNumber + slotIndex) % 2 === 0 ? 'short' : 'long';
+}
+
+/** JSTの通日。日付境界を日本時間で切る */
+export function jstDayNumber(now: number = Date.now()): number {
+  return Math.floor((now + 9 * 60 * 60 * 1000) / 86400000);
+}
+
+/**
+ * 設定値と投稿の位置から、実際に使う長さを決める。
+ * 'alternate' のときだけ交互割り当て、それ以外は設定どおり。
+ */
+export function resolveWithAlternation(
+  setting: string | null | undefined,
+  slotIndex: number,
+  now: number = Date.now(),
+): PostLength {
+  if (setting === 'alternate') return alternatedLength(jstDayNumber(now), slotIndex);
+  return resolvePostLength(setting);
+}
+
+/** 解決済みの長さに対応する上限文字数 */
 export function charBudgetFor(v: string | null | undefined): number {
   return POST_LENGTHS[resolvePostLength(v)].charBudget;
 }

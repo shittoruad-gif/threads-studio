@@ -259,11 +259,12 @@ export default function Settings() {
                   <Label className="text-sm font-medium text-foreground">{t("投稿の長さ")}</Label>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {t("短めは50〜100字。実測でいちばん見られる長さです。")}<br className="hidden sm:inline" />
-                    {t("長めは250〜300字。悩みをじっくり書く型に向きますが、表示回数は落ちます。")}
+                    {t("長めは250〜300字。悩みをじっくり書く型に向きますが、表示回数は落ちます。")}<br className="hidden sm:inline" />
+                    {t("交互を選ぶと、短めと長めを1本ずつ入れ替えて出し、どちらが効くか実データで比べます。")}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-1 rounded-lg border border-border p-1">
-                  {(["short", "long"] as const).map((v) => {
+                  {(["short", "long", "alternate"] as const).map((v) => {
                     const active = ((autoPostSettings as any)?.postLength ?? "short") === v;
                     return (
                       <button
@@ -277,7 +278,7 @@ export default function Settings() {
                             : "text-muted-foreground hover:bg-muted"
                         }`}
                       >
-                        {v === "short" ? t("短め") : t("長め")}
+                        {v === "short" ? t("短め") : v === "long" ? t("長め") : t("交互")}
                       </button>
                     );
                   })}
