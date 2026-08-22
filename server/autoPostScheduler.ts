@@ -9,6 +9,7 @@
 import cron from "node-cron";
 import * as db from "./db";
 import { getPlan } from "../shared/plans";
+import { buildCtaText } from "../shared/autoPostCta";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle } from "../shared/postAngles";
@@ -483,11 +484,11 @@ async function generateAutoPost(
     } catch { /* ガード失敗時はリライト文をそのまま使う（生成時ガードは通過済み） */ }
 
     const mainText = naturalMain;
-    // CTAはLLM出力を使わず短い定型文に固定する。
-    // （1文＝1行。文の途中で改行すると不自然に見えるため文末でのみ改行する）
-    const ctaText = includeCta
-      ? '初回体験のご相談は、プロフィールのリンクからLINEへどうぞ😊\n無理な勧誘はありません。'
-      : '';
+    // CTAはLLM出力を使わず、**登録済みリンクから機械的に**決める（shared/autoPostCta.ts）。
+    // 固定文にしていた頃、公式LINEを持たない店舗が「LINEへどうぞ」と
+    // 案内してしまう事故が起きた（2026-08-22 検出）。
+    // 案内先が1つも登録されていなければ null が返り、CTAを付けない。
+    const ctaText = includeCta ? (buildCtaText(project as any) ?? '') : '';
 
     // ★読みやすさ予算（300字）を機械的に強制する。
     //   プロンプト指示をAIが超過した場合、文の途中でぶつ切りにせず
