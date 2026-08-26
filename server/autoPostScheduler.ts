@@ -11,6 +11,7 @@ import * as db from "./db";
 import { getPlan } from "../shared/plans";
 import { buildCtaText } from "../shared/autoPostCta";
 import { charBudgetFor, resolveWithAlternation, POST_LENGTHS } from "../shared/postLength";
+import { checkNaturalized } from "../shared/jpQualityGuard";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle } from "../shared/postAngles";
@@ -180,25 +181,22 @@ async function naturalizeContent(text: string): Promise<string> {
 
 【話し言葉のルール】
 - 事実・情報を足さない。数字・店名・地名・意味を変えない。削るのはOK。
-- ベースはやわらかい です・ます 調。「〜なんです」「〜ですよね」・体言止めを3割混ぜる。
+- ベースはやわらかい です・ます 調。ただし同じ語尾（「〜なんです」「〜ですよね」）を2回以上続けない。
 - タメ口（「〜でさ」「〜じゃん」「〜だよね」「〜してる？」）は使わない。お店の公式アカウントとして、親しみやすいけど礼儀のある距離感。
-- 禁止フレーズ：「してみませんか」「がおすすめです」「いかがですか」「安心してください」「ぜひ」「と思われがちですが」
-- 締めの問いかけは、やわらかい敬語の短い一言（「同じ方いませんか？」）。
+- 禁止フレーズ：「してみませんか」「がおすすめです」「いかがですか」「安心してください」「ぜひ」「と思われがちですが」「正直、」「同じ悩みの方、いませんか」
+- **締めの形は元の文に従う**。元が言い切りなら言い切りのまま。元が問いかけなら問いかけのまま。締めを問いかけに書き換えることは絶対にしない。
 - 主語と述語がねじれた文を書かない。書き直した文は必ず声に出して自然か確認する。
 
+【漢字とひらがなのバランス（重要）】
+- 常用漢字で書ける言葉は漢字で書く（体・原因・続く・整える 等）。ひらがなに開きすぎると幼い文になる。
+- ただし補助動詞・形式名詞はひらがなのまま（〜してみる・〜すること・〜のとき 等）。
+- 元の文の漢字を、意味が同じままひらがなに開かない。
+
 【ぬくもりのルール（冷たくしない）】
-- **元の文にある絵文字は消さない**。無ければ、感情が動く場所に**1〜3個**自然に足す（😊💦✨🙌😅など。文末に機械的に並べない）。
-- 「！」を1〜2箇所、本当に気持ちが動くところに残す/足す。
-- 「正直」「個人的には」のような書き手の実感がある一言は削らない。
+- **元の文にある絵文字は消さない**。無い場合も、足すのは最大1個まで。無理に足さなくてよい。
+- 「！」は元の文にある分だけ。機械的に足さない。
 - 事務的・教科書的なトーンに直しすぎない。整いすぎた文はAIっぽく見える。
-
-【お手本の形（1文ずつ改行・文の途中では切らない・ぬくもりあり）】
-玉島で運動が続かない…と諦めていませんか？
-
-無理して頑張るから続かないんです💦
-マシンが動きを支えてくれるので、運動が苦手な人ほど合ってます！
-
-同じ悩みの方、いませんか？
+- どの投稿にも入れられる汎用フレーズ（「同じ悩みの方、いませんか？」等）で締めない。締めはこの投稿の内容に固有の言葉にする。
 
 【出力】書き直した本文だけを出力。前置き・説明・引用符は不要。
 
@@ -231,14 +229,27 @@ function trimToBudget(mainPost: string, cta: string | null, budget: number): str
   const parts = mainPost.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
   const ctaPart = (cta || '').trim();
   const len = (s: string) => Array.from(s).length;
-  const assemble = (blocks: string[]) =>
-    [...blocks, ...(ctaPart ? [ctaPart] : [])].join('\n\n');
+  const assemble = (blocks: string[], withCta: boolean) =>
+    [...blocks, ...(withCta && ctaPart ? [ctaPart] : [])].join('\n\n');
 
   let blocks = parts;
-  while (blocks.length > 1 && len(assemble(blocks)) > budget) {
+  while (blocks.length > 1 && len(assemble(blocks, true)) > budget) {
     blocks = blocks.slice(0, -1);
   }
-  return assemble(blocks);
+
+  // ★本文の保護：CTAを守るために本文が1段落（フックだけ）まで削られたら、
+  //   CTAを落として本文を優先する。「9割が知らないこと。」とだけ書いて
+  //   中身が無い投稿が実際に配信された（2026-08-26 検出・投稿725）。
+  //   フックは中身の予告なので、中身が無いならフック＋CTAは成立しない。
+  if (ctaPart && blocks.length === 1 && parts.length > 1) {
+    let bodyOnly = parts;
+    while (bodyOnly.length > 1 && len(assemble(bodyOnly, false)) > budget) {
+      bodyOnly = bodyOnly.slice(0, -1);
+    }
+    if (bodyOnly.length > 1) return assemble(bodyOnly, false);
+  }
+
+  return assemble(blocks, true);
 }
 
 // Optimal posting times (JST hours)
@@ -485,7 +496,21 @@ async function generateAutoPost(
     // ★人間化リライト（2パス目）：factGuard通過後の本文を口語に書き直す。
     //   事実の追加は禁止プロンプトで担保（削るのみ可）。CTAは定型で良いので対象外。
     //   リライト後にNGワードガードを再適用する（言い換えで規制語が混入した場合の保険）。
-    let naturalMain = await naturalizeContent(stripRawUrls(result.mainPost));
+    const beforeNaturalize = stripRawUrls(result.mainPost);
+    let naturalMain = await naturalizeContent(beforeNaturalize);
+
+    // ★日本語品質ガード（shared/jpQualityGuard.ts）。
+    //   リライトが口癖（「正直、」）・お手本コピー・ひらがな開きすぎ・
+    //   勝手な問いかけ締めを混入させた事故（2026-08-26 三上さん指摘）の再発防止。
+    //   不合格なら、機械で直さずリライト前の文に戻す（安全な代替が常にあるため）。
+    const verdict = checkNaturalized(naturalMain, beforeNaturalize, {
+      allowQuestionEnding: CONVERSATION_POST_TYPES.has(postType),
+    });
+    if (!verdict.ok) {
+      console.warn(`[AutoPost] naturalize rejected (${verdict.reason}) — リライト前の文を使用 userId=${userId}`);
+      naturalMain = beforeNaturalize;
+    }
+
     try {
       const guarded = await enforceNgWords({ mainPost: naturalMain } as any, ngWords);
       naturalMain = (guarded as any).mainPost || naturalMain;

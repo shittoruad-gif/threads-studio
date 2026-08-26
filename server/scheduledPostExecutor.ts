@@ -327,14 +327,28 @@ export async function executePendingPosts() {
           continue;
         }
 
+        const errMsg = error instanceof Error ? error.message : 'Unknown error';
+
+        // ★追い投稿の親投稿が消えている場合（Threads側のスパム判定削除等）は、
+        //   返信のしようがないので静かに取り消す。失敗メールは送らない。
+        //   このケースで毎日「実行に失敗しました」メールが届き続けていた
+        //   （2026-08-26 三上さん指摘・エラーsubcode 4279009 = メディアが見つかりません）。
+        if ((post as any).replyToThreadsId && (errMsg.includes('4279009') || errMsg.includes('does not exist'))) {
+          await db.updateScheduledPost(post.id, {
+            status: 'canceled',
+            errorMessage: `親投稿がThreads上に存在しないため取り消し（${errMsg.slice(0, 120)}）`,
+          });
+          console.warn(`[Scheduled Post] follow-up ${post.id} canceled: parent post missing on Threads`);
+          continue;
+        }
+
         await db.updateScheduledPost(post.id, {
           status: 'failed',
-          errorMessage: error instanceof Error ? error.message : 'Unknown error'
+          errorMessage: errMsg
         });
 
         failed++;
 
-        const errMsg = error instanceof Error ? error.message : 'Unknown error';
         // Notify owner about failed post
         await notifyOwner({
           title: '予約投稿の実行に失敗しました',
