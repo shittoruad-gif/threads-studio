@@ -39,8 +39,33 @@ Threadsの実投稿を定期収集し、生成日本語の品質基準と業種�
    コミット→push→Coolifyデプロイ→反映確認。報告には必ずn数と、
    変更した/しなかった判断の根拠を書く。変えない週は「変えなかった」と報告する。
 
+## 効果は表示回数でなく「集客」で測る
+
+いいね・表示回数は同業の共感でも増える。勝敗の最終判定は次のCV指標を優先する:
+
+1. **Keiroの計測リンク（クリック→LINE友だち追加）** — 直近7日:
+   ```
+   ssh root@163.44.103.9 'docker exec x10e9syw5oydt9pqw6hqwiij-051438583558 node -e "
+   const db=require(\"better-sqlite3\")(\"/app/data/keiro.db\",{readonly:true});
+   const since=Date.now()-7*86400000;
+   for(const t of db.prepare(\"SELECT id,name FROM tenants\").all()){
+     const c=db.prepare(\"SELECT COUNT(*) c FROM clicks WHERE tenant_id=? AND created_at>?\").get(t.id,since).c;
+     const f=db.prepare(\"SELECT COUNT(*) c FROM follows WHERE tenant_id=? AND created_at>?\").get(t.id,since).c;
+     if(c||f)console.log(t.name, \"クリック\"+c, \"友だち追加\"+f);
+   }"'
+   ```
+2. **合言葉ヒット** — 投稿別コメントの合言葉（shared/inquiryKeywords.ts）が
+   LINEの受信箱に届いた数。どの投稿から問い合わせが来たかを特定できる。
+3. これらが取れない業種・週は表示回数で代用してよいが、報告に「CV未計測」と明記する。
+
+**観客フィルタ**: 収集した投稿の反応が「見込み客」か「同業の共感」かを必ず判別する。
+判別のヒント: コメント欄の顔ぶれ（同業の店名アカウントばかりなら同業）、
+内容（道具相談・経営の弱音・相互フォロー企画は同業向け）。
+同業向けの型は win に載せない（industryStyleInsights.ts ヘッダー参照）。
+
 ## してはいけないこと
 
 - 1週のコーパスだけで普遍ルール（BANNED_TIC_PHRASES等）を緩めること
 - win/avoid に実在投稿の文言・固有名詞を書くこと
 - 根拠なくエントリを増やすこと（コーパスに無い業種の一般論を書かない）
+- 同業からの共感・情のいいねを「伸びた」の根拠として採用すること
