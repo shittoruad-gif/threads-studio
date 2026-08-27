@@ -169,12 +169,46 @@ function performanceMultiplier(angleId: string, perf?: AnglePerformance): number
   return 1 + (raw - 1) * confidence;
 }
 
+/**
+ * 切り口の集中検証期間（2026-08-29〜09-11の2週間・三上さん承認）。
+ *
+ * 15切り口に1日12本が分散すると各切り口のデータが貯まらないため、
+ * 期間限定で「検証したい8切り口」だけにローテーションを絞る。
+ *   - 新規採用の2つ: reservation_funnel（予約導線）/ deep_worry（悩み深掘り）
+ *   - 実測上位6つ: pro_tip 707表示 / misconception 191 / change_story 165 /
+ *     customer_voice 157 / surprise_fact 152 / seasonal 132（2026-08-28時点の平均）
+ *
+ * 期限を過ぎると自動で全切り口のローテーションに戻る（手動の後始末は不要）。
+ * 延長・変更するときはこの until とidリストを書き換える。
+ */
+export const ANGLE_FOCUS: { until: string; ids: readonly string[] } = {
+  until: '2026-09-11',
+  ids: [
+    'reservation_funnel', 'deep_worry',
+    'pro_tip', 'misconception', 'change_story',
+    'customer_voice', 'surprise_fact', 'seasonal',
+  ],
+};
+
+/** 現時点で回転対象の切り口（集中検証期間中は絞られる） */
+export function activeAngles(now: number = Date.now()): PostAngle[] {
+  // 期限はJSTの終日まで有効
+  const until = Date.parse(ANGLE_FOCUS.until + 'T23:59:59+09:00');
+  if (Number.isFinite(until) && now <= until) {
+    const focused = POST_ANGLES.filter((a) => ANGLE_FOCUS.ids.includes(a.id));
+    if (focused.length > 0) return focused;
+  }
+  return POST_ANGLES;
+}
+
 export function pickAngle(
   stats: Record<string, { good: number; bad: number }>,
   random: () => number = Math.random,
   perf?: AnglePerformance,
+  now: number = Date.now(),
 ): PostAngle {
-  const weights = POST_ANGLES.map((a) => {
+  const pool = activeAngles(now);
+  const weights = pool.map((a) => {
     const s = stats[a.id] ?? { good: 0, bad: 0 };
     // 好み（◯✕）× 結果（実測インプレッション）の掛け合わせ
     const preference = Math.max(0.1, 1 + 0.6 * s.good - 0.5 * s.bad);
@@ -182,9 +216,9 @@ export function pickAngle(
   });
   const total = weights.reduce((sum, w) => sum + w, 0);
   let r = random() * total;
-  for (let i = 0; i < POST_ANGLES.length; i++) {
+  for (let i = 0; i < pool.length; i++) {
     r -= weights[i];
-    if (r <= 0) return POST_ANGLES[i];
+    if (r <= 0) return pool[i];
   }
-  return POST_ANGLES[POST_ANGLES.length - 1];
+  return pool[pool.length - 1];
 }

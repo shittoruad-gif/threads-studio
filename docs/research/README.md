@@ -43,17 +43,24 @@ Threadsの実投稿を定期収集し、生成日本語の品質基準と業種�
 
 いいね・表示回数は同業の共感でも増える。勝敗の最終判定は次のCV指標を優先する:
 
-1. **Keiroの計測リンク（クリック→LINE友だち追加）** — 直近7日:
+1. **Keiroの計測リンク（実クリック→LINE友だち追加）** — 直近7日:
+   **クリックは必ずbotを除外して数えること。** 2026-08-29の調査で、生のクリック数の
+   96〜99%が Meta のプレビュークローラー（facebookexternalhit）等のbotだと判明した
+   （Moveact: 実1/bot211、しっとる: 実3/bot61）。生数で報告すると判断を誤る。
    ```
    ssh root@163.44.103.9 'docker exec x10e9syw5oydt9pqw6hqwiij-051438583558 node -e "
    const db=require(\"better-sqlite3\")(\"/app/data/keiro.db\",{readonly:true});
    const since=Date.now()-7*86400000;
+   const bot=/facebookexternalhit|curl|bot|crawler|spider|preview|meta-externalagent/i;
    for(const t of db.prepare(\"SELECT id,name FROM tenants\").all()){
-     const c=db.prepare(\"SELECT COUNT(*) c FROM clicks WHERE tenant_id=? AND created_at>?\").get(t.id,since).c;
+     const rows=db.prepare(\"SELECT ua FROM clicks WHERE tenant_id=? AND created_at>?\").all(t.id,since);
+     const real=rows.filter(r=>!bot.test(String(r.ua))).length;
      const f=db.prepare(\"SELECT COUNT(*) c FROM follows WHERE tenant_id=? AND created_at>?\").get(t.id,since).c;
-     if(c||f)console.log(t.name, \"クリック\"+c, \"友だち追加\"+f);
+     if(rows.length||f)console.log(t.name+\": 実クリック\"+real+\"(生\"+rows.length+\") 友だち追加\"+f);
    }"'
    ```
+   ※ Moveactの計測データは keiro.s-toru.com（上記コンテナ）側にある。
+     line.moveact.net 側のテナントはクリック・追加とも累計0で休眠状態（2026-08-29確認）。
 2. **合言葉ヒット** — 投稿別コメントの合言葉（shared/inquiryKeywords.ts）が
    LINEの受信箱に届いた数。どの投稿から問い合わせが来たかを特定できる。
 3. これらが取れない業種・週は表示回数で代用してよいが、報告に「CV未計測」と明記する。
