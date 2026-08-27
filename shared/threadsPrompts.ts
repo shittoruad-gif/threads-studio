@@ -20,6 +20,7 @@ export interface StylePreferenceLike {
 
 import { sanitizeForPrompt } from './sanitize';
 import { isLocalCatchmentBusiness } from './businessScope';
+import { buildIndustryStyleSection } from './industryStyleInsights';
 
 export type PostType =
   | 'hook_tree'   // 釣り×ツリー型（逆説で掴む）
@@ -449,10 +450,12 @@ function buildLiteSystemPrompt(opts: {
   counselingSection: string;
   adRegSection: string;
   styleSection: string;
+  /** 業種別の勝ち筋・負け筋（実測リサーチ由来）。無い業種は空文字 */
+  industrySection: string;
   /** 来店型の業種か。false のときは商圏（駅・徒歩分数）のルールを出さない */
   isLocalBusiness: boolean;
 }): string {
-  const { treeCount, tone, uspSection, n1Section, counselingSection, adRegSection, styleSection } = opts;
+  const { treeCount, tone, uspSection, n1Section, counselingSection, adRegSection, styleSection, industrySection } = opts;
   const isTreePost = treeCount > 0;
   const toneSection = tone && POST_TONES[tone] ? `\n${POST_TONES[tone].promptInstruction}` : '';
 
@@ -466,7 +469,7 @@ function buildLiteSystemPrompt(opts: {
 - 顧客エピソード・体験談は入力にあるものだけ使う。なければ作らない。
 - 「予約パンパン」「キャンセル待ち」「先着〇名」のような検証不能な盛り表現は使わない。
 - 迷ったら捏造より省略を選ぶ。
-${adRegSection}${counselingSection}${styleSection}${uspSection}${n1Section}${toneSection}
+${adRegSection}${industrySection}${counselingSection}${styleSection}${uspSection}${n1Section}${toneSection}
 
 【自然な文章のルール】
 - 人間が普段書くような、飾らない文章にする。
@@ -637,6 +640,8 @@ function buildSystemPrompt(
 
   // ────────── 広告規制セクション（業界別・最新法令ベース） ──────────
   const adRegSection = buildAdRegulationsPromptSection(businessType);
+  // 業種別の勝ち筋・負け筋（Threads実投稿の定点リサーチ由来。該当業種が無ければ空）
+  const industrySection = buildIndustryStyleSection(businessType);
 
   // ────────── スタイル校正（ユーザが選んだサンプル）──────────
   const styleSection = (() => {
@@ -681,7 +686,7 @@ function buildSystemPrompt(
     return buildLiteSystemPrompt({
       treeCount, postType, usp, n1Customer, purpose, tone,
       uspSection, n1Section, counselingSection,
-      adRegSection, styleSection,
+      adRegSection, styleSection, industrySection,
       isLocalBusiness,
     });
   }
@@ -689,7 +694,7 @@ function buildSystemPrompt(
   const purposeConfig = purpose ? POST_PURPOSES[purpose] : null;
   const purposeSection = purposeConfig ? `\n【今回の投稿の目的】
 この投稿の最優先目的は「${purposeConfig.name}」です。
-${purpose === 'cv' ? '- CV（予約・LINE登録）に直結する内容を最優先。ターゲットの呼びかけ・具体的な数字・行動の指示を必ず含める。\n- インプレッションよりもCVを重視。44インプで2人来院＞30万インプで予約ゼロ。' : ''}${purpose === 'awareness' ? '- 多くの人に見てもらうことを最優先。共感・驚き・「あるある」で拡散されやすい内容にする。\n- トレンドワードや時事ネタを絡めるとインプレッションが何倍にもなる。' : ''}${purpose === 'authority' ? '- 専門家としての信頼を構築することを最優先。情報は出し惜しみしない。\n- 「実は〜」「意外と知られていないが〜」で誤解を正し、プロとしての権威性を示す。' : ''}${purpose === 'fan' ? '- 感情を動かし、濃いファンを作ることを最優先。「この人だから」で選ばれる状態を目指す。\n- ストーリーや共感で心を掴み、仮想敵で「あなたの味方」というポジションを確立する。' : ''}` : '';
+${purpose === 'cv' ? '- CV（予約・LINE登録）に直結する内容を最優先。ターゲットの呼びかけ・具体的な数字・行動の指示を必ず含める。\n- インプレッションよりもCVを重視。44インプで2人来院＞30万インプで予約ゼロ。\n- 「今行く理由」を実在の事実で1つ添える（今の季節に起きる悩み・入力情報にある時期の事実など）。「残り◯枠」「お早めに」等の検証不能な希少性の煽りで代用しない。\n- 試しやすさを事実で下げる：入力情報に初回価格・所要時間があれば「初回◯円」「◯分」を明示する。' : ''}${purpose === 'awareness' ? '- 多くの人に見てもらうことを最優先。共感・驚き・「あるある」で拡散されやすい内容にする。\n- トレンドワードや時事ネタを絡めるとインプレッションが何倍にもなる。' : ''}${purpose === 'authority' ? '- 専門家としての信頼を構築することを最優先。情報は出し惜しみしない。\n- 「実は〜」「意外と知られていないが〜」で誤解を正し、プロとしての権威性を示す。' : ''}${purpose === 'fan' ? '- 感情を動かし、濃いファンを作ることを最優先。「この人だから」で選ばれる状態を目指す。\n- ストーリーや共感で心を掴み、仮想敵で「あなたの味方」というポジションを確立する。' : ''}` : '';
 
   const offerSection = postType === 'offer' ? `\n【オファー投稿の3要素】
 1. ターゲットの明確な呼びかけ（例：「横浜で小顔になりたい人」「腰痛で悩む〇〇の方」）
@@ -811,7 +816,7 @@ Threadsは1行が長いと読み飛ばされます。スマホで読まれるこ
 - ただし「コメントください」「いいねお願いします」のような直接的な依頼はNG。
 - 冒頭1行に数字を置く型（「〜の共通点3つ」「9ヶ月で20.8キロ」）が唯一の実測勝ち型（1.17倍）。
 - 投稿は「情報提供」だけでなく「感情を動かす」ことを意識する。読んだ人が「わかる！」「自分もそう！」と思える内容にする。
-${adRegSection}${counselingSection}${styleSection}${purposeSection}${uspSection}${n1Section}${tone && POST_TONES[tone] ? `\n${POST_TONES[tone].promptInstruction}` : ''}
+${adRegSection}${industrySection}${counselingSection}${styleSection}${purposeSection}${uspSection}${n1Section}${tone && POST_TONES[tone] ? `\n${POST_TONES[tone].promptInstruction}` : ''}
 
 ${isTreePost ? `【ツリー投稿のルール】
 - ツリー数は${treeCount}投稿で構成すること（必ず${treeCount}投稿ぴったり）。
@@ -889,6 +894,7 @@ ${isTreePost ? '4) ツリーで"滞在時間"を増やす（アルゴリズム�
 
 【統合ガイド追補（最新の実地知見・2026-06）】
 - **1行目の禁止オープナー（明示）**：「こんにちは」「おはようございます」「こんばんは」「はじめまして」「お知らせです」「◯◯整体院です」「〜にお悩みではありませんか？」「〜かもしれません」「いかがでしょうか」で始めない。あいさつ+店名の自己紹介で始まる投稿は、実測で伸びていない店舗投稿の典型（発信者42本の比較・2026-08-28）。最初の一文はスクロールを止める言い切りにする。
+- **1行目の強い選択肢**：お客様が普段そのまま口にしている言葉（customerWords・カウンセリングの実際の声）を鉤括弧で1行目に置くと、読んだ人が「これ私かも」と手を止める。入力に実在する言葉だけを使い、作らない。
 - **1行目は"お客さんが心の中で呟いている言葉"をそのまま置く**：「腰痛に悩む方へ」より「靴下を履くのにもひと工夫いるようになってませんか」。感情が動いた具体的な瞬間（いつ・どこで）まで掘る。
 - **仮想敵は「過去の自分」が最も安全**：業界の悪習・間違った常識・過去の自分の3択のうち、過去の自分を敵にすると嫌味がなく炎上しにくい。個人・特定の店・同業者の攻撃は絶対禁止。
 - **釣り投稿の設計（improvement欄の運用助言として書く）**：共感・あるある（短い1〜2行）を本体にして表示を伸ばし、本当に伝えたい解決策・ノウハウは「1つ目のコメント（運用者自身の返信）」に置くと、本体が伸びて解決策まで読まれCVに繋がる。本文にこの仕掛けの説明文（「解説はコメントで」等のメタ表現）は書かないこと。
