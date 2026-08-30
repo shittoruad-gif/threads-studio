@@ -194,8 +194,13 @@ async function startServer() {
               // 表示名は設定画面の連携一覧用（取れなくても連携は成立させる）
               const { fetchLineDisplayName } = await import('../lineNotify');
               const displayName = await fetchLineDisplayName(lineUserId);
-              const linked = await db.linkLineByCode(code, lineUserId, displayName);
-              await replyMessage(ev.replyToken, linked ? LINE_TEXTS.linked : LINE_TEXTS.linkFailed);
+              const result = await db.linkLineByCode(code, lineUserId, displayName);
+              await replyMessage(
+                ev.replyToken,
+                result === 'linked' ? LINE_TEXTS.linked
+                : result === 'limit' ? LINE_TEXTS.linkLimit
+                : LINE_TEXTS.linkFailed,
+              );
               continue;
             }
             // それ以外のメッセージには「よくある質問」への誘導を返す

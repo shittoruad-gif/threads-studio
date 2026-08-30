@@ -3310,24 +3310,48 @@ async function upsertLineLink(userId: number, lineUserId: string, displayName?: 
 }
 
 /**
- * 6桁コードでLINEユーザーを紐づける。
- * 成功したらコードを消し込み、二重使用を防ぐ。戻り値=紐づけできたか。
+ * プランごとのLINE連携枠（limit=-1は無制限）。
+ * 上限は原価防御ではなくプラン差別化（ライト1人・プロ2人・ビジネス無制限）。
  */
-export async function linkLineByCode(code: string, lineUserId: string, displayName?: string | null): Promise<boolean> {
+export async function getLineLinkCapacity(userId: number): Promise<{ limit: number; used: number; canAdd: boolean }> {
+  const { getMaxLineLinks, resolveEffectivePlanId } = await import('../shared/plans');
+  const sub = await getSubscriptionByUserId(userId);
+  const limit = getMaxLineLinks(resolveEffectivePlanId(sub?.planId, sub?.status));
+  const used = (await listLineLinks(userId)).length;
+  return { limit, used, canAdd: limit < 0 || used < limit };
+}
+
+/**
+ * 6桁コードでLINEユーザーを紐づける。
+ * 成功したらコードを消し込み、二重使用を防ぐ。
+ * 戻り値: 'linked'=成功 / 'limit'=プランの連携上限 / 'invalid'=コード不正・期限切れ
+ */
+export async function linkLineByCode(
+  code: string,
+  lineUserId: string,
+  displayName?: string | null,
+): Promise<'linked' | 'limit' | 'invalid'> {
   const db = await getDb();
-  if (!db) return false;
+  if (!db) return 'invalid';
   const rows = await db.select({ id: users.id, exp: users.lineLinkCodeExpiresAt })
     .from(users)
     .where(eq(users.lineLinkCode, code))
     .limit(1);
   const row = rows[0];
-  if (!row) return false;
-  if (!row.exp || new Date(row.exp).getTime() < Date.now()) return false;
+  if (!row) return 'invalid';
+  if (!row.exp || new Date(row.exp).getTime() < Date.now()) return 'invalid';
+  // すでに同じLINEがこのアカウントに紐づいているなら上限に数えない（付け直し）
+  const existing = await listLineLinks(row.id);
+  const isRelink = existing.some((l) => l.lineUserId === lineUserId);
+  if (!isRelink) {
+    const cap = await getLineLinkCapacity(row.id);
+    if (!cap.canAdd) return 'limit';
+  }
   await upsertLineLink(row.id, lineUserId, displayName);
   await db.update(users)
     .set({ lineLinkCode: null, lineLinkCodeExpiresAt: null })
     .where(eq(users.id, row.id));
-  return true;
+  return 'linked';
 }
 
 /** LINE userId からユーザーを引く（LIFFの自動ログインに使う） */

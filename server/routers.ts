@@ -4189,6 +4189,7 @@ ${CONCEPT_DESIGN_PROMPT}`;
     getStatus: protectedProcedure.query(async ({ ctx }) => {
       const { lineNotifyEnabled } = await import('./lineNotify');
       const links = await db.listLineLinks(ctx.user.id);
+      const cap = await db.getLineLinkCapacity(ctx.user.id);
       return {
         available: lineNotifyEnabled(),
         linked: links.length > 0,
@@ -4198,6 +4199,9 @@ ${CONCEPT_DESIGN_PROMPT}`;
           displayName: l.displayName,
           createdAt: l.createdAt,
         })),
+        // プランごとの連携上限（-1=無制限）。UIの追加連携ボタンの出し分けに使う
+        maxLinks: cap.limit,
+        canAddMore: cap.canAdd,
         addFriendUrl: process.env.LINE_NOTIFY_ADD_URL || null,
       };
     }),
@@ -4215,6 +4219,13 @@ ${CONCEPT_DESIGN_PROMPT}`;
       const { lineNotifyEnabled, generateLinkCode, LINK_CODE_TTL_MS } = await import('./lineNotify');
       if (!lineNotifyEnabled()) {
         throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'LINE通知は現在準備中です。' });
+      }
+      const cap = await db.getLineLinkCapacity(ctx.user.id);
+      if (!cap.canAdd) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: `ご利用中のプランで連携できるLINEは${cap.limit}人までです。不要な連携を解除するか、上位プランをご検討ください。`,
+        });
       }
       const code = generateLinkCode();
       await db.setLineLinkCode(ctx.user.id, code, new Date(Date.now() + LINK_CODE_TTL_MS));
@@ -4266,6 +4277,17 @@ ${CONCEPT_DESIGN_PROMPT}`;
         const lineUserId = await verifyLineIdToken(input.idToken);
         if (!lineUserId) {
           throw new TRPCError({ code: 'UNAUTHORIZED', message: 'LINEの本人確認に失敗しました。開き直してお試しください。' });
+        }
+        // 同じLINEの付け直しは上限に数えない
+        const existing = await db.listLineLinks(ctx.user.id);
+        if (!existing.some((l) => l.lineUserId === lineUserId)) {
+          const cap = await db.getLineLinkCapacity(ctx.user.id);
+          if (!cap.canAdd) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message: `ご利用中のプランで連携できるLINEは${cap.limit}人までです。不要な連携を解除するか、上位プランをご検討ください。`,
+            });
+          }
         }
         const displayName = await fetchLineDisplayName(lineUserId);
         await db.linkLineDirect(ctx.user.id, lineUserId, displayName);

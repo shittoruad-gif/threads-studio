@@ -299,13 +299,23 @@ export default function Settings() {
                           </Button>
                         </div>
                       ))}
-                      <div className="flex items-center gap-2 pt-1">
-                        <Button size="sm" variant="outline" disabled={createLineCode.isPending}
-                                onClick={() => createLineCode.mutate()}>
-                          {t("別のLINEを追加連携")}
-                        </Button>
-                        <p className="text-xs text-muted-foreground">{t("店長など複数人で通知を受け取れます")}</p>
-                      </div>
+                      {lineStatus.data.canAddMore ? (
+                        <div className="flex items-center gap-2 pt-1">
+                          <Button size="sm" variant="outline" disabled={createLineCode.isPending}
+                                  onClick={() => createLineCode.mutate()}>
+                            {t("別のLINEを追加連携")}
+                          </Button>
+                          <p className="text-xs text-muted-foreground">
+                            {(lineStatus.data.maxLinks ?? -1) < 0
+                              ? t("店長など複数人で通知を受け取れます（人数無制限）")
+                              : t("店長など複数人で通知を受け取れます") + `（あと${(lineStatus.data.maxLinks ?? 1) - (lineStatus.data.links?.length ?? 0)}人）`}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="pt-1 text-xs text-muted-foreground">
+                          {t("ご利用中のプランの連携上限")}（{lineStatus.data.maxLinks}{t("人")}）{t("に達しています。人数を増やすには上位プランをご検討ください。")}
+                        </p>
+                      )}
                     </div>
                   ) : lineCode ? (
                     <div className="mt-3 space-y-2">

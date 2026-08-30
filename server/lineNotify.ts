@@ -243,6 +243,7 @@ export async function verifyLineIdToken(idToken: string): Promise<string | null>
 export const LINE_TEXTS = {
   linked: "連携できました。これから投稿の承認依頼やコメント通知をこちらでお届けします。",
   linkFailed: "コードが確認できませんでした。アプリの設定画面で表示された6桁のコードを、そのまま送ってください（有効期限10分）。",
+  linkLimit: "ご利用中のプランで連携できるLINEの人数が上限に達しています。設定画面で不要な連携を解除するか、上位プランへの変更をご検討ください。",
   unlinked: "連携を解除しました。再開したいときは、アプリの設定画面からいつでも連携できます。",
   greeting:
     "友だち追加ありがとうございます。\n" +

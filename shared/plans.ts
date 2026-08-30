@@ -16,6 +16,11 @@ export interface PlanFeatures {
   maxAutoPostsPerDay: number;
   hasPrioritySupport: boolean;
   hasApiAccess?: boolean;
+  /**
+   * LINE連携できる人数（userLineLinks の上限）。-1 = 無制限。
+   * 原価防御ではなくプラン差別化のための上限（1人あたりのLINE原価は月40〜60円程度）。
+   */
+  maxLineLinks: number;
 }
 
 export interface PlanConfig {
@@ -46,6 +51,7 @@ const FEATURES_LIGHT: PlanFeatures = {
   maxAiGenerations: 10,
   hasPrioritySupport: false,
   hasApiAccess: false,
+  maxLineLinks: 1,              // LINE連携 1人まで
 };
 const FEATURES_PRO: PlanFeatures = {
   maxProjects: 10,
@@ -55,6 +61,7 @@ const FEATURES_PRO: PlanFeatures = {
   maxAiGenerations: -1,
   hasPrioritySupport: false,
   hasApiAccess: false,
+  maxLineLinks: 2,              // LINE連携 2人まで（オーナー＋店長）
 };
 const FEATURES_BUSINESS: PlanFeatures = {
   maxProjects: 50,
@@ -64,6 +71,7 @@ const FEATURES_BUSINESS: PlanFeatures = {
   maxAiGenerations: -1,
   hasPrioritySupport: true,
   hasApiAccess: true,
+  maxLineLinks: -1,             // LINE連携 無制限（多店舗運用）
 };
 
 export const PLANS: Record<string, PlanConfig> = {
@@ -80,6 +88,7 @@ export const PLANS: Record<string, PlanConfig> = {
       maxAiGenerations: 3,
       hasPrioritySupport: false,
       hasApiAccess: false,
+      maxLineLinks: 1,
     },
   },
 
@@ -207,6 +216,7 @@ export const PLANS: Record<string, PlanConfig> = {
       maxAiGenerations: -1,
       hasPrioritySupport: true,
       hasApiAccess: true,
+      maxLineLinks: -1,          // 代理店本体は無制限
     },
   },
 
@@ -228,6 +238,7 @@ export const PLANS: Record<string, PlanConfig> = {
       maxAiGenerations: -1,
       hasPrioritySupport: false,
       hasApiAccess: false,
+      maxLineLinks: 2,           // プロ相当（オーナー＋店長）
     },
   },
 };
@@ -339,6 +350,12 @@ export function getCampaignCounterpart(
  * 有料機能を使わせないため 'free' 扱いにする。
  * （解約・決済失敗後も planId が残って有料機能が使えてしまう課金漏れを防ぐ）
  */
+/** プランのLINE連携上限を返す（-1=無制限・不明プランは1に倒す） */
+export function getMaxLineLinks(planId: string | null | undefined): number {
+  const p = planId ? PLANS[planId] : undefined;
+  return p?.features.maxLineLinks ?? 1;
+}
+
 export function resolveEffectivePlanId(
   planId: string | null | undefined,
   status: string | null | undefined,
