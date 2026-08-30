@@ -3,6 +3,7 @@ import crypto from "crypto";
 import {
   verifyLineSignature, generateLinkCode, buildApprovalMessages,
   lineNotifyEnabled, LINK_CODE_TTL_MS, LINE_TEXTS,
+  liffEnabled, liffUrl,
 } from "./lineNotify";
 
 const SECRET = "test-secret";
@@ -59,6 +60,22 @@ describe("LINE通知連携", () => {
       () => "https://example.com/a",
     );
     expect(JSON.stringify(msgs)).toContain("9/1 15:00");
+  });
+
+  it("LIFF未設定なら通常URL・設定済みならLIFF URLに変換される", () => {
+    delete process.env.LIFF_ID;
+    delete process.env.LIFF_LOGIN_CHANNEL_ID;
+    expect(liffEnabled()).toBe(false);
+    expect(liffUrl("/comment-manager", "https://threads-studio.com"))
+      .toBe("https://threads-studio.com/comment-manager");
+
+    process.env.LIFF_ID = "1234567890-abcdefgh";
+    process.env.LIFF_LOGIN_CHANNEL_ID = "1234567890";
+    expect(liffEnabled()).toBe(true);
+    expect(liffUrl("/comment-manager", "https://threads-studio.com"))
+      .toBe("https://liff.line.me/1234567890-abcdefgh?path=%2Fcomment-manager");
+    delete process.env.LIFF_ID;
+    delete process.env.LIFF_LOGIN_CHANNEL_ID;
   });
 
   it("定型文にAIの口癖（同意確認疑問等）が入っていない", () => {

@@ -3315,6 +3315,30 @@ export async function linkLineByCode(code: string, lineUserId: string): Promise<
   return true;
 }
 
+/** LINE userId からユーザーを引く（LIFFの自動ログインに使う） */
+export async function getUserByLineUserId(lineUserId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(users).where(eq(users.lineUserId, lineUserId)).limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * LIFF内から直接紐づける（LIFFはLINE本人のIDトークンを持っているため、
+ * 6桁コードを介さずそのまま紐づけてよい）。
+ * 同じLINEユーザーが別アカウントに紐づいていたら、そちらは外す（1対1を保つ）。
+ */
+export async function linkLineDirect(userId: number, lineUserId: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users)
+    .set({ lineUserId: null })
+    .where(eq(users.lineUserId, lineUserId));
+  await db.update(users)
+    .set({ lineUserId, lineLinkCode: null, lineLinkCodeExpiresAt: null })
+    .where(eq(users.id, userId));
+}
+
 /** LINE userId から連携を解除する（「解除」コマンド・ブロック時） */
 export async function unlinkLineByLineUserId(lineUserId: string): Promise<void> {
   const db = await getDb();

@@ -176,6 +176,50 @@ export async function sendCommentPush(
   ]);
 }
 
+// ── LIFF（LINEトーク内でアプリを開く）─────────────────────────
+// 環境変数（未設定ならLIFF機能は無効・従来のURLで動く）:
+//   LIFF_ID … LINEログインチャネルに作成したLIFFアプリのID
+//   LIFF_LOGIN_CHANNEL_ID … そのLINEログインチャネルのチャネルID（IDトークン検証用）
+
+export function liffEnabled(): boolean {
+  return Boolean(process.env.LIFF_ID && process.env.LIFF_LOGIN_CHANNEL_ID);
+}
+
+/**
+ * アプリ内パスをLIFF URLに変換する（LIFF未設定なら通常URLを返す）。
+ * LIFFのエンドポイントは /liff で、?path= に開きたいページを渡す。
+ */
+export function liffUrl(path: string, base: string): string {
+  if (!liffEnabled()) return `${base}${path}`;
+  return `https://liff.line.me/${process.env.LIFF_ID}?path=${encodeURIComponent(path)}`;
+}
+
+/**
+ * LINEログインのIDトークンを検証して、LINEのuserId（sub）を返す。
+ * 検証はLINE公式のverifyエンドポイントに任せる（署名・期限・audをまとめて確認してくれる）。
+ */
+export async function verifyLineIdToken(idToken: string): Promise<string | null> {
+  const clientId = process.env.LIFF_LOGIN_CHANNEL_ID;
+  if (!clientId || !idToken) return null;
+  try {
+    const res = await fetch("https://api.line.me/oauth2/v2.1/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ id_token: idToken, client_id: clientId }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error(`[LineNotify] IDトークン検証失敗 ${res.status}: ${body.slice(0, 200)}`);
+      return null;
+    }
+    const data = (await res.json()) as { sub?: string };
+    return data.sub ?? null;
+  } catch (e) {
+    console.error("[LineNotify] IDトークン検証エラー:", e);
+    return null;
+  }
+}
+
 /** 連携完了・解除などの短い定型文 */
 export const LINE_TEXTS = {
   linked: "連携できました。これから投稿の承認依頼やコメント通知をこちらでお届けします。",

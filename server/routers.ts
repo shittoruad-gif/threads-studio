@@ -4210,6 +4210,51 @@ ${CONCEPT_DESIGN_PROMPT}`;
       await db.unlinkLineByUserId(ctx.user.id);
       return { success: true };
     }),
+
+    // ── LIFF（LINEトーク内でアプリを開く）──────────────────
+
+    // クライアントがLIFF初期化に使う設定（LIFF IDはビルドに埋めず実行時に配る）
+    liffConfig: publicProcedure.query(async () => {
+      const { liffEnabled } = await import('./lineNotify');
+      return { enabled: liffEnabled(), liffId: process.env.LIFF_ID || null };
+    }),
+
+    // LIFFの自動ログイン: LINEのIDトークンを検証し、連携済みユーザーなら
+    // 通常ログインと同じセッションCookieを発行する。
+    liffLogin: publicProcedure
+      .input(z.object({ idToken: z.string().min(10) }))
+      .mutation(async ({ ctx, input }) => {
+        const { verifyLineIdToken } = await import('./lineNotify');
+        const lineUserId = await verifyLineIdToken(input.idToken);
+        if (!lineUserId) {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'LINEの本人確認に失敗しました。開き直してお試しください。' });
+        }
+        const user = await db.getUserByLineUserId(lineUserId);
+        if (!user || !user.openId) {
+          // まだアプリのアカウントと紐づいていない（初回だけログインしてもらう）
+          return { ok: false as const, reason: 'not_linked' as const };
+        }
+        const { sdk } = await import('./_core/sdk');
+        const token = await sdk.createSessionToken(user.openId, { name: user.name ?? '' });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
+        return { ok: true as const };
+      }),
+
+    // ログイン済みユーザーをLIFF内から即時連携する（6桁コード不要。
+    // LIFFのIDトークン＝LINE本人の証明なので、そのまま紐づけてよい）
+    linkByLiff: protectedProcedure
+      .input(z.object({ idToken: z.string().min(10) }))
+      .mutation(async ({ ctx, input }) => {
+        const { verifyLineIdToken } = await import('./lineNotify');
+        const lineUserId = await verifyLineIdToken(input.idToken);
+        if (!lineUserId) {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'LINEの本人確認に失敗しました。開き直してお試しください。' });
+        }
+        await db.linkLineDirect(ctx.user.id, lineUserId);
+        return { success: true };
+      }),
   }),
 
   // ==================== Auto Post Settings ====================

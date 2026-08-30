@@ -46,8 +46,11 @@ export default function Login() {
           toast.error(e?.message || 'コードの適用に失敗しました');
         }
       }
-      // Redirect to dashboard after successful login
-      window.location.href = '/dashboard';
+      // Redirect after successful login.
+      // ?redirect= があればそこへ戻す（LIFF初回連携などの往復用。同一オリジンのパスのみ）
+      const redirect = new URLSearchParams(searchParams).get('redirect');
+      const safe = redirect && redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/dashboard';
+      window.location.href = safe;
     },
     onError: (err) => {
       const msg = err.message;
