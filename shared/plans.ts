@@ -61,7 +61,7 @@ const FEATURES_PRO: PlanFeatures = {
   maxAiGenerations: -1,
   hasPrioritySupport: false,
   hasApiAccess: false,
-  maxLineLinks: 2,              // LINE連携 2人まで（オーナー＋店長）
+  maxLineLinks: 3,              // LINE連携 3人まで（プロは1日3回・3アカウント・3人で統一）
 };
 const FEATURES_BUSINESS: PlanFeatures = {
   maxProjects: 50,
@@ -238,7 +238,7 @@ export const PLANS: Record<string, PlanConfig> = {
       maxAiGenerations: -1,
       hasPrioritySupport: false,
       hasApiAccess: false,
-      maxLineLinks: 2,           // プロ相当（オーナー＋店長）
+      maxLineLinks: 3,           // プロ相当（3人まで）
     },
   },
 };

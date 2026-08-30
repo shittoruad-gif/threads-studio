@@ -2,22 +2,22 @@ import { describe, it, expect } from "vitest";
 import { getMaxLineLinks, PLANS } from "../shared/plans";
 
 describe("LINE連携のプラン別上限", () => {
-  it("ライト1人・プロ2人・ビジネス無制限", () => {
+  it("ライト1人・プロ3人・ビジネス無制限", () => {
     expect(getMaxLineLinks("light")).toBe(1);
-    expect(getMaxLineLinks("pro")).toBe(2);
+    expect(getMaxLineLinks("pro")).toBe(3);
     expect(getMaxLineLinks("business")).toBe(-1);
   });
 
   it("キャンペーンプランは通常プランと同じ上限を引き継ぐ", () => {
     expect(getMaxLineLinks("light_campaign")).toBe(1);
-    expect(getMaxLineLinks("pro_campaign")).toBe(2);
+    expect(getMaxLineLinks("pro_campaign")).toBe(3);
     expect(getMaxLineLinks("business_campaign")).toBe(-1);
   });
 
-  it("フリー1人・代理店本体は無制限・代理店クライアントはプロ相当の2人", () => {
+  it("フリー1人・代理店本体は無制限・代理店クライアントはプロ相当の3人", () => {
     expect(getMaxLineLinks("free")).toBe(1);
     expect(getMaxLineLinks("agency")).toBe(-1);
-    expect(getMaxLineLinks("agency_client")).toBe(2);
+    expect(getMaxLineLinks("agency_client")).toBe(3);
   });
 
   it("不明なプラン・未指定は安全側の1人に倒す", () => {
