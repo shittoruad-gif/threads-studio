@@ -768,6 +768,22 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
               });
               console.log(`[AutoPost] 承認依頼メール送信: user=${user.id} ${fresh.length}件`);
             }
+            // LINE連携済みならLINEにも1通（承認ボタンは既存のワンタップ承認URLを開くだけ）
+            if (fresh.length > 0 && (owner as any)?.lineUserId) {
+              try {
+                const { sendApprovalPush } = await import('./lineNotify');
+                const { createApprovalToken } = await import('./approvalToken');
+                const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
+                const sent = await sendApprovalPush(
+                  (owner as any).lineUserId,
+                  fresh.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt })),
+                  (postId) => `${base}/api/post-approval?token=${createApprovalToken(postId, user.id, 'approve')}`,
+                );
+                if (sent) console.log(`[AutoPost] 承認依頼LINE送信: user=${user.id} ${fresh.length}件`);
+              } catch (e) {
+                console.error(`[AutoPost] 承認依頼LINE送信失敗 user=${user.id}:`, e);
+              }
+            }
           } catch (e) {
             console.error(`[AutoPost] 承認依頼メール送信失敗 user=${user.id}:`, e);
           }

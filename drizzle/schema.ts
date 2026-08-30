@@ -62,6 +62,12 @@ export const users = mysqlTable("users", {
   parentAgencyUserId: int("parentAgencyUserId"),
   // 固定投稿ウィザード通知バナーを確認した日時。null=未確認（バナー表示）
   wizardNotificationSeenAt: timestamp("wizardNotificationSeenAt"),
+  // ── LINE通知連携（段階1: 承認依頼・コメント通知を公式LINEで受け取る）──
+  // 連携済みユーザーのLINE userId。null=未連携（メール通知のみ）
+  lineUserId: varchar("lineUserId", { length: 64 }),
+  // 連携用の6桁コード（設定画面で発行→LINEトークに送って照合。10分で失効）
+  lineLinkCode: varchar("lineLinkCode", { length: 10 }),
+  lineLinkCodeExpiresAt: timestamp("lineLinkCodeExpiresAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

@@ -70,6 +70,15 @@ export default function Settings() {
   const { data: autoPostSettings, isLoading: settingsLoading } = trpc.autoPost.getSettings.useQuery(undefined, {
     enabled: !!user,
   });
+  const lineStatus = trpc.lineNotify.getStatus.useQuery();
+  const [lineCode, setLineCode] = useState<string | null>(null);
+  const createLineCode = trpc.lineNotify.createLinkCode.useMutation({
+    onSuccess: (d) => setLineCode(d.code),
+    onError: (e) => toast.error(e.message),
+  });
+  const unlinkLine = trpc.lineNotify.unlink.useMutation({
+    onSuccess: () => { setLineCode(null); toast.success(t("LINE連携を解除しました")); lineStatus.refetch(); },
+  });
   const updateAutoPost = trpc.autoPost.updateSettings.useMutation({
     onSuccess: () => {
       utils.autoPost.getSettings.invalidate();
@@ -252,6 +261,43 @@ export default function Settings() {
                   disabled={updateAutoPost.isPending}
                 />
               </div>
+
+              {/* LINE通知連携（承認依頼・コメント通知をLINEで受け取る） */}
+              {lineStatus.data?.available && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+                  <Label className="text-sm font-medium text-foreground">{t("LINEで通知を受け取る")}</Label>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {t("投稿の承認依頼と新着コメントを、公式LINEでお届けします。承認もLINEのボタンから1タップです。")}
+                  </p>
+                  {lineStatus.data.linked ? (
+                    <div className="mt-3 flex items-center gap-3">
+                      <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{t("連携済み")}</span>
+                      <Button size="sm" variant="outline" disabled={unlinkLine.isPending} onClick={() => unlinkLine.mutate()}>
+                        {t("解除する")}
+                      </Button>
+                    </div>
+                  ) : lineCode ? (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-xs text-muted-foreground">{t("① 下のボタンから公式LINEを友だち追加")}</p>
+                      {lineStatus.data.addFriendUrl && (
+                        <a href={lineStatus.data.addFriendUrl} target="_blank" rel="noreferrer"
+                           className="inline-block rounded-md bg-[#06C755] px-4 py-2 text-sm font-bold text-white">
+                          {t("友だち追加する")}
+                        </a>
+                      )}
+                      <p className="text-xs text-muted-foreground">{t("② トークにこのコードを送信（10分有効）")}</p>
+                      <p className="select-all rounded-lg border border-border bg-background px-4 py-2 text-center font-mono text-2xl font-bold tracking-widest">
+                        {lineCode}
+                      </p>
+                    </div>
+                  ) : (
+                    <Button size="sm" className="mt-3 bg-emerald-600 text-white hover:bg-emerald-700"
+                            disabled={createLineCode.isPending} onClick={() => createLineCode.mutate()}>
+                      {t("LINE連携をはじめる")}
+                    </Button>
+                  )}
+                </div>
+              )}
 
               {/* 投稿の長さ（shared/postLength.ts） */}
               <div className="flex items-start justify-between gap-4">

@@ -265,6 +265,21 @@ export async function runCommentWatchJob(): Promise<void> {
         </div>`,
       });
       notified++;
+
+      // LINE連携済みならLINEにも1通（本文プレビュー最大3件＋管理画面リンク）
+      if ((fullUser as any)?.lineUserId) {
+        try {
+          const { sendCommentPush } = await import('./lineNotify');
+          await sendCommentPush(
+            (fullUser as any).lineUserId,
+            newComments.length,
+            newComments.slice(0, 3).map((c) => (c.username ? '@' + c.username + '：' : '') + (c.text || '')),
+            `${base}/comment-manager`,
+          );
+        } catch (e) {
+          console.error(`[CommentWatch] LINE通知失敗 user=${u.id}:`, e);
+        }
+      }
     } catch (e) {
       console.error(`[CommentWatch] 処理エラー user=${u.id}:`, e);
     }

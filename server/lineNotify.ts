@@ -1,0 +1,188 @@
+/**
+ * LINE通知連携（段階1: 受け取る・承認する）。
+ *
+ * Threads Studio 専用の公式LINEアカウントから、
+ *   - 承認モードの「投稿ができました」通知（1回の生成につき1通にまとめる）
+ *   - 新着コメント通知
+ * をプッシュし、承認は既存のワンタップ承認URL（/api/post-approval）を
+ * ボタンで開くだけにする。承認ロジック自体は一切増やさない。
+ *
+ * 連携の仕組み:
+ *   設定画面で6桁コードを発行 → 公式LINEを友だち追加してコードを送る →
+ *   Webhookがコードを照合して users.lineUserId に紐づけ。
+ *   「解除」と送れば連携解除。
+ *
+ * 通数の考え方（LINE無料枠200通/月、ライト5,000通/月5,000円）:
+ *   承認は1日1通のダイジェスト・コメントは1日1通まで。
+ *   1ユーザー月40〜60通程度に収まる設計にする。
+ *
+ * 環境変数（未設定なら全機能が静かに無効＝既存動作に影響しない）:
+ *   LINE_NOTIFY_CHANNEL_SECRET / LINE_NOTIFY_CHANNEL_ACCESS_TOKEN
+ *   LINE_NOTIFY_ADD_URL（友だち追加URL。設定画面の案内に使う）
+ */
+
+import crypto from "crypto";
+
+const API_BASE = "https://api.line.me/v2/bot";
+
+export function lineNotifyEnabled(): boolean {
+  return Boolean(
+    process.env.LINE_NOTIFY_CHANNEL_SECRET && process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN,
+  );
+}
+
+/** Webhook署名の検証（LINEはボディのHMAC-SHA256をbase64で送ってくる） */
+export function verifyLineSignature(rawBody: Buffer | string, signature: string | undefined): boolean {
+  const secret = process.env.LINE_NOTIFY_CHANNEL_SECRET;
+  if (!secret || !signature) return false;
+  const mac = crypto.createHmac("sha256", secret).update(rawBody).digest("base64");
+  try {
+    return crypto.timingSafeEqual(Buffer.from(mac), Buffer.from(signature));
+  } catch {
+    return false;
+  }
+}
+
+/** 6桁の連携コードを作る（衝突しても照合時に userId 側で一意） */
+export function generateLinkCode(): string {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+/** 連携コードの有効期限（10分） */
+export const LINK_CODE_TTL_MS = 10 * 60 * 1000;
+
+async function pushMessage(lineUserId: string, messages: unknown[]): Promise<boolean> {
+  const token = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
+  if (!token) return false;
+  const res = await fetch(`${API_BASE}/message/push`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ to: lineUserId, messages }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[LineNotify] push失敗 ${res.status}: ${body.slice(0, 200)}`);
+    return false;
+  }
+  return true;
+}
+
+/** 受信への返信（replyTokenを使う。プッシュ通数を消費しない） */
+export async function replyMessage(replyToken: string, text: string): Promise<void> {
+  const token = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
+  if (!token) return;
+  await fetch(`${API_BASE}/message/reply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ replyToken, messages: [{ type: "text", text }] }),
+  }).catch((e) => console.error("[LineNotify] reply失敗:", e));
+}
+
+export interface ApprovalPushPost {
+  id: number;
+  postContent: string | null;
+  scheduledAt: Date | string | null;
+}
+
+function fmtTime(v: Date | string | null): string {
+  if (!v) return "";
+  const d = new Date(v);
+  // DBはUTC。日本時間で表示する
+  const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return `${jst.getUTCMonth() + 1}/${jst.getUTCDate()} ${String(jst.getUTCHours()).padStart(2, "0")}:${String(jst.getUTCMinutes()).padStart(2, "0")}`;
+}
+
+/**
+ * 承認依頼のLINEメッセージを組み立てる（1通にまとめる）。
+ * 承認ボタンは既存のワンタップ承認ページを開くだけ。
+ */
+export function buildApprovalMessages(
+  posts: ApprovalPushPost[],
+  approvalUrlFor: (postId: number) => string,
+): unknown[] {
+  const head = {
+    type: "text",
+    text:
+      `明日の投稿が${posts.length}件できました。\n` +
+      `内容を見て、よければ承認してください（1分で終わります）。`,
+  };
+  // ボタンテンプレートは最大4ボタン・本文60字制限があるためFlexで組む
+  const bubbles = posts.slice(0, 5).map((p) => ({
+    type: "bubble",
+    size: "kilo",
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        { type: "text", text: fmtTime(p.scheduledAt) + " 公開予定", size: "xs", color: "#888888" },
+        {
+          type: "text",
+          text: (p.postContent || "").slice(0, 120) || "（本文なし）",
+          wrap: true,
+          size: "sm",
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#059669",
+          height: "sm",
+          action: { type: "uri", label: "内容を見て承認する", uri: approvalUrlFor(p.id) },
+        },
+      ],
+    },
+  }));
+  const flex = {
+    type: "flex",
+    altText: `明日の投稿が${posts.length}件できました（承認待ち）`,
+    contents: bubbles.length === 1 ? bubbles[0] : { type: "carousel", contents: bubbles },
+  };
+  return [head, flex];
+}
+
+/** 承認依頼を1通のダイジェストで送る */
+export async function sendApprovalPush(
+  lineUserId: string,
+  posts: ApprovalPushPost[],
+  approvalUrlFor: (postId: number) => string,
+): Promise<boolean> {
+  if (!lineNotifyEnabled() || posts.length === 0) return false;
+  return pushMessage(lineUserId, buildApprovalMessages(posts, approvalUrlFor));
+}
+
+/** 新着コメント通知（1通・リンクはコメント管理画面へ） */
+export async function sendCommentPush(
+  lineUserId: string,
+  count: number,
+  previews: string[],
+  managerUrl: string,
+): Promise<boolean> {
+  if (!lineNotifyEnabled() || count === 0) return false;
+  const lines = previews.slice(0, 3).map((t) => `・${t.slice(0, 60)}`);
+  return pushMessage(lineUserId, [
+    {
+      type: "text",
+      text:
+        `投稿にコメントが${count}件届いています。\n` +
+        lines.join("\n") +
+        `\n\n返信の文案はAIが用意しています。\n${managerUrl}`,
+    },
+  ]);
+}
+
+/** 連携完了・解除などの短い定型文 */
+export const LINE_TEXTS = {
+  linked: "連携できました。これから投稿の承認依頼やコメント通知をこちらでお届けします。",
+  linkFailed: "コードが確認できませんでした。アプリの設定画面で表示された6桁のコードを、そのまま送ってください（有効期限10分）。",
+  unlinked: "連携を解除しました。再開したいときは、アプリの設定画面からいつでも連携できます。",
+  greeting:
+    "友だち追加ありがとうございます。\n" +
+    "Threads Studioの通知用アカウントです。\n\n" +
+    "アプリの設定画面で表示された6桁のコードを、このトークにそのまま送ってください。連携が完了します。",
+} as const;

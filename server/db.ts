@@ -3212,3 +3212,52 @@ export async function getShowcaseCandidates(limit = 60) {
     };
   });
 }
+
+// ── LINE通知連携 ─────────────────────────────────────────────
+
+/** 連携コードを発行して保存する（既存コードは上書き。10分で失効） */
+export async function setLineLinkCode(userId: number, code: string, expiresAt: Date): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users)
+    .set({ lineLinkCode: code, lineLinkCodeExpiresAt: expiresAt })
+    .where(eq(users.id, userId));
+}
+
+/**
+ * 6桁コードでLINEユーザーを紐づける。
+ * 成功したらコードを消し込み、二重使用を防ぐ。戻り値=紐づけできたか。
+ */
+export async function linkLineByCode(code: string, lineUserId: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.select({ id: users.id, exp: users.lineLinkCodeExpiresAt })
+    .from(users)
+    .where(eq(users.lineLinkCode, code))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return false;
+  if (!row.exp || new Date(row.exp).getTime() < Date.now()) return false;
+  await db.update(users)
+    .set({ lineUserId, lineLinkCode: null, lineLinkCodeExpiresAt: null })
+    .where(eq(users.id, row.id));
+  return true;
+}
+
+/** LINE userId から連携を解除する（「解除」コマンド・ブロック時） */
+export async function unlinkLineByLineUserId(lineUserId: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users)
+    .set({ lineUserId: null })
+    .where(eq(users.lineUserId, lineUserId));
+}
+
+/** アプリ側（設定画面）からの連携解除 */
+export async function unlinkLineByUserId(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users)
+    .set({ lineUserId: null, lineLinkCode: null, lineLinkCodeExpiresAt: null })
+    .where(eq(users.id, userId));
+}

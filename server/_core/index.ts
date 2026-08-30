@@ -154,6 +154,59 @@ async function startServer() {
   const server = createServer(app);
 
 
+  // ── LINE通知連携 webhook ──────────────────────────────────────────
+  // Threads Studio専用の公式LINEからの受信。express.json() より前に登録
+  // （署名検証に生ボディが必要）。友だち追加の挨拶・6桁コードでの連携・
+  // 「解除」での連携解除だけを扱う。未設定環境では404相当で無害。
+  app.post('/api/line-notify/webhook',
+    express.raw({ type: '*/*' }),
+    async (req, res) => {
+      try {
+        const { lineNotifyEnabled, verifyLineSignature, replyMessage, LINE_TEXTS } = await import('../lineNotify');
+        if (!lineNotifyEnabled()) return res.status(200).json({ ok: true, disabled: true });
+        const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(String(req.body ?? ''));
+        if (!verifyLineSignature(raw, req.headers['x-line-signature'] as string)) {
+          return res.status(400).json({ error: 'invalid signature' });
+        }
+        const payload = JSON.parse(raw.toString('utf8'));
+        const db = await import('../db');
+        for (const ev of payload.events ?? []) {
+          const lineUserId: string | undefined = ev?.source?.userId;
+          if (!lineUserId) continue;
+          if (ev.type === 'follow') {
+            await replyMessage(ev.replyToken, LINE_TEXTS.greeting);
+            continue;
+          }
+          if (ev.type === 'unfollow') {
+            // ブロックされたら紐づけを外す（送っても届かないため）
+            await db.unlinkLineByLineUserId(lineUserId);
+            continue;
+          }
+          if (ev.type === 'message' && ev.message?.type === 'text') {
+            const text = String(ev.message.text || '').trim();
+            if (text === '解除') {
+              await db.unlinkLineByLineUserId(lineUserId);
+              await replyMessage(ev.replyToken, LINE_TEXTS.unlinked);
+              continue;
+            }
+            const code = text.replace(/[^0-9]/g, '');
+            if (code.length === 6) {
+              const linked = await db.linkLineByCode(code, lineUserId);
+              await replyMessage(ev.replyToken, linked ? LINE_TEXTS.linked : LINE_TEXTS.linkFailed);
+              continue;
+            }
+            // それ以外のメッセージには案内だけ返す（プッシュ通数は消費しない）
+            await replyMessage(ev.replyToken, LINE_TEXTS.greeting);
+          }
+        }
+        return res.status(200).json({ ok: true });
+      } catch (e) {
+        console.error('[LineNotify Webhook] エラー:', e);
+        // LINE側のリトライ嵐を防ぐため200で返す
+        return res.status(200).json({ ok: false });
+      }
+    });
+
   // ── Univapay webhook endpoint ──────────────────────────────────────
   // 決済完了/失敗/解約の通知を受けてサブスクを有効化/更新する。
   // express.json() より前に登録（署名検証に生ボディが必要）。

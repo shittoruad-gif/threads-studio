@@ -4103,6 +4103,36 @@ ${CONCEPT_DESIGN_PROMPT}`;
     }),
   }),
 
+  // ==================== LINE通知連携（段階1） ====================
+  lineNotify: router({
+    // 連携状態と、設定画面の案内に必要な情報
+    getStatus: protectedProcedure.query(async ({ ctx }) => {
+      const { lineNotifyEnabled } = await import('./lineNotify');
+      const u = await db.getUserById(ctx.user.id);
+      return {
+        available: lineNotifyEnabled(),
+        linked: Boolean((u as any)?.lineUserId),
+        addFriendUrl: process.env.LINE_NOTIFY_ADD_URL || null,
+      };
+    }),
+
+    // 6桁の連携コードを発行（10分有効）
+    createLinkCode: protectedProcedure.mutation(async ({ ctx }) => {
+      const { lineNotifyEnabled, generateLinkCode, LINK_CODE_TTL_MS } = await import('./lineNotify');
+      if (!lineNotifyEnabled()) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'LINE通知は現在準備中です。' });
+      }
+      const code = generateLinkCode();
+      await db.setLineLinkCode(ctx.user.id, code, new Date(Date.now() + LINK_CODE_TTL_MS));
+      return { code, expiresInMinutes: 10 };
+    }),
+
+    unlink: protectedProcedure.mutation(async ({ ctx }) => {
+      await db.unlinkLineByUserId(ctx.user.id);
+      return { success: true };
+    }),
+  }),
+
   // ==================== Auto Post Settings ====================
   autoPost: router({
     getSettings: protectedProcedure.query(async ({ ctx }) => {
