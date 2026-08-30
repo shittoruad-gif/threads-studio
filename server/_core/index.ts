@@ -198,8 +198,16 @@ async function startServer() {
               await replyMessage(ev.replyToken, linked ? LINE_TEXTS.linked : LINE_TEXTS.linkFailed);
               continue;
             }
-            // それ以外のメッセージには案内だけ返す（プッシュ通数は消費しない）
-            await replyMessage(ev.replyToken, LINE_TEXTS.greeting);
+            // それ以外のメッセージには「よくある質問」への誘導を返す
+            // （このトークは通知用で、人が返信を監視していないため。replyなので通数は消費しない）
+            const { liffUrl } = await import('../lineNotify');
+            const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
+            await replyMessage(
+              ev.replyToken,
+              'メッセージありがとうございます。このアカウントは通知専用のため、お困りごとは下のメニュー、または「よくある質問」をご覧ください。\n' +
+              liffUrl('/help', base) +
+              '\n\n連携する場合は、アプリの設定画面で表示された6桁のコードをそのまま送ってください。',
+            );
           }
         }
         return res.status(200).json({ ok: true });

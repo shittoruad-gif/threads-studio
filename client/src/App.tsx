@@ -43,6 +43,7 @@ const ThreadsInviteGuide = lazy(() => import("./pages/ThreadsInviteGuide"));
 const ThreadsManual = lazy(() => import("./pages/ThreadsManual"));
 const ClientWelcome = lazy(() => import("./pages/ClientWelcome"));
 const Liff = lazy(() => import("./pages/Liff"));
+const Help = lazy(() => import("./pages/Help"));
 const CommentManager = lazy(() => import("./pages/CommentManager"));
 const PostAnalytics = lazy(() => import("./pages/PostAnalytics"));
 const AdminPresets = lazy(() => import("./pages/AdminPresets"));
@@ -128,6 +129,7 @@ function Router() {
       <Route path="/tour" component={Tour} />
       <Route path="/welcome" component={ClientWelcome} />
       <Route path="/liff" component={Liff} />
+      <Route path="/help" component={Help} />
       <Route path="/try" component={TryGenerate} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />

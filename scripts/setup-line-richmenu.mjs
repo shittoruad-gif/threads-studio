@@ -19,7 +19,7 @@ if (!TOKEN || !LIFF_ID) {
   process.exit(1);
 }
 
-const MENU_NAME = 'threads-studio-main-v2';
+const MENU_NAME = 'threads-studio-main-v3';
 const W = 2500;
 const H = 1686;
 const liff = (path) => `https://liff.line.me/${LIFF_ID}?path=${encodeURIComponent(path)}`;
@@ -31,7 +31,7 @@ const buttons = [
   { label1: 'お店の情報', label2: '強み・メニューの修正', path: '/ai-counseling' },
   { label1: '設定', label2: 'NGワード・文体・長さ', path: '/settings' },
   { label1: '投稿分析', label2: '反応を数字で見る', path: '/post-analytics' },
-  { label1: '使い方', label2: 'マニュアル・困ったら', path: '/manual' },
+  { label1: 'よくある質問', label2: '困ったらまずここ', path: '/help' },
 ];
 
 // ── メニュー画像（SVG→PNG）。ブランド色はアプリと同系のグリーン ──
