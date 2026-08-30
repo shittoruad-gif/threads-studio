@@ -67,6 +67,25 @@ async function pushMessage(lineUserId: string, messages: unknown[]): Promise<boo
   return true;
 }
 
+/**
+ * LINEの表示名を取得する（友だち追加済みユーザーのみ・失敗しても null）。
+ * 設定画面の連携一覧で「誰のLINEか」を見せるためだけに使う。
+ */
+export async function fetchLineDisplayName(lineUserId: string): Promise<string | null> {
+  const token = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
+  if (!token) return null;
+  try {
+    const res = await fetch(`${API_BASE}/profile/${lineUserId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { displayName?: string };
+    return data.displayName ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** 受信への返信（replyTokenを使う。プッシュ通数を消費しない） */
 export async function replyMessage(replyToken: string, text: string): Promise<void> {
   const token = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;

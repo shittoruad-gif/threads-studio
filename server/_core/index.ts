@@ -191,7 +191,10 @@ async function startServer() {
             }
             const code = text.replace(/[^0-9]/g, '');
             if (code.length === 6) {
-              const linked = await db.linkLineByCode(code, lineUserId);
+              // 表示名は設定画面の連携一覧用（取れなくても連携は成立させる）
+              const { fetchLineDisplayName } = await import('../lineNotify');
+              const displayName = await fetchLineDisplayName(lineUserId);
+              const linked = await db.linkLineByCode(code, lineUserId, displayName);
               await replyMessage(ev.replyToken, linked ? LINE_TEXTS.linked : LINE_TEXTS.linkFailed);
               continue;
             }

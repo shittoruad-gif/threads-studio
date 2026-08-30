@@ -4184,16 +4184,31 @@ ${CONCEPT_DESIGN_PROMPT}`;
 
   // ==================== LINE通知連携（段階1） ====================
   lineNotify: router({
-    // 連携状態と、設定画面の案内に必要な情報
+    // 連携状態と、設定画面の案内に必要な情報。
+    // 1アカウントに複数のLINEを連携できる（オーナー＋店長など）。links に全員分を返す。
     getStatus: protectedProcedure.query(async ({ ctx }) => {
       const { lineNotifyEnabled } = await import('./lineNotify');
-      const u = await db.getUserById(ctx.user.id);
+      const links = await db.listLineLinks(ctx.user.id);
       return {
         available: lineNotifyEnabled(),
-        linked: Boolean((u as any)?.lineUserId),
+        linked: links.length > 0,
+        links: links.map((l) => ({
+          // 生のLINE userIdは画面に出す必要がないので解除用の識別子としてだけ返す
+          lineUserId: l.lineUserId,
+          displayName: l.displayName,
+          createdAt: l.createdAt,
+        })),
         addFriendUrl: process.env.LINE_NOTIFY_ADD_URL || null,
       };
     }),
+
+    // 特定のLINEだけ連携解除する（設定画面の一覧から）
+    unlinkOne: protectedProcedure
+      .input(z.object({ lineUserId: z.string().min(5).max(64) }))
+      .mutation(async ({ ctx, input }) => {
+        await db.unlinkLineLink(ctx.user.id, input.lineUserId);
+        return { success: true };
+      }),
 
     // 6桁の連携コードを発行（10分有効）
     createLinkCode: protectedProcedure.mutation(async ({ ctx }) => {
@@ -4247,12 +4262,13 @@ ${CONCEPT_DESIGN_PROMPT}`;
     linkByLiff: protectedProcedure
       .input(z.object({ idToken: z.string().min(10) }))
       .mutation(async ({ ctx, input }) => {
-        const { verifyLineIdToken } = await import('./lineNotify');
+        const { verifyLineIdToken, fetchLineDisplayName } = await import('./lineNotify');
         const lineUserId = await verifyLineIdToken(input.idToken);
         if (!lineUserId) {
           throw new TRPCError({ code: 'UNAUTHORIZED', message: 'LINEの本人確認に失敗しました。開き直してお試しください。' });
         }
-        await db.linkLineDirect(ctx.user.id, lineUserId);
+        const displayName = await fetchLineDisplayName(lineUserId);
+        await db.linkLineDirect(ctx.user.id, lineUserId, displayName);
         return { success: true };
       }),
   }),

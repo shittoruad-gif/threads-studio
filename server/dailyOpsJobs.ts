@@ -266,20 +266,21 @@ export async function runCommentWatchJob(): Promise<void> {
       });
       notified++;
 
-      // LINE連携済みならLINEにも1通（本文プレビュー最大3件＋管理画面リンク）
-      if ((fullUser as any)?.lineUserId) {
-        try {
+      // LINE連携済みなら連携者全員にLINEでも通知（本文プレビュー最大3件＋管理画面リンク）
+      try {
+        const { getLineUserIdsForUser } = await import('./db');
+        const lineIds = await getLineUserIdsForUser(u.id);
+        if (lineIds.length > 0) {
           const { sendCommentPush, liffUrl } = await import('./lineNotify');
-          await sendCommentPush(
-            (fullUser as any).lineUserId,
-            newComments.length,
-            newComments.slice(0, 3).map((c) => (c.username ? '@' + c.username + '：' : '') + (c.text || '')),
-            // LIFF設定済みならLINEトーク内で開く（自動ログイン）。未設定なら通常URL
-            liffUrl('/comment-manager', base),
-          );
-        } catch (e) {
-          console.error(`[CommentWatch] LINE通知失敗 user=${u.id}:`, e);
+          const previews = newComments.slice(0, 3).map((c) => (c.username ? '@' + c.username + '：' : '') + (c.text || ''));
+          // LIFF設定済みならLINEトーク内で開く（自動ログイン）。未設定なら通常URL
+          const url = liffUrl('/comment-manager', base);
+          for (const lineId of lineIds) {
+            await sendCommentPush(lineId, newComments.length, previews, url);
+          }
         }
+      } catch (e) {
+        console.error(`[CommentWatch] LINE通知失敗 user=${u.id}:`, e);
       }
     } catch (e) {
       console.error(`[CommentWatch] 処理エラー user=${u.id}:`, e);

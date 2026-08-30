@@ -70,14 +70,27 @@ export default function Settings() {
   const { data: autoPostSettings, isLoading: settingsLoading } = trpc.autoPost.getSettings.useQuery(undefined, {
     enabled: !!user,
   });
-  const lineStatus = trpc.lineNotify.getStatus.useQuery();
   const [lineCode, setLineCode] = useState<string | null>(null);
+  // コード表示中は5秒ごとに状態を確認し、LINE側で連携が済んだら自動で一覧表示に切り替える
+  const lineStatus = trpc.lineNotify.getStatus.useQuery(undefined, {
+    refetchInterval: lineCode ? 5000 : false,
+  });
+  const lineLinkCount = lineStatus.data?.links?.length ?? 0;
+  const [linkCountAtCode, setLinkCountAtCode] = useState(0);
+  if (lineCode && lineLinkCount > linkCountAtCode) {
+    // 連携が増えた＝コードが使われたので入力画面を閉じる
+    setLineCode(null);
+  }
   const createLineCode = trpc.lineNotify.createLinkCode.useMutation({
-    onSuccess: (d) => setLineCode(d.code),
+    onSuccess: (d) => { setLinkCountAtCode(lineStatus.data?.links?.length ?? 0); setLineCode(d.code); },
     onError: (e) => toast.error(e.message),
   });
   const unlinkLine = trpc.lineNotify.unlink.useMutation({
     onSuccess: () => { setLineCode(null); toast.success(t("LINE連携を解除しました")); lineStatus.refetch(); },
+  });
+  const unlinkOne = trpc.lineNotify.unlinkOne.useMutation({
+    onSuccess: () => { toast.success(t("LINE連携を解除しました")); lineStatus.refetch(); },
+    onError: (e) => toast.error(e.message),
   });
   const updateAutoPost = trpc.autoPost.updateSettings.useMutation({
     onSuccess: () => {
@@ -269,12 +282,30 @@ export default function Settings() {
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {t("投稿の承認依頼と新着コメントを、公式LINEでお届けします。承認もLINEのボタンから1タップです。")}
                   </p>
-                  {lineStatus.data.linked ? (
-                    <div className="mt-3 flex items-center gap-3">
-                      <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{t("連携済み")}</span>
-                      <Button size="sm" variant="outline" disabled={unlinkLine.isPending} onClick={() => unlinkLine.mutate()}>
-                        {t("解除する")}
-                      </Button>
+                  {lineStatus.data.linked && !lineCode ? (
+                    <div className="mt-3 space-y-2">
+                      {/* 連携中のLINE一覧（オーナー・店長など複数人で受け取れる） */}
+                      {(lineStatus.data.links ?? []).map((l: any) => (
+                        <div key={l.lineUserId} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2">
+                          <span className="min-w-0 truncate text-sm text-foreground">
+                            {l.displayName || t("LINEアカウント")}
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              {t("連携日")} {new Date(l.createdAt).toLocaleDateString("ja-JP")}
+                            </span>
+                          </span>
+                          <Button size="sm" variant="outline" disabled={unlinkOne.isPending}
+                                  onClick={() => unlinkOne.mutate({ lineUserId: l.lineUserId })}>
+                            {t("解除")}
+                          </Button>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-2 pt-1">
+                        <Button size="sm" variant="outline" disabled={createLineCode.isPending}
+                                onClick={() => createLineCode.mutate()}>
+                          {t("別のLINEを追加連携")}
+                        </Button>
+                        <p className="text-xs text-muted-foreground">{t("店長など複数人で通知を受け取れます")}</p>
+                      </div>
                     </div>
                   ) : lineCode ? (
                     <div className="mt-3 space-y-2">

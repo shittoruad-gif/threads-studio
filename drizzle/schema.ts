@@ -66,7 +66,8 @@ export const users = mysqlTable("users", {
   // 固定投稿ウィザード通知バナーを確認した日時。null=未確認（バナー表示）
   wizardNotificationSeenAt: timestamp("wizardNotificationSeenAt"),
   // ── LINE通知連携（段階1: 承認依頼・コメント通知を公式LINEで受け取る）──
-  // 連携済みユーザーのLINE userId。null=未連携（メール通知のみ）
+  // 【旧】連携済みユーザーのLINE userId。複数LINE対応で userLineLinks テーブルへ移行済み。
+  // この列はもう読まない（migration 0058 で移行・後方互換のため残置）。
   lineUserId: varchar("lineUserId", { length: 64 }),
   // 連携用の6桁コード（設定画面で発行→LINEトークに送って照合。10分で失効）
   lineLinkCode: varchar("lineLinkCode", { length: 10 }),
@@ -83,6 +84,22 @@ export const users = mysqlTable("users", {
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+/**
+ * LINE連携（1アカウントに複数のLINEを紐づけられる）。
+ * オーナーと店長など、複数人で同じアカウントの通知受け取り・LIFF自動ログインができる。
+ * lineUserId はサービス全体で一意（1つのLINEは1アカウントにだけ属する）。
+ */
+export const userLineLinks = mysqlTable("userLineLinks", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  lineUserId: varchar("lineUserId", { length: 64 }).notNull().unique(),
+  // LINEの表示名（連携時にプロフィールAPIから取得。設定画面の一覧表示用・取れなくても可）
+  displayName: varchar("displayName", { length: 120 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  index("idx_userLineLinks_userId").on(table.userId),
+]);
 
 /**
  * Subscription plans configuration

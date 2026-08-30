@@ -768,18 +768,25 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
               });
               console.log(`[AutoPost] 承認依頼メール送信: user=${user.id} ${fresh.length}件`);
             }
-            // LINE連携済みならLINEにも1通（承認ボタンは既存のワンタップ承認URLを開くだけ）
-            if (fresh.length > 0 && (owner as any)?.lineUserId) {
+            // LINE連携済みなら連携者全員にLINEでも通知（複数人管理対応。
+            // 承認ボタンは既存のワンタップ承認URLを開くだけ）
+            if (fresh.length > 0) {
               try {
-                const { sendApprovalPush } = await import('./lineNotify');
-                const { createApprovalToken } = await import('./approvalToken');
-                const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
-                const sent = await sendApprovalPush(
-                  (owner as any).lineUserId,
-                  fresh.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt })),
-                  (postId) => `${base}/api/post-approval?token=${createApprovalToken(postId, user.id, 'approve')}`,
-                );
-                if (sent) console.log(`[AutoPost] 承認依頼LINE送信: user=${user.id} ${fresh.length}件`);
+                const { getLineUserIdsForUser } = await import('./db');
+                const lineIds = await getLineUserIdsForUser(user.id);
+                if (lineIds.length > 0) {
+                  const { sendApprovalPush } = await import('./lineNotify');
+                  const { createApprovalToken } = await import('./approvalToken');
+                  const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
+                  const posts = fresh.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt }));
+                  const urlFor = (postId: number) => `${base}/api/post-approval?token=${createApprovalToken(postId, user.id, 'approve')}`;
+                  let sentCount = 0;
+                  for (const lineId of lineIds) {
+                    const sent = await sendApprovalPush(lineId, posts, urlFor);
+                    if (sent) sentCount++;
+                  }
+                  if (sentCount > 0) console.log(`[AutoPost] 承認依頼LINE送信: user=${user.id} ${fresh.length}件×${sentCount}人`);
+                }
               } catch (e) {
                 console.error(`[AutoPost] 承認依頼LINE送信失敗 user=${user.id}:`, e);
               }

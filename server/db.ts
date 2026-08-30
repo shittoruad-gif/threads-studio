@@ -2,7 +2,7 @@ import { eq, and, desc, sql, lte, gte, gt, inArray, isNotNull } from "drizzle-or
 import { drizzle } from "drizzle-orm/mysql2";
 import { encrypt, decrypt } from "./encryption";
 import {
-  InsertUser, User, users,
+  InsertUser, User, users, userLineLinks,
   plans, InsertPlan, Plan,
   subscriptions, InsertSubscription, Subscription,
   threadsAccounts, InsertThreadsAccount, ThreadsAccount,
@@ -3295,11 +3295,25 @@ export async function setLineLinkCode(userId: number, code: string, expiresAt: D
     .where(eq(users.id, userId));
 }
 
+// LINE連携は userLineLinks テーブルで多対1管理（1アカウントに複数のLINE）。
+// users.lineUserId 列は旧仕様の残置で、もう読み書きしない（migration 0058 で移行済み）。
+
+/**
+ * LINEを紐づける共通処理。
+ * 同じLINEが別アカウントに紐づいていたら付け替える（1つのLINEは1アカウントにだけ属する）。
+ */
+async function upsertLineLink(userId: number, lineUserId: string, displayName?: string | null): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(userLineLinks).where(eq(userLineLinks.lineUserId, lineUserId));
+  await db.insert(userLineLinks).values({ userId, lineUserId, displayName: displayName ?? null });
+}
+
 /**
  * 6桁コードでLINEユーザーを紐づける。
  * 成功したらコードを消し込み、二重使用を防ぐ。戻り値=紐づけできたか。
  */
-export async function linkLineByCode(code: string, lineUserId: string): Promise<boolean> {
+export async function linkLineByCode(code: string, lineUserId: string, displayName?: string | null): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
   const rows = await db.select({ id: users.id, exp: users.lineLinkCodeExpiresAt })
@@ -3309,8 +3323,9 @@ export async function linkLineByCode(code: string, lineUserId: string): Promise<
   const row = rows[0];
   if (!row) return false;
   if (!row.exp || new Date(row.exp).getTime() < Date.now()) return false;
+  await upsertLineLink(row.id, lineUserId, displayName);
   await db.update(users)
-    .set({ lineUserId, lineLinkCode: null, lineLinkCodeExpiresAt: null })
+    .set({ lineLinkCode: null, lineLinkCodeExpiresAt: null })
     .where(eq(users.id, row.id));
   return true;
 }
@@ -3319,40 +3334,68 @@ export async function linkLineByCode(code: string, lineUserId: string): Promise<
 export async function getUserByLineUserId(lineUserId: string) {
   const db = await getDb();
   if (!db) return null;
-  const rows = await db.select().from(users).where(eq(users.lineUserId, lineUserId)).limit(1);
-  return rows[0] ?? null;
+  const links = await db.select({ userId: userLineLinks.userId })
+    .from(userLineLinks)
+    .where(eq(userLineLinks.lineUserId, lineUserId))
+    .limit(1);
+  if (!links[0]) return null;
+  return getUserById(links[0].userId);
 }
 
 /**
  * LIFF内から直接紐づける（LIFFはLINE本人のIDトークンを持っているため、
  * 6桁コードを介さずそのまま紐づけてよい）。
- * 同じLINEユーザーが別アカウントに紐づいていたら、そちらは外す（1対1を保つ）。
  */
-export async function linkLineDirect(userId: number, lineUserId: string): Promise<void> {
+export async function linkLineDirect(userId: number, lineUserId: string, displayName?: string | null): Promise<void> {
   const db = await getDb();
   if (!db) return;
+  await upsertLineLink(userId, lineUserId, displayName);
   await db.update(users)
-    .set({ lineUserId: null })
-    .where(eq(users.lineUserId, lineUserId));
-  await db.update(users)
-    .set({ lineUserId, lineLinkCode: null, lineLinkCodeExpiresAt: null })
+    .set({ lineLinkCode: null, lineLinkCodeExpiresAt: null })
     .where(eq(users.id, userId));
+}
+
+/** あるアカウントに連携中のLINE一覧（設定画面の表示用） */
+export async function listLineLinks(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    lineUserId: userLineLinks.lineUserId,
+    displayName: userLineLinks.displayName,
+    createdAt: userLineLinks.createdAt,
+  })
+    .from(userLineLinks)
+    .where(eq(userLineLinks.userId, userId))
+    .orderBy(userLineLinks.createdAt);
+}
+
+/** 通知の宛先LINE userId一覧（連携者全員に配信する） */
+export async function getLineUserIdsForUser(userId: number): Promise<string[]> {
+  const links = await listLineLinks(userId);
+  return links.map((l) => l.lineUserId);
 }
 
 /** LINE userId から連携を解除する（「解除」コマンド・ブロック時） */
 export async function unlinkLineByLineUserId(lineUserId: string): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  await db.update(users)
-    .set({ lineUserId: null })
-    .where(eq(users.lineUserId, lineUserId));
+  await db.delete(userLineLinks).where(eq(userLineLinks.lineUserId, lineUserId));
 }
 
-/** アプリ側（設定画面）からの連携解除 */
+/** アプリ側（設定画面）から特定のLINEだけ解除する */
+export async function unlinkLineLink(userId: number, lineUserId: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(userLineLinks)
+    .where(and(eq(userLineLinks.userId, userId), eq(userLineLinks.lineUserId, lineUserId)));
+}
+
+/** アプリ側（設定画面）からの全解除 */
 export async function unlinkLineByUserId(userId: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
+  await db.delete(userLineLinks).where(eq(userLineLinks.userId, userId));
   await db.update(users)
-    .set({ lineUserId: null, lineLinkCode: null, lineLinkCodeExpiresAt: null })
+    .set({ lineLinkCode: null, lineLinkCodeExpiresAt: null })
     .where(eq(users.id, userId));
 }
