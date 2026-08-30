@@ -73,14 +73,24 @@ export function getThreadsAuthUrl(config: ThreadsAuthConfig, options: ThreadsAut
   const defaultScopes = [
     "threads_basic",
     "threads_content_publish",
-    // 連続投稿（ツリー）の2件目以降とコメント返信は reply_to_id で作成するが、
-    // この「返信を作成する」操作には threads_manage_replies 権限が必須
-    // （エンドポイントが content_publish と同じでも、返信アクションは別権限）。
-    "threads_manage_replies",
     "threads_read_replies",
     // 投稿分析（PostAnalytics）でインサイトAPIを使うため必須
     "threads_manage_insights",
   ];
+
+  // 連続投稿（ツリー）の2件目以降・コメント返信・追い投稿は reply_to_id で
+  // 作成するが、この「返信を作成する」操作には threads_manage_replies が必須
+  // （エンドポイントが content_publish と同じでも、返信アクションは別権限）。
+  //
+  // ★2026-08-30のMeta審査で threads_manage_replies だけが非承認だった
+  //   （basic/content_publish/read_replies/manage_insights は承認・稼働中）。
+  //   未承認スコープを一般ユーザーの連携リクエストに混ぜると**連携自体が失敗する**ため、
+  //   承認されるまで既定では要求しない。承認後は環境変数を true にするだけで戻る。
+  //   テスター登録済みの自社アカウントは取得済みトークンにスコープが残っており、
+  //   トークン更新でも維持されるため影響しない（新規の再連携時のみ返信系が外れる）。
+  if (process.env.THREADS_MANAGE_REPLIES_APPROVED === "true") {
+    defaultScopes.splice(2, 0, "threads_manage_replies");
+  }
 
   // 地域トレンド収集（keyword_search）。Meta審査が「承認された後」だけ要求する。
   // ★未承認のスコープを一般ユーザーの連携リクエストに混ぜると、Threads連携
