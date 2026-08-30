@@ -91,10 +91,6 @@ export const plans = mysqlTable("plans", {
   maxAiGenerations: int("maxAiGenerations").notNull().default(0), // -1 for unlimited, 0 for none
   hasPrioritySupport: boolean("hasPrioritySupport").notNull().default(false),
   isActive: boolean("isActive").notNull().default(true),
-  // 連携トークンが返信作成権限(threads_manage_replies)付きで取得されたか。
-  // 2026-08-30の審査でこの権限のみ非承認→新規連携では要求しないため false。
-  // 返信を伴う機能（ツリー2件目以降・追い投稿・計測コメント・コメント返信送信）の出し分けに使う。
-  hasReplyScope: boolean("hasReplyScope").notNull().default(false),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -293,6 +289,10 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   accessToken: text("accessToken").notNull(),
   tokenExpiresAt: timestamp("tokenExpiresAt"),
   isActive: boolean("isActive").notNull().default(true),
+  // 連携トークンが返信作成権限(threads_manage_replies)付きで取得されたか。
+  // 2026-08-30の審査でこの権限のみ非承認→新規連携では要求しないため false。
+  // 返信を伴う機能（ツリー2件目以降・追い投稿・計測コメント・コメント返信送信）の出し分けに使う。
+  hasReplyScope: boolean("hasReplyScope").notNull().default(false),
   // どの店舗(プロジェクト)の内容を自動投稿するか。複数店舗運用時に
   // 「店舗Aのアカウントに店舗Bの内容」を防ぐための紐付け。
   // null の場合は全プロジェクトを日替わりローテーション（従来挙動）。
