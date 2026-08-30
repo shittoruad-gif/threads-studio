@@ -28,6 +28,9 @@ export default function AgencyClients() {
   const [resetFor, setResetFor] = useState<number | null>(null);
   const [resetPassword, setResetPassword] = useState("");
 
+  // 案内文にLINE友だち追加の案内を入れるためのURL（環境変数から配信される）
+  const lineStatus = trpc.lineNotify.getStatus.useQuery(undefined, { refetchOnWindowFocus: false });
+
   const createClient = trpc.agency.createClient.useMutation({
     onSuccess: (_res, vars) => {
       // 発行直後だけ、渡すための情報を画面に出す（パスワードは保存されないので今しか見せられない）
@@ -73,6 +76,11 @@ export default function AgencyClients() {
       `※ログイン後、設定画面からパスワードの変更をおすすめします\n\n` +
       `■ Threads連携の設定手順（Facebookアカウントの作成から説明しています）\n` +
       `${o}/threads-setup-guide\n\n` +
+      (lineStatus.data?.addFriendUrl
+        ? `■ 設定が終わったら、こちらのLINEを友だち追加してください\n` +
+          `${lineStatus.data.addFriendUrl}\n` +
+          `投稿の承認・コメントの確認など、毎日の運用がLINEのメニューだけで完結します。\n\n`
+        : ``) +
       `ご不明な点がございましたら、お気軽にご連絡ください。`;
     try {
       await navigator.clipboard.writeText(text);
