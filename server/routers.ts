@@ -3403,6 +3403,85 @@ ${input.commentText}
       return { items: result, total: result.length };
     }),
 
+    // ── 代理店解約時のクライアント引き継ぎ（shared/takeover.ts に流れの説明） ──
+
+    // 引き継ぎ待ちクライアント一覧（残り日数つき）
+    listTakeoverClients: adminProcedure.query(async () => {
+      const { takeoverDaysLeft } = await import('../shared/takeover');
+      const rows = await db.listTakeoverPendingClients();
+      const now = new Date();
+      return rows.map((r) => ({
+        ...r,
+        daysLeft: r.takeoverPendingAt ? takeoverDaysLeft(r.takeoverPendingAt, now) : 0,
+      }));
+    }),
+
+    // クライアントへ「同じ金額での直接契約」の案内メールを送る。
+    // 金額は代理店がそのクライアントに請求していた月額（運営が入力）。
+    // 決済リンクは UnivaPay 管理画面でその金額のリンクを作って貼る。
+    sendTakeoverOffer: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        monthlyPrice: z.number().int().min(0).max(1000000),
+        paymentLinkUrl: z.string().url(),
+      }))
+      .mutation(async ({ input }) => {
+        const user = await db.getUserById(input.userId);
+        if (!user?.email || !user.takeoverPendingAt) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '引き継ぎ待ちのクライアントが見つかりません' });
+        }
+        const { TAKEOVER_GRACE_DAYS, takeoverDaysLeft } = await import('../shared/takeover');
+        const daysLeft = takeoverDaysLeft(user.takeoverPendingAt, new Date());
+        const { sendEmail } = await import('./_core/notification');
+        const price = input.monthlyPrice.toLocaleString();
+        const store = (user.storeName || user.name || '').replace(/</g, '&lt;');
+        const ok = await sendEmail({
+          to: user.email,
+          subject: '【Threads Studio】ご利用継続のご案内（お手続きのお願い）',
+          html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+            <h2>Threads Studio ご利用継続のご案内</h2>
+            <p>${store ? store + ' さま' : 'ご担当者さま'}</p>
+            <p>いつもThreads Studioをご利用いただきありがとうございます。運営元の株式会社しっとるです。</p>
+            <p>これまで代理店経由でご提供していたThreads Studioのご契約について、
+            代理店との契約終了に伴い、今後は当社が<strong>直接</strong>お引き継ぎいたします。</p>
+            <p>月額はこれまでと同じ <strong>${price}円</strong> です。機能・データ・設定はそのまま、
+            何も変わりません。下のリンクからお支払いのご登録をお願いいたします。</p>
+            <a href="${input.paymentLinkUrl}" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin:16px 0;">お支払いを登録する（月額${price}円）</a>
+            <p style="font-size:13px;color:#6b7280;">お手続きの目安は残り${daysLeft}日です（猶予期間は${TAKEOVER_GRACE_DAYS}日間）。
+            期間中も通常どおりご利用いただけます。ご不明点はこのメールへの返信でお気軽にどうぞ。</p>
+          </div>`,
+        });
+        return { sent: ok, daysLeft };
+      }),
+
+    // 決済確認後: 通常プランの直接契約へ切り替える（親子関係も解消）
+    finalizeTakeover: adminProcedure
+      .input(z.object({ userId: z.number(), planId: z.string() }))
+      .mutation(async ({ input }) => {
+        const { isTakeoverTargetPlan } = await import('../shared/takeover');
+        if (!isTakeoverTargetPlan(input.planId)) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '引き継ぎ先はライト/プロ/ビジネスのいずれかです' });
+        }
+        const user = await db.getUserById(input.userId);
+        if (!user?.takeoverPendingAt) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '引き継ぎ待ちのクライアントが見つかりません' });
+        }
+        await db.finalizeTakeover(input.userId, input.planId);
+        return { success: true };
+      }),
+
+    // 引き継がない場合: 停止して猶予を終了する
+    stopTakeoverClient: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input }) => {
+        const user = await db.getUserById(input.userId);
+        if (!user?.takeoverPendingAt) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '引き継ぎ待ちのクライアントが見つかりません' });
+        }
+        await db.stopTakeoverClient(input.userId);
+        return { success: true };
+      }),
+
     // 管理者が任意のユーザに「決済失敗リマインダー」を再送する
     resendPaymentFailureEmail: adminProcedure
       .input(z.object({ userId: z.number() }))

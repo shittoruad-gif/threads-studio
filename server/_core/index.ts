@@ -431,19 +431,30 @@ async function startServer() {
           if (existing) {
             await db.updateSubscription(existing.id, { status: 'canceled' });
           }
-          // ★代理店プランの解約は、その代理店が発行したクライアントIDも連鎖停止する。
-          //   （代理店契約に内包されている利用枠なので、契約が切れたら使えなくする）
+          // ★代理店プランの解約: 配下クライアントは即停止せず「引き継ぎ猶予」に入れる。
+          //   運営が同じ金額での直接契約を案内して引き継げるようにする
+          //   （shared/takeover.ts に流れの説明。猶予切れは日次ジョブが停止する）。
           if ((existing?.planId ?? matchedPlanId) === 'agency') {
             try {
-              const clients = await db.listAgencyClients(user.id);
-              for (const c of clients) {
-                await db.setAgencyClientActive(c.id, false);
-              }
-              if (clients.length > 0) {
-                console.log(`[Univapay Webhook] 代理店解約→クライアント${clients.length}件を停止: agency=${user.id}`);
+              const marked = await db.markAgencyClientsForTakeover(user.id);
+              if (marked.length > 0) {
+                console.log(`[Univapay Webhook] 代理店解約→クライアント${marked.length}件を引き継ぎ猶予へ: agency=${user.id}`);
+                const { TAKEOVER_GRACE_DAYS } = await import('../../shared/takeover');
+                const { notifyOwner } = await import('./notification');
+                const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
+                const lines = marked.map((c) =>
+                  `・${c.storeName || c.name || '(店舗名なし)'} <${c.email}>`).join('\n');
+                await notifyOwner({
+                  title: `代理店解約: クライアント${marked.length}件が引き継ぎ待ち`,
+                  content:
+                    `代理店 ${user.email}（userId=${user.id}）が解約されました。\n` +
+                    `配下のクライアントは停止せず、${TAKEOVER_GRACE_DAYS}日間の引き継ぎ猶予に入っています。\n\n` +
+                    lines + '\n\n' +
+                    `管理画面から引き継ぎ案内の送信・切替・停止ができます:\n${base}/admin/billing`,
+                });
               }
             } catch (e) {
-              console.error('[Univapay Webhook] agency client suspend error:', e);
+              console.error('[Univapay Webhook] agency takeover mark error:', e);
             }
           }
           // キャンペーンプランの3回課金完了による自動終了か、通常解約かを判定。

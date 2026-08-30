@@ -287,12 +287,46 @@ export async function runCommentWatchJob(): Promise<void> {
   console.log(`[CommentWatch] 完了: ${notified}ユーザーに新着コメント通知`);
 }
 
+/**
+ * 代理店解約の引き継ぎ猶予が切れたクライアントを停止する。
+ * 猶予中（takeoverPendingAt から TAKEOVER_GRACE_DAYS 以内）は何もしない。
+ */
+export async function runTakeoverExpiryJob(): Promise<void> {
+  const { listTakeoverPendingClients, stopTakeoverClient } = await import("./db");
+  const { takeoverExpired } = await import("../shared/takeover");
+  const pending = await listTakeoverPendingClients();
+  const now = new Date();
+  const stopped: string[] = [];
+  for (const c of pending) {
+    if (!c.takeoverPendingAt || !takeoverExpired(c.takeoverPendingAt, now)) continue;
+    try {
+      await stopTakeoverClient(c.id);
+      stopped.push(`${c.storeName || c.name || ''} <${c.email}>`);
+    } catch (e) {
+      console.error(`[TakeoverExpiry] 停止失敗 user=${c.id}:`, e);
+    }
+  }
+  if (stopped.length > 0) {
+    console.log(`[TakeoverExpiry] 猶予切れ${stopped.length}件を停止`);
+    const { notifyOwner } = await import("./_core/notification");
+    await notifyOwner({
+      title: `引き継ぎ猶予切れ: クライアント${stopped.length}件を停止しました`,
+      content: stopped.map((s) => `・${s}`).join("\n"),
+    });
+  }
+}
+
 /** スケジューラ初期化（_core/index.tsから呼ぶ） */
 export function initDailyOpsSchedulers(): void {
   // 7:00 JST = 22:00 UTC
   cron.schedule("0 22 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");
     await runTrackedJob("analytics_snapshot", runAnalyticsSnapshotJob);
+  });
+  // 7:10 JST = 22:10 UTC — 代理店解約の引き継ぎ猶予切れチェック
+  cron.schedule("10 22 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    await runTrackedJob("takeover_expiry", runTakeoverExpiryJob);
   });
   // 8:00 JST = 23:00 UTC
   cron.schedule("0 23 * * *", async () => {

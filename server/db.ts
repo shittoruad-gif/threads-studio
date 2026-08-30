@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, lte, gte, gt, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, lte, gte, gt, inArray, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { encrypt, decrypt } from "./encryption";
 import {
@@ -1907,6 +1907,77 @@ export async function createAgencyClient(params: {
 export async function isAgencyClientOf(agencyUserId: number, clientUserId: number): Promise<boolean> {
   const target = await getUserById(clientUserId);
   return !!target && target.parentAgencyUserId === agencyUserId;
+}
+
+// ── 代理店解約時の引き継ぎ（shared/takeover.ts に流れの説明） ──
+
+/**
+ * 代理店解約時: 配下クライアントを止めずに「引き継ぎ猶予」へ入れる。
+ * すでに猶予中のクライアントは日時を上書きしない（猶予の起点を守る）。
+ * 対象になったクライアント一覧を返す（運営への通知メールに使う）。
+ */
+export async function markAgencyClientsForTakeover(agencyUserId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const clients = await listAgencyClients(agencyUserId);
+  const marked: typeof clients = [];
+  for (const c of clients) {
+    const [u] = await db.select({ takeoverPendingAt: users.takeoverPendingAt })
+      .from(users).where(eq(users.id, c.id));
+    if (u?.takeoverPendingAt) continue;
+    await db.update(users)
+      .set({ takeoverPendingAt: new Date() })
+      .where(eq(users.id, c.id));
+    marked.push(c);
+  }
+  return marked;
+}
+
+/** 引き継ぎ待ちのクライアント一覧（管理画面用。契約状態も添える） */
+export async function listTakeoverPendingClients() {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({
+    id: users.id,
+    email: users.email,
+    name: users.name,
+    storeName: users.storeName,
+    parentAgencyUserId: users.parentAgencyUserId,
+    takeoverPendingAt: users.takeoverPendingAt,
+    subscriptionStatus: subscriptions.status,
+    planId: subscriptions.planId,
+  })
+    .from(users)
+    .leftJoin(subscriptions, eq(subscriptions.userId, users.id))
+    .where(isNotNull(users.takeoverPendingAt))
+    .orderBy(desc(users.takeoverPendingAt));
+  return rows;
+}
+
+/**
+ * 引き継ぎ完了: クライアントを通常プランの直接契約に切り替える。
+ * 代理店との親子関係を外し、猶予フラグを消す。
+ * 決済（UnivaPayリンク）の確認は運営が行ったうえで呼ぶ前提。
+ */
+export async function finalizeTakeover(clientUserId: number, planId: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(subscriptions)
+    .set({ planId, status: 'active' })
+    .where(eq(subscriptions.userId, clientUserId));
+  await db.update(users)
+    .set({ takeoverPendingAt: null, parentAgencyUserId: null })
+    .where(eq(users.id, clientUserId));
+}
+
+/** 引き継ぎしない: クライアントを停止して猶予フラグを消す */
+export async function stopTakeoverClient(clientUserId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await setAgencyClientActive(clientUserId, false);
+  await db.update(users)
+    .set({ takeoverPendingAt: null })
+    .where(eq(users.id, clientUserId));
 }
 
 /** クライアントの利用を停止/再開する（サブスクのstatusで制御） */

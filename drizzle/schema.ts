@@ -58,8 +58,11 @@ export const users = mysqlTable("users", {
   threadsAppSecretEnc: text("threadsAppSecretEnc"),
   // ── 代理店プラン: クライアントへ個別IDを発行する ──
   //   代理店が発行したクライアントアカウントには、この列に代理店のuserIdが入る。
-  //   代理店本人は null。代理店が解約されると配下クライアントも利用停止になる。
+  //   代理店本人は null。代理店が解約されると配下クライアントは「引き継ぎ猶予」に入る。
   parentAgencyUserId: int("parentAgencyUserId"),
+  // 代理店解約でこのクライアントが「運営引き継ぎ待ち」になった日時。
+  // null=通常状態。猶予日数は shared/takeover.ts の TAKEOVER_GRACE_DAYS。
+  takeoverPendingAt: timestamp("takeoverPendingAt"),
   // 固定投稿ウィザード通知バナーを確認した日時。null=未確認（バナー表示）
   wizardNotificationSeenAt: timestamp("wizardNotificationSeenAt"),
   // ── LINE通知連携（段階1: 承認依頼・コメント通知を公式LINEで受け取る）──

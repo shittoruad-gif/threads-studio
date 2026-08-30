@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, RefreshCw, AlertTriangle, Mail, CreditCard, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, RefreshCw, AlertTriangle, Mail, CreditCard, ChevronDown, ChevronUp, Repeat } from 'lucide-react';
 
 /**
  * 管理者向け「契約・メール」画面。
@@ -40,6 +40,11 @@ function fmtDate(v: string | Date | null | undefined) {
 export default function AdminBilling() {
   const [emailSearch, setEmailSearch] = useState('');
   const [expandedLog, setExpandedLog] = useState<number | null>(null);
+  // 引き継ぎ: 操作中のクライアントと入力値
+  const [takeoverOpen, setTakeoverOpen] = useState<number | null>(null);
+  const [offerPrice, setOfferPrice] = useState('');
+  const [offerLink, setOfferLink] = useState('');
+  const [finalizePlan, setFinalizePlan] = useState('pro');
 
   const contracts = trpc.admin.univapayContracts.useQuery(undefined, {
     // UnivaPay APIを100件叩くので、勝手に何度も再取得しない
@@ -50,6 +55,19 @@ export default function AdminBilling() {
     { search: emailSearch || undefined, limit: 200 },
     { refetchOnWindowFocus: false },
   );
+  const takeover = trpc.admin.listTakeoverClients.useQuery(undefined, { refetchOnWindowFocus: false });
+  const sendOffer = trpc.admin.sendTakeoverOffer.useMutation({
+    onSuccess: () => { alert('案内メールを送信しました'); takeover.refetch(); },
+    onError: (e) => alert('送信に失敗しました: ' + e.message),
+  });
+  const finalize = trpc.admin.finalizeTakeover.useMutation({
+    onSuccess: () => { setTakeoverOpen(null); takeover.refetch(); },
+    onError: (e) => alert('切替に失敗しました: ' + e.message),
+  });
+  const stopClient = trpc.admin.stopTakeoverClient.useMutation({
+    onSuccess: () => { setTakeoverOpen(null); takeover.refetch(); },
+    onError: (e) => alert('停止に失敗しました: ' + e.message),
+  });
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
@@ -69,6 +87,13 @@ export default function AdminBilling() {
           <TabsTrigger value="emails">
             <Mail className="mr-1.5 h-4 w-4" />
             送信メール
+          </TabsTrigger>
+          <TabsTrigger value="takeover">
+            <Repeat className="mr-1.5 h-4 w-4" />
+            引き継ぎ
+            {(takeover.data?.length ?? 0) > 0 && (
+              <Badge className="ml-1.5 bg-amber-50 text-amber-700 border border-amber-200">{takeover.data!.length}</Badge>
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -198,6 +223,121 @@ export default function AdminBilling() {
               {(logs.data ?? []).length === 0 && (
                 <p className="py-8 text-center text-sm text-muted-foreground">送信メールの記録はまだありません</p>
               )}
+            </div>
+          )}
+        </TabsContent>
+        {/* ── 代理店解約の引き継ぎ ─────────────────────── */}
+        <TabsContent value="takeover">
+          <p className="mb-3 text-xs text-muted-foreground">
+            代理店が解約されると、配下のクライアントは停止せず30日間の「引き継ぎ猶予」に入ります。
+            代理店に払っていたのと同じ月額で当社の直接契約を案内し、決済を確認できたら「切替完了」を押してください。
+            猶予が切れると自動で停止されます。
+          </p>
+          {takeover.isLoading ? (
+            <div className="flex items-center justify-center py-16 text-muted-foreground">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              読み込み中...
+            </div>
+          ) : (takeover.data ?? []).length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">引き継ぎ待ちのクライアントはいません</p>
+          ) : (
+            <div className="space-y-2">
+              {(takeover.data ?? []).map((c: any) => (
+                <div key={c.id} className="rounded-lg border border-border">
+                  <button
+                    className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-left"
+                    onClick={() => {
+                      setTakeoverOpen(takeoverOpen === c.id ? null : c.id);
+                      setOfferPrice('');
+                      setOfferLink('');
+                    }}
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                      {c.storeName || c.name || '(店舗名なし)'}
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">{c.email}</span>
+                    </span>
+                    {c.daysLeft > 0
+                      ? <Badge className="bg-amber-50 text-amber-700 border border-amber-200">残り{c.daysLeft}日</Badge>
+                      : <Badge className="bg-red-50 text-red-700 border border-red-200">期限切れ</Badge>}
+                    <span className="text-xs text-muted-foreground">猶予開始 {fmtDate(c.takeoverPendingAt)}</span>
+                    {takeoverOpen === c.id ? <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                  </button>
+                  {takeoverOpen === c.id && (
+                    <div className="space-y-3 border-t border-border p-3">
+                      <div>
+                        <p className="mb-1.5 text-xs font-medium text-foreground">1. 案内メールを送る（代理店に払っていたのと同じ月額を入力）</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Input
+                            type="number"
+                            placeholder="月額（円）"
+                            value={offerPrice}
+                            onChange={(e) => setOfferPrice(e.target.value)}
+                            className="h-9 w-32 text-sm"
+                          />
+                          <Input
+                            placeholder="UnivaPay決済リンクURL（その金額で作成したもの）"
+                            value={offerLink}
+                            onChange={(e) => setOfferLink(e.target.value)}
+                            className="h-9 max-w-md flex-1 text-sm"
+                          />
+                          <Button
+                            size="sm"
+                            disabled={sendOffer.isPending || !offerPrice || !offerLink}
+                            onClick={() => sendOffer.mutate({
+                              userId: c.id,
+                              monthlyPrice: Number(offerPrice),
+                              paymentLinkUrl: offerLink,
+                            })}
+                          >
+                            {sendOffer.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                            案内メールを送信
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-medium text-foreground">2. 決済を確認できたら:</p>
+                        <select
+                          value={finalizePlan}
+                          onChange={(e) => setFinalizePlan(e.target.value)}
+                          className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+                        >
+                          <option value="light">ライトとして扱う</option>
+                          <option value="pro">プロとして扱う</option>
+                          <option value="business">ビジネスとして扱う</option>
+                        </select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={finalize.isPending}
+                          onClick={() => {
+                            if (confirm('直接契約へ切り替えます。決済（UnivaPay）の登録は確認済みですか？')) {
+                              finalize.mutate({ userId: c.id, planId: finalizePlan });
+                            }
+                          }}
+                        >
+                          切替完了
+                        </Button>
+                        <span className="mx-2 text-xs text-muted-foreground">／</span>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          disabled={stopClient.isPending}
+                          onClick={() => {
+                            if (confirm('このクライアントを停止します。よろしいですか？')) {
+                              stopClient.mutate({ userId: c.id });
+                            }
+                          }}
+                        >
+                          引き継がず停止
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        機能の割当（プラン）と実際の請求額は別です。請求額はUnivaPayのリンク金額（＝入力した月額）がそのまま適用されます。
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </TabsContent>
