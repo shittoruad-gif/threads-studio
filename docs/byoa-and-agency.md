@@ -40,10 +40,14 @@
 - `agency_client` プラン（`shared/plans.ts`、priceMonthly: 0）
   - 料金ページからは除外（Pricing.tsx でフィルタ）
   - 機能: プロジェクト3・Threads1・自動投稿3回/日・AI生成無制限
-- 上限 `AGENCY_CLIENT_LIMIT = 30`
+- 上限 `AGENCY_CLIENT_LIMIT = 100`（当初30→引き上げ済み）
 - `agency` ルーター（すべて代理店プラン契約＋自分の配下かを検証）
   - `listClients` / `createClient` / `setClientActive` / `resetClientPassword`
-- 代理店が解約されると配下クライアントを連鎖停止（Univapay Webhook の isCanceled 分岐）
+- 代理店が解約されると配下クライアントは**引き継ぎ猶予30日**に入る（2026-08-30変更・
+  それまでは連鎖停止だった）。流れは `shared/takeover.ts` のコメント参照。
+  運営は `/admin/billing` の「引き継ぎ」タブから、代理店に払っていたのと同じ月額での
+  直接契約案内メール送信 → 決済確認後「切替完了」（通常プランへ・親子関係解消）または
+  「引き継がず停止」。猶予切れは日次ジョブ `takeover_expiry`（7:10 JST）が自動停止。
 
 ### 画面
 サイドバー「代理店 > クライアント管理」（代理店プラン契約者にだけ表示）
