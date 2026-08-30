@@ -256,6 +256,9 @@ export default function Pricing() {
               1日1回だと、その1本が外れた日は誰にも届きません。1日3回なら残りの2本が拾い、
               反応の出やすい時間帯（お昼・夕方・夜）も同じ日に押さえられます。
             </p>
+                      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              ※ コメント返信の送信・ツリー投稿の続きは、現在Meta社の追加審査の承認待ちです（自動投稿・分析はご利用いただけます）。
+            </p>
           </div>
         </div>
 

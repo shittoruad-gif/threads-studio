@@ -1892,7 +1892,9 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           biography: profile.threads_biography,
           accessToken: longLivedToken.access_token,
           tokenExpiresAt: expiresAt,
-        });
+          // このトークンを返信権限付きで取得したか（threadsAuth.tsのスコープ既定と対で真実を記録）
+          hasReplyScope: process.env.THREADS_MANAGE_REPLIES_APPROVED === "true",
+        } as any);
 
         return { success: true, profile, isReconnection: isReconnection || isReactivation };
       }),
@@ -2300,6 +2302,15 @@ ${input.commentText}
         const account = await db.getThreadsAccountById(input.accountId);
         if (!account || account.userId !== ctx.user.id) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'アカウントが見つかりません。' });
+        }
+
+        // 返信の「送信」には threads_manage_replies が必要（2026-08-30審査で承認待ち）。
+        // 権限の無い連携では文案のコピーまで案内し、送信はブロックする。
+        if ((account as any).hasReplyScope === false) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: '返信の送信は、Meta社の追加審査の承認待ちです。文案をコピーしてThreadsアプリから返信してください。承認され次第、ここから直接送信できるようになります。',
+          });
         }
 
         if (account.tokenExpiresAt && new Date(account.tokenExpiresAt) < new Date()) {

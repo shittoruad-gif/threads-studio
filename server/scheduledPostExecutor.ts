@@ -201,8 +201,21 @@ export async function executePendingPosts() {
         const postUser = await db.getUserById(post.userId);
         const postProject = await db.getProjectById(post.projectId);
 
+        // 返信作成権限の有無（2026-08-30審査で threads_manage_replies のみ非承認。
+        // 新規連携のトークンには権限が無いため、返信を伴う処理は出し分ける）
+        const canReply = (account as any).hasReplyScope !== false;
+
         let result: { id: string };
         if ((post as any).replyToThreadsId) {
+          if (!canReply) {
+            // 権限の無いアカウントで返信を試みるとAPIエラーになるだけなので、静かに取り下げる
+            await db.updateScheduledPost(post.id, {
+              status: 'canceled',
+              errorMessage: '返信機能はMeta審査の承認待ちのため、この投稿（返信）は取り消しました。',
+            });
+            console.log(`[Scheduled Post] reply post ${post.id} canceled (返信権限なし account=${account.id})`);
+            continue;
+          }
           // ★追い投稿：新規投稿ではなく、元投稿への「返信」として公開する
           //   （自分の投稿にひとこと足すと、タイムラインで再浮上しやすくなる）
           const { createAndPublishPost } = await import('./threadsPost');
@@ -218,7 +231,12 @@ export async function executePendingPosts() {
           // ★ツリー（続きの投稿）は本物の返信チェーンとして連続投稿する。
           //   postContent が区切りを含めば複数投稿に分割、無ければ単一投稿。
           //   各セグメントは個別投稿なので500字制限による切り捨ては起きない。
-          const segments = splitThreadSegments(post.postContent || '');
+          let segments = splitThreadSegments(post.postContent || '');
+          if (!canReply && segments.length > 1) {
+            // ツリーの2本目以降は「返信」として作られる。権限が無い間は1本目だけ公開する
+            console.log(`[Scheduled Post] post ${post.id}: ツリー${segments.length}本→権限承認待ちのため1本目のみ公開`);
+            segments = segments.slice(0, 1);
+          }
           // トピックタグ（設定ONのとき、店舗情報から1つ。フォロワー外への発見性UP）
           const topicTag = postUser?.autoTopicTag !== false && postProject
             ? (await import('./reachBoost')).deriveTopicTag(postProject) ?? undefined
@@ -256,6 +274,7 @@ export async function executePendingPosts() {
             //   公式LINEが登録されていなければコメント自体を出さない
             //   （辿り着けない窓口へ誘導しない）。合言葉も業種で出し分け、
             //   来店を伴わない事業者に「予約」「空き状況」と言わせない。
+            if (!canReply) throw new Error('__NO_LINE_LINK__'); // 返信権限が無い間は計測コメントを出さない（正常スキップ扱い）
             const links = parseProjectLinks((postProject as any)?.links || null);
             const hasLineLink = links.some((l) => l.type === 'line' && !!l.url);
             const commentText = inquiryCommentText(post.id, {
@@ -288,7 +307,8 @@ export async function executePendingPosts() {
         if (
           post.source === 'auto' &&
           !(post as any).replyToThreadsId &&
-          postUser?.autoFollowUpEnabled !== false
+          postUser?.autoFollowUpEnabled !== false &&
+          canReply
         ) {
           try {
             const { buildFollowUpContent, computeFollowUpTime } = await import('./reachBoost');

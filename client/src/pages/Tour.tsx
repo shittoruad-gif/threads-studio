@@ -218,6 +218,10 @@ export default function Tour() {
               "気になる方は、プロフィールのリンクから公式LINEにご登録ください。\nかんたんな姿勢チェックをお送りしています。",
             ]}
           />
+        
+          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+            ※ ツリー（続きの投稿）は現在Meta社の追加審査の承認待ちのため、新規にご利用のお客様は1本目のみの投稿になります。
+          </p>
         </section>
 
         <section className="mb-12">
@@ -289,6 +293,11 @@ export default function Tour() {
               ourReply: "コメントありがとうございます！\n実は、姿勢は何歳からでも変わるんです😊\nよければ一度ご相談ください。",
             }}
           />
+        
+          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+            ※ コメント返信の「送信」と、ツリー投稿の2本目以降（続きの投稿）は、現在Meta社の追加審査の承認待ちです。
+            承認され次第、すべてのお客様にご利用いただけます。毎日の自動投稿・投稿分析は現在もご利用いただけます。
+          </p>
         </section>
 
         <section className="mb-12">
