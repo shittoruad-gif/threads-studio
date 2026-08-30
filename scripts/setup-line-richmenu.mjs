@@ -19,31 +19,38 @@ if (!TOKEN || !LIFF_ID) {
   process.exit(1);
 }
 
-const MENU_NAME = 'threads-studio-main-v1';
+const MENU_NAME = 'threads-studio-main-v2';
 const W = 2500;
-const H = 843;
+const H = 1686;
 const liff = (path) => `https://liff.line.me/${LIFF_ID}?path=${encodeURIComponent(path)}`;
 
+// 2段×3列＝6ボタン。「思った内容と違う」を直す操作までワンタップで届くようにする
 const buttons = [
-  { label1: '投稿の確認', label2: '承認する', path: '/post-history' },
-  { label1: 'コメント', label2: '管理・返信', path: '/comment-manager' },
-  { label1: '設定', label2: '店舗情報', path: '/settings' },
+  { label1: '投稿の確認', label2: '承認・書き換え・見送り', path: '/post-history' },
+  { label1: 'コメント', label2: '確認・AIで返信', path: '/comment-manager' },
+  { label1: 'お店の情報', label2: '強み・メニューの修正', path: '/ai-counseling' },
+  { label1: '設定', label2: 'NGワード・文体・長さ', path: '/settings' },
+  { label1: '投稿分析', label2: '反応を数字で見る', path: '/post-analytics' },
+  { label1: '使い方', label2: 'マニュアル・困ったら', path: '/manual' },
 ];
 
 // ── メニュー画像（SVG→PNG）。ブランド色はアプリと同系のグリーン ──
 const cellW = W / 3;
+const cellH = H / 2;
 const svg = `
 <svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
   <rect width="${W}" height="${H}" fill="#0E2A38"/>
   ${buttons
     .map((b, i) => {
-      const x = i * cellW;
+      const x = (i % 3) * cellW;
+      const y = Math.floor(i / 3) * cellH;
+      const cx = x + cellW / 2;
       return `
-    <rect x="${x + 24}" y="24" width="${cellW - 48}" height="${H - 48}" rx="28" fill="#F4FAFA"/>
-    <circle cx="${x + cellW / 2}" cy="${H / 2 - 130}" r="86" fill="#0E8388"/>
-    <text x="${x + cellW / 2}" y="${H / 2 - 108}" text-anchor="middle" font-family="Hiragino Sans, sans-serif" font-size="72" fill="#FFFFFF" font-weight="bold">${i + 1}</text>
-    <text x="${x + cellW / 2}" y="${H / 2 + 90}" text-anchor="middle" font-family="Hiragino Sans, sans-serif" font-size="86" fill="#13343B" font-weight="bold">${b.label1}</text>
-    <text x="${x + cellW / 2}" y="${H / 2 + 210}" text-anchor="middle" font-family="Hiragino Sans, sans-serif" font-size="64" fill="#4C6B67">${b.label2}</text>`;
+    <rect x="${x + 24}" y="${y + 24}" width="${cellW - 48}" height="${cellH - 48}" rx="28" fill="#F4FAFA"/>
+    <circle cx="${cx}" cy="${y + cellH / 2 - 130}" r="86" fill="#0E8388"/>
+    <text x="${cx}" y="${y + cellH / 2 - 108}" text-anchor="middle" font-family="Hiragino Sans, sans-serif" font-size="72" fill="#FFFFFF" font-weight="bold">${i + 1}</text>
+    <text x="${cx}" y="${y + cellH / 2 + 90}" text-anchor="middle" font-family="Hiragino Sans, sans-serif" font-size="86" fill="#13343B" font-weight="bold">${b.label1}</text>
+    <text x="${cx}" y="${y + cellH / 2 + 200}" text-anchor="middle" font-family="Hiragino Sans, sans-serif" font-size="56" fill="#4C6B67">${b.label2}</text>`;
     })
     .join('')}
 </svg>`;
@@ -59,12 +66,12 @@ const api = async (url, opts = {}) => {
   return res.status === 200 && res.headers.get('content-type')?.includes('json') ? res.json() : null;
 };
 
-// 1) 同名の古いメニューを削除（冪等）
+// 1) 旧バージョンを含む threads-studio-main-* を削除（冪等・置き換え）
 const list = await api('https://api.line.me/v2/bot/richmenu/list');
 for (const m of list?.richmenus ?? []) {
-  if (m.name === MENU_NAME) {
+  if (m.name?.startsWith('threads-studio-main-')) {
     await api(`https://api.line.me/v2/bot/richmenu/${m.richMenuId}`, { method: 'DELETE' });
-    console.log('古いメニューを削除:', m.richMenuId);
+    console.log('古いメニューを削除:', m.richMenuId, m.name);
   }
 }
 
