@@ -177,6 +177,19 @@ async function startServer() {
             await replyMessage(ev.replyToken, LINE_TEXTS.greeting);
             continue;
           }
+          // ★リッチメニュー・カードのボタン（postback）。トーク内で完結する操作。
+          if (ev.type === 'postback') {
+            try {
+              const { handlePostback } = await import('../lineChatHandler');
+              const { replyMessages } = await import('../lineNotify');
+              const msgs = await handlePostback(lineUserId, ev.postback?.data || '');
+              await replyMessages(ev.replyToken, msgs);
+            } catch (e) {
+              console.error('[LineChat] postback error:', e);
+              await replyMessage(ev.replyToken, '処理中にエラーが起きました。もう一度お試しください。');
+            }
+            continue;
+          }
           if (ev.type === 'unfollow') {
             // ブロックされたら紐づけを外す（送っても届かないため）
             await db.unlinkLineByLineUserId(lineUserId);
@@ -203,15 +216,23 @@ async function startServer() {
               );
               continue;
             }
-            // それ以外のメッセージには「よくある質問」への誘導を返す
-            // （このトークは通知用で、人が返信を監視していないため。replyなので通数は消費しない）
-            const { liffUrl } = await import('../lineNotify');
-            const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
+            // ★連携済みなら、トーク内で完結するチャット操作として扱う
+            try {
+              const { handleFreeText } = await import('../lineChatHandler');
+              const { replyMessages } = await import('../lineNotify');
+              const msgs = await handleFreeText(lineUserId, text);
+              if (msgs) {
+                await replyMessages(ev.replyToken, msgs);
+                continue;
+              }
+            } catch (e) {
+              console.error('[LineChat] text error:', e);
+            }
+            // 未連携の場合だけ、連携のお願いを返す
             await replyMessage(
               ev.replyToken,
-              'メッセージありがとうございます。このアカウントは通知専用のため、お困りごとは下のメニュー、または「よくある質問」をご覧ください。\n' +
-              liffUrl('/help', base) +
-              '\n\n連携する場合は、アプリの設定画面で表示された6桁のコードをそのまま送ってください。',
+              'メッセージありがとうございます。まずアカウントとの連携をお願いします。\n' +
+              'アプリの設定画面で表示される6桁のコードを、このトークにそのまま送ってください。',
             );
           }
         }

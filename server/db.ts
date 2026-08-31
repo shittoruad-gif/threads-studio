@@ -3481,3 +3481,38 @@ export async function listEventPosts(userId: number, eventId: number) {
     .where(and(eq(scheduledPosts.eventId, eventId), eq(scheduledPosts.userId, userId)))
     .orderBy(scheduledPosts.scheduledAt);
 }
+
+// ── LINEトーク内チャット操作の途中状態 ─────────────────────────
+/** 次に届くテキストの意味を保存する（書き直しの指示待ち等）。1LINEユーザー1件。 */
+export async function setLineChatState(lineUserId: string, state: string, payload?: string): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  await database.execute(sql.raw(
+    `INSERT INTO \`lineChatStates\` (\`lineUserId\`, \`state\`, \`payload\`) VALUES (${escapeSql(lineUserId)}, ${escapeSql(state)}, ${payload === undefined ? 'NULL' : escapeSql(payload)})
+     ON DUPLICATE KEY UPDATE \`state\` = VALUES(\`state\`), \`payload\` = VALUES(\`payload\`)`
+  ));
+}
+
+/** 保存済みの状態を取り出す（10分より古いものは無視する） */
+export async function getLineChatState(lineUserId: string): Promise<{ state: string; payload: string | null } | null> {
+  const database = await getDb();
+  if (!database) return null;
+  const rows: any = await database.execute(sql.raw(
+    `SELECT \`state\`, \`payload\` FROM \`lineChatStates\`
+     WHERE \`lineUserId\` = ${escapeSql(lineUserId)} AND \`updatedAt\` > (NOW() - INTERVAL 10 MINUTE) LIMIT 1`
+  ));
+  const r = rows?.[0]?.[0];
+  return r ? { state: r.state, payload: r.payload ?? null } : null;
+}
+
+/** 状態を消す（1ステップ終わったら必ず呼ぶ） */
+export async function clearLineChatState(lineUserId: string): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  await database.execute(sql.raw(`DELETE FROM \`lineChatStates\` WHERE \`lineUserId\` = ${escapeSql(lineUserId)}`));
+}
+
+/** SQL文字列リテラルのエスケープ（このファイル内の生SQL用） */
+function escapeSql(v: string): string {
+  return `'${String(v).replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
+}

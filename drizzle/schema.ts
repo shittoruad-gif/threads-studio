@@ -793,3 +793,15 @@ export const emailLogs = mysqlTable("email_logs", {
 
 export type EmailLog = typeof emailLogs.$inferSelect;
 export type InsertEmailLog = typeof emailLogs.$inferInsert;
+
+/**
+ * LINEトーク内チャット操作の途中状態（自由文の入力待ち）。
+ * 「書き直す→指示待ち」「NGワード追加→単語待ち」のように、
+ * 次に届くテキストを何として扱うかを1行だけ保持する（LINEユーザー単位）。
+ */
+export const lineChatStates = mysqlTable("lineChatStates", {
+  lineUserId: varchar("lineUserId", { length: 64 }).primaryKey(),
+  state: varchar("state", { length: 40 }).notNull(),
+  payload: text("payload"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});

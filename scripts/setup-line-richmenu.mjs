@@ -1,11 +1,12 @@
 /**
  * 公式LINE「Threads Studio 通知」のリッチメニューを作成して既定に設定する。
  *
- * トーク画面下部にフルサイズ6ボタン（2段×3列）を出し、
- * それぞれ LIFF（トーク内でアプリが開き自動ログイン）につなぐ。
+ * トーク画面下部にフルサイズ6ボタン（2段×3列）を出す。
+ * ★アプリ（LIFF）は開かない。すべて postback でサーバーに届き、
+ *   トーク内の返信だけで承認・書き直し・設定変更まで完結する。
  *
  * 使い方（一度だけ実行）:
- *   LINE_NOTIFY_CHANNEL_ACCESS_TOKEN=xxx LIFF_ID=xxxx-xxxxxxxx node scripts/setup-line-richmenu.mjs
+ *   LINE_NOTIFY_CHANNEL_ACCESS_TOKEN=xxx node scripts/setup-line-richmenu.mjs
  *
  * 再実行すると同名の古いメニューを削除して作り直す（冪等）。
  * 画像はスクリプト内のSVGから生成する（絵文字不使用・sharpはdevDependenciesを利用）。
@@ -13,25 +14,23 @@
 import sharp from 'sharp';
 
 const TOKEN = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
-const LIFF_ID = process.env.LIFF_ID;
-if (!TOKEN || !LIFF_ID) {
-  console.error('LINE_NOTIFY_CHANNEL_ACCESS_TOKEN と LIFF_ID を環境変数で指定してください');
+if (!TOKEN) {
+  console.error('LINE_NOTIFY_CHANNEL_ACCESS_TOKEN を環境変数で指定してください');
   process.exit(1);
 }
 
-const MENU_NAME = 'threads-studio-main-v4';
+const MENU_NAME = 'threads-studio-main-v5';
 const W = 2500;
 const H = 1686;
-const liff = (path) => `https://liff.line.me/${LIFF_ID}?path=${encodeURIComponent(path)}`;
-
-// 2段×3列＝6ボタン。「思った内容と違う」を直す操作までワンタップで届くようにする
+// ★2026-09-01: Webビュー（LIFF）を開かず、トーク内のやり取りで完結させる。
+//   ボタンはすべて postback。サーバー(lineChatHandler)が返信を組み立てる。
 const buttons = [
-  { label1: '投稿の確認', label2: '承認・書き換え・見送り', path: '/post-history' },
-  { label1: 'コメント', label2: '確認・AIで返信', path: '/comment-manager' },
-  { label1: 'お店・自分の情報', label2: '強み・発信内容の修正', path: '/ai-counseling' },
-  { label1: '設定', label2: 'NGワード・文体・長さ', path: '/settings' },
-  { label1: '投稿分析', label2: '反応を数字で見る', path: '/post-analytics' },
-  { label1: 'よくある質問', label2: '困ったらまずここ', path: '/help' },
+  { label1: '今日の投稿', label2: '承認・書き直し・見送り', data: 'm=posts' },
+  { label1: 'コメント', label2: '新着の確認', data: 'm=comments' },
+  { label1: '設定', label2: '自動投稿・確認・NGワード', data: 'm=settings' },
+  { label1: '投稿の成績', label2: '直近の投稿数と反応', data: 'm=stats' },
+  { label1: 'お店の情報', label2: '登録内容の確認・修正', data: 'm=profile' },
+  { label1: '使い方', label2: '困ったらまずここ', data: 'm=help' },
 ];
 
 // ── メニュー画像（SVG→PNG）。ブランド色はアプリと同系のグリーン ──
@@ -86,7 +85,7 @@ const created = await api('https://api.line.me/v2/bot/richmenu', {
     chatBarText: 'メニューを開く',
     areas: buttons.map((b, i) => ({
       bounds: { x: (i % 3) * cellW, y: Math.floor(i / 3) * cellH, width: cellW, height: cellH },
-      action: { type: 'uri', uri: liff(b.path) },
+      action: { type: 'postback', data: b.data, displayText: b.label1 },
     })),
   }),
 });

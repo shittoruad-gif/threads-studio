@@ -165,14 +165,25 @@ export function buildApprovalMessages(
   return [head, flex];
 }
 
-/** 承認依頼を1通のダイジェストで送る */
+/**
+ * 承認依頼を1通のダイジェストで送る。
+ * ★2026-09-01: Webビューを開かせず、トーク内のボタン（postback）で
+ *   承認・書き直し・見送りまで終わるカードに変更。
+ */
 export async function sendApprovalPush(
   lineUserId: string,
   posts: ApprovalPushPost[],
-  approvalUrlFor: (postId: number) => string,
+  _approvalUrlFor?: (postId: number) => string,
 ): Promise<boolean> {
   if (!lineNotifyEnabled() || posts.length === 0) return false;
-  return pushMessage(lineUserId, buildApprovalMessages(posts, approvalUrlFor));
+  const { buildPostCards } = await import("./lineChat");
+  return pushMessage(lineUserId, [
+    {
+      type: "text",
+      text: `明日の投稿が${posts.length}件できました。\n内容を見て、下のボタンを押すだけで終わります。`,
+    },
+    buildPostCards(posts as any),
+  ]);
 }
 
 /** 新着コメント通知（1通・リンクはコメント管理画面へ） */
@@ -242,16 +253,33 @@ export async function verifyLineIdToken(idToken: string): Promise<string | null>
 /** 連携完了・解除などの短い定型文 */
 export const LINE_TEXTS = {
   linked:
-    "連携できました。これから投稿の承認依頼やコメント通知をこちらでお届けします。\n\n" +
-    "初期設定がまだの方は、下のメニューの「お店・自分の情報」をタップしてください。" +
-    "目的選び（お店の集客／個人にファン）から質問への回答まで、このままLINEの中で進められます。",
+    "連携できました。これから、明日の投稿ができるたびにこのトークでお知らせします。\n\n" +
+    "届いた投稿は「これで投稿する」「書き直す」「見送る」のボタンで、そのまま決められます。\n" +
+    "下のメニューからは、いつでも今日の投稿の確認・設定の変更ができます。",
   linkFailed: "コードが確認できませんでした。アプリの設定画面で表示された6桁のコードを、そのまま送ってください（有効期限10分）。",
   linkLimit: "ご利用中のプランで連携できるLINEの人数が上限に達しています。設定画面で不要な連携を解除するか、上位プランへの変更をご検討ください。",
   unlinked: "連携を解除しました。再開したいときは、アプリの設定画面からいつでも連携できます。",
   greeting:
     "友だち追加ありがとうございます。\n" +
     "Threads StudioのLINE窓口です。\n\n" +
-    "下のメニューのどれかをタップすると、トーク内でアプリが開きます（初回だけログインが必要です）。" +
-    "はじめての方は「お店・自分の情報」から、目的選びと質問への回答をこのままLINEの中で進められます。\n\n" +
-    "アプリの設定画面で6桁の連携コードを発行した方は、そのコードをこのトークに送っていただいても連携できます。",
+    "毎日の投稿の確認・書き直し・設定の変更は、このトークの中だけで終わります（アプリを開く必要はありません）。\n\n" +
+    "はじめに、アプリの設定画面で表示される6桁のコードを、このトークにそのまま送ってください。連携が終わると、下のメニューがすぐ使えるようになります。",
 } as const;
+
+/** 任意のメッセージ配列をreplyで返す（チャット完結操作用・通数を消費しない） */
+export async function replyMessages(replyToken: string, messages: unknown[]): Promise<void> {
+  const token = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
+  if (!token || !replyToken || messages.length === 0) return;
+  try {
+    const res = await fetch("https://api.line.me/v2/bot/message/reply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ replyToken, messages: messages.slice(0, 5) }),
+    });
+    if (!res.ok) {
+      console.error(`[LineNotify] reply失敗 ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    }
+  } catch (e) {
+    console.error("[LineNotify] reply エラー:", e);
+  }
+}
