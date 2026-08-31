@@ -333,6 +333,23 @@ export function getCampaignSlotsRemaining(now: Date = new Date()): number {
 }
 
 /**
+ * セミナー価格を適用するクーポンコードの一覧（それ以外のモニターコードはモニター価格）。
+ * 営業マン別コード（案件の紐付け追跡用）もセミナー価格。追加時はこことDBの両方に足す。
+ * ※ server/coupon.ts から移設（管理画面でも効果表示に使うため共有化）。
+ */
+export const SEMINAR_PRICE_CODES: ReadonlySet<string> = new Set<string>([
+  'SEMINAR2026',
+  'OHKI2026',    // 大木慎也
+  'SASAKI2026',  // 佐々木竜也
+]);
+
+/** クーポンコード → キャンペーン種別（価格の出し分け） */
+export function campaignTierForCode(code: string): 'seminar' | 'monitor' {
+  const upper = (code || '').trim().toUpperCase();
+  return SEMINAR_PRICE_CODES.has(upper) ? 'seminar' : 'monitor';
+}
+
+/**
  * 通常プランIDに対応するキャンペーンプランを返す（なければundefined）。
  */
 export function getCampaignCounterpart(

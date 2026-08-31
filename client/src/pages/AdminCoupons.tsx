@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Plus, Edit, Trash2, BarChart } from 'lucide-react';
+import { campaignTierForCode, getCampaignCounterpart } from '@shared/plans';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -39,6 +40,44 @@ const COUPON_TYPE_LABELS: Record<string, string> = {
   monitor: 'モニター（90日プロ付き）',
   monitor_only: 'モニターのみ（料金変更なし）',
 };
+
+/**
+ * このコードを使うと実際に何が起きるかの説明文。
+ * server/coupon.ts の applyCoupon の分岐と、monitor_only は
+ * shared/plans.ts のキャンペーン価格（コード別のセミナー/モニター種別）に対応。
+ */
+function couponEffectText(coupon: { type: string; code: string }): string {
+  switch (coupon.type) {
+    case 'forever_free':
+      return 'プロプランを永久無料で利用できるようになります（課金なし・期限なし）。';
+    case 'trial_30':
+      return 'プロプランの30日間無料トライアルが始まります（期間終了後は課金なしで停止）。';
+    case 'trial_14':
+      return 'プロプランの14日間無料トライアルが始まります（期間終了後は課金なしで停止）。';
+    case 'discount_50':
+      return 'プロプランを90日間無料で利用できるようになります。';
+    case 'discount_30':
+      return 'プロプランを60日間無料で利用できるようになります。';
+    case 'special_price':
+      return 'プロプランを180日間無料で利用できるようになります。';
+    case 'monitor':
+      return 'プロプランを90日間無料＋モニター登録（フィードバック機能が有効になります）。';
+    case 'monitor_only': {
+      const tier = campaignTierForCode(coupon.code);
+      const tierLabel = tier === 'seminar' ? 'セミナー価格' : 'モニター価格';
+      const price = (planId: string) => {
+        const p = getCampaignCounterpart(planId, tier);
+        return p ? `¥${p.priceMonthly.toLocaleString()}` : '—';
+      };
+      return (
+        `プラン・課金はすぐには変わりません。モニター登録され、料金ページに${tierLabel}が表示されます：` +
+        `ライト${price('light')}／プロ${price('pro')}／ビジネス${price('business')}（月額・3回分。4回目のお支払いから通常価格に自動移行）。`
+      );
+    }
+    default:
+      return '';
+  }
+}
 
 interface CouponFormData {
   code: string;
@@ -239,6 +278,10 @@ export default function AdminCoupons() {
                 </div>
               </CardHeader>
               <CardContent>
+                <div className="mb-4 rounded-md bg-muted/60 px-3 py-2 text-sm">
+                  <span className="font-medium text-foreground">このコードで起きること：</span>
+                  <span className="text-muted-foreground">{couponEffectText(coupon)}</span>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground mb-1">使用回数</p>

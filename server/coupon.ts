@@ -59,27 +59,10 @@ export async function hasUserUsedCoupon(userId: number, couponId: number): Promi
   return result.length > 0;
 }
 
-/**
- * セミナー価格として扱うコードの一覧。
- * SEMINAR2026 に加え、営業マン別コード（案件の紐付け追跡用）もセミナー価格。
- * 各コードは coupons テーブルに別レコードで登録されているので usedCount で
- * 「どの営業マンが何件取ってきたか」が個別に集計できる。
- * 営業マンを追加する時はここと DB の両方に足す。
- */
-const SEMINAR_PRICE_CODES = new Set<string>([
-  'SEMINAR2026',
-  'OHKI2026',    // 大木慎也
-  'SASAKI2026',  // 佐々木竜也
-]);
-
-/**
- * クーポンコード → キャンペーン種別（価格の出し分け）。
- * セミナー価格の一覧に含まれるコードはセミナー価格、それ以外のモニターコードはモニター価格。
- */
-export function campaignTierForCode(code: string): 'seminar' | 'monitor' {
-  const upper = (code || '').trim().toUpperCase();
-  return SEMINAR_PRICE_CODES.has(upper) ? 'seminar' : 'monitor';
-}
+// セミナー価格コードの一覧と種別判定は @shared/plans に移設
+// （管理画面のクーポン効果表示でも使うため。営業マン追加時は shared/plans.ts と DB の両方に足す）。
+import { campaignTierForCode } from "@shared/plans";
+export { campaignTierForCode };
 
 /**
  * Apply a coupon to a user's subscription
