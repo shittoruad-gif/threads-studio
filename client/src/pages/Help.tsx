@@ -74,7 +74,7 @@ export default function Help() {
           </Qa>
 
           <Qa q="店長など、他の人も通知を受け取り、操作できるようにしたい" defaultOpen>
-            <p>1つのアカウントに、複数の人のLINEを連携できます（人数制限なし）。</p>
+            <p>1つのアカウントに、複数の人のLINEを連携できます（ライトプラン1人・プロプラン3人・ビジネスプラン無制限）。</p>
             <Steps
               items={[
                 <>追加したい人が、公式LINE「Threads Studio 通知」を友だち追加する</>,
