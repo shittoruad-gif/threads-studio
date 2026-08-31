@@ -226,35 +226,86 @@ export default function AICounseling() {
     );
   }
 
-  // 新規作成でモード未選択なら、最初に「何のための発信か」を選んでもらう
+  // 新規作成でモード未選択なら、最初に「何のための発信か」を選んでもらう。
+  // 初めての利用者がこの画面だけで方向性と進め方を理解できるよう、
+  // サービスの説明・具体例・この後の流れ・迷ったときの決め方まで載せる。
   if (isNew && mode === null) {
+    const pick = (m: 'store' | 'personal') => () => setMode(m);
     return (
-      <div className="min-h-[70vh] flex items-center justify-center px-4">
-        <div className="w-full max-w-2xl">
-          <p className="mb-2 text-center text-sm font-bold tracking-wider text-primary">はじめに</p>
-          <h1 className="mb-6 text-center text-xl font-bold text-foreground">何のための発信ですか？</h1>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <button
-              className="rounded-2xl border-2 border-border bg-card p-6 text-left transition hover:border-primary"
-              onClick={() => setMode('store')}
-            >
-              <p className="mb-1 text-lg font-bold text-foreground">お店の集客</p>
-              <p className="text-sm text-muted-foreground">
-                整体院・サロン・ジムなど、お店に来てもらうための発信。地域のお客様に届けます。
-              </p>
-            </button>
-            <button
-              className="rounded-2xl border-2 border-border bg-card p-6 text-left transition hover:border-primary"
-              onClick={() => setMode('personal')}
-            >
-              <p className="mb-1 text-lg font-bold text-foreground">個人にファンをつける</p>
-              <p className="text-sm text-muted-foreground">
-                経営者・専門家・コーチ・フリーランスなど、あなた自身の発信でファンを増やします。
-              </p>
-            </button>
-          </div>
-          <p className="mt-4 text-center text-xs text-muted-foreground">あとから作り直すこともできます。</p>
+      <div className="mx-auto max-w-3xl px-4 py-8">
+        <p className="mb-2 text-center text-sm font-bold tracking-wider text-primary">はじめに</p>
+        <h1 className="mb-2 text-center text-2xl font-bold text-foreground">何のための発信ですか？</h1>
+        <p className="mx-auto mb-6 max-w-xl text-center text-sm leading-relaxed text-muted-foreground">
+          Threads Studioは、AIがあなたの代わりに毎日Threadsへ投稿するサービスです。
+          目的によって投稿の作り方が変わるので、最初にどちらかを選んでください。
+        </p>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* お店の集客 */}
+          <button
+            className="flex flex-col rounded-2xl border-2 border-border bg-card p-6 text-left transition hover:border-primary hover:shadow-md"
+            onClick={pick('store')}
+          >
+            <p className="mb-1 text-lg font-bold text-foreground">お店の集客</p>
+            <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
+              お店に来てもらうための発信。地域のお客様に「行ってみたい」と思ってもらいます。
+            </p>
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {['整体院', 'サロン', 'ジム', 'カフェ', '教室'].map((x) => (
+                <span key={x} className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">{x}</span>
+              ))}
+            </div>
+            <ul className="mt-auto space-y-1 text-xs leading-relaxed text-muted-foreground">
+              <li>・地域名や店舗の強みを活かした投稿</li>
+              <li>・ご予約・公式LINEへの導線づくり</li>
+              <li>・「近所のあの店」として覚えてもらう</li>
+            </ul>
+          </button>
+
+          {/* 個人にファンをつける */}
+          <button
+            className="flex flex-col rounded-2xl border-2 border-border bg-card p-6 text-left transition hover:border-primary hover:shadow-md"
+            onClick={pick('personal')}
+          >
+            <p className="mb-1 text-lg font-bold text-foreground">個人にファンをつける</p>
+            <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
+              あなた自身の発信でファンを増やします。考え方や経験に共感してくれる人を集めます。
+            </p>
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {['経営者', 'コーチ', '士業', '講師', 'フリーランス'].map((x) => (
+                <span key={x} className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">{x}</span>
+              ))}
+            </div>
+            <ul className="mt-auto space-y-1 text-xs leading-relaxed text-muted-foreground">
+              <li>・持論・失敗談・挑戦の過程で人柄を伝える</li>
+              <li>・売り込まずに信頼とフォロワーを育てる</li>
+              <li>・オンライン中心の活動でもOK</li>
+            </ul>
+          </button>
         </div>
+
+        {/* 迷ったときの決め方 */}
+        <div className="mx-auto mt-5 max-w-xl rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+          <span className="font-bold text-foreground">迷ったら：</span>
+          お客様に「来てもらう場所」があるなら<span className="font-bold text-foreground">お店の集客</span>、
+          あなた個人の名前で仕事をしているなら<span className="font-bold text-foreground">個人にファンをつける</span>がおすすめです。
+        </div>
+
+        {/* この後の流れ */}
+        <div className="mx-auto mt-5 max-w-xl">
+          <p className="mb-2 text-center text-xs font-bold tracking-wider text-muted-foreground">選んだあとの流れ</p>
+          <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground sm:gap-2 sm:text-sm">
+            <span className="rounded-lg bg-card border border-border px-2.5 py-1.5 sm:px-3">質問に答える<span className="hidden sm:inline">（10〜15分）</span></span>
+            <span>→</span>
+            <span className="rounded-lg bg-card border border-border px-2.5 py-1.5 sm:px-3">AIが投稿を作る</span>
+            <span>→</span>
+            <span className="rounded-lg bg-card border border-border px-2.5 py-1.5 sm:px-3">毎日自動で投稿</span>
+          </div>
+        </div>
+
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          選択はあとから作り直せます。答えた内容だけがAIの「事実」として使われ、勝手な数字や実績は作られません。
+        </p>
       </div>
     );
   }

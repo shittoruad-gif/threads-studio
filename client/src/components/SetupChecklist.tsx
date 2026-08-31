@@ -49,8 +49,8 @@ export default function SetupChecklist({
     {
       done: hasProject,
       icon: MessageCircleQuestion,
-      title: t('お店のことをAIに教える'),
-      desc: t('チャットの質問に答えるだけです（10〜15分）。答えた内容だけを使って投稿が作られます。'),
+      title: t('発信の目的を選んで、AIに教える'),
+      desc: t('最初に「お店の集客」か「個人にファンをつける」かを選び、質問に答えるだけです（10〜15分）。答えた内容だけを使って投稿が作られます。'),
       cta: t('入力を始める'),
       action: () => onNavigate('/ai-counseling'),
     },
@@ -117,7 +117,7 @@ export default function SetupChecklist({
         </span>
       </div>
       <p className="mb-4 text-sm text-muted-foreground">
-        {t('上から順番に進めるだけで、毎日の自動投稿が始まります。')}
+        {t('Threads Studioは、AIがあなたの代わりに毎日Threadsへ投稿するサービスです。上から順番に進めるだけで、毎日の自動投稿が始まります。')}
       </p>
 
       <div className="space-y-2.5">

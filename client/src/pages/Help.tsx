@@ -61,6 +61,18 @@ export default function Help() {
         </p>
 
         <div className="space-y-3">
+          <Qa q="「お店の集客」と「個人にファンをつける」、どちらを選べばいい？">
+            <p>
+              最初の設定で選ぶ「発信の目的」です。お客様に<span className="font-bold text-foreground">来てもらう場所（店舗）</span>が
+              あるなら<Ui>お店の集客</Ui>、あなた<span className="font-bold text-foreground">個人の名前で仕事をしている</span>
+              （経営者・コーチ・士業・フリーランスなど）なら<Ui>個人にファンをつける</Ui>を選んでください。
+            </p>
+            <p>
+              両方に当てはまる場合は、いま売上に直結する方を選ぶのがおすすめです。
+              選択はあとから作り直せます（<Ui>お店の情報</Ui>から質問にもう一度答え直すだけです）。
+            </p>
+          </Qa>
+
           <Qa q="店長など、他の人も通知を受け取り、操作できるようにしたい" defaultOpen>
             <p>1つのアカウントに、複数の人のLINEを連携できます（人数制限なし）。</p>
             <Steps
