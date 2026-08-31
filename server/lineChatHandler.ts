@@ -7,9 +7,12 @@
  */
 import * as db from "./db";
 import {
-  buildPostCards, textWithQuick, parsePostback, fmtJst, REWRITE_KINDS,
+  buildPostCards, textWithQuick, textWithChoices, parsePostback, fmtJst, REWRITE_KINDS,
   MENU_ITEMS, HELP_TOPICS, helpQuick, settingsQuick, settingsSummary,
 } from "./lineChat";
+import { COUNSELING_QUESTIONS } from "../shared/counseling";
+import { applyPersonalOverrides } from "../shared/personalBrand";
+import { saveCounselingAnswers } from "./counselingSave";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
 
@@ -23,8 +26,34 @@ function notLinked(): unknown[] {
   }];
 }
 
+/** 投稿にアカウント名（@username）を付ける。複数運用時にどれか分かるようにするため。 */
+async function withAccountNames(userId: number, posts: any[]): Promise<any[]> {
+  try {
+    const accounts = await db.getThreadsAccountsByUserId(userId);
+    const byId = new Map(accounts.map((a: any) => [a.id, a.threadsUsername]));
+    return posts.map((p) => ({ ...p, accountName: byId.get(p.threadsAccountId) ?? null }));
+  } catch {
+    return posts;
+  }
+}
+
+/** 承認待ちを1件だけ出す（1件ずつモード。残り件数も伝える） */
+async function replyOneWaiting(userId: number, headText?: string): Promise<unknown[]> {
+  const all = await db.getScheduledPostsByUserId(userId);
+  const waiting = all
+    .filter((p: any) => p.status === "awaiting_approval")
+    .sort((a: any, b: any) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+  if (waiting.length === 0) {
+    return [textWithQuick((headText ? headText + "\n\n" : "") + "確認をお待ちしている投稿は、これで全部です。おつかれさまでした。", MENU_HINT)];
+  }
+  const withNames = await withAccountNames(userId, waiting);
+  const head = (headText ? headText + "\n\n" : "") +
+    (waiting.length === 1 ? "残り1件です。" : `残り${waiting.length}件です。まずこの1件から。`);
+  return [{ type: "text", text: head }, buildPostCards([withNames[0]], { one: true })];
+}
+
 /** 承認待ちの投稿を出す（無ければ次の予定を伝える） */
-async function repliesForPosts(userId: number): Promise<unknown[]> {
+async function repliesForPosts(userId: number, mode?: "one" | "all"): Promise<unknown[]> {
   const all = await db.getScheduledPostsByUserId(userId);
   const waiting = all
     .filter((p: any) => p.status === "awaiting_approval")
@@ -40,9 +69,22 @@ async function repliesForPosts(userId: number): Promise<unknown[]> {
       MENU_HINT,
     )];
   }
+  // 2件以上あるときは、まとめて見るか1件ずつ確認するかを選べるようにする。
+  // （複数アカウント運用だと、まとめて出すとどれを処理したか分からなくなるため）
+  if (waiting.length > 1 && !mode) {
+    return [textWithQuick(
+      `確認をお待ちしている投稿が${waiting.length}件あります。どちらで確認しますか？`,
+      [
+        { label: "1件ずつ確認する", data: "m=posts&one=1" },
+        { label: "まとめて見る", data: "m=posts&all=1" },
+      ],
+    )];
+  }
+  if (mode === "one" || waiting.length === 1) return replyOneWaiting(userId);
+  const withNames = await withAccountNames(userId, waiting);
   return [
     { type: "text", text: `確認をお待ちしている投稿が${waiting.length}件あります。内容を見て、下のボタンを押してください。` },
-    buildPostCards(waiting as any),
+    buildPostCards(withNames as any),
   ];
 }
 
@@ -54,7 +96,7 @@ async function ownedPost(userId: number, postId: number) {
 }
 
 /** 書き直し（AIに指示を渡して作り直す） */
-async function rewritePost(userId: number, postId: number, instruction: string): Promise<unknown[]> {
+async function rewritePost(userId: number, postId: number, instruction: string, one = false): Promise<unknown[]> {
   const post = await ownedPost(userId, postId);
   if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
   if (post.status !== "awaiting_approval") {
@@ -77,27 +119,69 @@ async function rewritePost(userId: number, postId: number, instruction: string):
     if (!next) throw new Error("empty");
     await db.updateScheduledPost(postId, { postContent: next });
     const updated = await db.getScheduledPostById(postId);
+    const [withName] = await withAccountNames(userId, [updated as any]);
     return [
       { type: "text", text: "書き直しました。こちらでよろしければ「これで投稿する」を押してください。" },
-      buildPostCards([updated as any]),
+      buildPostCards([withName], { one }),
     ];
   } catch {
     return [textWithQuick("うまく書き直せませんでした。もう一度お試しいただくか、別の言い方でお伝えください。", MENU_HINT)];
   }
 }
 
-/** 直近7日の成績（数字だけをテキストで返す） */
+/** 直近7日の成績（表示回数・いいねの内訳と、反応が良かった投稿） */
 async function repliesForStats(userId: number): Promise<unknown[]> {
   try {
-    const all = await db.getScheduledPostsByUserId(userId);
     const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const posted = all.filter((p: any) => p.status === "posted" && p.postedAt && new Date(p.postedAt).getTime() >= since);
-    if (posted.length === 0) {
-      return [textWithQuick("この7日間に公開された投稿はまだありません。", MENU_HINT)];
+    const rows = await db.getPostAnalyticsByUserId(userId);
+    const recent = rows.filter((r: any) => r.postedAt && new Date(r.postedAt).getTime() >= since);
+    if (recent.length === 0) {
+      const all = await db.getScheduledPostsByUserId(userId);
+      const posted = all.filter((p: any) => p.status === "posted" && p.postedAt && new Date(p.postedAt).getTime() >= since);
+      return [textWithQuick(
+        posted.length > 0
+          ? `この7日間で${posted.length}件を公開しました。\n反応の数字はThreadsから取り込み中です。数時間後にもう一度ご確認ください。`
+          : "この7日間に公開された投稿はまだありません。",
+        MENU_HINT,
+      )];
     }
+    const accounts = await db.getThreadsAccountsByUserId(userId);
+    const nameOf = new Map<number, string>(accounts.map((a: any) => [a.id, a.threadsUsername]));
+    const sum = (k: string) => recent.reduce((n: number, r: any) => n + (Number(r[k]) || 0), 0);
+    const imp = sum("impressions"), likes = sum("likes"), rep = sum("replies"), rt = sum("reposts");
+    const avg = Math.round(imp / recent.length);
+
+    // アカウントが複数あるときは内訳も出す（どのアカウントが伸びたか分かるように）
+    const byAcc = new Map<number, { imp: number; likes: number; n: number }>();
+    for (const r of recent as any[]) {
+      const key = r.threadsAccountId ?? 0;
+      const cur = byAcc.get(key) || { imp: 0, likes: 0, n: 0 };
+      cur.imp += Number(r.impressions) || 0;
+      cur.likes += Number(r.likes) || 0;
+      cur.n += 1;
+      byAcc.set(key, cur);
+    }
+    const accLines = byAcc.size > 1
+      ? "\n\n【アカウント別】\n" + Array.from(byAcc.entries())
+          .sort((a, b) => b[1].imp - a[1].imp)
+          .map(([id, v]) => `・@${nameOf.get(id) ?? "（不明）"}：${v.n}件／${v.imp.toLocaleString()}回表示／いいね${v.likes}`)
+          .join("\n")
+      : "";
+
+    const top = [...recent]
+      .sort((a: any, b: any) => (Number(b.impressions) || 0) - (Number(a.impressions) || 0))
+      .slice(0, 3)
+      .map((r: any, i: number) =>
+        `${i + 1}. ${(r.postContent || "").replace(/\n/g, " ").slice(0, 40)}…\n　　${(Number(r.impressions) || 0).toLocaleString()}回表示／いいね${Number(r.likes) || 0}`)
+      .join("\n");
+
     return [textWithQuick(
-      `この7日間で${posted.length}件の投稿を公開しました。\n\n` +
-      "反応の数字（表示回数・いいね）は、投稿ごとの集計が届きしだいこのトークでもお伝えできるようにしています。いまは詳しい数字が必要なときだけアプリの「投稿分析」をご覧ください。",
+      `直近7日の成績です。\n\n` +
+      `・投稿数：${recent.length}件\n` +
+      `・表示回数：${imp.toLocaleString()}回（1投稿あたり平均${avg.toLocaleString()}回）\n` +
+      `・いいね：${likes}／返信：${rep}／リポスト：${rt}` +
+      accLines +
+      `\n\n【反応が良かった投稿】\n${top}`,
       MENU_HINT,
     )];
   } catch {
@@ -111,7 +195,10 @@ async function repliesForProfile(userId: number): Promise<unknown[]> {
     const projects = await db.getProjectsByUserId(userId);
     const p: any = projects?.[0];
     if (!p) {
-      return [textWithQuick("まだお店の情報が登録されていません。最初の登録だけはアプリの画面からお願いします。", MENU_HINT)];
+      return [textWithQuick(
+        "まだお店の情報が登録されていません。\nこのトークで質問にお答えいただくだけで登録できます（10〜15分・全20問）。",
+        [{ label: "はじめの設定を始める", data: "m=setup" }, ...MENU_HINT],
+      )];
     }
     const lines = [
       p.businessType ? `・業種：${p.businessType}` : null,
@@ -121,12 +208,94 @@ async function repliesForProfile(userId: number): Promise<unknown[]> {
     ].filter(Boolean);
     return [textWithQuick(
       "登録されている内容です。\n\n" + lines.join("\n") +
-      "\n\n直したいところがあれば、この続きにそのまま書いて送ってください（例：「強みを、女性スタッフのみの安心感に変えて」）。",
-      MENU_HINT,
+      "\n\n登録し直したいときは「はじめの設定をやり直す」を押してください。",
+      [{ label: "はじめの設定をやり直す", data: "m=setup" }, ...MENU_HINT],
     )];
   } catch {
     return [textWithQuick("お店の情報を読み込めませんでした。", MENU_HINT)];
   }
+}
+
+
+// ══════════ はじめの設定（20問）をトーク内で1問ずつ聞く ══════════
+// 状態: state="counseling" / payload={mode, step, answers, projectId}
+interface CounselingState { mode: "store" | "personal"; step: number; answers: Record<string, string>; projectId: string }
+
+function questionsFor(mode: "store" | "personal") {
+  return mode === "personal" ? applyPersonalOverrides(COUNSELING_QUESTIONS) : COUNSELING_QUESTIONS;
+}
+
+/** n問目を出す（選択肢はタップで送れるようにする） */
+function askQuestion(st: CounselingState): unknown[] {
+  const qs = questionsFor(st.mode);
+  const q: any = qs[st.step];
+  const total = qs.length;
+  const head = `【${st.step + 1}／${total}】\n${q.prompt}`;
+  const hint = q.helper ? `\n\n${q.helper}` : "";
+  const skip = q.required ? "" : "\n\n（なければ「スキップ」と送ってください）";
+  const choices: string[] = [];
+  if (Array.isArray(q.choices)) for (const c of q.choices) choices.push(c.label);
+  else if (Array.isArray(q.suggestions)) choices.push(...q.suggestions);
+  if (!q.required) choices.push("スキップ");
+  return [textWithChoices(head + hint + skip, choices)];
+}
+
+/** 回答を受け取り、次の質問へ進む。最後まで行ったら保存する。 */
+async function advanceCounseling(userId: number, lineUserId: string, st: CounselingState, answer: string): Promise<unknown[]> {
+  const qs = questionsFor(st.mode);
+  const q: any = qs[st.step];
+  const a = answer.trim();
+  if (/^(やめる|中止|キャンセル)$/.test(a)) {
+    await db.clearLineChatState(lineUserId);
+    return [textWithQuick("はじめの設定を中断しました。「はじめの設定」からいつでも再開できます。", MENU_HINT)];
+  }
+  const skipped = /^(スキップ|なし|特になし)$/.test(a);
+  if (q.required && skipped) {
+    return [{ type: "text", text: "こちらは必要な項目です。おおよそで構いませんので、お答えください。" }, ...askQuestion(st)];
+  }
+  // choice型はラベル→valueに戻す
+  let stored = skipped ? "" : a.slice(0, 500);
+  if (Array.isArray(q.choices) && !skipped) {
+    const hit = q.choices.find((c: any) => c.label === a || c.value === a);
+    if (hit) stored = hit.value;
+  }
+  st.answers[q.id] = stored;
+  st.step += 1;
+
+  if (st.step < qs.length) {
+    await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
+    return askQuestion(st);
+  }
+
+  // 全問終了 → 保存
+  await db.clearLineChatState(lineUserId);
+  const res = await saveCounselingAnswers({
+    userId, projectId: st.projectId, mode: st.mode, answers: st.answers as any,
+  });
+  if (!res.ok) {
+    return [textWithQuick("保存に失敗しました。時間をおいて「はじめの設定」からやり直してください。", MENU_HINT)];
+  }
+  return [textWithQuick(
+    "ありがとうございました。設定が終わりました。\n\n" +
+    "この内容をもとに、AIが毎日の投稿を作ります。できあがった投稿は、このトークでお知らせします。\n" +
+    "内容を直したくなったら、いつでも「はじめの設定」からやり直せます。",
+    MENU_HINT,
+  )];
+}
+
+/** はじめの設定を開始（まず目的を選んでもらう） */
+async function startCounseling(lineUserId: string): Promise<unknown[]> {
+  return [textWithQuick(
+    "はじめの設定を始めます（10〜15分・全20問）。\n\n" +
+    "まず、何のための発信かを選んでください。\n" +
+    "・お店の集客：お客様に来てもらうための発信\n" +
+    "・個人にファンをつける：ご自身の名前での発信\n\n" +
+    "途中でやめたいときは「やめる」と送ってください。",
+    [
+      { label: "お店の集客", data: "c=start&mode=store" },
+      { label: "個人にファンをつける", data: "c=start&mode=personal" },
+    ],
+  )];
 }
 
 /**
@@ -138,10 +307,22 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   const q = parsePostback(data);
 
   // ── メニュー ──
-  if (q.m === "posts") return repliesForPosts(user.id);
+  if (q.m === "posts") return repliesForPosts(user.id, q.one ? "one" : q.all ? "all" : undefined);
   if (q.m === "stats") return repliesForStats(user.id);
   if (q.m === "profile") return repliesForProfile(user.id);
   if (q.m === "help") return [textWithQuick("よくあるご質問です。知りたいものを選んでください。", helpQuick())];
+  if (q.m === "setup") return startCounseling(lineUserId);
+  if (q.c === "start" && (q.mode === "store" || q.mode === "personal")) {
+    // 既存プロジェクトがあればそれを更新、無ければ新規IDで作る
+    const projects = await db.getProjectsByUserId(user.id);
+    const projectId = (projects?.[0] as any)?.id || `line_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    const st: CounselingState = { mode: q.mode, step: 0, answers: {}, projectId };
+    await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
+    return [
+      { type: "text", text: q.mode === "personal" ? "「個人にファンをつける」で進めます。" : "「お店の集客」で進めます。" },
+      ...askQuestion(st),
+    ];
+  }
   if (q.m === "menu") return [textWithQuick("どれをご覧になりますか？", MENU_HINT)];
   if (q.m === "settings") {
     const s = (await db.getAutoPostSettings(user.id)) || {};
@@ -164,17 +345,22 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const scheduledAt = post.scheduledAt && new Date(post.scheduledAt) > now ? undefined : now;
     await db.updateScheduledPost(Number(q.i), { status: "pending", ...(scheduledAt ? { scheduledAt } : {}) });
     const when = scheduledAt ? "まもなく" : `${fmtJst(post.scheduledAt)} に`;
-    return [textWithQuick(`承認しました。${when}公開されます。`, MENU_HINT)];
+    const done = `承認しました。${when}公開されます。`;
+    // 1件ずつモードなら、続けて次の1件を出す（どれを処理したか分からなくならない）
+    if (q.o) return replyOneWaiting(user.id, done);
+    return [textWithQuick(done, MENU_HINT)];
   }
   if (q.a === "skip" && q.i) {
     const post = await ownedPost(user.id, Number(q.i));
     if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
     await db.updateScheduledPost(Number(q.i), { status: "canceled" });
-    return [textWithQuick("この投稿は見送りにしました。明日の投稿はまた新しく作ります。", MENU_HINT)];
+    const done = "この投稿は見送りにしました。明日の投稿はまた新しく作ります。";
+    if (q.o) return replyOneWaiting(user.id, done);
+    return [textWithQuick(done, MENU_HINT)];
   }
   if (q.a === "rw" && q.i) {
-    const items = Object.entries(REWRITE_KINDS).map(([k, v]) => ({ label: v.label, data: `a=rw2&i=${q.i}&k=${k}` }));
-    await db.setLineChatState(lineUserId, "rewrite_free", q.i);
+    const items = Object.entries(REWRITE_KINDS).map(([k, v]) => ({ label: v.label, data: `a=rw2&i=${q.i}&k=${k}${q.o ? "&o=1" : ""}` }));
+    await db.setLineChatState(lineUserId, "rewrite_free", JSON.stringify({ i: q.i, o: q.o ? 1 : 0 }));
     return [textWithQuick(
       "どんなふうに直しますか？\n下から選ぶか、ご希望をそのまま文章で送ってください（例：「クーポンの話を入れて」）。",
       items,
@@ -184,7 +370,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     await db.clearLineChatState(lineUserId);
     const kind = REWRITE_KINDS[q.k];
     if (!kind) return [{ type: "text", text: "選択を読み取れませんでした。" }];
-    return rewritePost(user.id, Number(q.i), kind.instruction);
+    return rewritePost(user.id, Number(q.i), kind.instruction, !!q.o);
   }
 
   // ── 設定 ──
@@ -223,9 +409,23 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   if (!user) return null; // 未連携は既存の案内に任せる
 
   const st = await db.getLineChatState(lineUserId);
+  if (st?.state === "counseling" && st.payload) {
+    try {
+      const cs: CounselingState = JSON.parse(st.payload);
+      return await advanceCounseling(user.id, lineUserId, cs, text);
+    } catch {
+      await db.clearLineChatState(lineUserId);
+      return [textWithQuick("設定の途中で問題が起きました。「はじめの設定」からやり直してください。", MENU_HINT)];
+    }
+  }
   if (st?.state === "rewrite_free" && st.payload) {
     await db.clearLineChatState(lineUserId);
-    return rewritePost(user.id, Number(st.payload), text.slice(0, 200));
+    let postId = 0, one = false;
+    try {
+      const p = JSON.parse(st.payload);
+      postId = Number(p.i); one = !!p.o;
+    } catch { postId = Number(st.payload); }
+    return rewritePost(user.id, postId, text.slice(0, 200), one);
   }
   if (st?.state === "ngword") {
     await db.clearLineChatState(lineUserId);

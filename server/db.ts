@@ -3493,16 +3493,23 @@ export async function setLineChatState(lineUserId: string, state: string, payloa
   ));
 }
 
-/** 保存済みの状態を取り出す（10分より古いものは無視する） */
+/**
+ * 保存済みの状態を取り出す。
+ * 有効期限は用途で変える: はじめの設定(counseling)は回答に10〜15分かかるので長め、
+ * それ以外（書き直しの指示待ち等）は取り違えを防ぐため短くする。
+ */
 export async function getLineChatState(lineUserId: string): Promise<{ state: string; payload: string | null } | null> {
   const database = await getDb();
   if (!database) return null;
   const rows: any = await database.execute(sql.raw(
-    `SELECT \`state\`, \`payload\` FROM \`lineChatStates\`
-     WHERE \`lineUserId\` = ${escapeSql(lineUserId)} AND \`updatedAt\` > (NOW() - INTERVAL 10 MINUTE) LIMIT 1`
+    `SELECT \`state\`, \`payload\`, TIMESTAMPDIFF(MINUTE, \`updatedAt\`, NOW()) AS ageMin
+     FROM \`lineChatStates\` WHERE \`lineUserId\` = ${escapeSql(lineUserId)} LIMIT 1`
   ));
   const r = rows?.[0]?.[0];
-  return r ? { state: r.state, payload: r.payload ?? null } : null;
+  if (!r) return null;
+  const ttl = r.state === "counseling" ? 180 : 15;
+  if (Number(r.ageMin) > ttl) return null;
+  return { state: r.state, payload: r.payload ?? null };
 }
 
 /** 状態を消す（1ステップ終わったら必ず呼ぶ） */

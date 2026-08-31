@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPostCards, parsePostback, textWithQuick, settingsQuick, settingsSummary, helpQuick } from "./lineChat";
+import { buildPostCards, parsePostback, textWithQuick, textWithChoices, settingsQuick, settingsSummary, helpQuick } from "./lineChat";
 
 describe("LINEチャット完結UI", () => {
   it("投稿カードのボタンはすべてpostback（Webビューを開かない）", () => {
@@ -51,5 +51,34 @@ describe("LINEチャット完結UI", () => {
 
   it("ヘルプの選択肢が並ぶ", () => {
     expect(helpQuick().length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe("複数アカウント運用での取り違え防止", () => {
+  it("カードにアカウント名が入る", () => {
+    const json = JSON.stringify(buildPostCards([
+      { id: 1, postContent: "a", scheduledAt: null, accountName: "salon_a" },
+    ]));
+    expect(json).toContain("@salon_a");
+  });
+
+  it("1件ずつモードではボタンに o=1 が付く（処理後に次の1件を出すため）", () => {
+    const json = JSON.stringify(buildPostCards([{ id: 5, postContent: "a", scheduledAt: null }], { one: true }));
+    expect(json).toContain("a=ok&i=5&o=1");
+    expect(json).toContain("a=rw&i=5&o=1");
+    expect(json).toContain("a=skip&i=5&o=1");
+  });
+
+  it("まとめて表示のときは o=1 が付かない", () => {
+    const json = JSON.stringify(buildPostCards([{ id: 5, postContent: "a", scheduledAt: null }]));
+    expect(json).not.toContain("o=1");
+  });
+});
+
+describe("カウンセリングの選択肢", () => {
+  it("タップでその文字が送られる（手入力と同じ扱いにする）", () => {
+    const msg: any = textWithChoices("業種は？", ["整体院", "美容サロン", "スキップ"]);
+    expect(msg.quickReply.items[0].action.type).toBe("message");
+    expect(msg.quickReply.items[0].action.text).toBe("整体院");
   });
 });

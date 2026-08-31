@@ -30,6 +30,23 @@ export function textWithQuick(text: string, items: QuickItem[]): unknown {
   return msg;
 }
 
+/**
+ * 選択肢タップで「その文字を発言する」クイックリプライ。
+ * カウンセリングの回答のように、タップでも手入力でも同じ扱いにしたいときに使う。
+ */
+export function textWithChoices(text: string, choices: string[]): unknown {
+  const msg: any = { type: "text", text };
+  if (choices.length > 0) {
+    msg.quickReply = {
+      items: choices.slice(0, 13).map((c) => ({
+        type: "action",
+        action: { type: "message", label: c.slice(0, 20), text: c.slice(0, 300) },
+      })),
+    };
+  }
+  return msg;
+}
+
 export function fmtJst(v: Date | string | null): string {
   if (!v) return "";
   const d = new Date(v);
@@ -41,7 +58,11 @@ export function fmtJst(v: Date | string | null): string {
  * 承認待ち投稿のカード（トーク内で完結。ボタンはすべてpostback）。
  * 本文は全文を載せる（見に行かせない）。1カード=1投稿・最大5件。
  */
-export function buildPostCards(posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null }>): unknown {
+export function buildPostCards(
+  posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null; accountName?: string | null }>,
+  opts: { one?: boolean } = {},
+): unknown {
+  const suffix = opts.one ? "&o=1" : "";
   const bubbles = posts.slice(0, 5).map((p) => ({
     type: "bubble",
     size: "mega",
@@ -50,7 +71,12 @@ export function buildPostCards(posts: Array<{ id: number; postContent: string | 
       layout: "vertical",
       spacing: "md",
       contents: [
-        { type: "text", text: `${fmtJst(p.scheduledAt)} 公開予定`, size: "xs", color: "#8A9A9A" },
+        {
+          type: "text",
+          // ★複数アカウントを運用していても「どのアカウントの投稿か」が必ず分かるようにする
+          text: (p.accountName ? `@${p.accountName}　` : "") + `${fmtJst(p.scheduledAt)} 公開予定`,
+          size: "xs", color: "#0E8388", weight: "bold", wrap: true,
+        },
         { type: "text", text: (p.postContent || "（本文なし）").slice(0, 900), wrap: true, size: "sm", color: "#13343B" },
       ],
     },
@@ -60,12 +86,12 @@ export function buildPostCards(posts: Array<{ id: number; postContent: string | 
       spacing: "sm",
       contents: [
         { type: "button", style: "primary", color: "#0E8388", height: "sm",
-          action: { type: "postback", label: "これで投稿する", data: `a=ok&i=${p.id}`, displayText: "これで投稿する" } },
+          action: { type: "postback", label: "これで投稿する", data: `a=ok&i=${p.id}${suffix}`, displayText: "これで投稿する" } },
         { type: "box", layout: "horizontal", spacing: "sm", contents: [
           { type: "button", style: "secondary", height: "sm",
-            action: { type: "postback", label: "書き直す", data: `a=rw&i=${p.id}`, displayText: "書き直す" } },
+            action: { type: "postback", label: "書き直す", data: `a=rw&i=${p.id}${suffix}`, displayText: "書き直す" } },
           { type: "button", style: "secondary", height: "sm",
-            action: { type: "postback", label: "見送る", data: `a=skip&i=${p.id}`, displayText: "見送る" } },
+            action: { type: "postback", label: "見送る", data: `a=skip&i=${p.id}${suffix}`, displayText: "見送る" } },
         ] },
       ],
     },
@@ -105,6 +131,7 @@ export const MENU_ITEMS: QuickItem[] = [
   { label: "投稿の成績", data: "m=stats" },
   { label: "お店の情報", data: "m=profile" },
   { label: "使い方", data: "m=help" },
+  { label: "はじめの設定", data: "m=setup" },
 ];
 
 export const HELP_TOPICS: Array<{ key: string; q: string; a: string }> = [

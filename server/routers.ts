@@ -878,68 +878,22 @@ export const appRouter = router({
         }),
       }))
       .mutation(async ({ ctx, input }) => {
-        const a = input.answers;
-        const trimmed = (s: string) => (s ?? '').trim();
-        // タイトル自動生成（店名＞業種＋地域＞既定）。
-        const deriveTitle = () => {
-          const store = trimmed(a.storeNameRaw);
-          if (store && !/^(なし|無し|特になし)$/i.test(store)) return store.slice(0, 60);
-          const bt = trimmed(a.businessTypeRaw);
-          const ar = trimmed(a.areaRaw);
-          if (bt || ar) return `${bt}${ar ? `（${ar}）` : ''}`.slice(0, 60);
-          return 'マイプロジェクト';
-        };
-
-        let project = await db.getProjectById(input.projectId);
-        // ★カウンセリング起点フロー：プロジェクトが無ければここで作成する。
-        if (!project) {
-          await db.createProject({
-            id: input.projectId,
-            userId: ctx.user.id,
-            title: deriveTitle(),
-            mode: input.mode,
-          } as any);
-          project = await db.getProjectById(input.projectId);
-          if (!project) {
-            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'プロジェクトの作成に失敗しました。' });
-          }
-        } else if (project.userId !== ctx.user.id) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+        // 保存処理は server/counselingSave.ts に集約（LINEチャットでの聞き取りと同じ結果にする）
+        const { saveCounselingAnswers } = await import('./counselingSave');
+        const saved = await saveCounselingAnswers({
+          userId: ctx.user.id,
+          projectId: input.projectId,
+          mode: input.mode,
+          answers: input.answers as any,
+        });
+        if (!saved.ok) {
+          throw new TRPCError({
+            code: saved.reason === 'not_found' ? 'NOT_FOUND' : 'INTERNAL_SERVER_ERROR',
+            message: saved.reason === 'not_found' ? 'Project not found' : 'プロジェクトの作成に失敗しました。',
+          });
         }
-
         const { buildCounselingResult } = await import('../shared/counseling');
         const result = buildCounselingResult(input.answers);
-
-        const updatePatch: any = {
-          counselingResult: JSON.stringify(result),
-          useThreadsKnowhow: result.useThreadsKnowhow,
-          mode: input.mode,
-        };
-        // 基本情報をプロジェクトへ反映（未設定 or 今回入力があれば上書き）。
-        if (trimmed(a.businessTypeRaw)) updatePatch.businessType = trimmed(a.businessTypeRaw);
-        if (trimmed(a.areaRaw)) updatePatch.area = trimmed(a.areaRaw);
-        if (trimmed(a.targetRaw)) updatePatch.target = trimmed(a.targetRaw);
-        if (trimmed(a.mainProblemRaw)) updatePatch.mainProblem = trimmed(a.mainProblemRaw);
-        if (trimmed(a.strengthRaw)) updatePatch.strength = trimmed(a.strengthRaw);
-        const storeName = trimmed(a.storeNameRaw);
-        if (storeName && !/^(なし|無し|特になし)$/i.test(storeName)) updatePatch.storeName = storeName;
-        if ((!project.title || project.title === 'マイプロジェクト') ) updatePatch.title = deriveTitle();
-
-        // USP / N1 / 実績 / 主張 が未設定なら、カウンセリングの内容で埋める（手間削減）。
-        if (!project.usp && input.answers.uspRaw.trim()) {
-          updatePatch.usp = input.answers.uspRaw.trim();
-        }
-        if (!project.n1Customer && result.realEpisodes.length > 0) {
-          updatePatch.n1Customer = result.realEpisodes.join('\n');
-        }
-        if (!project.proof && result.realProofs.length > 0) {
-          updatePatch.proof = result.realProofs.join('\n');
-        }
-        if (!(project as any).belief && result.industryMyths.length > 0) {
-          updatePatch.belief = result.industryMyths.join('\n');
-        }
-
-        await db.updateProject(input.projectId, updatePatch);
         return { success: true, result, projectId: input.projectId };
       }),
 
