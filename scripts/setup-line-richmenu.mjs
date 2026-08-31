@@ -1,8 +1,8 @@
 /**
  * 公式LINE「Threads Studio 通知」のリッチメニューを作成して既定に設定する。
  *
- * トーク画面下部に3つのボタン（投稿の確認・承認 / コメント管理 / 設定・店舗情報）を
- * 出し、それぞれ LIFF（トーク内でアプリが開き自動ログイン）につなぐ。
+ * トーク画面下部にフルサイズ6ボタン（2段×3列）を出し、
+ * それぞれ LIFF（トーク内でアプリが開き自動ログイン）につなぐ。
  *
  * 使い方（一度だけ実行）:
  *   LINE_NOTIFY_CHANNEL_ACCESS_TOKEN=xxx LIFF_ID=xxxx-xxxxxxxx node scripts/setup-line-richmenu.mjs
@@ -19,7 +19,7 @@ if (!TOKEN || !LIFF_ID) {
   process.exit(1);
 }
 
-const MENU_NAME = 'threads-studio-main-v3';
+const MENU_NAME = 'threads-studio-main-v4';
 const W = 2500;
 const H = 1686;
 const liff = (path) => `https://liff.line.me/${LIFF_ID}?path=${encodeURIComponent(path)}`;
@@ -28,7 +28,7 @@ const liff = (path) => `https://liff.line.me/${LIFF_ID}?path=${encodeURIComponen
 const buttons = [
   { label1: '投稿の確認', label2: '承認・書き換え・見送り', path: '/post-history' },
   { label1: 'コメント', label2: '確認・AIで返信', path: '/comment-manager' },
-  { label1: 'お店の情報', label2: '強み・メニューの修正', path: '/ai-counseling' },
+  { label1: 'お店・自分の情報', label2: '強み・発信内容の修正', path: '/ai-counseling' },
   { label1: '設定', label2: 'NGワード・文体・長さ', path: '/settings' },
   { label1: '投稿分析', label2: '反応を数字で見る', path: '/post-analytics' },
   { label1: 'よくある質問', label2: '困ったらまずここ', path: '/help' },
@@ -85,7 +85,7 @@ const created = await api('https://api.line.me/v2/bot/richmenu', {
     name: MENU_NAME,
     chatBarText: 'メニューを開く',
     areas: buttons.map((b, i) => ({
-      bounds: { x: i * cellW, y: 0, width: cellW, height: H },
+      bounds: { x: (i % 3) * cellW, y: Math.floor(i / 3) * cellH, width: cellW, height: cellH },
       action: { type: 'uri', uri: liff(b.path) },
     })),
   }),
