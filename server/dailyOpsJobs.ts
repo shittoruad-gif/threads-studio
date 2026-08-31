@@ -330,6 +330,12 @@ export function initDailyOpsSchedulers(): void {
     const { runTrackedJob } = await import("./jobRunner");
     await runTrackedJob("takeover_expiry", runTakeoverExpiryJob);
   });
+  // 7:20 JST = 22:20 UTC — Univapayとの課金状態の照合（Webhook取りこぼしの保険）
+  cron.schedule("20 22 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runBillingReconcileJob } = await import("./billingReconcile");
+    await runTrackedJob("billing_reconcile", runBillingReconcileJob);
+  });
   // 8:00 JST = 23:00 UTC
   cron.schedule("0 23 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");
