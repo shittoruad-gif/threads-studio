@@ -850,6 +850,8 @@ export const appRouter = router({
     saveCounseling: protectedProcedure
       .input(z.object({
         projectId: z.string(),
+        // 'personal'=個人ブランディングモード（shared/personalBrand.ts）
+        mode: z.enum(['store', 'personal']).default('store'),
         answers: z.object({
           // 基本情報（プロジェクト作成/更新に使う）
           storeNameRaw: z.string().default(''),
@@ -895,6 +897,7 @@ export const appRouter = router({
             id: input.projectId,
             userId: ctx.user.id,
             title: deriveTitle(),
+            mode: input.mode,
           } as any);
           project = await db.getProjectById(input.projectId);
           if (!project) {
@@ -910,6 +913,7 @@ export const appRouter = router({
         const updatePatch: any = {
           counselingResult: JSON.stringify(result),
           useThreadsKnowhow: result.useThreadsKnowhow,
+          mode: input.mode,
         };
         // 基本情報をプロジェクトへ反映（未設定 or 今回入力があれば上書き）。
         if (trimmed(a.businessTypeRaw)) updatePatch.businessType = trimmed(a.businessTypeRaw);
@@ -1155,11 +1159,13 @@ export const appRouter = router({
           }
         }
 
-        // Call LLM
+        // Call LLM（個人ブランディングモードなら発信者設定を最優先で上書き）
         const { invokeLLM } = await import('./_core/llm');
+        const { isPersonalMode, personalModePromptOverride } = await import('../shared/personalBrand');
+        const personalOverride = isPersonalMode((project as any).mode) ? personalModePromptOverride() : '';
         const response = await invokeLLM({
           messages: [
-            { role: 'user', content: prompt + angleNote },
+            { role: 'user', content: prompt + angleNote + personalOverride },
           ],
           response_format: {
             type: 'json_schema',

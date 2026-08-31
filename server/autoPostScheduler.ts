@@ -15,6 +15,7 @@ import { checkNaturalized, polishPunctuation } from "../shared/jpQualityGuard";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle } from "../shared/postAngles";
+import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
 import { stripRawUrls } from "../shared/sanitize";
 import { invokeLLM } from "./_core/llm";
 import { nanoid } from "nanoid";
@@ -170,9 +171,10 @@ function findForeignRegionWords(
  * factGuard通過後に実行しても捏造は発生しない。
  * 失敗時は元のテキストをそのまま返す（リライトはベストエフォート）。
  */
-export async function naturalizeContent(text: string): Promise<string> {
+export async function naturalizeContent(text: string, personal: boolean = false): Promise<string> {
   try {
-    const prompt = `あなたはお店のオーナーです。次のThreads投稿の下書きを、自分のスマホで打ち直すつもりで自然な投稿に直してください。
+    const persona = personal ? 'あなたは自分の名前で発信している個人事業主です' : 'あなたはお店のオーナーです';
+    const prompt = `${persona}。次のThreads投稿の下書きを、自分のスマホで打ち直すつもりで自然な投稿に直してください。
 
 【最優先：スマホでの見た目】
 - 合計 **50〜100文字** に収める。長い場合は情報を削る（一番大事な1メッセージだけ残す）。
@@ -364,7 +366,7 @@ async function generateAutoPost(
     // ★実績学習：実際に見られた回数（インプレッション）でも重みを補正する。
     //   クライアントが◯✕を押さなくても、結果そのものから伸びる型が増えていく。
     const perf = await db.getAnglePerformanceStats(userId, project.id);
-    angle = pickAngle(stats, Math.random, perf);
+    angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store');
     // ◯✕が付いた実例をプロンプトに注入して「このお店の好み」を学習させる
     const [liked, disliked] = await Promise.all([
       db.getRatedPostSamples(userId, 'good', 2, project.id),
@@ -453,6 +455,9 @@ async function generateAutoPost(
       stylePreference,
       ngWords,
     });
+    // 個人ブランディングモード: 発信者設定を最優先で上書き（店舗前提の表現を止める）
+    const personal = isPersonalMode((project as any).mode);
+    const promptWithMode = prompt;
 
     // Call LLM
     // ★自動投稿は人の目を通らず公開されるため、短文・会話調の最終指示を
@@ -460,12 +465,14 @@ async function generateAutoPost(
     const response = await invokeLLM({
       messages: [{
         role: 'user',
-        content: prompt + AUTO_POST_STYLE_ADDENDUM
+        content: promptWithMode + AUTO_POST_STYLE_ADDENDUM
           + seasonContextJST()
           + angleNote
           + lengthNote
           + preferenceNote
-          + (CONVERSATION_POST_TYPES.has(postType) ? CONVERSATION_ENDING_ADDENDUM : ''),
+          + (CONVERSATION_POST_TYPES.has(postType) ? CONVERSATION_ENDING_ADDENDUM : '')
+          // ★個人モードの上書きは最末尾（末尾の指示が最も遵守されやすい）
+          + (personal ? personalModePromptOverride() : ''),
       }],
       response_format: JSON_SCHEMA,
     });
@@ -512,7 +519,7 @@ async function generateAutoPost(
     //   事実の追加は禁止プロンプトで担保（削るのみ可）。CTAは定型で良いので対象外。
     //   リライト後にNGワードガードを再適用する（言い換えで規制語が混入した場合の保険）。
     const beforeNaturalize = stripRawUrls(result.mainPost);
-    let naturalMain = await naturalizeContent(beforeNaturalize);
+    let naturalMain = await naturalizeContent(beforeNaturalize, personal);
 
     // ★日本語品質ガード（shared/jpQualityGuard.ts）。
     //   リライトが口癖（「正直、」）・お手本コピー・ひらがな開きすぎ・

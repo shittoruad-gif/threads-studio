@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { useThreadsAccount } from '@/components/ThreadsAccountSwitcher';
 import { cn } from '@/lib/utils';
 import ProjectLinksManager from '@/components/ProjectLinksManager';
+import { applyPersonalOverrides } from '@shared/personalBrand';
 import {
   COUNSELING_QUESTIONS,
   type CounselingAnswers,
@@ -104,6 +105,9 @@ export default function AICounseling() {
     draft ? Math.min(draft.stepIndex ?? 0, COUNSELING_QUESTIONS.length - 1) : 0
   );
   const [answers, setAnswers] = useState<Partial<CounselingAnswers>>(draft?.answers ?? {});
+  // プロジェクトの種別（store=店舗集客 / personal=個人ブランディング）。
+  // 新規はモード選択画面で選ぶ。既存プロジェクトは保存済みのmodeを引き継ぐ。
+  const [mode, setMode] = useState<'store' | 'personal' | null>((draft as any)?.mode ?? null);
 
   // /ai-counseling を引数なしで開いたが既にプロジェクトがある場合は、
   // 真っ白な新規入力ではなく既存の回答を開く（「入力が消えた」ように見える誤解の防止。
@@ -146,7 +150,7 @@ export default function AICounseling() {
     try {
       localStorage.setItem(
         COUNSELING_DRAFT_KEY,
-        JSON.stringify({ projectId, answers, stepIndex, savedAt: Date.now() } satisfies CounselingDraft)
+        JSON.stringify({ projectId, answers, stepIndex, mode, savedAt: Date.now() } as CounselingDraft & { mode: typeof mode })
       );
     } catch { /* 容量超過等は無視（保存できないだけ） */ }
   }, [answers, stepIndex, isNew, projectId]);
@@ -181,6 +185,14 @@ export default function AICounseling() {
     setHydrated(true);
   }, [counselingData, counselingLoading, hydrated]);
 
+  // 既存プロジェクトを開いた場合は保存済みのモードを引き継ぐ
+  useEffect(() => {
+    if (mode === null && project && !isNew) {
+      setMode(((project as any).mode === 'personal' ? 'personal' : 'store'));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, isNew]);
+
   const saveMutation = trpc.project.saveCounseling.useMutation({
     onSuccess: () => {
       // バナーが残らないように getCounseling と project.get の両方を invalidate。
@@ -214,10 +226,44 @@ export default function AICounseling() {
     );
   }
 
-  const totalSteps = COUNSELING_QUESTIONS.length;
+  // 新規作成でモード未選択なら、最初に「何のための発信か」を選んでもらう
+  if (isNew && mode === null) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center px-4">
+        <div className="w-full max-w-2xl">
+          <p className="mb-2 text-center text-sm font-bold tracking-wider text-primary">はじめに</p>
+          <h1 className="mb-6 text-center text-xl font-bold text-foreground">何のための発信ですか？</h1>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <button
+              className="rounded-2xl border-2 border-border bg-card p-6 text-left transition hover:border-primary"
+              onClick={() => setMode('store')}
+            >
+              <p className="mb-1 text-lg font-bold text-foreground">お店の集客</p>
+              <p className="text-sm text-muted-foreground">
+                整体院・サロン・ジムなど、お店に来てもらうための発信。地域のお客様に届けます。
+              </p>
+            </button>
+            <button
+              className="rounded-2xl border-2 border-border bg-card p-6 text-left transition hover:border-primary"
+              onClick={() => setMode('personal')}
+            >
+              <p className="mb-1 text-lg font-bold text-foreground">個人にファンをつける</p>
+              <p className="text-sm text-muted-foreground">
+                経営者・専門家・コーチ・フリーランスなど、あなた自身の発信でファンを増やします。
+              </p>
+            </button>
+          </div>
+          <p className="mt-4 text-center text-xs text-muted-foreground">あとから作り直すこともできます。</p>
+        </div>
+      </div>
+    );
+  }
+
+  const questions = mode === 'personal' ? applyPersonalOverrides(COUNSELING_QUESTIONS) : COUNSELING_QUESTIONS;
+  const totalSteps = questions.length;
   const isLast = stepIndex === totalSteps - 1;
   const isFirst = stepIndex === 0;
-  const currentQuestion = COUNSELING_QUESTIONS[stepIndex];
+  const currentQuestion = questions[stepIndex];
   const currentAnswer = answers[currentQuestion.id] ?? '';
 
   const setAnswer = (id: keyof CounselingAnswers, value: string) => {
@@ -248,7 +294,7 @@ export default function AICounseling() {
   });
 
   const handleSave = () => {
-    saveMutation.mutate({ projectId, answers: buildAnswersPayload(answers) });
+    saveMutation.mutate({ projectId, mode: mode ?? 'store', answers: buildAnswersPayload(answers) });
   };
 
   // canProceed は現在のレンダーで描画されるボタンの enable/disable 用。
@@ -365,7 +411,9 @@ export default function AICounseling() {
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
           {isNew
-            ? 'いくつかの質問に答えるだけで、お店の情報が登録され、すぐに投稿を作れるようになります。答えた内容だけをAIは「事実」として使います。'
+            ? (mode === 'personal'
+              ? 'いくつかの質問に答えるだけで、あなたの発信の土台が登録され、すぐに投稿を作れるようになります。答えた内容だけをAIは「事実」として使います。'
+              : 'いくつかの質問に答えるだけで、お店の情報が登録され、すぐに投稿を作れるようになります。答えた内容だけをAIは「事実」として使います。')
             : 'ここで答えてもらった内容だけをAIは「事実」として使います。書かれていない数字・エピソードを勝手に作ることはありません。'}
         </p>
       </div>
@@ -381,7 +429,7 @@ export default function AICounseling() {
           </div>
 
           <div className="space-y-2">
-            {COUNSELING_QUESTIONS.map((q, i) => {
+            {questions.map((q, i) => {
               const display = formatAnswerForReview(q, (answers[q.id] as string) ?? '');
               const isEmpty = display === '（未入力）';
               return (

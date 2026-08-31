@@ -24,6 +24,8 @@ export interface CtaSourceProject {
   /** 旧形式の単一URL（linksが空のときだけ見る） */
   ctaLink?: string | null;
   businessType?: string | null;
+  /** 'personal'=個人ブランディングモード（来店・予約の言葉を使わない） */
+  mode?: string | null;
 }
 
 /** 相談の呼び方。来店型は「ご相談・ご予約」、それ以外は「ご相談」 */
@@ -38,16 +40,21 @@ function consultWord(isLocal: boolean): string {
  */
 export function buildCtaText(project: CtaSourceProject): string | null {
   const links: ProjectLink[] = parseProjectLinks(project.links);
-  const isLocal = isLocalCatchmentBusiness(project.businessType);
+  const personal = project.mode === 'personal';
+  const isLocal = !personal && isLocalCatchmentBusiness(project.businessType);
   const has = (t: string) => links.some((l) => l.type === t && !!l.url);
 
   // 1. 公式LINE がある場合だけ、LINEへ案内する
   if (has('line')) {
+    if (personal) {
+      // 個人ブランディング: 来店・予約の言葉を使わず、続きを読む導線として案内
+      return 'もっと詳しい話は、プロフィールのリンクから公式LINEでお届けしています😊';
+    }
     return `${consultWord(isLocal)}は、プロフィールのリンクから公式LINEへどうぞ😊\n無理な勧誘はありません。`;
   }
 
-  // 2. ネット予約がある場合
-  if (has('reservation')) {
+  // 2. ネット予約がある場合（個人モードでは予約導線を出さない）
+  if (!personal && has('reservation')) {
     return 'ご予約は、プロフィールのリンクからどうぞ😊\n空き状況はその場でご確認いただけます。';
   }
 

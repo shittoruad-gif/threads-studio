@@ -335,6 +335,9 @@ export type InsertThreadsAccount = typeof threadsAccounts.$inferInsert;
  */
 export const projects = mysqlTable("projects", {
   id: varchar("id", { length: 50 }).primaryKey(),
+  // プロジェクトの種別: 'store'=店舗集客（既定） / 'personal'=個人ブランディング
+  // （経営者・専門家・フリーランスが個人にファンをつける発信）。shared/personalBrand.ts
+  mode: varchar("mode", { length: 10 }).default("store").notNull(),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
   title: varchar("title", { length: 255 }).notNull(),
   templateId: varchar("templateId", { length: 100 }),

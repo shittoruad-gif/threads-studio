@@ -134,8 +134,33 @@ export const POST_ANGLES: PostAngle[] = [
 ];
 
 /** id→定義の逆引き */
+/**
+ * 個人ブランディングモード専用の追加切り口（shared/personalBrand.ts）。
+ * 店舗モードの回転には入れない（店舗の発信で「持論」が強すぎると浮くため）。
+ */
+export const PERSONAL_EXTRA_ANGLES: PostAngle[] = [
+  {
+    id: 'opinion',
+    label: '持論・スタンス',
+    hint: '入力情報の「持論・業界の違うと思うこと」から1つ選び、自分の意見として言い切る。攻撃・煽りにせず、理由を1つ添える。意見が入力に無ければ「大事にしていること」を語る。',
+  },
+  {
+    id: 'failure_story',
+    label: '失敗談',
+    hint: '入力情報にある自分の失敗・遠回りを1つだけ正直に書き、そこから得た学びで締める。武勇伝にしない。入力に失敗談が無ければ原体験の苦労を素材にする。',
+  },
+  {
+    id: 'journey',
+    label: '挑戦の途中経過',
+    hint: 'いま取り組んでいること・挑戦の途中経過を過程のまま見せる（完成した成果でなくてよい）。入力情報の活動・サービスづくりの文脈で書き、数字や結果を作らない。',
+  },
+];
+
+const ANGLE_BY_ID = new Map([...POST_ANGLES, ...PERSONAL_EXTRA_ANGLES].map((a) => [a.id, a]));
+
 export function getAngle(id: string | null | undefined): PostAngle | undefined {
-  return POST_ANGLES.find((a) => a.id === id);
+  if (!id) return undefined;
+  return ANGLE_BY_ID.get(id);
 }
 
 /**
@@ -190,8 +215,20 @@ export const ANGLE_FOCUS: { until: string; ids: readonly string[] } = {
   ],
 };
 
-/** 現時点で回転対象の切り口（集中検証期間中は絞られる） */
-export function activeAngles(now: number = Date.now()): PostAngle[] {
+/**
+ * 現時点で回転対象の切り口（集中検証期間中は絞られる）。
+ * mode='personal'（個人ブランディング）は来店・商圏前提の切り口を外し、
+ * 持論・失敗談・挑戦の途中経過を加えたプールを使う。
+ * ANGLE_FOCUSの集中検証は店舗の実測実験なので個人モードには適用しない。
+ */
+export function activeAngles(now: number = Date.now(), mode: string = 'store'): PostAngle[] {
+  if (mode === 'personal') {
+    const EXCLUDED = ['local', 'reservation_funnel'];
+    return [
+      ...POST_ANGLES.filter((a) => !EXCLUDED.includes(a.id)),
+      ...PERSONAL_EXTRA_ANGLES,
+    ];
+  }
   // 期限はJSTの終日まで有効
   const until = Date.parse(ANGLE_FOCUS.until + 'T23:59:59+09:00');
   if (Number.isFinite(until) && now <= until) {
@@ -206,8 +243,9 @@ export function pickAngle(
   random: () => number = Math.random,
   perf?: AnglePerformance,
   now: number = Date.now(),
+  mode: string = 'store',
 ): PostAngle {
-  const pool = activeAngles(now);
+  const pool = activeAngles(now, mode);
   const weights = pool.map((a) => {
     const s = stats[a.id] ?? { good: 0, bad: 0 };
     // 好み（◯✕）× 結果（実測インプレッション）の掛け合わせ
