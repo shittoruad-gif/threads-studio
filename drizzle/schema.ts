@@ -398,6 +398,30 @@ export type InsertProject = typeof projects.$inferInsert;
 /**
  * Scheduled posts for Threads
  */
+/**
+ * イベント告知（開催日から逆算した告知投稿を自動生成・予約する。shared/eventCountdown.ts）
+ */
+export const events = mysqlTable("events", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  projectId: varchar("projectId", { length: 50 }),
+  threadsAccountId: int("threadsAccountId").notNull(),
+  title: varchar("title", { length: 120 }).notNull(),
+  // 開催日（JSTの日付を 'YYYY-MM-DD' で保持。逆算はこの日付基準）
+  eventDate: varchar("eventDate", { length: 10 }).notNull(),
+  // 開始時刻など画面・本文表示用の自由記述（例: 14:00〜16:00）
+  eventTime: varchar("eventTime", { length: 40 }),
+  venue: varchar("venue", { length: 200 }),
+  description: text("description"),
+  // 参加方法・特典など（本文の事実として使う）
+  offer: varchar("offer", { length: 300 }),
+  status: mysqlEnum("status", ["active", "canceled"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("idx_events_userId").on(table.userId),
+]);
+
 export const scheduledPosts = mysqlTable("scheduledPosts", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -410,6 +434,8 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   // クライアントの◯✕評価（good=いい/bad=違う）。切り口の重み付け学習に使う
   clientRating: mysqlEnum("clientRating", ["good", "bad"]),
   ratedAt: timestamp("ratedAt"),
+  // イベント告知から生成された投稿はイベントIDを持つ（イベント中止時に未投稿分を取り消す）
+  eventId: int("eventId"),
   // 投稿の生成元：manual=ユーザーが手動で予約 / auto=自動投稿エンジンが生成。
   // 「予約中」が手動か自動か区別がつかない混乱を解消するため。
   source: mysqlEnum("source", ["manual", "auto"]).default("manual").notNull(),

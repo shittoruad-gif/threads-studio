@@ -43,6 +43,7 @@ const ThreadsInviteGuide = lazy(() => import("./pages/ThreadsInviteGuide"));
 const ThreadsManual = lazy(() => import("./pages/ThreadsManual"));
 const ClientWelcome = lazy(() => import("./pages/ClientWelcome"));
 const Liff = lazy(() => import("./pages/Liff"));
+const Events = lazy(() => import("./pages/Events"));
 const Help = lazy(() => import("./pages/Help"));
 const CommentManager = lazy(() => import("./pages/CommentManager"));
 const PostAnalytics = lazy(() => import("./pages/PostAnalytics"));
@@ -106,6 +107,7 @@ function DashboardRoutes() {
         <Route path="/ai-templates" component={AITemplates} />
         <Route path="/referral" component={Referral} />
         <Route path="/agency-clients" component={AgencyClients} />
+        <Route path="/events" component={Events} />
         <Route path="/settings" component={Settings} />
       </Switch>
     </DashboardLayout>
@@ -160,6 +162,9 @@ function Router() {
         {() => <DashboardRoutes />}
       </Route>
       <Route path="/post-history">
+        {() => <DashboardRoutes />}
+      </Route>
+      <Route path="/events">
         {() => <DashboardRoutes />}
       </Route>
       <Route path="/comment-manager">

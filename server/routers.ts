@@ -4182,6 +4182,105 @@ ${CONCEPT_DESIGN_PROMPT}`;
     }),
   }),
 
+  // ==================== イベント告知（開催日から逆算した告知投稿） ====================
+  events: router({
+    // 登録と同時に、開催日から逆算した告知投稿を生成して予約する
+    create: protectedProcedure
+      .input(z.object({
+        threadsAccountId: z.number(),
+        projectId: z.string().min(1),
+        title: z.string().min(1).max(120),
+        eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        eventTime: z.string().max(40).optional(),
+        venue: z.string().max(200).optional(),
+        description: z.string().max(1000).optional(),
+        offer: z.string().max(300).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { planCountdownSlots } = await import('../shared/eventCountdown');
+        const slots = planCountdownSlots(input.eventDate, new Date());
+        if (slots.length === 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '開催日が過ぎているか、近すぎるため告知を予約できません。開催日をご確認ください。' });
+        }
+
+        const account = await db.getThreadsAccountById(input.threadsAccountId);
+        if (!account || account.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Threadsアカウントが見つかりません' });
+        }
+        const project = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'プロジェクトが見つかりません' });
+        }
+
+        // 月間投稿数の上限（連携アカウント単位）: 逆算分をまとめて予約できるか確認
+        const subscription = await db.getSubscriptionByUserId(ctx.user.id);
+        const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
+        const plan = getPlan(planId);
+        if (plan && plan.features.maxScheduledPosts !== -1) {
+          const monthlyCount = await db.countAccountMonthlyUsage(input.threadsAccountId);
+          if (monthlyCount + slots.length > plan.features.maxScheduledPosts) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: `イベント告知${slots.length}件を予約すると月間投稿数の上限（${plan.features.maxScheduledPosts}件）を超えます。`,
+            });
+          }
+        }
+
+        const event = await db.createEvent({
+          userId: ctx.user.id,
+          projectId: input.projectId,
+          threadsAccountId: input.threadsAccountId,
+          title: input.title,
+          eventDate: input.eventDate,
+          eventTime: input.eventTime ?? null,
+          venue: input.venue ?? null,
+          description: input.description ?? null,
+          offer: input.offer ?? null,
+        } as any);
+
+        const settings = await db.getAutoPostSettings(ctx.user.id);
+        const { createEventPosts } = await import('./eventAnnounce');
+        const created = await createEventPosts({
+          userId: ctx.user.id,
+          event: event as any,
+          projectId: input.projectId,
+          threadsAccountId: input.threadsAccountId,
+          project: {
+            businessType: (project as any).businessType,
+            area: (project as any).area,
+            storeName: (project as any).storeName ?? (project as any).title,
+          },
+          slots,
+          requireApproval: Boolean((settings as any)?.autoPostRequireApproval),
+        });
+
+        return {
+          eventId: (event as any).id,
+          created,
+          requireApproval: Boolean((settings as any)?.autoPostRequireApproval),
+          schedule: slots.map((s) => ({ label: s.stage.label, scheduledAt: s.scheduledAt })),
+        };
+      }),
+
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const rows = await db.listEvents(ctx.user.id);
+      const withPosts = await Promise.all(rows.map(async (e) => ({
+        ...e,
+        posts: await db.listEventPosts(ctx.user.id, e.id),
+      })));
+      return withPosts;
+    }),
+
+    cancel: protectedProcedure
+      .input(z.object({ eventId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const event = await db.getEventById(ctx.user.id, input.eventId);
+        if (!event) throw new TRPCError({ code: 'NOT_FOUND', message: 'イベントが見つかりません' });
+        const canceled = await db.cancelEvent(ctx.user.id, input.eventId);
+        return { success: true, canceledPosts: canceled };
+      }),
+  }),
+
   // ==================== LINE通知連携（段階1） ====================
   lineNotify: router({
     // 連携状態と、設定画面の案内に必要な情報。

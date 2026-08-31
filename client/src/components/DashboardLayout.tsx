@@ -32,6 +32,7 @@ import {
   ChevronDown,
   ChevronUp,
   Pencil,
+  CalendarClock,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -66,6 +67,7 @@ const mainMenuItems: MenuItem[] = [
 const contentMenuItems: MenuItem[] = [
   { icon: BarChart3, label: "投稿分析", path: "/post-analytics", badgeKey: "analytics" },
   { icon: MessageCircle, label: "コメント管理", path: "/comment-manager", badgeKey: "comments" },
+  { icon: CalendarClock, label: "イベント告知", path: "/events" },
   { icon: Pencil, label: "お店の情報を修正", path: "/ai-counseling" },
   { icon: Link2, label: "Threads連携", path: "/threads-connect" },
 ];

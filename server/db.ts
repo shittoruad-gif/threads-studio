@@ -2,7 +2,7 @@ import { eq, and, desc, sql, lte, gte, gt, inArray, isNotNull } from "drizzle-or
 import { drizzle } from "drizzle-orm/mysql2";
 import { encrypt, decrypt } from "./encryption";
 import {
-  InsertUser, User, users, userLineLinks,
+  InsertUser, User, users, userLineLinks, events,
   plans, InsertPlan, Plan,
   subscriptions, InsertSubscription, Subscription,
   threadsAccounts, InsertThreadsAccount, ThreadsAccount,
@@ -3422,4 +3422,62 @@ export async function unlinkLineByUserId(userId: number): Promise<void> {
   await db.update(users)
     .set({ lineLinkCode: null, lineLinkCodeExpiresAt: null })
     .where(eq(users.id, userId));
+}
+
+
+/* ===================== イベント告知（shared/eventCountdown.ts） ===================== */
+
+export async function createEvent(data: typeof events.$inferInsert) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(events).values(data);
+  const rows = await db.select().from(events)
+    .where(and(eq(events.userId, data.userId), eq(events.title, data.title)))
+    .orderBy(desc(events.id)).limit(1);
+  return rows[0];
+}
+
+export async function listEvents(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(events).where(eq(events.userId, userId)).orderBy(desc(events.eventDate));
+}
+
+export async function getEventById(userId: number, eventId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(events)
+    .where(and(eq(events.id, eventId), eq(events.userId, userId))).limit(1);
+  return rows[0];
+}
+
+/** イベントを中止し、未投稿の告知（pending/awaiting_approval）を取り消す。戻り値=取り消した投稿数 */
+export async function cancelEvent(userId: number, eventId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  await db.update(events).set({ status: "canceled" })
+    .where(and(eq(events.id, eventId), eq(events.userId, userId)));
+  const result: any = await db.update(scheduledPosts)
+    .set({ status: "canceled" })
+    .where(and(
+      eq(scheduledPosts.eventId, eventId),
+      eq(scheduledPosts.userId, userId),
+      inArray(scheduledPosts.status, ["pending", "awaiting_approval"]),
+    ));
+  return Number(result?.[0]?.affectedRows ?? 0);
+}
+
+/** イベントに紐づく告知投稿の状況（画面表示用） */
+export async function listEventPosts(userId: number, eventId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: scheduledPosts.id,
+    scheduledAt: scheduledPosts.scheduledAt,
+    status: scheduledPosts.status,
+    postContent: scheduledPosts.postContent,
+  })
+    .from(scheduledPosts)
+    .where(and(eq(scheduledPosts.eventId, eventId), eq(scheduledPosts.userId, userId)))
+    .orderBy(scheduledPosts.scheduledAt);
 }
