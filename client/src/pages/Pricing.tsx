@@ -272,7 +272,7 @@ export default function Pricing() {
               <div>
                 <p className="font-bold text-rose-700">限定キャンペーン価格が適用されています</p>
                 <p className="text-sm text-rose-600">
-                  先着{CAMPAIGN_SLOT_TOTAL}名様限定 ・ 残り{slotsRemaining}名 ｜ 3回課金で自動終了、その後フリープランに戻ります
+                  キャンペーン価格は3回分。4回目のお支払いから通常価格に自動で切り替わります（事前にメールでお知らせします）
                 </p>
               </div>
             </div>
@@ -327,7 +327,7 @@ export default function Pricing() {
                         ¥{campaignPlan.priceMonthly.toLocaleString()}
                       </div>
                       <div className="text-rose-500 text-xs font-medium">
-                        /月 ×{campaignPlan.campaignCharges ?? 3}回（その後フリープランに戻ります）
+                        /月 ×{campaignPlan.campaignCharges ?? 3}回（その後は通常価格に自動移行）
                       </div>
                     </div>
                   </>
