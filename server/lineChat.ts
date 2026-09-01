@@ -155,8 +155,22 @@ export function helpQuick(): QuickItem[] {
   return HELP_TOPICS.map((t) => ({ label: t.q, data: `h=${t.key}` }));
 }
 
-/** 設定メニューの選択肢（現在値を見せてから切り替えさせる） */
-export function settingsQuick(s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; postLength?: string | null }): QuickItem[] {
+/**
+ * 設定メニューの選択肢（現在値を見せてから切り替えさせる）。
+ * ★プランによって使える機能が違うため、できないことは出さない。
+ *   フリープランは自動投稿そのものが無い（maxPerDay=0）。
+ */
+export function settingsQuick(
+  s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; postLength?: string | null },
+  maxPerDay = 3,
+): QuickItem[] {
+  if (maxPerDay <= 0) {
+    // 自動投稿が使えないプラン。切り替えても意味がないので出さない。
+    return [
+      { label: "プランを見る", data: "s=plan" },
+      { label: "NGワードを追加", data: "s=ng" },
+    ];
+  }
   return [
     { label: s.autoPostEnabled ? "自動投稿を止める" : "自動投稿を始める", data: `s=auto&v=${s.autoPostEnabled ? "off" : "on"}` },
     { label: s.autoPostRequireApproval ? "確認なしにする" : "公開前に確認する", data: `s=appr&v=${s.autoPostRequireApproval ? "off" : "on"}` },
@@ -166,12 +180,28 @@ export function settingsQuick(s: { autoPostEnabled?: boolean | null; autoPostReq
   ];
 }
 
-export function settingsSummary(s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; postLength?: string | null; autoPostFrequency?: string | null }): string {
-  const freq = s.autoPostFrequency === "three_daily" ? "1日3回" : s.autoPostFrequency === "twice_daily" ? "1日2回" : "1日1回";
+export function settingsSummary(
+  s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; postLength?: string | null; autoPostFrequency?: string | null },
+  opts: { maxPerDay?: number; planName?: string } = {},
+): string {
+  const maxPerDay = opts.maxPerDay ?? 3;
+  const want = s.autoPostFrequency === "three_daily" ? 3 : s.autoPostFrequency === "twice_daily" ? 2 : 1;
+  // 実際に投稿される回数は「設定した回数」と「プランの上限」の小さい方
+  const actual = Math.min(want, maxPerDay);
   const len = s.postLength === "long" ? "長め" : s.postLength === "alternate" ? "短めと長めを交互" : "短め";
+  const head = opts.planName ? `ご契約：${opts.planName}\n\n` : "";
+  if (maxPerDay <= 0) {
+    return (
+      head + "いまの設定です。\n" +
+      "・自動投稿：ご利用中のプランでは使えません（手動での作成はお試しいただけます）\n" +
+      `・投稿の長さ：${len}\n\n` +
+      "毎日の自動投稿をご利用になるには、プランのご変更が必要です。"
+    );
+  }
   return (
-    "いまの設定です。\n" +
-    `・自動投稿：${s.autoPostEnabled ? "ON（" + freq + "）" : "OFF"}\n` +
+    head + "いまの設定です。\n" +
+    `・自動投稿：${s.autoPostEnabled ? `ON（1日${actual}回）` : "OFF"}\n` +
+    (want > maxPerDay ? `　※ ご利用中のプランの上限は1日${maxPerDay}回です\n` : "") +
     `・公開前の確認：${s.autoPostRequireApproval ? "する" : "しない"}\n` +
     `・投稿の長さ：${len}\n\n` +
     "変えたいものを選んでください。"

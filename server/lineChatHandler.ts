@@ -182,6 +182,17 @@ async function repliesForPosts(userId: number, mode?: "one" | "all"): Promise<un
   ];
 }
 
+/** ご契約プラン（実効プラン）を取得する。プランごとの上限判定に使う。 */
+async function planOf(userId: number) {
+  try {
+    const sub = await db.getSubscriptionByUserId(userId);
+    const { getPlan, resolveEffectivePlanId } = await import("@shared/plans");
+    return { plan: getPlan(resolveEffectivePlanId(sub?.planId, sub?.status)) };
+  } catch {
+    return { plan: undefined as any };
+  }
+}
+
 /** 投稿の所有者チェック付き取得 */
 async function ownedPost(userId: number, postId: number) {
   const post = await db.getScheduledPostById(postId);
@@ -629,7 +640,19 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   }
   if (q.m === "settings") {
     const s = (await db.getAutoPostSettings(user.id)) || {};
-    return [textWithQuick(settingsSummary(s as any), settingsQuick(s as any))];
+    const { plan } = await planOf(user.id);
+    const maxPerDay = plan?.features.maxAutoPostsPerDay ?? 0;
+    return [textWithQuick(
+      settingsSummary(s as any, { maxPerDay, planName: plan?.name }),
+      settingsQuick(s as any, maxPerDay),
+    )];
+  }
+  if (q.s === "plan") {
+    const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+    return [textWithQuick(
+      `プランのご確認・ご変更はこちらから行えます。\n${base}/pricing?openExternalBrowser=1`,
+      MENU_HINT,
+    )];
   }
   if (q.m === "comments") {
     return [textWithQuick(
@@ -700,6 +723,18 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
 
   // ── 設定 ──
   if (q.s === "auto") {
+    // ★自動投稿が使えないプランでONにさせない（ONにしても投稿されず、誤解を招くため）
+    if (q.v === "on") {
+      const { plan } = await planOf(user.id);
+      if ((plan?.features.maxAutoPostsPerDay ?? 0) <= 0) {
+        const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+        return [textWithQuick(
+          `ご利用中の${plan?.name ?? "プラン"}では、自動投稿はご利用いただけません。\n` +
+          `毎日の自動投稿をご利用になるには、プランのご変更が必要です。\n${base}/pricing?openExternalBrowser=1`,
+          MENU_HINT,
+        )];
+      }
+    }
     await db.updateAutoPostSettings(user.id, { autoPostEnabled: q.v === "on" });
     return [textWithQuick(
       (q.v === "on" ? "自動投稿を始めました。明日から毎日投稿します。" : "自動投稿を止めました。再開したいときは「設定」からどうぞ。") +
