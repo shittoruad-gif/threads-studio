@@ -3523,3 +3523,12 @@ export async function clearLineChatState(lineUserId: string): Promise<void> {
 function escapeSql(v: string): string {
   return `'${String(v).replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
 }
+
+
+/** 連携済みのLINEユーザーIDを全件返す（リッチメニューの一括是正用） */
+export async function listAllLinkedLineUserIds(): Promise<string[]> {
+  const database = await getDb();
+  if (!database) return [];
+  const rows: any = await database.execute(sql.raw("SELECT `lineUserId` FROM `userLineLinks`"));
+  return (rows?.[0] ?? []).map((r: any) => r.lineUserId).filter(Boolean);
+}

@@ -339,3 +339,24 @@ export async function resetToDefaultRichMenu(lineUserId: string): Promise<void> 
     console.error("[LineNotify] リッチメニュー戻しに失敗:", e);
   }
 }
+
+
+/**
+ * 連携済みの方を、まとめて通常メニューへ切り替える（起動時に1回だけ）。
+ * 既定メニューを「未連携むけ」にしたため、それ以前から連携していた方が
+ * 2ボタンのまま取り残されるのを直すためのもの。
+ */
+let reconciled = false;
+export async function reconcileRichMenus(): Promise<void> {
+  if (reconciled || !lineNotifyEnabled()) return;
+  reconciled = true;
+  try {
+    const db = await import("./db");
+    const ids = await db.listAllLinkedLineUserIds();
+    if (ids.length === 0) return;
+    for (const id of ids) await switchToMainRichMenu(id);
+    console.log(`[LineNotify] リッチメニューを是正: ${ids.length}件を通常メニューへ`);
+  } catch (e) {
+    console.error("[LineNotify] リッチメニュー一括是正に失敗:", e);
+  }
+}

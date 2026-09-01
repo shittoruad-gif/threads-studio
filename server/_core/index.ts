@@ -1359,6 +1359,11 @@ async function startServer() {
           console.log(`[DB] Applied migration: ${file}`);
         }
         console.log("[DB] Migration check complete");
+        // 既定メニューを「未連携むけ」にしたため、それ以前から連携済みの方を通常メニューへ戻す
+        try {
+          const { reconcileRichMenus } = await import("../lineNotify");
+          void reconcileRichMenus();
+        } catch { /* 起動を止めない */ }
       }
     }
   } catch (err: any) {

@@ -432,8 +432,18 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     await db.clearLineChatState(lineUserId);
     return [textWithQuick("中断しました。", MENU_HINT)];
   }
-  if (q.m === "link") {
-    return [textWithQuick("このLINEはすでに連携済みです。別の方を追加する場合は、その方のLINEから「連携する」を押してください。", MENU_HINT)];
+  if (q.m === "link" || q.m === "signup") {
+    // ★連携より前から友だち追加していた方は、未連携むけメニューのまま残ってしまう。
+    //   ここを押した＝そのメニューが出ている証拠なので、通常メニューに直す。
+    try {
+      const { switchToMainRichMenu } = await import("./lineNotify");
+      await switchToMainRichMenu(lineUserId);
+    } catch { /* 切替に失敗しても案内は返す */ }
+    return [textWithQuick(
+      "このLINEはすでに連携できています。\n下のメニューを、いつものメニュー（投稿の確認・設定など）に切り替えました。\n\n" +
+      "※ 切り替わって見えないときは、トークをいったん閉じて開き直してください。",
+      MENU_HINT,
+    )];
   }
   if (q.m === "settings") {
     const s = (await db.getAutoPostSettings(user.id)) || {};
