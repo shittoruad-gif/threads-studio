@@ -313,7 +313,14 @@ async function repliesForProfile(userId: number): Promise<unknown[]> {
 
 // ══════════ はじめの設定（20問）をトーク内で1問ずつ聞く ══════════
 // 状態: state="counseling" / payload={mode, step, answers, projectId}
-interface CounselingState { mode: "store" | "personal"; step: number; answers: Record<string, string>; projectId: string }
+interface CounselingState {
+  mode: "store" | "personal";
+  step: number;
+  answers: Record<string, string>;
+  projectId: string;
+  /** 確認画面から1問だけ直しているとき、その質問番号（0始まり）。直し終えたら確認画面へ戻る。 */
+  editing?: number | null;
+}
 
 function questionsFor(mode: "store" | "personal") {
   return mode === "personal" ? applyPersonalOverrides(COUNSELING_QUESTIONS) : COUNSELING_QUESTIONS;
@@ -324,17 +331,52 @@ function askQuestion(st: CounselingState): unknown[] {
   const qs = questionsFor(st.mode);
   const q: any = qs[st.step];
   const total = qs.length;
-  const head = `【${st.step + 1}／${total}】\n${q.prompt}`;
+  const editing = st.editing !== null && st.editing !== undefined;
+  const head = editing
+    ? `【${st.step + 1}問目を直します】\n${q.prompt}`
+    : `【${st.step + 1}／${total}】\n${q.prompt}`;
   const hint = q.helper ? `\n\n${q.helper}` : "";
   const skip = q.required ? "" : "\n\n（なければ「スキップ」と送ってください）";
+  const back = editing
+    ? "\n\n（直すのをやめる場合は「戻る」と送ってください）"
+    : st.step > 0
+      ? "\n\n（1つ前の質問に戻る場合は「戻る」と送ってください）"
+      : "";
   const choices: string[] = [];
   if (Array.isArray(q.choices)) for (const c of q.choices) choices.push(c.label);
   else if (Array.isArray(q.suggestions)) choices.push(...q.suggestions);
   if (!q.required) choices.push("スキップ");
-  return [textWithChoices(head + hint + skip, choices)];
+  if (editing || st.step > 0) choices.push("戻る");
+  return [textWithChoices(head + hint + skip + back, choices)];
 }
 
-/** 回答を受け取り、次の質問へ進む。最後まで行ったら保存する。 */
+/**
+ * 全問の回答を一覧で見せる確認画面。
+ * ここから「◯番を直す」で1問だけ直せる（直したらまたこの画面に戻る）。
+ */
+function reviewCounseling(st: CounselingState): unknown[] {
+  const qs = questionsFor(st.mode);
+  const lines = qs.map((q: any, i: number) => {
+    const v = (st.answers[q.id] ?? "").trim();
+    const shown = v ? (v.length > 40 ? v.slice(0, 40) + "…" : v) : "（未記入）";
+    // 質問文は1行目だけを見出しに使う（長い質問文をそのまま出すと読みにくいため）
+    const title = String(q.prompt).split("\n")[0].replace(/[。？]$/, "").slice(0, 22);
+    return `${i + 1}. ${title}\n　 ${shown}`;
+  });
+  return [
+    { type: "text", text: "入力いただいた内容です。ご確認ください。\n\n" + lines.slice(0, 10).join("\n") },
+    textWithQuick(
+      lines.slice(10).join("\n") +
+      "\n\nこの内容でよろしければ「登録する」を押してください。\n直したい項目がある場合は「直す」を押して、番号を送ってください。",
+      [
+        { label: "この内容で登録する", data: "c=save" },
+        { label: "直す", data: "c=edit" },
+      ],
+    ),
+  ];
+}
+
+/** 回答を受け取り、次の質問へ進む。全問終わったら確認画面を出す。 */
 async function advanceCounseling(userId: number, lineUserId: string, st: CounselingState, answer: string): Promise<unknown[]> {
   const qs = questionsFor(st.mode);
   const q: any = qs[st.step];
@@ -343,25 +385,49 @@ async function advanceCounseling(userId: number, lineUserId: string, st: Counsel
     await db.clearLineChatState(lineUserId);
     return [textWithQuick("はじめの設定を中断しました。「はじめの設定」からいつでも再開できます。", MENU_HINT)];
   }
+  // ★「戻る」＝1つ前の質問へ（直している最中なら確認画面へ戻る）
+  if (/^(戻る|もどる|ひとつ前|1つ前)$/.test(a)) {
+    if (st.editing !== null && st.editing !== undefined) {
+      st.editing = null;
+      st.step = qs.length; // 確認画面の位置に戻す
+      await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
+      return reviewCounseling(st);
+    }
+    if (st.step === 0) {
+      await db.clearLineChatState(lineUserId);
+      return startCounseling(lineUserId);
+    }
+    st.step -= 1;
+    await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
+    return askQuestion(st);
+  }
   const skipped = /^(スキップ|なし|特になし)$/.test(a);
   if (q.required && skipped) {
     return [{ type: "text", text: "こちらは必要な項目です。おおよそで構いませんので、お答えください。" }, ...askQuestion(st)];
   }
-  // choice型はラベル→valueに戻す
   let stored = skipped ? "" : a.slice(0, 500);
   if (Array.isArray(q.choices) && !skipped) {
     const hit = q.choices.find((c: any) => c.label === a || c.value === a);
     if (hit) stored = hit.value;
   }
   st.answers[q.id] = stored;
-  st.step += 1;
 
-  if (st.step < qs.length) {
+  // 確認画面から1問だけ直していた場合は、直したら確認画面に戻る
+  if (st.editing !== null && st.editing !== undefined) {
+    st.editing = null;
+    st.step = qs.length; // ★確認画面の位置に戻す（戻さないと次の入力が質問の続きになる）
     await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
-    return askQuestion(st);
+    return [{ type: "text", text: `${q.prompt.split("\n")[0].slice(0, 20)} を直しました。` }, ...reviewCounseling(st)];
   }
 
-  // 全問終了 → 保存
+  st.step += 1;
+  await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
+  if (st.step < qs.length) return askQuestion(st);
+  return reviewCounseling(st);
+}
+
+/** 確認画面から「登録する」で保存する */
+async function saveCounselingFromChat(userId: number, lineUserId: string, st: CounselingState): Promise<unknown[]> {
   await db.clearLineChatState(lineUserId);
   const res = await saveCounselingAnswers({
     userId, projectId: st.projectId, mode: st.mode, answers: st.answers as any,
@@ -372,7 +438,7 @@ async function advanceCounseling(userId: number, lineUserId: string, st: Counsel
   return [textWithQuick(
     "ありがとうございました。設定が終わりました。\n\n" +
     "この内容をもとに、AIが毎日の投稿を作ります。できあがった投稿は、このトークでお知らせします。\n" +
-    "内容を直したくなったら、いつでも「はじめの設定」からやり直せます。",
+    "内容を直したくなったら、いつでも「お店の情報」から確認・修正できます。",
     MENU_HINT,
   )];
 }
@@ -416,6 +482,21 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   if (q.m === "profile") return repliesForProfile(user.id);
   if (q.m === "help") return [textWithQuick("よくあるご質問です。知りたいものを選んでください。", helpQuick())];
   if (q.m === "setup") return startCounseling(lineUserId);
+  if (q.c === "save" || q.c === "edit" || q.c === "pick") {
+    const cur = await db.getLineChatState(lineUserId);
+    if (cur?.state !== "counseling" || !cur.payload) {
+      return [textWithQuick("入力の途中経過が見つかりませんでした。「はじめの設定」からやり直してください。", MENU_HINT)];
+    }
+    const cs: CounselingState = JSON.parse(cur.payload);
+    if (q.c === "save") return saveCounselingFromChat(user.id, lineUserId, cs);
+    if (q.c === "edit") {
+      const qs = questionsFor(cs.mode);
+      return [{
+        type: "text",
+        text: `直したい項目の番号（1〜${qs.length}）を送ってください。\n例：「3」と送ると3番目の質問をもう一度お聞きします。`,
+      }];
+    }
+  }
   if (q.c === "start" && (q.mode === "store" || q.mode === "personal")) {
     // 既存プロジェクトがあればそれを更新、無ければ新規IDで作る
     const projects = await db.getProjectsByUserId(user.id);
@@ -467,17 +548,39 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     await db.updateScheduledPost(Number(q.i), { status: "pending", ...(scheduledAt ? { scheduledAt } : {}) });
     const when = scheduledAt ? "まもなく" : `${fmtJst(post.scheduledAt)} に`;
     const done = `承認しました。${when}公開されます。`;
-    // 1件ずつモードなら、続けて次の1件を出す（どれを処理したか分からなくならない）
-    if (q.o) return replyOneWaiting(user.id, done);
-    return [textWithQuick(done, MENU_HINT)];
+    // ★押し間違いに備えて取り消しを用意する（まだ公開前なら戻せる）
+    const undo = [{ label: "取り消す", data: `a=undo&i=${q.i}` }, ...MENU_HINT];
+    if (q.o) {
+      const next = await replyOneWaiting(user.id, done + "\n（間違えた場合は「取り消す」を押してください）");
+      return next;
+    }
+    return [textWithQuick(done + "\n\n間違えて押した場合は「取り消す」で元に戻せます。", undo)];
   }
   if (q.a === "skip" && q.i) {
     const post = await ownedPost(user.id, Number(q.i));
     if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
     await db.updateScheduledPost(Number(q.i), { status: "canceled" });
     const done = "この投稿は見送りにしました。明日の投稿はまた新しく作ります。";
-    if (q.o) return replyOneWaiting(user.id, done);
-    return [textWithQuick(done, MENU_HINT)];
+    const undo = [{ label: "取り消す", data: `a=undo&i=${q.i}` }, ...MENU_HINT];
+    if (q.o) return replyOneWaiting(user.id, done + "\n（間違えた場合は「取り消す」を押してください）");
+    return [textWithQuick(done + "\n\n間違えて押した場合は「取り消す」で元に戻せます。", undo)];
+  }
+  // ★承認・見送りの取り消し（未公開のものだけ確認待ちへ戻す）
+  if (q.a === "undo" && q.i) {
+    const post = await ownedPost(user.id, Number(q.i));
+    if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
+    if (post.status === "posted") {
+      return [textWithQuick("この投稿はすでに公開されています。取り消す場合は、Threadsアプリから削除してください。", MENU_HINT)];
+    }
+    if (post.status !== "pending" && post.status !== "canceled") {
+      return [textWithQuick("この投稿は取り消せる状態ではありません。", MENU_HINT)];
+    }
+    await db.updateScheduledPost(Number(q.i), { status: "awaiting_approval" });
+    const [withName] = await withAccountNames(user.id, [(await db.getScheduledPostById(Number(q.i))) as any]);
+    return [
+      { type: "text", text: "取り消しました。もう一度ご確認ください。" },
+      buildPostCards([withName]),
+    ];
   }
   if (q.a === "rw" && q.i) {
     const items = Object.entries(REWRITE_KINDS).map(([k, v]) => ({ label: v.label, data: `a=rw2&i=${q.i}&k=${k}${q.o ? "&o=1" : ""}` }));
@@ -497,16 +600,29 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   // ── 設定 ──
   if (q.s === "auto") {
     await db.updateAutoPostSettings(user.id, { autoPostEnabled: q.v === "on" });
-    return [textWithQuick(q.v === "on" ? "自動投稿を始めました。明日から毎日投稿します。" : "自動投稿を止めました。再開したいときは「設定」からどうぞ。", MENU_HINT)];
+    return [textWithQuick(
+      (q.v === "on" ? "自動投稿を始めました。明日から毎日投稿します。" : "自動投稿を止めました。再開したいときは「設定」からどうぞ。") +
+      "\n\n間違えた場合は「元に戻す」を押してください。",
+      [{ label: "元に戻す", data: `s=auto&v=${q.v === "on" ? "off" : "on"}` }, ...MENU_HINT],
+    )];
   }
   if (q.s === "appr") {
     await db.updateAutoPostSettings(user.id, { autoPostRequireApproval: q.v === "on" });
-    return [textWithQuick(q.v === "on" ? "公開前に、このトークで確認できるようにしました。" : "確認なしで公開するようにしました。おまかせで毎日投稿されます。", MENU_HINT)];
+    return [textWithQuick(
+      (q.v === "on" ? "公開前に、このトークで確認できるようにしました。" : "確認なしで公開するようにしました。おまかせで毎日投稿されます。") +
+      "\n\n間違えた場合は「元に戻す」を押してください。",
+      [{ label: "元に戻す", data: `s=appr&v=${q.v === "on" ? "off" : "on"}` }, ...MENU_HINT],
+    )];
   }
   if (q.s === "len") {
+    const prev = (await db.getAutoPostSettings(user.id))?.postLength || "short";
     const v = q.v === "long" ? "long" : q.v === "alt" ? "alternate" : "short";
     await db.updateAutoPostSettings(user.id, { postLength: v });
-    return [textWithQuick(`投稿の長さを「${v === "long" ? "長め" : v === "alternate" ? "交互" : "短め"}」に変えました。`, MENU_HINT)];
+    const jp = (x: string) => (x === "long" ? "長め" : x === "alternate" ? "交互" : "短め");
+    return [textWithQuick(
+      `投稿の長さを「${jp(v)}」に変えました。\n\n間違えた場合は「元に戻す」を押してください。`,
+      [{ label: `元に戻す（${jp(prev)}）`, data: `s=len&v=${prev === "alternate" ? "alt" : prev}` }, ...MENU_HINT],
+    )];
   }
   if (q.s === "ng") {
     await db.setLineChatState(lineUserId, "ngword");
@@ -544,6 +660,22 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   if (st?.state === "counseling" && st.payload) {
     try {
       const cs: CounselingState = JSON.parse(st.payload);
+      const qs = questionsFor(cs.mode);
+      // 全問終わって確認画面を出している状態で数字が来たら「その項目を直す」
+      const atReview = cs.step >= qs.length && (cs.editing === null || cs.editing === undefined);
+      const num = Number(text.trim());
+      if (atReview && Number.isInteger(num) && num >= 1 && num <= qs.length) {
+        cs.editing = num - 1;
+        cs.step = num - 1;
+        await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
+        return askQuestion(cs);
+      }
+      if (atReview && /^(登録|登録する|これでOK|ok)$/i.test(text.trim())) {
+        return saveCounselingFromChat(user.id, lineUserId, cs);
+      }
+      if (atReview) {
+        return reviewCounseling(cs);
+      }
       return await advanceCounseling(user.id, lineUserId, cs, text);
     } catch {
       await db.clearLineChatState(lineUserId);

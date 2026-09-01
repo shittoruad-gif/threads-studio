@@ -99,3 +99,25 @@ describe("公式LINEから来た方の連携導線", () => {
     expect(msg.quickReply.items[1].action.data).toBe("m=signup");
   });
 });
+
+describe("入力のやり直し", () => {
+  it("必須でない質問には「スキップ」、2問目以降には「戻る」が出せる", () => {
+    const msg: any = textWithChoices("質問です", ["選択肢A", "スキップ", "戻る"]);
+    const labels = msg.quickReply.items.map((i: any) => i.action.label);
+    expect(labels).toContain("スキップ");
+    expect(labels).toContain("戻る");
+  });
+
+  it("確認画面のボタンは「登録する」と「直す」の2つ", () => {
+    const msg: any = textWithQuick("ご確認ください", [
+      { label: "この内容で登録する", data: "c=save" },
+      { label: "直す", data: "c=edit" },
+    ]);
+    expect(msg.quickReply.items.map((i: any) => i.action.data)).toEqual(["c=save", "c=edit"]);
+  });
+
+  it("押し間違い用の取り消しボタンを作れる", () => {
+    const msg: any = textWithQuick("承認しました", [{ label: "取り消す", data: "a=undo&i=12" }]);
+    expect(msg.quickReply.items[0].action.data).toBe("a=undo&i=12");
+  });
+});
