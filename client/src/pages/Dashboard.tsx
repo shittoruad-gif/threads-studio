@@ -1044,7 +1044,7 @@ export default function Dashboard() {
                 onClick={() => setCouponModalOpen(true)}
               >
                 <Crown className="w-4 h-4 mr-2" />
-                {t("クーポンコードを適用")}
+                {t("紹介コードを適用")}
               </Button>
               {subscription?.planId !== 'free' && !subscription?.cancelAtPeriodEnd && (
                 <Button
@@ -1403,7 +1403,7 @@ export default function Dashboard() {
         open={couponModalOpen}
         onClose={() => setCouponModalOpen(false)}
         onSuccess={(code) => {
-          toast.success(t('クーポンが適用されました！'), {
+          toast.success(t('紹介コードが適用されました！'), {
             description: code ? `${t('適用コード')}：${code}` : undefined,
           });
         }}

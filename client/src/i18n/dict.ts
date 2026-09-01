@@ -35,8 +35,8 @@ export const dict: Record<string, string> = {
   "ログイン中...": "Logging in...",
   "アカウントをお持ちでないですか？": "Don't have an account?",
   "新規登録": "Sign up",
-  "クーポン / モニターコード（任意）": "Coupon / Monitor code (optional)",
-  "クーポン / モニターコードをお持ちの方": "Have a coupon / monitor code?",
+  "紹介コード（任意）": "Referral code (optional)",
+  "紹介コードをお持ちの方": "Have a referral code?",
   "この画面をすぐ開けるように保存": "Save this page for quick access",
 
   // ── Threads連携画面（審査で最重要） ──
@@ -337,7 +337,7 @@ export const dict: Record<string, string> = {
   "解約済み": "Canceled",
   "現在の請求期間終了後にサブスクリプションが終了します。": "Your subscription will end when the current billing period finishes.",
   "再度ご利用になる場合は、料金プランから再登録してください。": "To use it again, subscribe from the pricing page.",
-  "クーポンコードを適用": "Apply coupon code",
+  "紹介コードを適用": "Apply referral code",
   "解約する": "Cancel subscription",
   "プランを変更": "Change plan",
   "プロジェクト数": "Projects",
@@ -702,7 +702,7 @@ export const dict: Record<string, string> = {
   "業種・地域・ターゲットを設定するだけで、プロフィール遷移→LINE登録→予約に繋がる高品質なThreads投稿をAIが自動生成します。": "Just set your industry, area and target audience, and AI writes high-quality Threads posts that lead to profile visits, LINE sign-ups and bookings.",
   "お店の情報・カウンセリングの回答・予約/LINEのリンクを、いつでもまとめて修正できます。間違って入力した場合はここから直してください。": "You can edit your store info, answers and booking/LINE links anytime. Fix any mistakes here.",
   "過去にAIで生成した投稿を確認・再利用できます。履歴からコピーして、簡単に再度使用することができます。": "Review and reuse posts you generated before. Copy from the history to use them again.",
-  "クーポンが適用されました！": "Coupon applied!",
+  "紹介コードが適用されました！": "Referral code applied!",
   "適用コード": "Code applied",
   "送信中...": "Submitting...",
   "回答する": "Submit",

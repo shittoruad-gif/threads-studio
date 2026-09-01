@@ -38,21 +38,21 @@ export default function CouponModal({ open, onClose, onSuccess }: CouponModalPro
     if (data.valid && data.coupon) {
       setValidationResult({
         valid: true,
-        message: data.coupon.description || "有効なクーポンコードです",
+        message: data.coupon.description || "有効な紹介コードです",
         type: data.coupon.type,
         duration: data.coupon.type === "trial_30" ? 30 : data.coupon.type === "trial_14" ? 14 : undefined,
       });
     } else {
       setValidationResult({
         valid: false,
-        message: data.error || "無効なクーポンコードです",
+        message: data.error || "無効な紹介コードです",
       });
     }
   }
   if (validateMutation.error && !validationResult) {
     setValidationResult({
       valid: false,
-      message: "クーポンコードの検証に失敗しました",
+      message: "紹介コードの確認に失敗しました",
     });
   }
 
@@ -76,14 +76,14 @@ export default function CouponModal({ open, onClose, onSuccess }: CouponModalPro
       } else {
         setValidationResult({
           valid: false,
-          message: data.message || "クーポンの適用に失敗しました",
+          message: data.message || "紹介コードの適用に失敗しました",
         });
       }
     },
     onError: (error) => {
       setValidationResult({
         valid: false,
-        message: error.message || "クーポンの適用に失敗しました",
+        message: error.message || "紹介コードの適用に失敗しました",
       });
     },
   });
@@ -92,7 +92,7 @@ export default function CouponModal({ open, onClose, onSuccess }: CouponModalPro
     if (!couponCode.trim()) {
       setValidationResult({
         valid: false,
-        message: "クーポンコードを入力してください",
+        message: "紹介コードを入力してください",
       });
       return;
     }
@@ -116,19 +116,19 @@ export default function CouponModal({ open, onClose, onSuccess }: CouponModalPro
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-2xl gradient-text">
             <Sparkles className="w-6 h-6" />
-            クーポンコードを適用
+            紹介コードを適用
           </DialogTitle>
           <DialogDescription>
-            お持ちのクーポンコードを入力して、特別なプランをご利用ください
+            お持ちの紹介コードを入力すると、特別価格でご利用いただけます
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 mt-4">
           <div className="space-y-2">
-            <Label htmlFor="coupon-code">クーポンコード</Label>
+            <Label htmlFor="coupon-code">紹介コード</Label>
             <Input
               id="coupon-code"
-              placeholder="クーポンコードを入力"
+              placeholder="紹介コードを入力"
               value={couponCode}
               onChange={(e) => {
                 setCouponCode(e.target.value.toUpperCase());
@@ -187,7 +187,7 @@ export default function CouponModal({ open, onClose, onSuccess }: CouponModalPro
               <CheckCircle2 className="h-4 w-4 text-green-500" />
               <AlertDescription className="text-green-500">
                 <span className="font-semibold">
-                  クーポン「{applyMutation.data.code || couponCode.trim().toUpperCase()}」を適用しました！
+                  紹介コード「{applyMutation.data.code || couponCode.trim().toUpperCase()}」を適用しました！
                 </span>
                 {applyMutation.data.message && (
                   <span className="block mt-1 text-foreground/80">{applyMutation.data.message}</span>
@@ -257,7 +257,7 @@ export default function CouponModal({ open, onClose, onSuccess }: CouponModalPro
           </div>
 
           <p className="text-xs text-muted-foreground text-center">
-            クーポンコードをお持ちの方は上記に入力してください
+            紹介コードをお持ちの方は、上の欄にご入力ください
           </p>
         </div>
       </DialogContent>

@@ -21,7 +21,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showRegisteredMessage, setShowRegisteredMessage] = useState(registered);
-  // クーポン/モニターコード（ログイン成功時に適用）
+  // 紹介コード（ログイン成功時に適用）
   const [couponCode, setCouponCode] = useState('');
   const [showCoupon, setShowCoupon] = useState(false);
 
@@ -29,7 +29,7 @@ export default function Login() {
 
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: async () => {
-      // ログインに成功したら、クーポン/モニターコードが入力されていれば適用する。
+      // ログインに成功したら、紹介コードが入力されていれば適用する。
       // （登録時に入れ損ねた・ログインで詰まったモニターでも確実に反映できる動線）
       const code = couponCode.trim();
       if (code) {
@@ -159,13 +159,13 @@ export default function Login() {
               />
             </div>
 
-            {/* クーポン/モニターコード（任意） */}
+            {/* 紹介コード（任意） */}
             <div className="space-y-2">
               {showCoupon ? (
                 <>
                   <Label htmlFor="couponCode" className="flex items-center gap-1.5">
                     <Ticket className="h-3.5 w-3.5 text-emerald-600" />
-                    {t("クーポン / モニターコード（任意）")}
+                    {t("紹介コード（任意）")}
                   </Label>
                   <Input
                     id="couponCode"
@@ -187,7 +187,7 @@ export default function Login() {
                   className="text-xs text-primary hover:underline flex items-center gap-1"
                 >
                   <Ticket className="h-3.5 w-3.5" />
-                  {t("クーポン / モニターコードをお持ちの方")}
+                  {t("紹介コードをお持ちの方")}
                 </button>
               )}
             </div>

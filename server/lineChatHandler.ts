@@ -49,8 +49,33 @@ function signupGuide(): unknown[] {
   return [textWithQuick(
     "アカウントの作成は、こちらのページからお願いします（3分ほどで終わります）。\n" +
     `${base}/register\n\n` +
-    "クーポンコードをお持ちの場合は、登録画面の「クーポンコード」欄にご入力ください。\n" +
     "作成が終わったら、このトークで「連携する」を押してください。",
+    [
+      { label: "紹介コードをお持ちの方はこちら", data: "m=refcode" },
+      { label: "連携する", data: "m=link" },
+    ],
+  )];
+}
+
+/** 紹介コードをお持ちの方: コードを受け取り、適用済みの登録リンクを返す */
+async function askReferralCode(lineUserId: string): Promise<unknown[]> {
+  await db.setLineChatState(lineUserId, "signup_code");
+  return [{
+    type: "text",
+    text: "お持ちの紹介コードを、このトークに送ってください。\nそのコードが入った状態の登録ページのリンクをお返しします。",
+  }];
+}
+
+function referralLink(lineUserId: string, code: string): Promise<unknown[]> | unknown[] {
+  const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+  const c = code.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 32);
+  if (!c) {
+    return [{ type: "text", text: "コードを読み取れませんでした。もう一度送ってください。" }];
+  }
+  return [textWithQuick(
+    `こちらのリンクから登録してください。紹介コード「${c}」が入った状態で開きます。\n` +
+    `${base}/register?code=${encodeURIComponent(c)}\n\n` +
+    "登録が終わったら、このトークで「連携する」を押してください。",
     [{ label: "連携する", data: "m=link" }],
   )];
 }
@@ -377,6 +402,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     // 未連携でも、連携に関する操作だけは進められるようにする
     if (q.m === "link") return startLinking(lineUserId);
     if (q.m === "signup") return signupGuide();
+    if (q.m === "refcode") return askReferralCode(lineUserId);
     if (q.m === "cancel") {
       await db.clearLineChatState(lineUserId);
       return notLinked();
@@ -496,6 +522,10 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   if (!user) {
     const pending = await db.getLineChatState(lineUserId);
     if (pending?.state === "link_email") return sendLinkCodeByEmail(lineUserId, text);
+    if (pending?.state === "signup_code") {
+      await db.clearLineChatState(lineUserId);
+      return referralLink(lineUserId, text) as unknown[];
+    }
     if (/^(連携|れんけい|連携する)$/.test(text.trim())) return startLinking(lineUserId);
     return notLinked();
   }

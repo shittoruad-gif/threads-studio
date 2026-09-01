@@ -15,7 +15,13 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [storeName, setStoreName] = useState('');
-  const [couponCode, setCouponCode] = useState('');
+  // ★LINEなどから ?code=XXX 付きで来た場合は、紹介コード欄に自動で入れておく
+  const codeFromUrl = (() => {
+    if (typeof window === 'undefined') return '';
+    const params = new URLSearchParams(window.location.search);
+    return (params.get('code') || params.get('coupon') || '').trim().toUpperCase().slice(0, 32);
+  })();
+  const [couponCode, setCouponCode] = useState(codeFromUrl);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [error, setError] = useState('');
 
@@ -219,7 +225,7 @@ export default function Register() {
 
             <div className="space-y-2">
               <Label htmlFor="couponCode">
-                クーポンコード <span className="text-muted-foreground text-xs">（任意）</span>
+                紹介コード <span className="text-muted-foreground text-xs">（任意）</span>
               </Label>
               <Input
                 id="couponCode"
@@ -231,7 +237,7 @@ export default function Register() {
                 autoComplete="off"
               />
               <p className="text-xs text-muted-foreground">
-                クーポンコードをお持ちの方はこちらに入力してください（登録後、料金ページでキャンペーン価格が表示されます）
+                紹介コードをお持ちの方だけ、こちらにご入力ください（お持ちでない場合は空欄のままで問題ありません）
               </p>
             </div>
 
