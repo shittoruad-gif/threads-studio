@@ -15,6 +15,12 @@ export type BotAnswer = {
   answer: string;
   /** 知識の範囲で答えられたか（false なら担当者へ） */
   confident: boolean;
+  /**
+   * AIに問い合わせできたか。
+   * false は「AIが落ちていて判断すらできていない」状態で、
+   * このときだけ従来のキーワード案内にフォールバックする。
+   */
+  available: boolean;
   /** 質問の分類 */
   category: string;
   /** 記録した質問のID（担当者返信・FAQ反映で使う） */
@@ -72,6 +78,7 @@ export async function answerQuestion(params: {
     confident: false,
     category: "その他",
   };
+  let available = false;
 
   try {
     const { invokeLLM } = await import("./_core/llm");
@@ -90,6 +97,7 @@ export async function answerQuestion(params: {
         confident: Boolean(parsed.confident) && Boolean(String(parsed.answer || "").trim()),
         category: String(parsed.category || "その他"),
       };
+      available = true;
     }
   } catch (e) {
     console.error("[SupportBot] 自動応答に失敗:", e);
@@ -110,5 +118,5 @@ export async function answerQuestion(params: {
     console.error("[SupportBot] ご質問の記録に失敗:", e);
   }
 
-  return { ...result, questionId };
+  return { ...result, available, questionId };
 }

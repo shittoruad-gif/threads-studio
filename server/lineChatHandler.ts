@@ -392,11 +392,11 @@ function askQuestion(st: CounselingState): unknown[] {
     ? `【${st.step + 1}問目を直します】\n${q.prompt}`
     : `【${st.step + 1}／${total}】\n${q.prompt}`;
   const hint = q.helper ? `\n\n${q.helper}` : "";
-  const skip = q.required ? "" : "\n\n（なければ「スキップ」と送ってください）";
+  const skip = q.required ? "" : "\n\n（なければ下の「スキップ」を押してください）";
   const back = editing
-    ? "\n\n（直すのをやめる場合は「戻る」と送ってください）"
+    ? "\n\n（直すのをやめる場合は下の「戻る」を押してください）"
     : st.step > 0
-      ? "\n\n（1つ前の質問に戻る場合は「戻る」と送ってください）"
+      ? "\n\n（1つ前の質問に戻る場合は下の「戻る」を押してください）"
       : "";
   const choices: string[] = [];
   if (Array.isArray(q.choices)) for (const c of q.choices) choices.push(c.label);
@@ -683,6 +683,14 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       MENU_HINT,
     )];
   }
+  if (q.m === "addstaff") return issueStaffLinkCode(user.id);
+  if (q.m === "sendq" && q.q) {
+    await db.clearLineChatState(lineUserId);
+    const rec = await db.getSupportQuestionById(Number(q.q));
+    const asked = String(rec?.question || "").trim();
+    if (!asked) return [textWithQuick("ご質問を読み取れませんでした。お手数ですが、そのままメッセージでお送りください。", MENU_HINT)];
+    return forwardToStaff(user.id, lineUserId, asked, Number(q.q));
+  }
   if (q.m === "staff") {
     return startStaffHandoff(lineUserId, q.q ? Number(q.q) : undefined);
   }
@@ -805,7 +813,10 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   // ── ヘルプ ──
   if (q.h) {
     const t = HELP_TOPICS.find((x) => x.key === q.h);
-    if (t) return [textWithQuick(t.a, helpQuick())];
+    // ★選んだ時点でやることが決まっているものは、説明を挟まずそのまま実行する
+    if (t?.directPostback) return handlePostback(lineUserId, t.directPostback);
+    // 実行できるものは、その場で押せるボタンを先頭に置く（説明だけで終わらせない）
+    if (t) return [textWithQuick(t.a, t.action ? [t.action, ...helpQuick()] : helpQuick())];
   }
   return [textWithQuick("うまく受け取れませんでした。下から選んでください。", MENU_HINT)];
 }
@@ -903,9 +914,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   if (/^(メニュー|めにゅー|menu)$/i.test(t)) return [textWithQuick("どれをご覧になりますか？", MENU_HINT)];
   if (/(投稿|承認).{0,4}(確認|見たい|見る)|^今日の投稿$/.test(t)) return handlePostback(lineUserId, "m=posts");
   if (/^(設定|せってい)$/.test(t)) return handlePostback(lineUserId, "m=settings");
-  if (/^(追加|ついか)$/.test(t)) {
-    return [{ type: "text", text: "他の方も操作できるようにするには、アプリの設定画面で6桁のコードを発行し、そのコードをその方のLINEからこのトークに送ってもらってください。" }];
-  }
+  if (/^(追加|ついか)$/.test(t)) return issueStaffLinkCode(user.id);
   // ★文章でのご質問は、まず自動でお答えする。
   //   （以前は「料金」などの言葉に反応して料金ページのリンクを返すだけで、
   //     「プロプランは何アカウントまで？」のような具体的なご質問に答えられていなかった）
@@ -956,15 +965,71 @@ async function autoAnswer(userId: number, lineUserId: string, question: string):
   const { answerQuestion } = await import("./supportBot");
   const res = await answerQuestion({ question, userId, lineUserId, source: "line" });
 
-  // 答えを作れなかったときは、ここでは返さない（呼び出し元の案内にまわす）。
-  if (!res.confident || !res.answer) return null;
+  if (res.confident && res.answer) {
+    return [textWithQuick(
+      res.answer + "\n\n解決しない場合は「担当者に聞く」を押してください。",
+      [
+        { label: "担当者に聞く", data: `m=staff${res.questionId ? `&q=${res.questionId}` : ""}` },
+        ...MENU_HINT,
+      ],
+    )];
+  }
 
+  // ★AIが「答えられない」と判断したご質問に、言葉の一致だけで別の案内を返すと
+  //   的外れな返事になる（例：「資本金はいくらですか」に料金ページを出す）。
+  //   判断できているときは、下手な当てずっぽうをせず担当者におつなぎする。
+  if (res.available) {
+    return [textWithQuick(
+      "申し訳ありません、こちらではお答えできないご質問でした。\n" +
+      "担当者にお伝えしますので、下の「担当者に聞く」を押してください。",
+      [
+        { label: "担当者に聞く", data: `m=staff${res.questionId ? `&q=${res.questionId}` : ""}` },
+        ...MENU_HINT,
+      ],
+    )];
+  }
+
+  // AI自体が使えなかったときだけ、従来のキーワード案内にまわす。
+  return null;
+}
+
+/**
+ * スタッフ追加用の6桁コードを、このトークの中で発行してお伝えする。
+ *
+ * ★以前は「アプリの設定画面でコードを発行してください」と案内していたが、
+ *   それでは「追加」と送らせる意味がなく、案内のためだけの往復になっていた。
+ *   コードはここで発行して、そのままお伝えする。
+ */
+async function issueStaffLinkCode(userId: number): Promise<unknown[]> {
+  const cap = await db.getLineLinkCapacity(userId);
+  if (!cap.canAdd) {
+    const limitText = cap.limit < 0 ? "無制限" : `${cap.limit}人`;
+    return [textWithQuick(
+      `いま ${cap.used} 人の方が操作できる状態です。\n` +
+      `ご契約のプランで操作できるのは ${limitText} までのため、これ以上は追加できません。\n` +
+      "人数を増やすには、プランのご変更をお願いします。",
+      [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT],
+    )];
+  }
+
+  // 6桁のコードを発行（10分で失効）。既存コードは上書きされる。
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  try {
+    await db.setLineLinkCode(userId, code, expiresAt);
+  } catch (e) {
+    console.error("[LineChat] スタッフ追加コードの発行に失敗:", e);
+    return [textWithQuick("コードを発行できませんでした。時間をおいてもう一度お試しください。", MENU_HINT)];
+  }
+
+  const rest = cap.limit < 0 ? "無制限" : `あと ${cap.limit - cap.used} 人`;
   return [textWithQuick(
-    res.answer + "\n\n解決しない場合は「担当者に聞く」を押してください。",
-    [
-      { label: "担当者に聞く", data: `m=staff${res.questionId ? `&q=${res.questionId}` : ""}` },
-      ...MENU_HINT,
-    ],
+    `追加用のコードは【${code}】です（10分間有効）。\n\n` +
+    "追加したい方に、次の2つをお伝えください。\n" +
+    "1. Threads Studio の公式LINEを友だち追加する\n" +
+    `2. そのトークに「${code}」とそのまま送る\n\n` +
+    `これで、その方も投稿の確認や設定ができるようになります。（${rest}追加できます）`,
+    MENU_HINT,
   )];
 }
 
@@ -972,7 +1037,26 @@ async function autoAnswer(userId: number, lineUserId: string, question: string):
  * 担当者へのお問い合わせを受け付ける（次に届く文章を担当者へお届けする）。
  */
 async function startStaffHandoff(lineUserId: string, questionId?: number): Promise<unknown[]> {
-  await db.setLineChatState(lineUserId, "staff_message", questionId ? String(questionId) : undefined);
+  // ★直前のご質問が分かっている場合は、書き直していただかずにそのままお送りできるようにする。
+  //   （以前は必ず「もう一度お送りください」と書かせていて、無駄な往復になっていた）
+  if (questionId) {
+    const q = await db.getSupportQuestionById(questionId);
+    const asked = String(q?.question || "").trim();
+    if (asked) {
+      await db.setLineChatState(lineUserId, "staff_message", String(questionId));
+      return [textWithQuick(
+        "担当者にお伝えします。\n\n" +
+        `さきほどのご質問「${asked.slice(0, 60)}${asked.length > 60 ? "…" : ""}」を\n` +
+        "そのままお送りする場合は、下の「このまま送る」を押してください。\n" +
+        "補足があれば、そのままメッセージでお送りいただいても構いません。",
+        [
+          { label: "このまま送る", data: `m=sendq&q=${questionId}` },
+          { label: "やめる", data: "m=cancel" },
+        ],
+      )];
+    }
+  }
+  await db.setLineChatState(lineUserId, "staff_message");
   return [textWithQuick(
     "担当者にお伝えします。\nご質問・ご要望を、このままメッセージでお送りください。\n（お返事はこのトークにお送りします）",
     [{ label: "やめる", data: "m=cancel" }],
