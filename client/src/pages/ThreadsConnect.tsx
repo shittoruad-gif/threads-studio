@@ -106,6 +106,11 @@ export default function ThreadsConnect() {
   const userIntentRef = useRef<'add-different' | 'reconnect' | null>(null);
   const [showSameAccountGuide, setShowSameAccountGuide] = useState(false);
 
+  // ★LINEから来た場合は、連携後に「LINEに戻る」導線を出す（?from=line）
+  const fromLine = typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('from') === 'line';
+  const [justConnected, setJustConnected] = useState(false);
+
   const handleCallback = trpc.threads.handleCallback.useMutation({
     onSuccess: (data) => {
       setIsProcessingCallback(false);
@@ -120,6 +125,7 @@ export default function ThreadsConnect() {
       } else {
         toast.success(t("Threadsアカウントを連携しました"));
       }
+      setJustConnected(true);
       userIntentRef.current = null;
       refetch();
     },
@@ -278,6 +284,25 @@ export default function ThreadsConnect() {
         <>{t('お知らせが出たら')}<b>{t('接続を更新')}</b>{t('を押すだけで60日延長されます')}</>,
         <>{t('直らないときだけ')}<b>{t('接続をやり直す')}</b>{t('→Threadsの画面で')}<b>{t('許可')}</b>{t('（パソコン推奨）')}</>,
       ]} />
+
+      {/* ★LINEから来た方向け。連携が終わったらワンタップでトークに戻れるようにする
+          （LINE→ブラウザ→LINE の往復が切れると「終わったのか分からない」ため）。 */}
+      {fromLine && justConnected && (
+        <div className="bg-teal-50 border-2 border-teal-300 rounded-xl p-4 mb-4">
+          <p className="text-teal-900 font-bold text-sm sm:text-base">
+            {t('連携が完了しました。LINEに戻って続きを進めましょう。')}
+          </p>
+          <p className="text-teal-800 text-xs sm:text-sm mt-1 leading-relaxed">
+            {t('LINEのトークで「はじめの設定」を押すと、このアカウント用のお店の情報を登録できます。')}
+          </p>
+          <a
+            href="https://line.me/R/ti/p/@936rschf"
+            className="inline-flex items-center justify-center mt-3 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-bold hover:bg-teal-700"
+          >
+            {t('LINEに戻る')}
+          </a>
+        </div>
+      )}
 
       {/* PC推奨バナー（全ユーザー・初回から表示）。スマホではThreadsアプリの横取り等で
           「このページは存在しません」に飛ぶ事例があるため、まずPCを強く推奨する。 */}

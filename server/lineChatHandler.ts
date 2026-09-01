@@ -309,16 +309,18 @@ async function repliesForConnect(userId: number): Promise<unknown[]> {
       `あと ${rest} 追加できます。\n\n` +
       (full
         ? "上限に達しているため、追加するには不要なアカウントの連携を解除するか、上位プランへの変更が必要です。"
-        : "追加する場合は、こちらのページを開いて「Threadsと連携する」を押してください。\n" +
-          `${base}/threads-connect\n\n` +
-          "※ この連携だけは、Meta（Threads）の認証画面を通るため、LINEの中ではなく通常のブラウザ（SafariやChrome）で開いてください。\n" +
-          "※ 追加したいアカウントでThreadsにログインした状態で開くと、そのアカウントがつながります。"),
+        : "追加する場合は、こちらを開いて「Threadsと連携する」を押してください。\n" +
+          `${base}/threads-connect?openExternalBrowser=1&from=line\n\n` +
+          "※ このリンクは、SafariやChromeなどいつものブラウザで自動的に開きます（Threads側の認証があるため、LINEの中のブラウザでは進めないことがあります）。\n" +
+          "※ もしLINEの中で開いてしまった場合は、画面右下の「…」から「他のブラウザで開く」を選んでください。\n" +
+          "※ 追加したいアカウントでThreadsにログインした状態で開くと、そのアカウントがつながります。\n" +
+          "※ 連携が終わったら、画面の「LINEに戻る」からこのトークへ戻れます。"),
       MENU_HINT,
     )];
   } catch {
     return [textWithQuick(
-      `Threadsアカウントの連携は、こちらのページから行えます。\n${base}/threads-connect\n\n` +
-      "※ 通常のブラウザで開いてください。",
+      `Threadsアカウントの連携は、こちらから行えます。\n${base}/threads-connect?openExternalBrowser=1&from=line\n\n` +
+      "※ いつものブラウザで開きます。LINEの中で開いた場合は、右下の「…」から「他のブラウザで開く」を選んでください。",
       MENU_HINT,
     )];
   }
