@@ -71,6 +71,24 @@ export const appRouter = router({
       }));
     }),
 
+    /**
+     * 設定の工程一覧。
+     * ★アプリのチェックリストは、必ずこれを表示すること。
+     *   画面側で条件を書き直すと、LINE・メールの案内とすぐ食い違う。
+     */
+    setupSteps: protectedProcedure.query(async ({ ctx }) => {
+      const { getSetupSteps } = await import('./nextAction');
+      const steps = await getSetupSteps(ctx.user.id);
+      const done = steps.filter((s) => s.done).length;
+      return {
+        steps,
+        done,
+        total: steps.length,
+        percent: steps.length === 0 ? 100 : Math.round((done / steps.length) * 100),
+        next: steps.find((s) => !s.done) ?? null,
+      };
+    }),
+
     /** アプリの画面からご質問いただく（自動でお答えし、記録する） */
     ask: protectedProcedure
       .input(z.object({ question: z.string().min(3).max(1000) }))

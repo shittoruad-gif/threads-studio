@@ -34,12 +34,18 @@ export function SetupProgress() {
   const { data: pinnedData } = trpc.project.hasPinnedPost.useQuery(undefined, {
     enabled: isAuthenticated,
   });
+  // 工程の一覧（判定はサーバー側。アプリ・LINE・メールで同じものを見る）
+  const { data: setup } = trpc.support.setupSteps.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
 
   const hasProjects = (projects?.length ?? 0) > 0;
   const hasThreadsAccounts = (threadsAccounts?.length ?? 0) > 0;
   const hasGenerated = (aiHistory?.total ?? 0) > 0;
   const hasPinnedPost = pinnedData?.hasPinnedPost ?? false;
   void hasGenerated;
+  // 工程の判定はサーバー側（getSetupSteps）に移した。下の変数は他の表示で使う。
+  void hasPinnedPost; void hasProjects; void hasThreadsAccounts;
 
   // 固定投稿の生成画面へ。プロジェクト未登録なら先に店舗情報登録へ誘導。
   const goCreatePinned = () => {
@@ -62,51 +68,34 @@ export function SetupProgress() {
     }, 200);
   };
 
-  // 正しい順番：連携 → 店舗情報 → 固定投稿 → 自動投稿
-  const statusItems: StatusItem[] = [
-    {
-      id: "account",
-      label: "アカウント作成済み",
-      completed: true,
-    },
-    {
-      id: "threads",
-      label: "Threadsアカウントを連携",
-      completed: hasThreadsAccounts,
-      actionLabel: "連携する",
-      action: () => setLocation("/threads-connect"),
-    },
-    {
-      id: "project",
-      label: "お店の情報を登録",
-      completed: hasProjects,
-      actionLabel: "登録する",
-      action: () => setLocation("/ai-project-create"),
-    },
-    {
-      id: "pinned",
-      label: "固定投稿をAIで作成（集客の入口）",
-      completed: hasPinnedPost,
-      actionLabel: "作成する",
-      action: goCreatePinned,
-    },
-    {
-      id: "autopost",
-      label: "自動投稿をONにする",
-      completed: isAutoPostEnabled,
-      actionLabel: "設定する",
-      action: scrollToAutoPost,
-      warning: !isAutoPostEnabled && hasProjects && hasThreadsAccounts,
-    },
-  ];
+  // ★工程の判定はサーバー（server/nextAction.ts の getSetupSteps）に一本化している。
+  //   ここで条件を書き直すと、公式LINE・メールの案内とすぐ食い違う。
+  //   （以前は画面側で別々に判定していたため、「LINEでは紐づけが要ると言っているのに
+  //     アプリでは準備完了」という状態が起きていた）
+  const statusItems: StatusItem[] = (setup?.steps ?? []).map((s: any) => ({
+    id: s.id,
+    label: s.label,
+    completed: s.done,
+    ...(s.done ? {} : {
+      actionLabel: s.actionLabel ?? "進む",
+      action: s.id === "pinned" || s.id === "no_pinned"
+        ? goCreatePinned
+        : s.id === "auto_off"
+          ? scrollToAutoPost
+          : () => setLocation(s.path ?? "/dashboard"),
+      warning: Boolean(s.important),
+    }),
+  }));
 
   // 次にやるべき1ステップ（最初の未完了）
   const nextStep = statusItems.find((s) => !s.completed && s.action);
 
   const completedCount = statusItems.filter((s) => s.completed).length;
   const totalCount = statusItems.length;
-  const progressPercent = Math.round((completedCount / totalCount) * 100);
+  const progressPercent = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
 
+  // 工程がまだ取れていないうちは何も出さない（「0%」が一瞬見えないように）
+  if (totalCount === 0) return null;
   // Hide when fully complete and not in demo mode
   if (completedCount === totalCount && !isDemoMode) {
     return null;
