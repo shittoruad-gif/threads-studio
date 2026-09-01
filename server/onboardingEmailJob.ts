@@ -25,8 +25,11 @@ import { sendEmail } from "./_core/notification";
 import { escapeHtml } from "@shared/sanitize";
 import { createUnsubscribeToken } from "./unsubscribeToken";
 
-/** 1通目・2通目を送るまでの日数（登録日から） */
-const FIRST_AFTER_DAYS = 3;
+/**
+ * 1通目・2通目を送るまでの日数（登録日から）。
+ * 1通目は翌日。登録した勢いがあるうちに次の一歩をお伝えしたいので、間を空けない。
+ */
+const FIRST_AFTER_DAYS = 1;
 const SECOND_AFTER_DAYS = 10;
 
 /**
@@ -156,7 +159,7 @@ export async function runOnboardingEmailJob(): Promise<void> {
       const needDays = t.stage === 0 ? FIRST_AFTER_DAYS : SECOND_AFTER_DAYS;
       if (ageDays < needDays) { skipped++; continue; }
 
-      // 1通目からあまり間を空けずに2通目を送らない
+      // 1通目の直後に2通目が続かないようにする（1通目=翌日・2通目=10日目なので通常は空く）
       if (t.lastSentAt && (Date.now() - t.lastSentAt.getTime()) / 86400000 < 5) { skipped++; continue; }
 
       const second = t.stage >= 1;
