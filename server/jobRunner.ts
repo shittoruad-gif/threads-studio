@@ -93,6 +93,8 @@ async function jobRegistry(): Promise<TrackedJob[]> {
   const { runAnalyticsSnapshotJob, runApprovalReminderJob } = await import('./dailyOpsJobs');
   const { runBillingReconcileJob } = await import('./billingReconcile');
   const { runNextActionNotifyJob } = await import('./nextActionJob');
+  const { runOnboardingEmailJob } = await import('./onboardingEmailJob');
+  const { runLineFollowerNudgeJob } = await import('./lineFollowerNudgeJob');
   // 日次ジョブの maxStalenessHours は 23h。周期(24h)より短いので二重実行はせず、
   // かつ「起動が発火時刻をまたいで遅れても、その日のうちなら必ず追い実行」できる
   // （＝丸ごと飛ぶ穴を塞ぐ）。実行が多少遅れても害の無いジョブばかりのため許容。
@@ -105,6 +107,10 @@ async function jobRegistry(): Promise<TrackedJob[]> {
     { name: 'approval_reminder', hour: 23, minute: 0, tzOffsetHours: 0, maxStalenessHours: 23, run: runApprovalReminderJob },
     // dailyOpsJobs: '30 23 * * *' UTC（8:30 JST）
     { name: 'next_action_notify', hour: 23, minute: 30, tzOffsetHours: 0, maxStalenessHours: 23, run: runNextActionNotifyJob },
+    // dailyOpsJobs: '0 0 * * *' UTC（9:00 JST）
+    { name: 'onboarding_email', hour: 0, minute: 0, tzOffsetHours: 0, maxStalenessHours: 23, run: runOnboardingEmailJob },
+    // dailyOpsJobs: '10 0 * * *' UTC（9:10 JST）
+    { name: 'line_follower_nudge', hour: 0, minute: 10, tzOffsetHours: 0, maxStalenessHours: 23, run: runLineFollowerNudgeJob },
     // autoPostScheduler: '0 6 * * *' timezone Asia/Tokyo
     { name: 'auto_post_generation', hour: 6, minute: 0, tzOffsetHours: 9, maxStalenessHours: 23, run: processAutoPostGeneration },
     // trialReminder: '0 9 * * *'（TZ指定なし＝サーバローカル。コンテナはUTC）

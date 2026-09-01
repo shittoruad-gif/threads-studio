@@ -558,6 +558,12 @@ async function startCounseling(lineUserId: string, accountId?: number | null): P
 export async function handlePostback(lineUserId: string, data: string): Promise<unknown[]> {
   const q = parsePostback(data);
   const user = await db.getUserByLineUserId(lineUserId);
+  // 友だち追加だけの方へのご案内を止める（連携前でも押せる必要がある）
+  if (q.f === "off") {
+    await db.setLineFollowerOptOut(lineUserId, true);
+    return [{ type: "text", text: "承知しました。ご案内は今後お送りしません。\nご利用になりたくなったら、いつでもこのトークからお進みいただけます。" }];
+  }
+
   if (!user) {
     // 未連携でも、連携に関する操作だけは進められるようにする
     if (q.m === "link") return startLinking(lineUserId);

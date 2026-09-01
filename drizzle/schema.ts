@@ -42,6 +42,11 @@ export const users = mysqlTable("users", {
   // Last auto-post type index (for rotation)
   lastAutoPostTypeIndex: int("lastAutoPostTypeIndex").default(0).notNull(),
   lastAutoPurposeIndex: int("lastAutoPurposeIndex").default(0).notNull(),
+  // 登録したまま止まっている方へのメール案内（2通で打ち止め）
+  onboardingEmailStage: int("onboardingEmailStage").default(0).notNull(),
+  onboardingEmailLastSentAt: timestamp("onboardingEmailLastSentAt"),
+  // ご案内メールの配信停止（お手続き・お支払いに関するメールは対象外）
+  emailOptOut: tinyint("emailOptOut").default(0).notNull(),
   // 「次にやること」の公式LINE通知。ご本人が「もう不要」と言えばOFFにできる。
   nextActionNotifyEnabled: tinyint("nextActionNotifyEnabled").default(1).notNull(),
   // 直近に送った案内の種類と日時（同じ案内を毎日送らないため）
@@ -810,6 +815,22 @@ export type InsertEmailLog = typeof emailLogs.$inferInsert;
  * 「書き直す→指示待ち」「NGワード追加→単語待ち」のように、
  * 次に届くテキストを何として扱うかを1行だけ保持する（LINEユーザー単位）。
  */
+/**
+ * 公式LINEに先に友だち追加した方の記録。
+ * アプリ登録前の方は users にも userLineLinks にも行が無く、
+ * メールアドレスも分からないため、LINEのトークでしか追いかけられない。
+ */
+export const lineFollowers = mysqlTable("lineFollowers", {
+  lineUserId: varchar("lineUserId", { length: 64 }).primaryKey(),
+  followedAt: timestamp("followedAt").defaultNow().notNull(),
+  linkedAt: timestamp("linkedAt"),
+  nudgeStage: int("nudgeStage").default(0).notNull(),
+  nudgeLastSentAt: timestamp("nudgeLastSentAt"),
+  optOut: tinyint("optOut").default(0).notNull(),
+}, (table) => [
+  index("idx_lineFollowers_linkedAt").on(table.linkedAt),
+]);
+
 /**
  * お客様からのご質問と、自動応答・担当者の回答の記録。
  * 「自動で答える」「答えられないものは担当者へ」「集まった質問をよくある質問へ」を1つの表で扱う。

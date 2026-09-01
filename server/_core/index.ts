@@ -174,6 +174,9 @@ async function startServer() {
           const lineUserId: string | undefined = ev?.source?.userId;
           if (!lineUserId) continue;
           if (ev.type === 'follow') {
+            // ★アプリ登録より先にLINEを追加した方は、users にも行が無く追いかけられない。
+            //   友だち追加を控えておき、連携が無いままなら後日このトークでご案内する。
+            try { await db.recordLineFollow(lineUserId); } catch (e) { console.error('[LineChat] 友だち追加の記録に失敗:', e); }
             // ★公式LINEから先に登録した方が迷わないよう、あいさつに連携ボタンを付ける
             const { replyMessages } = await import('../lineNotify');
             const { textWithQuick } = await import('../lineChat');
@@ -201,6 +204,7 @@ async function startServer() {
           if (ev.type === 'unfollow') {
             // ブロックされたら紐づけを外す（送っても届かないため）
             await db.unlinkLineByLineUserId(lineUserId);
+            try { await db.removeLineFollower(lineUserId); } catch { /* 記録の削除は失敗しても続行 */ }
             continue;
           }
           if (ev.type === 'message' && ev.message?.type === 'text') {
@@ -1168,6 +1172,33 @@ async function startServer() {
   a.link{color:#0f766e}
 </style></head>
 <body><div class="card">${body}</div></body></html>`;
+
+  // ご案内メールの配信停止（ログイン不要・署名つきリンク）。
+  // お手続きやお支払いに関するメールは対象外で、これまで通りお送りする。
+  app.get('/api/unsubscribe', async (req, res) => {
+    const { verifyUnsubscribeToken } = await import('../unsubscribeToken');
+    const userId = verifyUnsubscribeToken(req.query.token);
+    if (!userId) {
+      return res.status(400).send(approvalPage('リンクが無効です', `
+        <h1>このリンクは使えません</h1>
+        <p>URLが途中で切れている可能性があります。</p>
+        <p class="meta">お手数ですが、メールに返信してお知らせください。</p>`, 'ng'));
+    }
+    try {
+      const db = await import('../db');
+      await db.setEmailOptOut(userId, true);
+    } catch (e) {
+      console.error('[Unsubscribe] 失敗:', e);
+      return res.status(500).send(approvalPage('うまくいきませんでした', `
+        <h1>いま手続きができませんでした</h1>
+        <p>お手数ですが、少し時間をおいてもう一度お試しください。</p>`, 'ng'));
+    }
+    return res.send(approvalPage('配信を停止しました', `
+      <h1>配信を停止しました</h1>
+      <p>使い方のご案内メールは、今後お送りしません。</p>
+      <p class="meta">お手続き・お支払いに関する大切なお知らせは、引き続きお送りします。</p>
+      <a class="btn" href="/settings">アプリを開く</a>`, 'ok'));
+  });
 
   app.get('/api/post-approval', async (req, res) => {
     const parsed = verifyApprovalToken(req.query.token);

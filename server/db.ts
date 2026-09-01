@@ -3313,6 +3313,13 @@ async function upsertLineLink(userId: number, lineUserId: string, displayName?: 
   if (!db) return;
   await db.delete(userLineLinks).where(eq(userLineLinks.lineUserId, lineUserId));
   await db.insert(userLineLinks).values({ userId, lineUserId, displayName: displayName ?? null });
+  // ★連携できたら、友だち追加だけの方への案内は止める。
+  //   （6桁コード・LIFF・メール、どの経路で連携しても必ずここを通る）
+  try {
+    await db.execute(sql.raw(
+      `UPDATE \`lineFollowers\` SET \`linkedAt\` = NOW() WHERE \`lineUserId\` = ${escapeSql(lineUserId)}`
+    ));
+  } catch { /* 記録の更新は失敗しても連携そのものは成立させる */ }
 }
 
 /**
@@ -3530,6 +3537,129 @@ function escapeSql(v: string): string {
   return `'${String(v).replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
 }
 
+
+// ── 公式LINEに先に友だち追加した方 ─────────────────────────────
+/** 友だち追加を記録する（すでにあれば何もしない） */
+export async function recordLineFollow(lineUserId: string): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  await database.execute(sql.raw(
+    `INSERT INTO \`lineFollowers\` (\`lineUserId\`) VALUES (${escapeSql(lineUserId)})
+     ON DUPLICATE KEY UPDATE \`lineUserId\` = \`lineUserId\``
+  ));
+}
+
+/** ブロックされたら記録を消す（送っても届かないため） */
+export async function removeLineFollower(lineUserId: string): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  await database.execute(sql.raw(`DELETE FROM \`lineFollowers\` WHERE \`lineUserId\` = ${escapeSql(lineUserId)}`));
+}
+
+/** 連携できたことを記録する（以後はご案内の対象外） */
+export async function markLineFollowerLinked(lineUserId: string): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  await database.execute(sql.raw(
+    `UPDATE \`lineFollowers\` SET \`linkedAt\` = NOW() WHERE \`lineUserId\` = ${escapeSql(lineUserId)}`
+  ));
+}
+
+/** 「もう不要」と言われたら送らない */
+export async function setLineFollowerOptOut(lineUserId: string, optOut: boolean): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  await database.execute(sql.raw(
+    `UPDATE \`lineFollowers\` SET \`optOut\` = ${optOut ? 1 : 0} WHERE \`lineUserId\` = ${escapeSql(lineUserId)}`
+  ));
+}
+
+/** 友だち追加だけで、まだ連携していない方（ご案内の対象） */
+export async function listUnlinkedLineFollowers(): Promise<Array<{
+  lineUserId: string; followedAt: Date; stage: number; lastSentAt: Date | null;
+}>> {
+  const database = await getDb();
+  if (!database) return [];
+  const rows: any = await database.execute(sql.raw(
+    `SELECT f.\`lineUserId\` AS lineUserId, f.\`followedAt\` AS followedAt,
+            f.\`nudgeStage\` AS stage, f.\`nudgeLastSentAt\` AS lastSentAt
+     FROM \`lineFollowers\` f
+     LEFT JOIN \`userLineLinks\` l ON l.\`lineUserId\` = f.\`lineUserId\`
+     WHERE f.\`linkedAt\` IS NULL AND l.\`id\` IS NULL
+       AND f.\`optOut\` = 0 AND f.\`nudgeStage\` < 2`
+  ));
+  return (rows?.[0] ?? []).map((r: any) => ({
+    lineUserId: String(r.lineUserId),
+    followedAt: new Date(r.followedAt),
+    stage: Number(r.stage ?? 0),
+    lastSentAt: r.lastSentAt ? new Date(r.lastSentAt) : null,
+  }));
+}
+
+/** ご案内を送ったことを記録する */
+export async function recordLineFollowerNudge(lineUserId: string, stage: number): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  await database.execute(sql.raw(
+    `UPDATE \`lineFollowers\` SET \`nudgeStage\` = ${Number(stage)}, \`nudgeLastSentAt\` = NOW()
+     WHERE \`lineUserId\` = ${escapeSql(lineUserId)}`
+  ));
+}
+
+// ── ご案内メール（登録したまま止まっている方へ）────────────────────
+/** ご案内メールの配信停止／再開 */
+export async function setEmailOptOut(userId: number, optOut: boolean): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  const { users } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  await database.update(users).set({ emailOptOut: optOut ? 1 : 0 } as any).where(eq(users.id, userId));
+}
+
+/**
+ * ご案内メールの対象者。
+ * ・配信停止していない
+ * ・メールアドレスがある
+ * ・LINE未連携（LINE連携済みの方には、トークでお伝えするのでメールは送らない）
+ * ・まだ2通送りきっていない
+ */
+export async function listUsersForOnboardingEmail(): Promise<Array<{
+  userId: number; email: string; name: string | null;
+  stage: number; createdAt: Date; lastSentAt: Date | null;
+}>> {
+  const database = await getDb();
+  if (!database) return [];
+  const rows: any = await database.execute(sql.raw(
+    `SELECT u.\`id\` AS userId, u.\`email\` AS email, u.\`name\` AS name,
+            u.\`onboardingEmailStage\` AS stage, u.\`createdAt\` AS createdAt,
+            u.\`onboardingEmailLastSentAt\` AS lastSentAt
+     FROM \`users\` u
+     LEFT JOIN \`userLineLinks\` l ON l.\`userId\` = u.\`id\`
+     WHERE u.\`emailOptOut\` = 0
+       AND u.\`email\` IS NOT NULL AND u.\`email\` <> ''
+       AND l.\`id\` IS NULL
+       AND u.\`onboardingEmailStage\` < 2`
+  ));
+  return (rows?.[0] ?? []).map((r: any) => ({
+    userId: Number(r.userId),
+    email: String(r.email),
+    name: r.name ?? null,
+    stage: Number(r.stage ?? 0),
+    createdAt: new Date(r.createdAt),
+    lastSentAt: r.lastSentAt ? new Date(r.lastSentAt) : null,
+  }));
+}
+
+/** ご案内メールを送ったことを記録する */
+export async function recordOnboardingEmailSent(userId: number, stage: number): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  const { users } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  await database.update(users)
+    .set({ onboardingEmailStage: stage, onboardingEmailLastSentAt: new Date() } as any)
+    .where(eq(users.id, userId));
+}
 
 // ── 「次にやること」のご案内 ───────────────────────────────
 /** ご自身で承認して公開した投稿の件数（0なら、まだ承認の流れを体験していない） */
