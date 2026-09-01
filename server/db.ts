@@ -3538,6 +3538,26 @@ function escapeSql(v: string): string {
 }
 
 
+// ── 固定投稿のピン留め確認 ───────────────────────────────────
+/** 「Threadsでピン留めしました」を記録する */
+export async function confirmPinnedPost(userId: number): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  const { users } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  await database.update(users).set({ pinnedPostConfirmedAt: new Date() } as any).where(eq(users.id, userId));
+}
+
+/** ピン留め済みとして申告されているか */
+export async function isPinnedPostConfirmed(userId: number): Promise<boolean> {
+  const database = await getDb();
+  if (!database) return false;
+  const { users } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  const rows = await database.select({ v: users.pinnedPostConfirmedAt }).from(users).where(eq(users.id, userId)).limit(1);
+  return Boolean(rows?.[0]?.v);
+}
+
 // ── 公式LINEに先に友だち追加した方 ─────────────────────────────
 /** 友だち追加を記録する（すでにあれば何もしない） */
 export async function recordLineFollow(lineUserId: string): Promise<void> {

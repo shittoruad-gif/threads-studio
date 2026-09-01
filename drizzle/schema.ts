@@ -42,6 +42,8 @@ export const users = mysqlTable("users", {
   // Last auto-post type index (for rotation)
   lastAutoPostTypeIndex: int("lastAutoPostTypeIndex").default(0).notNull(),
   lastAutoPurposeIndex: int("lastAutoPurposeIndex").default(0).notNull(),
+  // 「Threadsでピン留めしました」というご本人の確認（APIでは確認できないため申告制）
+  pinnedPostConfirmedAt: timestamp("pinnedPostConfirmedAt"),
   // 登録したまま止まっている方へのメール案内（2通で打ち止め）
   onboardingEmailStage: int("onboardingEmailStage").default(0).notNull(),
   onboardingEmailLastSentAt: timestamp("onboardingEmailLastSentAt"),

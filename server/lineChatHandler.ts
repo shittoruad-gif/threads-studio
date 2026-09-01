@@ -733,6 +733,21 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       MENU_HINT,
     )];
   }
+  if (q.n === "pinned") {
+    await db.confirmPinnedPost(user.id);
+    return [textWithQuick(
+      "ありがとうございます。ピン留めを記録しました。\n" +
+      "プロフィールを見に来た方が、最初にこの投稿を読む形になります。",
+      MENU_HINT,
+    )];
+  }
+  if (q.n === "pinhow") {
+    const { pinGuideText } = await import("@shared/pinGuide");
+    return [textWithQuick(
+      pinGuideText() + "\n\n終わったら、下の「ピン留めしました」を押してください。",
+      [{ label: "ピン留めしました", data: "n=pinned" }, ...MENU_HINT],
+    )];
+  }
   if (q.n === "on") {
     await db.setNextActionNotifyEnabled(user.id, true);
     return [textWithQuick(

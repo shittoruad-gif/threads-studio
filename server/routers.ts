@@ -89,6 +89,12 @@ export const appRouter = router({
       };
     }),
 
+    /** 「Threadsでピン留めしました」を記録する（APIでは確認できないため申告制） */
+    confirmPinned: protectedProcedure.mutation(async ({ ctx }) => {
+      await db.confirmPinnedPost(ctx.user.id);
+      return { success: true } as const;
+    }),
+
     /** アプリの画面からご質問いただく（自動でお答えし、記録する） */
     ask: protectedProcedure
       .input(z.object({ question: z.string().min(3).max(1000) }))

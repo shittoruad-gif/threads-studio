@@ -113,6 +113,21 @@ export async function getSetupSteps(userId: number): Promise<SetupStep[]> {
     actionLabel: "作成する",
   });
 
+  // ★作っただけでは効果が出ない。Threadsのプロフィールに固定して、はじめて入口になる。
+  //   ピン留めはThreadsのAPIでは操作も確認もできないため、ご本人の申告で完了とする。
+  if (hasPinned) {
+    let confirmed = false;
+    try { confirmed = await db.isPinnedPostConfirmed(userId); } catch { confirmed = false; }
+    steps.push({
+      id: "pin_not_confirmed",
+      label: "作った固定投稿をThreadsでピン留めする",
+      done: confirmed,
+      path: "/ai-generate?pinned=1",
+      actionLabel: "やり方を見る",
+      important: true,
+    });
+  }
+
   if (maxPerDay > 0) {
     steps.push({
       id: "auto_off",
@@ -215,7 +230,26 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
     };
   }
 
-  // ⑥ プランでは自動投稿が使えるのに、OFFのまま。
+  // ⑥ 固定投稿は作ったが、Threads側でピン留めがまだ。
+  //    ここを飛ばすと「固定投稿を作ったのに効果がない」ということになる。
+  {
+    let confirmed = false;
+    try { confirmed = await db.isPinnedPostConfirmed(userId); } catch { confirmed = true; }
+    if (!confirmed) {
+      const { pinGuideText } = await import("@shared/pinGuide");
+      return {
+        key: "pin_not_confirmed",
+        text:
+          "次にやることが1つあります。\n\n" +
+          "固定投稿はできていますが、まだThreadsでピン留めされていないようです。\n\n" +
+          pinGuideText() +
+          "\n\n終わったら、下の「ピン留めしました」を押してください。",
+        buttons: [{ label: "ピン留めしました", data: "n=pinned" }],
+      };
+    }
+  }
+
+  // ⑦ プランでは自動投稿が使えるのに、OFFのまま。
   const settings: any = await db.getAutoPostSettings(userId).catch(() => null);
   if (maxPerDay > 0 && settings && settings.autoPostEnabled === false) {
     return {
@@ -228,7 +262,7 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
     };
   }
 
-  // ⑦ 公開前の確認がOFFのまま。最初のうちは中身を見てからのほうが安心。
+  // ⑧ 公開前の確認がOFFのまま。最初のうちは中身を見てからのほうが安心。
   //    （一度もご自身の投稿を承認したことがない方にだけお伝えする）
   if (maxPerDay > 0 && settings && settings.autoPostRequireApproval === false) {
     const approved = await db.countApprovedPosts(userId).catch(() => 1);

@@ -33,6 +33,7 @@ import { useThreadsAccount } from '@/components/ThreadsAccountSwitcher';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import PinGuide from '@/components/PinGuide';
 import HelpTooltip from '@/components/HelpTooltip';
 import { triggerCelebration } from '@/components/Celebration';
 import ErrorGuide from '@/components/ErrorGuide';
@@ -843,6 +844,9 @@ export default function AIGenerate() {
                           ? t("いま固定投稿モードです。下の「AI投稿を生成」を押すと、プロフィールに固定する用の投稿ができます。")
                           : t("プロフィールの一番上に固定する「お店の入口」。LINE登録や予約に最もつながる投稿です。まだの方はこれから作りましょう。")}
                       </p>
+                      {/* ★作って投稿しただけでは効果が出ない。Threads側でピン留めして
+                          はじめて入口になるので、手順をここに常に置く。 */}
+                      <PinGuide />
                     </div>
                     <div className="shrink-0">
                       {postType === 'pinned' ? (
