@@ -25,7 +25,7 @@ export default function Privacy() {
           <h1 className="text-3xl font-bold text-foreground">プライバシーポリシー</h1>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-8">最終更新日：2026年6月15日</p>
+        <p className="text-sm text-muted-foreground mb-8">最終更新日：2026年9月1日</p>
 
         <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
           <section>
@@ -87,6 +87,16 @@ export default function Privacy() {
                   不具合の検知・修正のため、エラー発生時のエラー内容や発生状況などの診断情報を収集する場合があります
                   （エラー監視サービス（例：Sentry）を利用することがあります）。サービスの品質・安定性向上のため、
                   このような情報を収集することにご理解をお願いいたします。
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">2.8 LINE連携情報</h3>
+                <p>
+                  当社の公式LINEアカウントと連携された場合、LINEから提供されるユーザー識別子（LINEユーザーID）および
+                  表示名を取得・保存します。これは、投稿の確認依頼や通知をお届けし、LINEのトーク上での操作を
+                  ご本人のアカウントと結びつけるために必要です。連携の解除（トークで「解除」と送信、または設定画面からの操作）により、
+                  これらの情報は速やかに削除されます。
                 </p>
               </div>
             </div>
@@ -212,7 +222,7 @@ export default function Privacy() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
-                <span>サービス提供に必要な業務委託先（決済処理のUnivapay／株式会社ユニヴァ・ペイキャスト、AI生成のGoogle LLC、メール配信のResend、エラー監視サービス（例：Sentry。利用する場合）等）に対して、必要最小限の情報を提供する場合</span>
+                <span>サービス提供に必要な業務委託先（決済処理のUnivapay／株式会社ユニヴァ・ペイキャスト、AI生成のGoogle LLC、メール配信のResend、LINEでの通知配信に用いるLINEヤフー株式会社、エラー監視サービス（例：Sentry。利用する場合）等）に対して、必要最小限の情報を提供する場合</span>
               </li>
             </ul>
           </section>

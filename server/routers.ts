@@ -76,10 +76,21 @@ export const appRouter = router({
         couponCode: z.string().optional(),
         // #28 紹介コード（/register?ref=XXX から取得）
         referralCode: z.string().trim().min(1).max(16).optional(),
+        // ★規約同意（後日の紛争に備えて記録する。false では登録できない）
+        agreedToTerms: z.boolean(),
+        termsVersion: z.string().max(20).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const { hashPassword, isValidEmail, isValidPassword } = await import('./auth-helpers');
-        
+
+        // ★規約への同意は必須（画面のチェックだけに頼らずサーバーでも止める）
+        if (!input.agreedToTerms) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: '利用規約・プライバシーポリシー・特定商取引法に基づく表記への同意が必要です。',
+          });
+        }
+
         // Validate email
         if (!isValidEmail(input.email)) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '無効なメールアドレスです。' });
@@ -106,6 +117,21 @@ export const appRouter = router({
         const user = await db.createEmailUser(input.email, passwordHash, input.name, input.storeName?.trim() || undefined);
         if (!user) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'ユーザーの作成に失敗しました。' });
+        }
+
+        // ★規約同意の記録（誰が・いつ・どの版に・どの端末から）
+        try {
+          const { LEGAL_VERSION } = await import('../shared/legalVersion');
+          const ipRaw = ctx.req.ip || ctx.req.headers['x-forwarded-for'] || '';
+          const ip = String(Array.isArray(ipRaw) ? ipRaw[0] : ipRaw).slice(0, 64);
+          const ua = String(ctx.req.headers['user-agent'] || '').slice(0, 255);
+          await db.recordTermsAgreement(user.id, {
+            version: input.termsVersion || LEGAL_VERSION,
+            ip,
+            userAgent: ua,
+          });
+        } catch (e) {
+          console.error('[Register] 規約同意の記録に失敗:', e);
         }
 
         // Generate email verification token

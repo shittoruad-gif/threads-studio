@@ -25,7 +25,7 @@ export default function Terms() {
           <h1 className="text-3xl font-bold text-foreground">利用規約</h1>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-8">最終更新日：2026年8月20日</p>
+        <p className="text-sm text-muted-foreground mb-8">最終更新日：2026年9月1日</p>
 
         <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
           <section>
@@ -65,6 +65,18 @@ export default function Terms() {
               <li className="flex items-start gap-2">
                 <span className="text-primary mt-1">•</span>
                 <span>自動投稿スケジューリング</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary mt-1">•</span>
+                <span>投稿に寄せられたコメントの確認および返信文案の生成</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary mt-1">•</span>
+                <span>イベント開催日から逆算した告知投稿の作成</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary mt-1">•</span>
+                <span>当社の公式LINEアカウントと連携し、LINEのトーク上で投稿の確認・承認・設定変更を行う機能</span>
               </li>
             </ul>
           </section>
@@ -155,6 +167,9 @@ export default function Terms() {
               </p>
               <p>
                 6. 解約後も、支払い済み期間の終了まではサービスをご利用いただけます。
+              </p>
+              <p>
+                7. 紹介コードの適用によるキャンペーン価格は、所定の回数（3回）分のお支払いまで適用されます。4回目のお支払いから通常価格へ自動的に切り替わり、以降は毎月自動更新されます。切り替えの前にメールでお知らせします。
               </p>
             </div>
           </section>

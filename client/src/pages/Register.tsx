@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Link, useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
+import { LEGAL_VERSION } from '@shared/legalVersion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -93,6 +94,9 @@ export default function Register() {
       storeName: storeName.trim() || undefined,
       couponCode: couponCode.trim() || undefined,
       referralCode: referralCode || undefined,
+      // 規約同意の記録用（サーバー側でも同意なしは拒否される）
+      agreedToTerms,
+      termsVersion: LEGAL_VERSION,
     });
   };
 

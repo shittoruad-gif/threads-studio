@@ -69,6 +69,12 @@ export const users = mysqlTable("users", {
   // 【旧】連携済みユーザーのLINE userId。複数LINE対応で userLineLinks テーブルへ移行済み。
   // この列はもう読まない（migration 0058 で移行・後方互換のため残置）。
   lineUserId: varchar("lineUserId", { length: 64 }),
+  // ── 規約同意の記録（後日の紛争に備えて「誰が・いつ・どの版に」同意したかを残す）──
+  // 同意なしには登録できないため、通常は登録時刻と同じ値が入る。
+  termsAgreedAt: timestamp("termsAgreedAt"),
+  termsVersion: varchar("termsVersion", { length: 20 }),
+  termsAgreedIp: varchar("termsAgreedIp", { length: 64 }),
+  termsAgreedUa: varchar("termsAgreedUa", { length: 255 }),
   // 連携用の6桁コード（設定画面で発行→LINEトークに送って照合。10分で失効）
   lineLinkCode: varchar("lineLinkCode", { length: 10 }),
   lineLinkCodeExpiresAt: timestamp("lineLinkCodeExpiresAt"),

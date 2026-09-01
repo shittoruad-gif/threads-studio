@@ -77,12 +77,14 @@ export default function AdminUsers() {
   const handleExportCSV = () => {
     if (filteredUsers.length === 0) { toast.error('エクスポートするデータがありません'); return; }
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const header = '名前,店舗名,メールアドレス,プラン,状態,モニター,登録日\n';
+    const header = '名前,店舗名,メールアドレス,プラン,状態,モニター,規約同意日,規約版,登録日\n';
     const rows = filteredUsers.map((u) => {
       const a = u as any;
       return [
         esc(u.name), esc(a.storeName), esc(u.email), esc(a.planId ?? ''),
         esc(a.subscriptionStatus ?? ''), esc(a.isMonitor ? 'はい' : ''),
+        esc(u.termsAgreedAt ? new Date(u.termsAgreedAt).toLocaleString('ja-JP') : ''),
+        esc(u.termsVersion ?? ''),
         esc(u.createdAt ? new Date(u.createdAt).toLocaleDateString('ja-JP') : ''),
       ].join(',');
     }).join('\n');
@@ -198,6 +200,7 @@ export default function AdminUsers() {
                 <TableHead>状態</TableHead>
                 <TableHead>連携</TableHead>
                 <TableHead>モニター</TableHead>
+                <TableHead>規約同意</TableHead>
                 <TableHead>最終ログイン</TableHead>
                 <TableHead>登録日</TableHead>
                 <TableHead>操作</TableHead>
@@ -237,6 +240,16 @@ export default function AdminUsers() {
                     >
                       {u.isMonitor ? 'モニター' : 'OFF'}
                     </Button>
+                  </TableCell>
+                  <TableCell className="text-xs whitespace-nowrap">
+                    {user.termsAgreedAt ? (
+                      <span title={`版 ${user.termsVersion ?? '-'}`}>
+                        {new Date(user.termsAgreedAt).toLocaleDateString('ja-JP')}
+                        <span className="text-muted-foreground ml-1">({user.termsVersion ?? '-'})</span>
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">記録なし</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-xs whitespace-nowrap">{relativeDays(user.lastSignedIn)}</TableCell>
                   <TableCell className="text-xs whitespace-nowrap">

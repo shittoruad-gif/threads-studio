@@ -2034,6 +2034,9 @@ export async function getAllUsers() {
     createdAt: users.createdAt,
     lastSignedIn: users.lastSignedIn,
     isMonitor: users.isMonitor,
+    // 規約同意の記録（誰が・いつ・どの版に同意したか）
+    termsAgreedAt: users.termsAgreedAt,
+    termsVersion: users.termsVersion,
   }).from(users).orderBy(desc(users.createdAt));
 
   if (userRows.length === 0) return [];
@@ -3531,4 +3534,24 @@ export async function listAllLinkedLineUserIds(): Promise<string[]> {
   if (!database) return [];
   const rows: any = await database.execute(sql.raw("SELECT `lineUserId` FROM `userLineLinks`"));
   return (rows?.[0] ?? []).map((r: any) => r.lineUserId).filter(Boolean);
+}
+
+/**
+ * 規約同意の記録（登録時に1回）。
+ * 「誰が・いつ・どの版に・どの端末から同意したか」を残し、後日の確認に備える。
+ */
+export async function recordTermsAgreement(
+  userId: number,
+  info: { version: string; ip?: string; userAgent?: string },
+): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  await database.update(users)
+    .set({
+      termsAgreedAt: new Date(),
+      termsVersion: info.version,
+      termsAgreedIp: info.ip || null,
+      termsAgreedUa: info.userAgent || null,
+    } as any)
+    .where(eq(users.id, userId));
 }

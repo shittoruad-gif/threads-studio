@@ -25,7 +25,7 @@ export default function CommercialTransaction() {
           <h1 className="text-3xl font-bold text-foreground">特定商取引法に基づく表記</h1>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-8">最終更新日：2026年6月15日</p>
+        <p className="text-sm text-muted-foreground mb-8">最終更新日：2026年9月1日</p>
 
         <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
           <div className="overflow-x-auto">
@@ -93,7 +93,7 @@ export default function CommercialTransaction() {
                 <td className="py-4 px-4 text-muted-foreground">
                   有料プランには7日間の無料トライアルがあります。お申し込み時にカードをご登録いただき、
                   トライアル期間（7日間）の終了後に初回決済が行われ、以降は毎月自動更新されます。
-                  キャンペーンプランは、お申し込み時から所定の回数分が課金され、完了後に自動終了します。
+                  キャンペーン価格（紹介コード適用時）は、所定の回数（3回）分のお支払いまで適用されます。4回目のお支払いから通常価格へ自動的に切り替わり、以降は毎月自動更新されます。切り替えの前にメールでお知らせします。切り替えを望まれない場合は、それまでに解約してください。
                 </td>
               </tr>
               <tr>
