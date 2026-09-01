@@ -88,7 +88,7 @@ const COMPARISON_FEATURES: ComparisonFeature[] = [
 const FAQ_ITEMS = [
   {
     question: '無料トライアル中に解約できますか？',
-    answer: 'はい。お申し込み時にカードをご登録いただきますが、7日間のトライアル期間中にダッシュボードから解約すれば、料金は一切発生しません。8日目以降に自動でお支払いが始まります。',
+    answer: 'はい。お申し込み時にカードをご登録いただきますが、7日間のトライアル期間中にダッシュボードから解約すれば、料金は一切発生しません。8日目以降に自動でお支払いが始まります。なお、紹介コードによるキャンペーン価格でお申し込みの場合は無料トライアルの対象外となり、お申し込み時に初回のお支払いが発生します（解約はいつでも可能です）。',
   },
   {
     question: 'プランの変更はできますか？',
@@ -242,11 +242,21 @@ export default function Pricing() {
           <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
             シンプルな料金プラン
           </h1>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            お申し込み時にカードをご登録いただき、7日間は無料で全機能をお試しいただけます。
-            <br />
-            8日目から自動でお支払いが始まります。トライアル期間中はダッシュボードからいつでも解約でき、料金は発生しません。
-          </p>
+          {/* ★紹介コードが適用されている方は、キャンペーン価格での即時お申し込みになる。
+              7日間無料トライアルは付かないため、同じ説明を出すと事実と食い違う。 */}
+          {campaignUnlocked ? (
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              紹介コードによるキャンペーン価格が適用されています。
+              <br />
+              キャンペーン価格でのお申し込みには7日間の無料トライアルは付かず、お申し込み時に初回のお支払いが発生します。解約はダッシュボードからいつでも行えます。
+            </p>
+          ) : (
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              お申し込み時にカードをご登録いただき、7日間は無料で全機能をお試しいただけます。
+              <br />
+              8日目から自動でお支払いが始まります。トライアル期間中はダッシュボードからいつでも解約でき、料金は発生しません。
+            </p>
+          )}
           <div className="mt-6 mx-auto max-w-2xl rounded-xl border-2 border-emerald-300 bg-emerald-50 px-5 py-4 text-left dark:border-emerald-800 dark:bg-emerald-950/30">
             <p className="text-[0.98rem] font-bold text-foreground">
               おすすめは、1日3投稿のプロプランです
@@ -364,6 +374,9 @@ export default function Pricing() {
                     </>
                   ) : plan.priceMonthly === 0 ? (
                     '無料で始める'
+                  ) : campaignPlan ? (
+                    // キャンペーン価格は即時課金のため「無料で試す」とは書けない
+                    'このプランに申し込む'
                   ) : (
                     '7日間無料で試す'
                   )}
@@ -498,10 +511,12 @@ export default function Pricing() {
         {/* CTA Section */}
         <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl p-10 text-center max-w-3xl mx-auto">
           <h3 className="text-2xl font-bold text-white mb-4">
-            まずは7日間無料でお試しください
+            {campaignUnlocked ? 'キャンペーン価格でお申し込みいただけます' : 'まずは7日間無料でお試しください'}
           </h3>
           <p className="text-white/80 mb-6">
-            7日間は無料。トライアル中はダッシュボードからいつでも解約でき、料金は発生しません。
+            {campaignUnlocked
+              ? '紹介コード適用のお申し込みには無料トライアルは付かず、お申し込み時に初回のお支払いが発生します。解約はダッシュボードからいつでも行えます。'
+              : '7日間は無料。トライアル中はダッシュボードからいつでも解約でき、料金は発生しません。'}
           </p>
           <Button
             size="lg"
