@@ -26,11 +26,24 @@ import { escapeHtml } from "@shared/sanitize";
 import { createUnsubscribeToken } from "./unsubscribeToken";
 
 /**
- * 1通目・2通目を送るまでの日数（登録日から）。
- * 1通目は翌日。登録した勢いがあるうちに次の一歩をお伝えしたいので、間を空けない。
+ * 2通目を送るまでの日数（登録日から）。
+ * 1通目は「登録日の翌日」なので、日数ではなく日付で判定する（下の isNextDayOrLater）。
  */
-const FIRST_AFTER_DAYS = 1;
 const SECOND_AFTER_DAYS = 10;
+
+/** 日本時間での「日付」（YYYY-MM-DD） */
+function jstDate(d: Date): string {
+  return new Date(d.getTime() + 9 * 3600_000).toISOString().slice(0, 10);
+}
+
+/**
+ * 登録日の翌日以降か。
+ * ★「24時間経過」で判定すると、午後に登録された方は翌々日になってしまう。
+ *   「翌日にお届けする」という意図に合わせて、日付が変わったかどうかで見る。
+ */
+function isNextDayOrLater(createdAt: Date, now: Date): boolean {
+  return jstDate(now) > jstDate(createdAt);
+}
 
 /**
  * ★これより前に登録された方には送らない。
@@ -154,10 +167,16 @@ export async function runOnboardingEmailJob(): Promise<void> {
       const action = await detectNextAction(t.userId);
       if (!action) { skipped++; continue; }
 
-      const ageDays = (Date.now() - t.createdAt.getTime()) / 86400000;
+      const now = new Date();
+      const ageDays = (now.getTime() - t.createdAt.getTime()) / 86400000;
       if (ageDays > MAX_AGE_DAYS) { skipped++; continue; }
-      const needDays = t.stage === 0 ? FIRST_AFTER_DAYS : SECOND_AFTER_DAYS;
-      if (ageDays < needDays) { skipped++; continue; }
+      if (t.stage === 0) {
+        // 1通目：登録日の翌日から
+        if (!isNextDayOrLater(t.createdAt, now)) { skipped++; continue; }
+      } else {
+        // 2通目：登録から10日後
+        if (ageDays < SECOND_AFTER_DAYS) { skipped++; continue; }
+      }
 
       // 1通目の直後に2通目が続かないようにする（1通目=翌日・2通目=10日目なので通常は空く）
       if (t.lastSentAt && (Date.now() - t.lastSentAt.getTime()) / 86400000 < 5) { skipped++; continue; }
