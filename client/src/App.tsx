@@ -49,6 +49,7 @@ const CommentManager = lazy(() => import("./pages/CommentManager"));
 const PostAnalytics = lazy(() => import("./pages/PostAnalytics"));
 const AdminPresets = lazy(() => import("./pages/AdminPresets"));
 const AdminFeedback = lazy(() => import("./pages/AdminFeedback"));
+const AdminQuestions = lazy(() => import("./pages/AdminQuestions"));
 const AdminHitPosts = lazy(() => import("./pages/AdminHitPosts"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
@@ -103,6 +104,7 @@ function DashboardRoutes() {
         <Route path="/admin/users" component={AdminUsers} />
         <Route path="/admin/presets" component={AdminPresets} />
         <Route path="/admin/feedback" component={AdminFeedback} />
+        <Route path="/admin/questions" component={AdminQuestions} />
         <Route path="/admin/hit-posts" component={AdminHitPosts} />
         <Route path="/ai-templates" component={AITemplates} />
         <Route path="/referral" component={Referral} />
@@ -201,6 +203,9 @@ function Router() {
         {() => <DashboardRoutes />}
       </Route>
       <Route path="/admin/feedback">
+        {() => <DashboardRoutes />}
+      </Route>
+      <Route path="/admin/questions">
         {() => <DashboardRoutes />}
       </Route>
       <Route path="/admin/hit-posts">

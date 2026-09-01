@@ -683,6 +683,9 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       MENU_HINT,
     )];
   }
+  if (q.m === "staff") {
+    return startStaffHandoff(lineUserId, q.q ? Number(q.q) : undefined);
+  }
   if (q.m === "comments") {
     return [textWithQuick(
       "新しいコメントが届いたときは、このトークで内容と返信の文案をお送りします。\n" +
@@ -852,6 +855,14 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
       return [textWithQuick("設定の途中で問題が起きました。「はじめの設定」からやり直してください。", MENU_HINT)];
     }
   }
+  if (st?.state === "staff_message") {
+    await db.clearLineChatState(lineUserId);
+    if (/^(やめる|中止|キャンセル)$/.test(text.trim())) {
+      return [textWithQuick("承知しました。中止しました。", MENU_HINT)];
+    }
+    return forwardToStaff(user.id, lineUserId, text.slice(0, 2000), st.payload ? Number(st.payload) : undefined);
+  }
+
   // ★入力待ちの途中で「やめる」と打たれたら、その言葉を内容として使わずに抜ける。
   //   （NGワード待ち・書き直し待ちでこれが無く、「やめる」がそのまま
   //     NGワードや書き直し指示として使われてしまっていた）
@@ -895,24 +906,112 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   if (/^(追加|ついか)$/.test(t)) {
     return [{ type: "text", text: "他の方も操作できるようにするには、アプリの設定画面で6桁のコードを発行し、そのコードをその方のLINEからこのトークに送ってもらってください。" }];
   }
-  // ★ここから下は「実際によく送られてくる言葉」に答えるための受け皿。
-  //   以前はどれを送っても同じメニューを返すだけで、質問に答えていなかった。
+  // ★文章でのご質問は、まず自動でお答えする。
+  //   （以前は「料金」などの言葉に反応して料金ページのリンクを返すだけで、
+  //     「プロプランは何アカウントまで？」のような具体的なご質問に答えられていなかった）
+  //   自動で答えられなかったときだけ、下のキーワード案内にまわす。
+  if (looksLikeQuestion(t)) {
+    const answered = await autoAnswer(user.id, lineUserId, t);
+    if (answered) return answered;
+  }
+
+  // 短い言葉での操作指示・自動応答で答えられなかったときの受け皿。
   if (/(料金|価格|値段|いくら|プラン|課金|支払|請求)/.test(t)) return handlePostback(lineUserId, "s=plan");
   if (/(解約|退会|やめたい|停止|キャンセルしたい)/.test(t)) {
     const base = process.env.APP_BASE_URL || "https://threads-studio.com";
     return [textWithQuick(
       "ご解約は、アプリの設定画面からお手続きいただけます。\n" +
       `${base}/settings?openExternalBrowser=1\n\n` +
-      "お手続きが分からない場合や、その前にご相談されたい場合は、このトークにご用件をお送りください（担当者が確認します）。",
-      MENU_HINT,
+      "お手続きが分からない場合や、その前にご相談されたい場合は、下の「担当者に聞く」を押してください。",
+      [{ label: "担当者に聞く", data: "m=staff" }, ...MENU_HINT],
     )];
   }
   if (/(連携|つなぐ|つながらない|アカウントを追加|Threads)/i.test(t)) return handlePostback(lineUserId, "m=connect");
   if (/(使い方|わからない|分からない|ヘルプ|help|教えて)/i.test(t)) return handlePostback(lineUserId, "m=help");
   if (/(投稿.{0,6}(来ない|されない|止ま)|動いてい?ない)/.test(t)) return handlePostback(lineUserId, "m=settings");
   if (/(はじめ|初期|最初).{0,4}(設定|登録)|お店の情報/.test(t)) return handlePostback(lineUserId, "m=setup");
+
   return [textWithQuick(
-    "ご用件を下から選んでください。投稿の確認・書き直し・設定の変更は、このトークの中で終わります。",
+    "ご用件を下から選んでください。ご質問は文章のままお送りいただければ、こちらでお答えします。",
+    [{ label: "担当者に聞く", data: "m=staff" }, ...MENU_HINT],
+  )];
+}
+
+/**
+ * 「ご質問」らしいかの判定。
+ * 短いあいさつや相づちにまでAIを呼ぶとお待たせしてしまうので、ある程度の長さか
+ * 疑問の形をしているものだけを対象にする。
+ */
+function looksLikeQuestion(t: string): boolean {
+  if (t.length < 5) return false;
+  if (/^(はい|いいえ|ありがとう|了解|おはよう|こんにちは|こんばんは|よろしく)/.test(t)) return false;
+  return /[?？]$/.test(t) || /(ですか|でしょうか|ますか|できます|教えて|とは|どう|なぜ|いつ|どこ|いくら|何|方法|やり方)/.test(t) || t.length >= 12;
+}
+
+/**
+ * ご質問に自動でお答えする。
+ * 答えられた場合も「担当者に聞く」を必ず添えて、行き止まりにしない。
+ */
+async function autoAnswer(userId: number, lineUserId: string, question: string): Promise<unknown[] | null> {
+  const { answerQuestion } = await import("./supportBot");
+  const res = await answerQuestion({ question, userId, lineUserId, source: "line" });
+
+  // 答えを作れなかったときは、ここでは返さない（呼び出し元の案内にまわす）。
+  if (!res.confident || !res.answer) return null;
+
+  return [textWithQuick(
+    res.answer + "\n\n解決しない場合は「担当者に聞く」を押してください。",
+    [
+      { label: "担当者に聞く", data: `m=staff${res.questionId ? `&q=${res.questionId}` : ""}` },
+      ...MENU_HINT,
+    ],
+  )];
+}
+
+/**
+ * 担当者へのお問い合わせを受け付ける（次に届く文章を担当者へお届けする）。
+ */
+async function startStaffHandoff(lineUserId: string, questionId?: number): Promise<unknown[]> {
+  await db.setLineChatState(lineUserId, "staff_message", questionId ? String(questionId) : undefined);
+  return [textWithQuick(
+    "担当者にお伝えします。\nご質問・ご要望を、このままメッセージでお送りください。\n（お返事はこのトークにお送りします）",
+    [{ label: "やめる", data: "m=cancel" }],
+  )];
+}
+
+/**
+ * 担当者へお問い合わせ内容をお届けする。
+ */
+async function forwardToStaff(userId: number, lineUserId: string, message: string, questionId?: number): Promise<unknown[]> {
+  let user: any = null;
+  try { user = await db.getUserById(userId); } catch { user = null; }
+  let qid = questionId;
+  if (!qid) {
+    try {
+      qid = await db.createSupportQuestion({
+        userId, lineUserId, source: "line", question: message, needsHuman: 1, category: "その他",
+      });
+    } catch { qid = undefined; }
+  } else {
+    try {
+      await db.updateSupportQuestion(qid, { needsHuman: 1, question: message });
+    } catch { /* 記録に失敗しても、担当者への連絡は続ける */ }
+  }
+
+  const { notifyStaffOfQuestion } = await import("./supportNotify");
+  const delivered = await notifyStaffOfQuestion({
+    questionId: qid,
+    userName: user?.name ?? null,
+    userEmail: user?.email ?? null,
+    lineUserId,
+    message,
+  });
+
+  return [textWithQuick(
+    delivered
+      ? "担当者にお送りしました。確認のうえ、このトークにお返事します。\n（営業時間の都合で、お返事までお時間をいただく場合があります）"
+      : "承りました。担当者が確認のうえ、このトークにお返事します。",
     MENU_HINT,
   )];
 }
+

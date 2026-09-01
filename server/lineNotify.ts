@@ -267,6 +267,14 @@ export const LINE_TEXTS = {
 } as const;
 
 /** 任意のメッセージ配列をreplyで返す（チャット完結操作用・通数を消費しない） */
+/**
+ * 指定のLINEユーザーに、文章を1通お送りする。
+ * 担当者からの返信・運営への通知に使う（push APIなので通数課金の対象）。
+ */
+export async function pushTextTo(lineUserId: string, text: string): Promise<boolean> {
+  return pushMessage(lineUserId, [{ type: "text", text: text.slice(0, 4900) }]);
+}
+
 export async function replyMessages(replyToken: string, messages: unknown[]): Promise<void> {
   const token = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
   if (!token || !replyToken || messages.length === 0) return;

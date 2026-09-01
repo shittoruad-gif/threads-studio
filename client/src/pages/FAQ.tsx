@@ -8,6 +8,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
+import { trpc } from "@/lib/trpc";
 
 interface FAQItem {
   question: string;
@@ -100,7 +101,37 @@ const faqSections: FAQSection[] = [
 export default function FAQ() {
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredSections = faqSections
+  // ★お客様から実際にいただいたご質問のうち、掲載を選んだものをここに出す。
+  //   （公式LINEに届いたご質問が、そのままこのページに反映される）
+  const { data: published } = trpc.support.publishedFaq.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  const allSections: FAQSection[] = (() => {
+    const rows = published ?? [];
+    if (rows.length === 0) return faqSections;
+    // 分類ごとにまとめ、既存のセクションがあればそこへ、無ければ新しく作る
+    const byCategory = new Map<string, FAQItem[]>();
+    for (const r of rows) {
+      const key = r.category || "その他";
+      const list = byCategory.get(key) ?? [];
+      list.push({ question: r.question, answer: r.answer });
+      byCategory.set(key, list);
+    }
+    const merged: FAQSection[] = faqSections.map((sec) => {
+      const extra = byCategory.get(sec.title);
+      if (!extra) return sec;
+      byCategory.delete(sec.title);
+      return { ...sec, items: [...sec.items, ...extra] };
+    });
+    for (const [title, items] of Array.from(byCategory.entries())) {
+      merged.push({ title, items });
+    }
+    return merged;
+  })();
+
+  const filteredSections = allSections
     .map((section) => ({
       ...section,
       items: section.items.filter(

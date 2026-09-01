@@ -3528,6 +3528,90 @@ function escapeSql(v: string): string {
 }
 
 
+// ── お客様からのご質問（自動応答・担当者対応・よくある質問への反映）─────────
+/** ご質問を1件記録する。戻り値は採番されたID。 */
+export async function createSupportQuestion(q: {
+  userId?: number | null;
+  lineUserId?: string | null;
+  source: string;
+  question: string;
+  aiAnswer?: string | null;
+  aiConfident?: number;
+  needsHuman?: number;
+  category?: string | null;
+}): Promise<number | undefined> {
+  const database = await getDb();
+  if (!database) return undefined;
+  const { supportQuestions } = await import("../drizzle/schema");
+  const res: any = await database.insert(supportQuestions).values({
+    userId: q.userId ?? null,
+    lineUserId: q.lineUserId ?? null,
+    source: q.source,
+    question: q.question,
+    aiAnswer: q.aiAnswer ?? null,
+    aiConfident: q.aiConfident ?? 0,
+    needsHuman: q.needsHuman ?? 0,
+    category: q.category ?? null,
+  } as any);
+  return res?.[0]?.insertId ?? res?.insertId;
+}
+
+/** 「担当者に聞く」を選ばれたことを記録する。 */
+export async function markSupportQuestionNeedsHuman(id: number): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  const { supportQuestions } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  await database.update(supportQuestions).set({ needsHuman: 1 } as any).where(eq(supportQuestions.id, id));
+}
+
+/** ご質問の一覧（新着順）。needsHumanOnly で「担当者対応が必要なもの」に絞る。 */
+export async function listSupportQuestions(opts?: { needsHumanOnly?: boolean; limit?: number }): Promise<any[]> {
+  const database = await getDb();
+  if (!database) return [];
+  const { supportQuestions } = await import("../drizzle/schema");
+  const { desc, eq } = await import("drizzle-orm");
+  const limit = Math.min(Math.max(opts?.limit ?? 200, 1), 500);
+  const base = database.select().from(supportQuestions);
+  const q = opts?.needsHumanOnly
+    ? base.where(eq(supportQuestions.needsHuman, 1))
+    : base;
+  return await q.orderBy(desc(supportQuestions.createdAt)).limit(limit);
+}
+
+/** ご質問を1件取り出す。 */
+export async function getSupportQuestionById(id: number): Promise<any | null> {
+  const database = await getDb();
+  if (!database) return null;
+  const { supportQuestions } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  const rows = await database.select().from(supportQuestions).where(eq(supportQuestions.id, id)).limit(1);
+  return rows?.[0] ?? null;
+}
+
+/** ご質問の内容を更新する（担当者の返信・よくある質問への掲載）。 */
+export async function updateSupportQuestion(id: number, patch: Record<string, any>): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  const { supportQuestions } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  await database.update(supportQuestions).set(patch as any).where(eq(supportQuestions.id, id));
+}
+
+/** よくある質問に掲載中のQ&A（公開ページ用）。 */
+export async function listPublishedFaqQuestions(): Promise<any[]> {
+  const database = await getDb();
+  if (!database) return [];
+  const { supportQuestions } = await import("../drizzle/schema");
+  const { desc, eq } = await import("drizzle-orm");
+  return await database
+    .select()
+    .from(supportQuestions)
+    .where(eq(supportQuestions.faqPublished, 1))
+    .orderBy(desc(supportQuestions.faqPublishedAt))
+    .limit(100);
+}
+
 /** 連携済みのLINEユーザーIDを全件返す（リッチメニューの一括是正用） */
 export async function listAllLinkedLineUserIds(): Promise<string[]> {
   const database = await getDb();

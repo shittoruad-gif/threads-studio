@@ -161,7 +161,11 @@ export const HELP_TOPICS: Array<{ key: string; q: string; a: string }> = [
 
 /** ヘルプの選択肢 */
 export function helpQuick(): QuickItem[] {
-  return HELP_TOPICS.map((t) => ({ label: t.q, data: `h=${t.key}` }));
+  // ★どのご質問にも当てはまらないときのために、最後に必ず担当者への導線を置く。
+  return [
+    ...HELP_TOPICS.map((t) => ({ label: t.q, data: `h=${t.key}` })),
+    { label: "担当者に聞く", data: "m=staff" },
+  ];
 }
 
 /**

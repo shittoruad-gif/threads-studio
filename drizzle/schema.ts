@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint, uniqueIndex, index } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint, tinyint, uniqueIndex, index } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -805,6 +805,34 @@ export type InsertEmailLog = typeof emailLogs.$inferInsert;
  * 「書き直す→指示待ち」「NGワード追加→単語待ち」のように、
  * 次に届くテキストを何として扱うかを1行だけ保持する（LINEユーザー単位）。
  */
+/**
+ * お客様からのご質問と、自動応答・担当者の回答の記録。
+ * 「自動で答える」「答えられないものは担当者へ」「集まった質問をよくある質問へ」を1つの表で扱う。
+ */
+export const supportQuestions = mysqlTable("supportQuestions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId"),
+  lineUserId: varchar("lineUserId", { length: 64 }),
+  source: varchar("source", { length: 16 }).default("line").notNull(),
+  question: text("question").notNull(),
+  aiAnswer: text("aiAnswer"),
+  aiConfident: tinyint("aiConfident").default(0).notNull(),
+  needsHuman: tinyint("needsHuman").default(0).notNull(),
+  category: varchar("category", { length: 40 }),
+  staffReply: text("staffReply"),
+  repliedAt: timestamp("repliedAt"),
+  faqPublished: tinyint("faqPublished").default(0).notNull(),
+  faqQuestion: varchar("faqQuestion", { length: 255 }),
+  faqAnswer: text("faqAnswer"),
+  faqPublishedAt: timestamp("faqPublishedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("idx_supportQuestions_created").on(table.createdAt),
+  index("idx_supportQuestions_needsHuman").on(table.needsHuman),
+  index("idx_supportQuestions_faq").on(table.faqPublished),
+]);
+
 export const lineChatStates = mysqlTable("lineChatStates", {
   lineUserId: varchar("lineUserId", { length: 64 }).primaryKey(),
   state: varchar("state", { length: 40 }).notNull(),

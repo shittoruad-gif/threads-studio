@@ -58,6 +58,59 @@ export const appRouter = router({
     }),
   }),
   
+  // ── お客様サポート（自動応答とよくある質問）─────────────────
+  support: router({
+    /** よくある質問に掲載中のQ&A（ログイン不要で表示する） */
+    publishedFaq: publicProcedure.query(async () => {
+      const rows = await db.listPublishedFaqQuestions();
+      return rows.map((r: any) => ({
+        id: r.id,
+        question: r.faqQuestion,
+        answer: r.faqAnswer,
+        category: r.category || 'その他',
+      }));
+    }),
+
+    /** アプリの画面からご質問いただく（自動でお答えし、記録する） */
+    ask: protectedProcedure
+      .input(z.object({ question: z.string().min(3).max(1000) }))
+      .mutation(async ({ ctx, input }) => {
+        const { answerQuestion } = await import('./supportBot');
+        const res = await answerQuestion({
+          question: input.question,
+          userId: ctx.user.id,
+          source: 'web',
+        });
+        return {
+          answer: res.confident ? res.answer : '',
+          confident: res.confident,
+          questionId: res.questionId ?? null,
+        };
+      }),
+
+    /** アプリの画面から担当者におつなぎする */
+    contactStaff: protectedProcedure
+      .input(z.object({ message: z.string().min(3).max(2000), questionId: z.number().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        let qid = input.questionId;
+        if (qid) {
+          await db.updateSupportQuestion(qid, { needsHuman: 1 });
+        } else {
+          qid = await db.createSupportQuestion({
+            userId: ctx.user.id, source: 'web', question: input.message, needsHuman: 1, category: 'その他',
+          });
+        }
+        const { notifyStaffOfQuestion } = await import('./supportNotify');
+        await notifyStaffOfQuestion({
+          questionId: qid,
+          userName: ctx.user.name ?? null,
+          userEmail: (ctx.user as any).email ?? null,
+          message: input.message,
+        });
+        return { success: true } as const;
+      }),
+  }),
+
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -3348,6 +3401,76 @@ ${input.commentText}
 
     // ==================== User Management (Admin Only) ====================
     // Get all users (admin only)
+    // ── お客様からのご質問（自動応答の記録・担当者返信・よくある質問への反映）──
+    listQuestions: adminProcedure
+      .input(z.object({ needsHumanOnly: z.boolean().optional(), limit: z.number().min(1).max(500).optional() }).optional())
+      .query(async ({ input }) => {
+        const rows = await db.listSupportQuestions({
+          needsHumanOnly: input?.needsHumanOnly,
+          limit: input?.limit,
+        });
+        // 集計（説明会の題材づくり用）：分類ごとの件数
+        const counts: Record<string, number> = {};
+        for (const r of rows) {
+          const k = r.category || 'その他';
+          counts[k] = (counts[k] ?? 0) + 1;
+        }
+        return {
+          questions: rows,
+          categoryCounts: Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([category, count]) => ({ category, count })),
+          waitingCount: rows.filter((r: any) => r.needsHuman === 1 && !r.repliedAt).length,
+        };
+      }),
+
+    /** 担当者としてお客様に返信する（LINEに直接お送りする）。 */
+    replyToQuestion: adminProcedure
+      .input(z.object({ id: z.number(), message: z.string().min(1).max(2000) }))
+      .mutation(async ({ input }) => {
+        const q = await db.getSupportQuestionById(input.id);
+        if (!q) throw new TRPCError({ code: 'NOT_FOUND', message: 'ご質問が見つかりません' });
+        if (!q.lineUserId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'このご質問にはLINEの送り先がありません（アプリからのご質問です）' });
+        }
+        const { pushTextTo } = await import('./lineNotify');
+        const ok = await pushTextTo(q.lineUserId, input.message);
+        if (!ok) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'LINEへの送信に失敗しました' });
+        }
+        await db.updateSupportQuestion(input.id, { staffReply: input.message, repliedAt: new Date() });
+        return { success: true } as const;
+      }),
+
+    /** よくある質問への掲載・取り下げ。 */
+    publishQuestionToFaq: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        publish: z.boolean(),
+        faqQuestion: z.string().max(255).optional(),
+        faqAnswer: z.string().max(4000).optional(),
+        category: z.string().max(40).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const q = await db.getSupportQuestionById(input.id);
+        if (!q) throw new TRPCError({ code: 'NOT_FOUND', message: 'ご質問が見つかりません' });
+        if (input.publish) {
+          const fq = (input.faqQuestion ?? q.faqQuestion ?? q.question ?? '').trim();
+          const fa = (input.faqAnswer ?? q.faqAnswer ?? q.staffReply ?? q.aiAnswer ?? '').trim();
+          if (!fq || !fa) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '掲載する質問文と回答の両方を入力してください' });
+          }
+          await db.updateSupportQuestion(input.id, {
+            faqPublished: 1,
+            faqQuestion: fq.slice(0, 255),
+            faqAnswer: fa,
+            faqPublishedAt: new Date(),
+            ...(input.category ? { category: input.category } : {}),
+          });
+        } else {
+          await db.updateSupportQuestion(input.id, { faqPublished: 0 });
+        }
+        return { success: true } as const;
+      }),
+
     getAllUsers: adminProcedure.query(async () => {
       return await db.getAllUsers();
     }),
