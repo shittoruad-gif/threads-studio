@@ -49,7 +49,11 @@ export default function Login() {
       // Redirect after successful login.
       // ?redirect= があればそこへ戻す（LIFF初回連携などの往復用。同一オリジンのパスのみ）
       const redirect = new URLSearchParams(searchParams).get('redirect');
-      const safe = redirect && redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/dashboard';
+      // ★新規登録直後の初回ログインは、まず料金プランを選んでもらう。
+      //   （以前はいきなりダッシュボード→カウンセリングへ飛ばされ、プランを選ぶ画面に
+      //     たどり着けない、という問い合わせが実際に発生した）
+      const afterRegister = registered ? '/pricing' : '/dashboard';
+      const safe = redirect && redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : afterRegister;
       window.location.href = safe;
     },
     onError: (err) => {

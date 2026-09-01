@@ -313,6 +313,29 @@ export default function Dashboard() {
         <SetupProgress />
 
         {/* Trial Banner */}
+        {/* 無料プランのまま止まっている人への、プラン選択への導線。
+            サイドメニューの「料金プラン」だけだと気づかれず「プランを選べない」と言われたため追加。 */}
+        {!subLoading && (subscription?.planId ?? 'free') === 'free' && !subscription?.isTrialing && (
+          <div className="mb-6 bg-emerald-50 border-2 border-emerald-200 rounded-xl p-4 sm:p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm sm:text-base font-bold text-emerald-800">
+                  {t("いまは無料プランです")}
+                </p>
+                <p className="text-xs sm:text-sm text-emerald-700 mt-1 leading-relaxed">
+                  {t("自動投稿・AI生成の回数を増やすには、有料プランをお選びください。")}
+                </p>
+              </div>
+              <a
+                href="/pricing"
+                className="shrink-0 inline-flex items-center justify-center rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 text-sm transition-colors"
+              >
+                {t("料金プランを見る")}
+              </a>
+            </div>
+          </div>
+        )}
+
         {subscription?.isTrialing && subscription?.trialEndsAt && (
           <TrialBanner
             trialEndsAt={subscription.trialEndsAt}

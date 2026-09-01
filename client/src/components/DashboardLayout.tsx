@@ -75,6 +75,8 @@ const contentMenuItems: MenuItem[] = [
 const accountMenuItems: MenuItem[] = [
   // クライアントが迷わない実運用マニュアル（毎日やること・承認・修正手順）を最優先で見せる
   { icon: BookOpen, label: "使い方マニュアル", path: "/manual" },
+  // ★プラン確認・申し込みの入口。ここが無く「料金プランを選べない」状態だった。
+  { icon: CreditCard, label: "料金プラン", path: "/pricing" },
   { icon: Settings, label: "設定", path: "/settings" },
 ];
 
