@@ -535,6 +535,25 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   if (q.m === "stats") return repliesForStats(user.id);
   if (q.m === "profile") return repliesForProfile(user.id);
   if (q.m === "connect") return repliesForConnect(user.id);
+  // ★「お店・アカウント」= 店舗情報とThreads連携の入口をまとめる。
+  //   2つ目のアカウントをつなぐ導線が見つからない、という声への対応。
+  if (q.m === "account") {
+    const accounts = (await db.getThreadsAccountsByUserId(user.id)).filter((a: any) => a.isActive);
+    const projects = await db.getProjectsByUserId(user.id);
+    const list = accounts.length > 0
+      ? accounts.map((a: any) => `・@${a.threadsUsername}`).join("\n")
+      : "（まだ連携していません）";
+    return [textWithQuick(
+      "連携中のThreadsアカウント\n" + list +
+      `\n\n登録済みのお店の情報：${projects?.length ?? 0}件\n\n` +
+      "やりたいことを選んでください。",
+      [
+        { label: "Threadsアカウントを追加", data: "m=connect" },
+        { label: "お店の情報を登録・やり直す", data: "m=setup" },
+        { label: "登録内容を見る", data: "m=profile" },
+      ],
+    )];
+  }
   if (q.m === "help") return [textWithQuick("よくあるご質問です。知りたいものを選んでください。", helpQuick())];
   if (q.m === "setup") {
     // ★複数アカウントを運用している場合、どのアカウントの設定かを先に選んでもらう。

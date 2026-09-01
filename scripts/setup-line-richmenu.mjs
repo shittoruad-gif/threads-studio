@@ -23,7 +23,7 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-const MAIN_NAME = 'threads-studio-main-v6';
+const MAIN_NAME = 'threads-studio-main-v7';
 const ONBOARDING_NAME = 'threads-studio-onboarding-v1';
 const W = 2500;
 const H = 1686;
@@ -34,7 +34,7 @@ const buttons = [
   { label1: 'コメント', label2: '新着の確認', data: 'm=comments' },
   { label1: '設定', label2: '自動投稿・確認・NGワード', data: 'm=settings' },
   { label1: '投稿の成績', label2: '直近の投稿数と反応', data: 'm=stats' },
-  { label1: 'お店の情報', label2: '登録内容の確認・修正', data: 'm=profile' },
+  { label1: 'お店・アカウント', label2: '登録内容・Threads連携', data: 'm=account' },
   { label1: '使い方', label2: '困ったらまずここ', data: 'm=help' },
 ];
 
