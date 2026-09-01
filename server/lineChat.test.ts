@@ -82,3 +82,20 @@ describe("カウンセリングの選択肢", () => {
     expect(msg.quickReply.items[0].action.text).toBe("整体院");
   });
 });
+
+describe("公式LINEから来た方の連携導線", () => {
+  it("あいさつは連携を促す文面になっている（アプリの設定画面を探させない）", async () => {
+    const { LINE_TEXTS } = await import("./lineNotify");
+    expect(LINE_TEXTS.greeting).toContain("連携する");
+    expect(LINE_TEXTS.greeting).not.toContain("設定画面で表示される6桁");
+  });
+
+  it("連携用のクイックリプライが作れる", () => {
+    const msg: any = textWithQuick("まだつながっていません", [
+      { label: "連携する", data: "m=link" },
+      { label: "アカウントを持っていない", data: "m=signup" },
+    ]);
+    expect(msg.quickReply.items[0].action.data).toBe("m=link");
+    expect(msg.quickReply.items[1].action.data).toBe("m=signup");
+  });
+});

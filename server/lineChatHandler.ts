@@ -16,13 +16,82 @@ import { saveCounselingAnswers } from "./counselingSave";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
 
-/** 未連携ユーザーへの案内（連携前は何もできないため） */
+/**
+ * 未連携ユーザーへの案内。
+ * ★公式LINEから先に登録した方が戸惑わないよう、トーク内のボタンだけで
+ *   連携まで進められるようにする（アプリ画面を探させない）。
+ */
 function notLinked(): unknown[] {
+  return [textWithQuick(
+    "まだアカウントとつながっていません。\n" +
+    "下のボタンから、このトークの中で連携できます。",
+    [
+      { label: "連携する", data: "m=link" },
+      { label: "アカウントを持っていない", data: "m=signup" },
+    ],
+  )];
+}
+
+/** 連携の入口（登録メールアドレスを聞く） */
+async function startLinking(lineUserId: string): Promise<unknown[]> {
+  await db.setLineChatState(lineUserId, "link_email");
+  return [textWithQuick(
+    "Threads Studio にご登録のメールアドレスを、このトークに送ってください。\n" +
+    "そのアドレス宛に6桁の番号をお送りします。\n\n" +
+    "（まだアカウントをお持ちでない場合は「アカウントを持っていない」を押してください）",
+    [{ label: "アカウントを持っていない", data: "m=signup" }, { label: "やめる", data: "m=cancel" }],
+  )];
+}
+
+/** アカウント未作成の方への案内（作成はご本人にお願いする） */
+function signupGuide(): unknown[] {
+  const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+  return [textWithQuick(
+    "アカウントの作成は、こちらのページからお願いします（3分ほどで終わります）。\n" +
+    `${base}/register\n\n` +
+    "クーポンコードをお持ちの場合は、登録画面の「クーポンコード」欄にご入力ください。\n" +
+    "作成が終わったら、このトークで「連携する」を押してください。",
+    [{ label: "連携する", data: "m=link" }],
+  )];
+}
+
+/**
+ * 入力されたメールアドレス宛に、連携用の6桁番号を送る。
+ * ★存在しないアドレスでも同じ文面を返す（登録の有無を外から確かめられないようにするため）。
+ */
+async function sendLinkCodeByEmail(lineUserId: string, email: string): Promise<unknown[]> {
+  await db.clearLineChatState(lineUserId);
+  const addr = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) {
+    await db.setLineChatState(lineUserId, "link_email");
+    return [{ type: "text", text: "メールアドレスの形式が正しくないようです。もう一度送ってください。" }];
+  }
+  try {
+    const user = await db.getUserByEmail(addr);
+    if (user) {
+      const { generateLinkCode, LINK_CODE_TTL_MS } = await import("./lineNotify");
+      const code = generateLinkCode();
+      await db.setLineLinkCode(user.id, code, new Date(Date.now() + LINK_CODE_TTL_MS));
+      const { sendEmail } = await import("./_core/notification");
+      await sendEmail({
+        to: addr,
+        subject: "【Threads Studio】LINE連携の番号（6桁）",
+        html:
+          "<p>公式LINEとの連携をリクエストいただきました。</p>" +
+          `<p>次の6桁の番号を、LINEのトークにそのまま送ってください。</p>` +
+          `<p style="font-size:24px;font-weight:bold;letter-spacing:4px">${code}</p>` +
+          "<p>この番号は10分間だけ有効です。<br>お心当たりがない場合は、このメールは破棄してください（連携は行われません）。</p>",
+      });
+    }
+  } catch (e) {
+    console.error("[LineChat] link code mail error:", e);
+  }
   return [{
     type: "text",
     text:
-      "はじめまして。まだアカウントと連携できていません。\n\n" +
-      "アプリの設定画面で表示される6桁のコードを、このトークにそのまま送ってください。連携が終わると、投稿の確認や設定の変更がこのトークだけでできるようになります。",
+      `${addr} 宛に6桁の番号をお送りしました。\n` +
+      "届いた番号を、このトークにそのまま送ってください（10分間有効です）。\n\n" +
+      "※ 数分待っても届かない場合は、ご登録のメールアドレスが違うか、迷惑メールフォルダに入っている可能性があります。",
   }];
 }
 
@@ -302,9 +371,18 @@ async function startCounseling(lineUserId: string): Promise<unknown[]> {
  * postback（ボタン）を処理して返信メッセージを返す。
  */
 export async function handlePostback(lineUserId: string, data: string): Promise<unknown[]> {
-  const user = await db.getUserByLineUserId(lineUserId);
-  if (!user) return notLinked();
   const q = parsePostback(data);
+  const user = await db.getUserByLineUserId(lineUserId);
+  if (!user) {
+    // 未連携でも、連携に関する操作だけは進められるようにする
+    if (q.m === "link") return startLinking(lineUserId);
+    if (q.m === "signup") return signupGuide();
+    if (q.m === "cancel") {
+      await db.clearLineChatState(lineUserId);
+      return notLinked();
+    }
+    return notLinked();
+  }
 
   // ── メニュー ──
   if (q.m === "posts") return repliesForPosts(user.id, q.one ? "one" : q.all ? "all" : undefined);
@@ -324,6 +402,13 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     ];
   }
   if (q.m === "menu") return [textWithQuick("どれをご覧になりますか？", MENU_HINT)];
+  if (q.m === "cancel") {
+    await db.clearLineChatState(lineUserId);
+    return [textWithQuick("中断しました。", MENU_HINT)];
+  }
+  if (q.m === "link") {
+    return [textWithQuick("このLINEはすでに連携済みです。別の方を追加する場合は、その方のLINEから「連携する」を押してください。", MENU_HINT)];
+  }
   if (q.m === "settings") {
     const s = (await db.getAutoPostSettings(user.id)) || {};
     return [textWithQuick(settingsSummary(s as any), settingsQuick(s as any))];
@@ -406,7 +491,14 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
  */
 export async function handleFreeText(lineUserId: string, text: string): Promise<unknown[] | null> {
   const user = await db.getUserByLineUserId(lineUserId);
-  if (!user) return null; // 未連携は既存の案内に任せる
+
+  // ★未連携でも、メールアドレスの入力待ちなら受け付ける（LINE内で連携を完結させる）
+  if (!user) {
+    const pending = await db.getLineChatState(lineUserId);
+    if (pending?.state === "link_email") return sendLinkCodeByEmail(lineUserId, text);
+    if (/^(連携|れんけい|連携する)$/.test(text.trim())) return startLinking(lineUserId);
+    return notLinked();
+  }
 
   const st = await db.getLineChatState(lineUserId);
   if (st?.state === "counseling" && st.payload) {

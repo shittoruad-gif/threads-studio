@@ -174,7 +174,15 @@ async function startServer() {
           const lineUserId: string | undefined = ev?.source?.userId;
           if (!lineUserId) continue;
           if (ev.type === 'follow') {
-            await replyMessage(ev.replyToken, LINE_TEXTS.greeting);
+            // ★公式LINEから先に登録した方が迷わないよう、あいさつに連携ボタンを付ける
+            const { replyMessages } = await import('../lineNotify');
+            const { textWithQuick } = await import('../lineChat');
+            await replyMessages(ev.replyToken, [
+              textWithQuick(LINE_TEXTS.greeting, [
+                { label: '連携する', data: 'm=link' },
+                { label: 'アカウントを持っていない', data: 'm=signup' },
+              ]),
+            ]);
             continue;
           }
           // ★リッチメニュー・カードのボタン（postback）。トーク内で完結する操作。
@@ -228,11 +236,10 @@ async function startServer() {
             } catch (e) {
               console.error('[LineChat] text error:', e);
             }
-            // 未連携の場合だけ、連携のお願いを返す
+            // ここに来るのは handleFreeText が例外になった場合のみ
             await replyMessage(
               ev.replyToken,
-              'メッセージありがとうございます。まずアカウントとの連携をお願いします。\n' +
-              'アプリの設定画面で表示される6桁のコードを、このトークにそのまま送ってください。',
+              'メッセージありがとうございます。うまく処理できませんでした。下のメニューからお試しください。',
             );
           }
         }
