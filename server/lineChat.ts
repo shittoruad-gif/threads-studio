@@ -19,6 +19,15 @@ type QuickItem = { label: string; data: string };
 /** クイックリプライ付きテキスト（選択肢は最大13件） */
 export function textWithQuick(text: string, items: QuickItem[]): unknown {
   const msg: any = { type: "text", text };
+  // ★同じラベルが二重に並ぶと押し間違いのもとになるので、先に出た方だけを残す。
+  //   （「次にやること」を先頭に足したときに、共通メニュー側と重複していた）
+  const seen = new Set<string>();
+  items = items.filter((it) => {
+    const key = it.label.slice(0, 20);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   if (items.length > 0) {
     msg.quickReply = {
       items: items.slice(0, 13).map((it) => ({

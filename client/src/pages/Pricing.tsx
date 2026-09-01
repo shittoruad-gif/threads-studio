@@ -346,15 +346,17 @@ export default function Pricing() {
                   className={`w-full ${
                     plan.popular
                       ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                      : isCurrentPlan(plan.id)
+                      : isCurrentPlan(plan.id) && plan.priceMonthly !== 0
                       ? 'bg-muted text-muted-foreground cursor-default'
                       : 'bg-background border border-border text-foreground/80 hover:bg-muted/50'
                   }`}
                   onClick={() => handleSelectPlan(campaignPlan ? campaignPlan.id : plan.id)}
-                  disabled={isCurrentPlan(plan.id) || createCheckout.isPending}
+                  // ★フリープランは「現在のプラン」でも押せるようにする。
+                  //   登録直後にこの画面へ来た方が、無料のまま先へ進めず行き止まりになっていたため。
+                  disabled={(isCurrentPlan(plan.id) && plan.priceMonthly !== 0) || createCheckout.isPending}
                 >
                   {isCurrentPlan(plan.id) ? (
-                    '現在のプラン'
+                    plan.priceMonthly === 0 ? 'このまま無料で始める' : '現在のプラン'
                   ) : canChangePlan(plan.id) ? (
                     <>
                       <RefreshCw className="w-4 h-4 mr-2" />

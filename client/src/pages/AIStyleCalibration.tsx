@@ -38,11 +38,18 @@ export default function AIStyleCalibration() {
     { enabled: !!projectId, refetchOnMount: true, refetchOnWindowFocus: false },
   );
 
+  // ★はじめの設定が終わった直後の行き先。
+  //   Threadsが未連携のままAI生成画面に置かれると、作っても投稿できず手詰まりになるため、
+  //   未連携の方はまず連携画面へご案内する。
+  const { data: threadsAccounts } = trpc.threads.list.useQuery();
+  const nextPathAfterSetup = () =>
+    (threadsAccounts?.length ?? 0) > 0 ? `/ai-generate?project=${projectId}` : '/threads-connect';
+
   const saveMutation = trpc.project.saveStylePreference.useMutation({
     onSuccess: () => {
       utils.project.getStylePreference.invalidate({ projectId });
       toast.success('スタイルの好みを保存しました');
-      setLocation(`/ai-generate?project=${projectId}`);
+      setLocation(nextPathAfterSetup());
     },
     onError: (e) => toast.error(e.message),
   });
@@ -82,7 +89,7 @@ export default function AIStyleCalibration() {
   };
 
   const handleSkip = () => {
-    setLocation(`/ai-generate?project=${projectId}`);
+    setLocation(nextPathAfterSetup());
   };
 
   return (

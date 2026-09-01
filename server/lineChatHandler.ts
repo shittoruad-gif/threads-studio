@@ -499,10 +499,39 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
   if (!res.ok) {
     return [textWithQuick("保存に失敗しました。時間をおいて「はじめの設定」からやり直してください。", MENU_HINT)];
   }
+  // ★ここで「毎日投稿します」と言い切ってはいけない。
+  //   Threads未連携／自動投稿のないプランでは実際には投稿されず、
+  //   案内と実態が食い違って「動いていない」という問い合わせになる。
+  //   いまの状態で本当に次に必要なことだけを案内する。
+  let accounts: any[] = [];
+  try { accounts = (await db.getThreadsAccountsByUserId(userId)) || []; } catch { accounts = []; }
+  const { plan } = await planOf(userId);
+  const maxPerDay = Number(plan?.features?.maxAutoPostsPerDay ?? 0);
+  const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+
+  const head = "ありがとうございました。設定が終わりました。\n内容を直したくなったら、いつでも「お店の情報」から確認・修正できます。\n\n";
+
+  if (accounts.length === 0) {
+    return [textWithQuick(
+      head +
+      "次にやることが1つあります。\n" +
+      "まだThreadsのアカウントとつながっていないため、このままでは投稿ができません。\n" +
+      "下の「アカウント連携」から、Threadsとつないでください。",
+      [{ label: "アカウント連携", data: "m=connect" }, ...MENU_HINT],
+    )];
+  }
+  if (maxPerDay <= 0) {
+    return [textWithQuick(
+      head +
+      "ご利用中のフリープランでは、毎日の自動投稿はご利用いただけません（手動での作成はお試しいただけます）。\n" +
+      "毎日の自動投稿をご利用になる場合は、プランのご変更をお願いします。\n" +
+      `${base}/pricing?openExternalBrowser=1`,
+      [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT],
+    )];
+  }
   return [textWithQuick(
-    "ありがとうございました。設定が終わりました。\n\n" +
-    "この内容をもとに、AIが毎日の投稿を作ります。できあがった投稿は、このトークでお知らせします。\n" +
-    "内容を直したくなったら、いつでも「お店の情報」から確認・修正できます。",
+    head +
+    "この内容をもとに、AIが毎日の投稿を作ります。できあがった投稿は、このトークでお知らせします。",
     MENU_HINT,
   )];
 }
@@ -711,7 +740,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     await db.setLineChatState(lineUserId, "rewrite_free", JSON.stringify({ i: q.i, o: q.o ? 1 : 0 }));
     return [textWithQuick(
       "どんなふうに直しますか？\n下から選ぶか、ご希望をそのまま文章で送ってください（例：「クーポンの話を入れて」）。",
-      items,
+      [...items, { label: "やめる", data: "m=cancel" }],
     )];
   }
   if (q.a === "rw2" && q.i && q.k) {
@@ -762,7 +791,12 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   }
   if (q.s === "ng") {
     await db.setLineChatState(lineUserId, "ngword");
-    return [{ type: "text", text: "投稿で使ってほしくない言葉を送ってください（いくつかある場合は、読点や改行で区切ってください）。" }];
+    // ★「やめる」を必ず出す。これが無いと、気が変わって別のことを打った言葉が
+    //   そのままNGワードとして登録されてしまう。
+    return [textWithQuick(
+      "投稿で使ってほしくない言葉を送ってください（いくつかある場合は、読点や改行で区切ってください）。",
+      [{ label: "やめる", data: "m=cancel" }],
+    )];
   }
 
   // ── ヘルプ ──
@@ -818,6 +852,14 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
       return [textWithQuick("設定の途中で問題が起きました。「はじめの設定」からやり直してください。", MENU_HINT)];
     }
   }
+  // ★入力待ちの途中で「やめる」と打たれたら、その言葉を内容として使わずに抜ける。
+  //   （NGワード待ち・書き直し待ちでこれが無く、「やめる」がそのまま
+  //     NGワードや書き直し指示として使われてしまっていた）
+  if ((st?.state === "ngword" || st?.state === "rewrite_free") &&
+      /^(やめる|中止|キャンセル|戻る|終わり|終了)$/.test(text.trim())) {
+    await db.clearLineChatState(lineUserId);
+    return [textWithQuick("わかりました。中止しました。", MENU_HINT)];
+  }
   if (st?.state === "rewrite_free" && st.payload) {
     await db.clearLineChatState(lineUserId);
     let postId = 0, one = false;
@@ -853,6 +895,22 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   if (/^(追加|ついか)$/.test(t)) {
     return [{ type: "text", text: "他の方も操作できるようにするには、アプリの設定画面で6桁のコードを発行し、そのコードをその方のLINEからこのトークに送ってもらってください。" }];
   }
+  // ★ここから下は「実際によく送られてくる言葉」に答えるための受け皿。
+  //   以前はどれを送っても同じメニューを返すだけで、質問に答えていなかった。
+  if (/(料金|価格|値段|いくら|プラン|課金|支払|請求)/.test(t)) return handlePostback(lineUserId, "s=plan");
+  if (/(解約|退会|やめたい|停止|キャンセルしたい)/.test(t)) {
+    const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+    return [textWithQuick(
+      "ご解約は、アプリの設定画面からお手続きいただけます。\n" +
+      `${base}/settings?openExternalBrowser=1\n\n` +
+      "お手続きが分からない場合や、その前にご相談されたい場合は、このトークにご用件をお送りください（担当者が確認します）。",
+      MENU_HINT,
+    )];
+  }
+  if (/(連携|つなぐ|つながらない|アカウントを追加|Threads)/i.test(t)) return handlePostback(lineUserId, "m=connect");
+  if (/(使い方|わからない|分からない|ヘルプ|help|教えて)/i.test(t)) return handlePostback(lineUserId, "m=help");
+  if (/(投稿.{0,6}(来ない|されない|止ま)|動いてい?ない)/.test(t)) return handlePostback(lineUserId, "m=settings");
+  if (/(はじめ|初期|最初).{0,4}(設定|登録)|お店の情報/.test(t)) return handlePostback(lineUserId, "m=setup");
   return [textWithQuick(
     "ご用件を下から選んでください。投稿の確認・書き直し・設定の変更は、このトークの中で終わります。",
     MENU_HINT,

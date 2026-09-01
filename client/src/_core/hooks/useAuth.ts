@@ -14,7 +14,10 @@ export function useAuth(options?: UseAuthOptions) {
   const utils = trpc.useUtils();
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
-    retry: false,
+    // ★一時的な失敗（回線切れ・混雑による429・サーバー再起動中）で
+    //   「未ログイン」と誤判定しないよう、少しだけ再試行する。
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 4000),
     refetchOnWindowFocus: false,
   });
 
@@ -62,10 +65,16 @@ export function useAuth(options?: UseAuthOptions) {
 
   useEffect(() => {
     if (!redirectOnUnauthenticated) return;
-    if (meQuery.isLoading || logoutMutation.isPending) return;
+    if (meQuery.isLoading || meQuery.isFetching || logoutMutation.isPending) return;
     if (state.user) return;
     if (typeof window === "undefined") return;
     if (window.location.pathname === redirectPath) return;
+
+    // ★ここが重要：auth.me は未ログインなら「null を返す（エラーではない）」。
+    //   つまりエラーが出ている＝サーバーに聞けていないだけなので、
+    //   ログイン画面へ飛ばしてはいけない（飛ばすと、実際にはログイン中なのに
+    //   締め出されたように見え、ログインし直しても入れない状態になる）。
+    if (meQuery.error) return;
 
     window.location.href = redirectPath
   }, [
@@ -73,6 +82,8 @@ export function useAuth(options?: UseAuthOptions) {
     redirectPath,
     logoutMutation.isPending,
     meQuery.isLoading,
+    meQuery.isFetching,
+    meQuery.error,
     state.user,
   ]);
 

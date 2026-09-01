@@ -108,7 +108,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { loading, user, logout } = useAuth();
+  const { loading, user, logout, error: authError, refresh: refreshAuth } = useAuth();
   const { t } = useLang();
   const [location, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -204,14 +204,40 @@ export default function DashboardLayout({
   }, [isMobile]);
 
   // Redirect to login if not authenticated
+  //
+  // ★エラーが出ているとき（回線が切れた・混み合って429・サーバー再起動中）は
+  //   「未ログイン」ではなく「今は確認できない」だけなので、ログイン画面へ飛ばさない。
+  //   飛ばしてしまうと、ログイン中のお客様が締め出されたように見えてしまう。
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !user && !authError) {
       window.location.href = getLoginUrl();
     }
-  }, [loading, user]);
+  }, [loading, user, authError]);
 
   if (loading) {
     return <DashboardLayoutSkeleton />;
+  }
+
+  if (!user && authError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="flex flex-col items-center gap-6 p-8 max-w-md w-full text-center">
+          <h1 className="text-xl font-semibold text-foreground">
+            {t("いま画面を読み込めませんでした")}
+          </h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {t("通信が不安定か、アクセスが混み合っている可能性があります。ログアウトされたわけではありませんので、少し時間をおいて、もう一度お試しください。")}
+          </p>
+          <Button
+            onClick={() => refreshAuth()}
+            size="lg"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            {t("もう一度読み込む")}
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   if (!user) {

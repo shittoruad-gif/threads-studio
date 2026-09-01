@@ -826,14 +826,41 @@ async function startServer() {
   );
 
   // Rate limiting for API endpoints
+  //
+  // ★ここは「同一IPからの機械的な連打」を止めるためのもので、ふつうに使っている
+  //   お客様を止めるためのものではない。以前は全API一律100回/15分だったが、
+  //   ・院内の複数スタッフが同じWi-Fiから使う
+  //   ・携帯回線でグローバルIPが共有される
+  //   といったケースで簡単に上限へ達し、しかも上限に達すると auth.me まで429になって
+  //   「勝手にログアウトされ、ログインし直すこともできない（ログインも429）」状態になっていた。
+  //   そのため、通常APIはゆるく・パスワード試行系だけ厳しく、の2段構えにする。
+  const AUTH_SENSITIVE = /auth\.(login|register|requestPasswordReset|resetPassword)/;
+
+  // パスワードの総当たり対策。ここだけは厳しくしておく。
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'ログイン・登録の試行が多すぎます。しばらく待ってから再試行してください。' },
+  });
+
+  // 通常API。1ページの表示でtRPCは2回程度なので、1000回/15分あれば
+  // 実利用でぶつかることはまずない（＝異常な連打だけを止める）。
   const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // max 100 requests per window per IP
+    windowMs: 15 * 60 * 1000,
+    max: 1000,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'リクエストが多すぎます。しばらく待ってから再試行してください。' },
+    // Webhook（LINE・決済）は相手サーバーから来るので、ここで止めると通知が落ちる。
+    skip: (req) => req.path.includes('webhook'),
   });
-  app.use('/api/', apiLimiter);
+
+  app.use('/api/', (req, res, next) => {
+    if (req.method === 'POST' && AUTH_SENSITIVE.test(req.path)) return authLimiter(req, res, next);
+    return apiLimiter(req, res, next);
+  });
 
   // CSRF protection: verify Origin header on mutation requests
   app.use('/api/trpc', (req, res, next) => {
