@@ -218,16 +218,33 @@ async function startServer() {
               const { fetchLineDisplayName } = await import('../lineNotify');
               const displayName = await fetchLineDisplayName(lineUserId);
               const result = await db.linkLineByCode(code, lineUserId, displayName);
+              const user0 = await db.getUserByLineUserId(lineUserId);
               if (result === 'linked') {
                 const { switchToMainRichMenu } = await import('../lineNotify');
                 await switchToMainRichMenu(lineUserId);
               }
-              await replyMessage(
-                ev.replyToken,
-                result === 'linked' ? LINE_TEXTS.linked
-                : result === 'limit' ? LINE_TEXTS.linkLimit
-                : LINE_TEXTS.linkFailed,
-              );
+              if (result === 'linked') {
+                // ★連携直後は「次に何をするか」を必ず1タップで出す。
+                //   リッチメニューには「はじめの設定」が無いため、ここが初期設定の入口になる。
+                const { replyMessages } = await import('../lineNotify');
+                const { textWithQuick } = await import('../lineChat');
+                const hasProject = await db.getProjectsByUserId(user0?.id ?? 0).then(
+                  (ps: any[]) => Array.isArray(ps) && ps.length > 0,
+                ).catch(() => false);
+                await replyMessages(ev.replyToken, [
+                  textWithQuick(
+                    LINE_TEXTS.linked + (hasProject ? '' : '\n\n続けて、はじめの設定（全20問・10〜15分）に進みましょう。'),
+                    hasProject
+                      ? [{ label: '今日の投稿', data: 'm=posts' }, { label: '設定', data: 'm=settings' }]
+                      : [{ label: 'はじめの設定を始める', data: 'm=setup' }, { label: 'あとで', data: 'm=menu' }],
+                  ),
+                ]);
+              } else {
+                await replyMessage(
+                  ev.replyToken,
+                  result === 'limit' ? LINE_TEXTS.linkLimit : LINE_TEXTS.linkFailed,
+                );
+              }
               continue;
             }
             // ★連携済みなら、トーク内で完結するチャット操作として扱う
