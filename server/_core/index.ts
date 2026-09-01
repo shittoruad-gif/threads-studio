@@ -207,6 +207,8 @@ async function startServer() {
             const text = String(ev.message.text || '').trim();
             if (text === '解除') {
               await db.unlinkLineByLineUserId(lineUserId);
+              const { resetToDefaultRichMenu } = await import('../lineNotify');
+              await resetToDefaultRichMenu(lineUserId);
               await replyMessage(ev.replyToken, LINE_TEXTS.unlinked);
               continue;
             }
@@ -216,6 +218,10 @@ async function startServer() {
               const { fetchLineDisplayName } = await import('../lineNotify');
               const displayName = await fetchLineDisplayName(lineUserId);
               const result = await db.linkLineByCode(code, lineUserId, displayName);
+              if (result === 'linked') {
+                const { switchToMainRichMenu } = await import('../lineNotify');
+                await switchToMainRichMenu(lineUserId);
+              }
               await replyMessage(
                 ev.replyToken,
                 result === 'linked' ? LINE_TEXTS.linked

@@ -4350,6 +4350,11 @@ ${CONCEPT_DESIGN_PROMPT}`;
         }
         const displayName = await fetchLineDisplayName(lineUserId);
         await db.linkLineDirect(ctx.user.id, lineUserId, displayName);
+        // 連携できたら、その方のリッチメニューを通常メニュー（6ボタン）に切り替える
+        try {
+          const { switchToMainRichMenu } = await import('./lineNotify');
+          await switchToMainRichMenu(lineUserId);
+        } catch { /* 切替失敗は連携成立に影響させない */ }
         return { success: true };
       }),
   }),

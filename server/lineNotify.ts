@@ -283,3 +283,59 @@ export async function replyMessages(replyToken: string, messages: unknown[]): Pr
     console.error("[LineNotify] reply エラー:", e);
   }
 }
+
+// ── リッチメニューの出し分け ───────────────────────────────
+// 既定メニュー = 未連携むけ（「連携する」だけを見せる）。
+// 連携が成立した人だけ、その人専用に「通常メニュー（6ボタン）」へ切り替える。
+// ※ すでに友だち追加済みの方にはあいさつ文が再送されないため、
+//   メニュー自体を入口にしないと「連携する」に辿り着けない。
+let mainMenuIdCache: string | null = null;
+
+/** 通常メニューのIDを得る（envが無ければ名前で探して覚える） */
+export async function getMainRichMenuId(): Promise<string | null> {
+  if (process.env.LINE_RICHMENU_MAIN_ID) return process.env.LINE_RICHMENU_MAIN_ID;
+  if (mainMenuIdCache) return mainMenuIdCache;
+  const token = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
+  if (!token) return null;
+  try {
+    const res = await fetch("https://api.line.me/v2/bot/richmenu/list", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    const hit = (data.richmenus ?? []).find((m: any) => String(m.name || "").startsWith("threads-studio-main-"));
+    mainMenuIdCache = hit?.richMenuId ?? null;
+    return mainMenuIdCache;
+  } catch {
+    return null;
+  }
+}
+
+/** 連携が済んだ人を、通常メニューに切り替える（失敗しても連携自体は成立させる） */
+export async function switchToMainRichMenu(lineUserId: string): Promise<void> {
+  const token = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
+  const menuId = await getMainRichMenuId();
+  if (!token || !menuId) return;
+  try {
+    await fetch(`https://api.line.me/v2/bot/user/${encodeURIComponent(lineUserId)}/richmenu/${menuId}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (e) {
+    console.error("[LineNotify] リッチメニュー切替に失敗:", e);
+  }
+}
+
+/** 連携を解除した人を、既定（未連携むけ）メニューに戻す */
+export async function resetToDefaultRichMenu(lineUserId: string): Promise<void> {
+  const token = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
+  if (!token) return;
+  try {
+    await fetch(`https://api.line.me/v2/bot/user/${encodeURIComponent(lineUserId)}/richmenu`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (e) {
+    console.error("[LineNotify] リッチメニュー戻しに失敗:", e);
+  }
+}

@@ -1,9 +1,13 @@
 /**
  * 公式LINE「Threads Studio 通知」のリッチメニューを作成して既定に設定する。
  *
- * トーク画面下部にフルサイズ6ボタン（2段×3列）を出す。
+ * リッチメニューを2種類つくって設置する。
+ *   ① onboarding（未連携の方むけ・2ボタン）… 既定メニュー。「連携する」「アカウントを持っていない」
+ *   ② main（連携済みの方むけ・6ボタン）… 連携が成立した人だけ、この menu に切り替える
  * ★アプリ（LIFF）は開かない。すべて postback でサーバーに届き、
  *   トーク内の返信だけで承認・書き直し・設定変更まで完結する。
+ * ※ 既定を onboarding にしているのは、すでに友だち追加済みの方にも
+ *   「連携する」ボタンが必ず見えるようにするため（あいさつ文は再送されないため）。
  *
  * 使い方（一度だけ実行）:
  *   LINE_NOTIFY_CHANNEL_ACCESS_TOKEN=xxx node scripts/setup-line-richmenu.mjs
@@ -19,7 +23,8 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-const MENU_NAME = 'threads-studio-main-v5';
+const MAIN_NAME = 'threads-studio-main-v6';
+const ONBOARDING_NAME = 'threads-studio-onboarding-v1';
 const W = 2500;
 const H = 1686;
 // ★2026-09-01: Webビュー（LIFF）を開かず、トーク内のやり取りで完結させる。
@@ -33,26 +38,35 @@ const buttons = [
   { label1: '使い方', label2: '困ったらまずここ', data: 'm=help' },
 ];
 
+// 未連携の方むけ（既定メニュー）。まず連携してもらうことだけに絞る。
+const onboardingButtons = [
+  { label1: '連携する', label2: 'ご登録のアカウントとつなぐ', data: 'm=link' },
+  { label1: 'アカウントを持っていない', label2: 'まずは新規登録から', data: 'm=signup' },
+];
+
 // ── メニュー画像（SVG→PNG）。ブランド色はアプリと同系のグリーン ──
-const cellW = W / 3;
-const cellH = H / 2;
-const svg = `
+function buildSvg(items, cols, rows) {
+  const cw = W / cols;
+  const ch = H / rows;
+  return `
 <svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
   <rect width="${W}" height="${H}" fill="#0E2A38"/>
-  ${buttons
+  ${items
     .map((b, i) => {
-      const x = (i % 3) * cellW;
-      const y = Math.floor(i / 3) * cellH;
-      const cx = x + cellW / 2;
+      const x = (i % cols) * cw;
+      const y = Math.floor(i / cols) * ch;
+      const cx = x + cw / 2;
+      const big = cols === 1;
       return `
-    <rect x="${x + 24}" y="${y + 24}" width="${cellW - 48}" height="${cellH - 48}" rx="28" fill="#F4FAFA"/>
-    <circle cx="${cx}" cy="${y + cellH / 2 - 130}" r="86" fill="#0E8388"/>
-    <text x="${cx}" y="${y + cellH / 2 - 108}" text-anchor="middle" font-family="Hiragino Sans, sans-serif" font-size="72" fill="#FFFFFF" font-weight="bold">${i + 1}</text>
-    <text x="${cx}" y="${y + cellH / 2 + 90}" text-anchor="middle" font-family="Hiragino Sans, sans-serif" font-size="86" fill="#13343B" font-weight="bold">${b.label1}</text>
-    <text x="${cx}" y="${y + cellH / 2 + 200}" text-anchor="middle" font-family="Hiragino Sans, sans-serif" font-size="56" fill="#4C6B67">${b.label2}</text>`;
+    <rect x="${x + 24}" y="${y + 24}" width="${cw - 48}" height="${ch - 48}" rx="28" fill="#F4FAFA"/>
+    <circle cx="${cx}" cy="${y + ch / 2 - (big ? 150 : 130)}" r="${big ? 96 : 86}" fill="#0E8388"/>
+    <text x="${cx}" y="${y + ch / 2 - (big ? 122 : 108)}" text-anchor="middle" font-family="Hiragino Sans, sans-serif" font-size="${big ? 84 : 72}" fill="#FFFFFF" font-weight="bold">${i + 1}</text>
+    <text x="${cx}" y="${y + ch / 2 + (big ? 100 : 90)}" text-anchor="middle" font-family="Hiragino Sans, sans-serif" font-size="${big ? 104 : 86}" fill="#13343B" font-weight="bold">${b.label1}</text>
+    <text x="${cx}" y="${y + ch / 2 + (big ? 220 : 200)}" text-anchor="middle" font-family="Hiragino Sans, sans-serif" font-size="${big ? 62 : 56}" fill="#4C6B67">${b.label2}</text>`;
     })
     .join('')}
 </svg>`;
+}
 
 const api = async (url, opts = {}) => {
   const res = await fetch(url, {
@@ -65,42 +79,51 @@ const api = async (url, opts = {}) => {
   return res.status === 200 && res.headers.get('content-type')?.includes('json') ? res.json() : null;
 };
 
-// 1) 旧バージョンを含む threads-studio-main-* を削除（冪等・置き換え）
+// 1) 旧バージョンを削除（冪等・置き換え）
 const list = await api('https://api.line.me/v2/bot/richmenu/list');
 for (const m of list?.richmenus ?? []) {
-  if (m.name?.startsWith('threads-studio-main-')) {
+  if (m.name?.startsWith('threads-studio-main-') || m.name?.startsWith('threads-studio-onboarding-')) {
     await api(`https://api.line.me/v2/bot/richmenu/${m.richMenuId}`, { method: 'DELETE' });
     console.log('古いメニューを削除:', m.richMenuId, m.name);
   }
 }
 
-// 2) メニュー本体を作成
-const created = await api('https://api.line.me/v2/bot/richmenu', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    size: { width: W, height: H },
-    selected: true,
-    name: MENU_NAME,
-    chatBarText: 'メニューを開く',
-    areas: buttons.map((b, i) => ({
-      bounds: { x: (i % 3) * cellW, y: Math.floor(i / 3) * cellH, width: cellW, height: cellH },
-      action: { type: 'postback', data: b.data, displayText: b.label1 },
-    })),
-  }),
-});
-const id = created.richMenuId;
-console.log('作成:', id);
+/** メニューを1つ作って画像まで載せる */
+async function createMenu(name, items, cols, rows, chatBarText) {
+  const cw = W / cols;
+  const ch = H / rows;
+  const created = await api('https://api.line.me/v2/bot/richmenu', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      size: { width: W, height: H },
+      selected: true,
+      name,
+      chatBarText,
+      areas: items.map((b, i) => ({
+        bounds: { x: (i % cols) * cw, y: Math.floor(i / cols) * ch, width: cw, height: ch },
+        action: { type: 'postback', data: b.data, displayText: b.label1 },
+      })),
+    }),
+  });
+  const id = created.richMenuId;
+  const png = await sharp(Buffer.from(buildSvg(items, cols, rows))).png().toBuffer();
+  await api(`https://api-data.line.me/v2/bot/richmenu/${id}/content`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'image/png' },
+    body: png,
+  });
+  console.log(`作成: ${name} = ${id}`);
+  return id;
+}
 
-// 3) 画像をアップロード
-const png = await sharp(Buffer.from(svg)).png().toBuffer();
-await api(`https://api-data.line.me/v2/bot/richmenu/${id}/content`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'image/png' },
-  body: png,
-});
-console.log('画像アップロード完了');
+const mainId = await createMenu(MAIN_NAME, buttons, 3, 2, 'メニューを開く');
+const onboardingId = await createMenu(ONBOARDING_NAME, onboardingButtons, 1, 2, 'まず連携してください');
 
-// 4) 全ユーザーの既定メニューに設定
-await api(`https://api.line.me/v2/bot/user/all/richmenu/${id}`, { method: 'POST' });
-console.log('既定メニューに設定しました');
+// 2) 既定は「未連携むけ」。連携が成立した人だけサーバーが main に切り替える。
+await api(`https://api.line.me/v2/bot/user/all/richmenu/${onboardingId}`, { method: 'POST' });
+console.log('既定メニュー（未連携むけ）を設定しました');
+
+console.log('\n--- 環境変数に設定してください ---');
+console.log(`LINE_RICHMENU_MAIN_ID=${mainId}`);
+console.log(`LINE_RICHMENU_ONBOARDING_ID=${onboardingId}`);
