@@ -132,6 +132,7 @@ export const MENU_ITEMS: QuickItem[] = [
   { label: "お店の情報", data: "m=profile" },
   { label: "使い方", data: "m=help" },
   { label: "はじめの設定", data: "m=setup" },
+  { label: "アカウント連携", data: "m=connect" },
 ];
 
 export const HELP_TOPICS: Array<{ key: string; q: string; a: string }> = [
@@ -143,6 +144,8 @@ export const HELP_TOPICS: Array<{ key: string; q: string; a: string }> = [
     a: "「設定」→「NGワードを追加」を押して、使ってほしくない言葉を送ってください。以後の投稿では自動的に避けます。" },
   { key: "member", q: "スタッフも操作できるようにしたい",
     a: "追加したい方が公式LINEを友だち追加したあと、こちらのトークで「追加」と送ってください。6桁のコードをお伝えします（連携できる人数はプランによって異なります）。" },
+  { key: "multi", q: "2つ目のアカウントをつなぎたい",
+    a: "プロプランはThreadsアカウントを3つまで、ビジネスプランは10までつなげます。メニューの「アカウント連携」を押すと、いま何件つないでいるか・あと何件つなげるかと、連携ページのリンクをお送りします。連携だけはMeta（Threads）の認証画面を通るため、LINEの中ではなく通常のブラウザで開いてください。" },
   { key: "stop", q: "しばらく投稿を止めたい",
     a: "「設定」→「自動投稿」をOFFにすると止まります。再開したいときは同じ場所でONにしてください。" },
 ];

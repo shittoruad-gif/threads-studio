@@ -283,6 +283,47 @@ async function repliesForStats(userId: number): Promise<unknown[]> {
   }
 }
 
+/**
+ * Threadsアカウントの連携案内。
+ * ★連携そのもの（Metaの認証）はブラウザでしか行えないため、
+ *   トークでは「いま何件つないでいるか・あと何件つなげるか・どこから連携するか」を示す。
+ */
+async function repliesForConnect(userId: number): Promise<unknown[]> {
+  const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+  try {
+    const accounts = await db.getThreadsAccountsByUserId(userId);
+    const active = accounts.filter((a: any) => a.isActive);
+    const sub = await db.getSubscriptionByUserId(userId);
+    const { getPlan, resolveEffectivePlanId } = await import("@shared/plans");
+    const plan = getPlan(resolveEffectivePlanId(sub?.planId, sub?.status));
+    const max = plan?.features.maxThreadsAccounts ?? 1;
+    const maxLabel = max === -1 ? "無制限" : `${max}件`;
+    const rest = max === -1 ? "無制限" : `${Math.max(0, max - active.length)}件`;
+    const list = active.length > 0
+      ? active.map((a: any, i: number) => `${i + 1}. @${a.threadsUsername}`).join("\n")
+      : "（まだありません）";
+    const full = max !== -1 && active.length >= max;
+    return [textWithQuick(
+      `いま連携しているThreadsアカウントです。\n\n${list}\n\n` +
+      `ご契約のプラン：${plan?.name ?? "—"}（連携できる上限 ${maxLabel}）\n` +
+      `あと ${rest} 追加できます。\n\n` +
+      (full
+        ? "上限に達しているため、追加するには不要なアカウントの連携を解除するか、上位プランへの変更が必要です。"
+        : "追加する場合は、こちらのページを開いて「Threadsと連携する」を押してください。\n" +
+          `${base}/threads-connect\n\n` +
+          "※ この連携だけは、Meta（Threads）の認証画面を通るため、LINEの中ではなく通常のブラウザ（SafariやChrome）で開いてください。\n" +
+          "※ 追加したいアカウントでThreadsにログインした状態で開くと、そのアカウントがつながります。"),
+      MENU_HINT,
+    )];
+  } catch {
+    return [textWithQuick(
+      `Threadsアカウントの連携は、こちらのページから行えます。\n${base}/threads-connect\n\n` +
+      "※ 通常のブラウザで開いてください。",
+      MENU_HINT,
+    )];
+  }
+}
+
 /** お店・自分の情報の要約 */
 async function repliesForProfile(userId: number): Promise<unknown[]> {
   try {
@@ -320,6 +361,8 @@ interface CounselingState {
   projectId: string;
   /** 確認画面から1問だけ直しているとき、その質問番号（0始まり）。直し終えたら確認画面へ戻る。 */
   editing?: number | null;
+  /** どのThreadsアカウントの設定か（複数運用時。1つだけなら未設定） */
+  accountId?: number | null;
 }
 
 function questionsFor(mode: "store" | "personal") {
@@ -432,6 +475,14 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
   const res = await saveCounselingAnswers({
     userId, projectId: st.projectId, mode: st.mode, answers: st.answers as any,
   });
+  // 指定のアカウントに、いま登録したお店の情報を結びつける（そのアカウントの投稿に使われる）
+  if (res.ok && st.accountId) {
+    try {
+      await db.updateThreadsAccount(st.accountId, { defaultProjectId: st.projectId } as any);
+    } catch (e) {
+      console.error("[LineChat] アカウントと店舗情報の紐づけに失敗:", e);
+    }
+  }
   if (!res.ok) {
     return [textWithQuick("保存に失敗しました。時間をおいて「はじめの設定」からやり直してください。", MENU_HINT)];
   }
@@ -444,7 +495,8 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
 }
 
 /** はじめの設定を開始（まず目的を選んでもらう） */
-async function startCounseling(lineUserId: string): Promise<unknown[]> {
+async function startCounseling(lineUserId: string, accountId?: number | null): Promise<unknown[]> {
+  const a = accountId ? `&a=${accountId}` : "";
   return [textWithQuick(
     "はじめの設定を始めます（10〜15分・全20問）。\n\n" +
     "まず、何のための発信かを選んでください。\n" +
@@ -452,8 +504,8 @@ async function startCounseling(lineUserId: string): Promise<unknown[]> {
     "・個人にファンをつける：ご自身の名前での発信\n\n" +
     "途中でやめたいときは「やめる」と送ってください。",
     [
-      { label: "お店の集客", data: "c=start&mode=store" },
-      { label: "個人にファンをつける", data: "c=start&mode=personal" },
+      { label: "お店の集客", data: `c=start&mode=store${a}` },
+      { label: "個人にファンをつける", data: `c=start&mode=personal${a}` },
     ],
   )];
 }
@@ -480,8 +532,23 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   if (q.m === "posts") return repliesForPosts(user.id, q.one ? "one" : q.all ? "all" : undefined);
   if (q.m === "stats") return repliesForStats(user.id);
   if (q.m === "profile") return repliesForProfile(user.id);
+  if (q.m === "connect") return repliesForConnect(user.id);
   if (q.m === "help") return [textWithQuick("よくあるご質問です。知りたいものを選んでください。", helpQuick())];
-  if (q.m === "setup") return startCounseling(lineUserId);
+  if (q.m === "setup") {
+    // ★複数アカウントを運用している場合、どのアカウントの設定かを先に選んでもらう。
+    //   選ばないと1つ目のお店の情報を上書きしてしまうため。
+    const accounts = (await db.getThreadsAccountsByUserId(user.id)).filter((a: any) => a.isActive);
+    if (accounts.length >= 2) {
+      return [textWithQuick(
+        "どのアカウントの情報を登録しますか？\nアカウントごとに、別々のお店の情報を登録できます。",
+        accounts.slice(0, 10).map((a: any) => ({ label: `@${a.threadsUsername}`, data: `c=acct&a=${a.id}` })),
+      )];
+    }
+    return startCounseling(lineUserId, accounts[0]?.id ?? null);
+  }
+  if (q.c === "acct" && q.a) {
+    return startCounseling(lineUserId, Number(q.a));
+  }
   if (q.c === "save" || q.c === "edit" || q.c === "pick") {
     const cur = await db.getLineChatState(lineUserId);
     if (cur?.state !== "counseling" || !cur.payload) {
@@ -498,10 +565,23 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     }
   }
   if (q.c === "start" && (q.mode === "store" || q.mode === "personal")) {
-    // 既存プロジェクトがあればそれを更新、無ければ新規IDで作る
-    const projects = await db.getProjectsByUserId(user.id);
-    const projectId = (projects?.[0] as any)?.id || `line_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-    const st: CounselingState = { mode: q.mode, step: 0, answers: {}, projectId };
+    // ★どのお店の情報を書き換えるかを決める。
+    //   アカウントが指定されていればそのアカウントに紐づく情報、無ければ既存の1件目。
+    //   どちらも無ければ新規に作る（他のアカウントの情報を上書きしない）。
+    const accountId = q.a ? Number(q.a) : null;
+    let projectId: string | undefined;
+    if (accountId) {
+      const acct = await db.getThreadsAccountById(accountId);
+      if (acct && acct.userId === user.id) projectId = (acct as any).defaultProjectId ?? undefined;
+    }
+    if (!projectId) {
+      const projects = await db.getProjectsByUserId(user.id);
+      projectId = accountId
+        ? undefined                       // アカウント指定時は新規作成（上書き防止）
+        : ((projects?.[0] as any)?.id ?? undefined);
+    }
+    if (!projectId) projectId = `line_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    const st: CounselingState = { mode: q.mode, step: 0, answers: {}, projectId, accountId };
     await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
     return [
       { type: "text", text: q.mode === "personal" ? "「個人にファンをつける」で進めます。" : "「お店の集客」で進めます。" },
