@@ -42,6 +42,11 @@ export const users = mysqlTable("users", {
   // Last auto-post type index (for rotation)
   lastAutoPostTypeIndex: int("lastAutoPostTypeIndex").default(0).notNull(),
   lastAutoPurposeIndex: int("lastAutoPurposeIndex").default(0).notNull(),
+  // 「次にやること」の公式LINE通知。ご本人が「もう不要」と言えばOFFにできる。
+  nextActionNotifyEnabled: tinyint("nextActionNotifyEnabled").default(1).notNull(),
+  // 直近に送った案内の種類と日時（同じ案内を毎日送らないため）
+  nextActionLastKey: varchar("nextActionLastKey", { length: 40 }),
+  nextActionLastSentAt: timestamp("nextActionLastSentAt"),
   // Referral code for referral program
   referralCode: varchar("referralCode", { length: 16 }).unique(),
   // User's credit balance (for referral rewards)

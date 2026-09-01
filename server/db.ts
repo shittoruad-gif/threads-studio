@@ -2037,6 +2037,9 @@ export async function getAllUsers() {
     // 規約同意の記録（誰が・いつ・どの版に同意したか）
     termsAgreedAt: users.termsAgreedAt,
     termsVersion: users.termsVersion,
+    // 「次にやること」の案内の状態（管理画面で、誰がどこで止まっているかを見るため）
+    nextActionNotifyEnabled: users.nextActionNotifyEnabled,
+    nextActionLastSentAt: users.nextActionLastSentAt,
   }).from(users).orderBy(desc(users.createdAt));
 
   if (userRows.length === 0) return [];
@@ -3527,6 +3530,72 @@ function escapeSql(v: string): string {
   return `'${String(v).replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
 }
 
+
+// ── 「次にやること」のご案内 ───────────────────────────────
+/** ご自身で承認して公開した投稿の件数（0なら、まだ承認の流れを体験していない） */
+export async function countApprovedPosts(userId: number): Promise<number> {
+  const database = await getDb();
+  if (!database) return 0;
+  const rows: any = await database.execute(sql.raw(
+    `SELECT COUNT(*) AS c FROM \`scheduledPosts\` WHERE \`userId\` = ${Number(userId)} AND \`status\` = 'posted'`
+  ));
+  return Number(rows?.[0]?.[0]?.c ?? 0);
+}
+
+/** 「次にやること」の案内を送ってよいユーザー（LINE連携済み・案内をONにしている）*/
+export async function listUsersForNextActionNotify(): Promise<Array<{ userId: number; lineUserId: string; lastKey: string | null; lastSentAt: Date | null }>> {
+  const database = await getDb();
+  if (!database) return [];
+  // ★1アカウントに複数のLINEが紐づく（オーナー＋スタッフ）ことがある。
+  //   設定のご案内はオーナーにだけ届けたいので、最初に連携した1件を選ぶ。
+  const rows: any = await database.execute(sql.raw(
+    `SELECT u.\`id\` AS userId, l.\`lineUserId\` AS lineUserId,
+            u.\`nextActionLastKey\` AS lastKey, u.\`nextActionLastSentAt\` AS lastSentAt
+     FROM \`users\` u
+     JOIN \`userLineLinks\` l ON l.\`id\` = (
+       SELECT MIN(l2.\`id\`) FROM \`userLineLinks\` l2 WHERE l2.\`userId\` = u.\`id\`
+     )
+     WHERE u.\`nextActionNotifyEnabled\` = 1`
+  ));
+  return (rows?.[0] ?? []).map((r: any) => ({
+    userId: Number(r.userId),
+    lineUserId: String(r.lineUserId),
+    lastKey: r.lastKey ?? null,
+    lastSentAt: r.lastSentAt ? new Date(r.lastSentAt) : null,
+  }));
+}
+
+/** 送った案内を記録する（同じものを毎日送らないため）*/
+export async function recordNextActionSent(userId: number, key: string): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  const { users } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  await database.update(users)
+    .set({ nextActionLastKey: key, nextActionLastSentAt: new Date() } as any)
+    .where(eq(users.id, userId));
+}
+
+/** 「次にやること」の案内を止める／再開する */
+export async function setNextActionNotifyEnabled(userId: number, enabled: boolean): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  const { users } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  await database.update(users)
+    .set({ nextActionNotifyEnabled: enabled ? 1 : 0 } as any)
+    .where(eq(users.id, userId));
+}
+
+/** いま案内がONかどうか */
+export async function isNextActionNotifyEnabled(userId: number): Promise<boolean> {
+  const database = await getDb();
+  if (!database) return false;
+  const { users } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  const rows = await database.select({ v: users.nextActionNotifyEnabled }).from(users).where(eq(users.id, userId)).limit(1);
+  return Number(rows?.[0]?.v ?? 1) === 1;
+}
 
 // ── お客様からのご質問（自動応答・担当者対応・よくある質問への反映）─────────
 /** ご質問を1件記録する。戻り値は採番されたID。 */

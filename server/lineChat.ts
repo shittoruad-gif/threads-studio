@@ -189,12 +189,18 @@ export function helpQuick(): QuickItem[] {
 export function settingsQuick(
   s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; postLength?: string | null },
   maxPerDay = 3,
+  nextActionNotify = true,
 ): QuickItem[] {
+  // 「次にやること」の案内は、いつでも止められる／戻せるようにしておく。
+  const notifyToggle: QuickItem = nextActionNotify
+    ? { label: "案内を受け取らない", data: "n=off" }
+    : { label: "案内を受け取る", data: "n=on" };
   if (maxPerDay <= 0) {
     // 自動投稿が使えないプラン。切り替えても意味がないので出さない。
     return [
       { label: "プランを見る", data: "s=plan" },
       { label: "NGワードを追加", data: "s=ng" },
+      notifyToggle,
     ];
   }
   return [
@@ -203,13 +209,17 @@ export function settingsQuick(
     { label: "短め にする", data: "s=len&v=short" },
     { label: "長め にする", data: "s=len&v=long" },
     { label: "NGワードを追加", data: "s=ng" },
+    notifyToggle,
   ];
 }
 
 export function settingsSummary(
   s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; postLength?: string | null; autoPostFrequency?: string | null },
-  opts: { maxPerDay?: number; planName?: string } = {},
+  opts: { maxPerDay?: number; planName?: string; nextActionNotify?: boolean } = {},
 ): string {
+  const notify = opts.nextActionNotify === false
+    ? "・次にやることの案内：受け取らない\n"
+    : "・次にやることの案内：受け取る\n";
   const maxPerDay = opts.maxPerDay ?? 3;
   const want = s.autoPostFrequency === "three_daily" ? 3 : s.autoPostFrequency === "twice_daily" ? 2 : 1;
   // 実際に投稿される回数は「設定した回数」と「プランの上限」の小さい方
@@ -220,7 +230,8 @@ export function settingsSummary(
     return (
       head + "いまの設定です。\n" +
       "・自動投稿：ご利用中のプランでは使えません（手動での作成はお試しいただけます）\n" +
-      `・投稿の長さ：${len}\n\n` +
+      `・投稿の長さ：${len}\n` +
+      notify + "\n" +
       "毎日の自動投稿をご利用になるには、プランのご変更が必要です。"
     );
   }
@@ -229,7 +240,8 @@ export function settingsSummary(
     `・自動投稿：${s.autoPostEnabled ? `ON（1日${actual}回）` : "OFF"}\n` +
     (want > maxPerDay ? `　※ ご利用中のプランの上限は1日${maxPerDay}回です\n` : "") +
     `・公開前の確認：${s.autoPostRequireApproval ? "する" : "しない"}\n` +
-    `・投稿の長さ：${len}\n\n` +
+    `・投稿の長さ：${len}\n` +
+    notify + "\n" +
     "変えたいものを選んでください。"
   );
 }

@@ -267,6 +267,11 @@ export const LINE_TEXTS = {
 } as const;
 
 /** 任意のメッセージ配列をreplyで返す（チャット完結操作用・通数を消費しない） */
+/** 指定のLINEユーザーに、組み立て済みのメッセージをお送りする（ボタン付きの案内など）。 */
+export async function pushMessages(lineUserId: string, messages: unknown[]): Promise<boolean> {
+  return pushMessage(lineUserId, messages);
+}
+
 /**
  * 指定のLINEユーザーに、文章を1通お送りする。
  * 担当者からの返信・運営への通知に使う（push APIなので通数課金の対象）。

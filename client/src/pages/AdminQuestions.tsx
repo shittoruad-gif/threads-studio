@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, MessageSquare, Send, BookOpen } from 'lucide-react';
+import { Loader2, MessageSquare, Send, BookOpen, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 /**
@@ -29,6 +29,7 @@ export default function AdminQuestions() {
 
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.admin.listQuestions.useQuery({ needsHumanOnly });
+  const { data: stuck } = trpc.admin.listStuckUsers.useQuery();
 
   const reply = trpc.admin.replyToQuestion.useMutation({
     onSuccess: () => {
@@ -98,6 +99,45 @@ export default function AdminQuestions() {
           )}
           <p className="text-xs text-muted-foreground mt-3">
             件数の多い順です。無料説明会で扱う内容を決めるときの目安にしてください。
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* 設定が途中で止まっているお客様。公式LINEにも同じ内容をお送りしている。 */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-500" />
+            設定が途中で止まっているお客様
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!stuck ? (
+            <p className="text-sm text-muted-foreground">確認中です。</p>
+          ) : stuck.length === 0 ? (
+            <p className="text-sm text-muted-foreground">いません。全員、設定が整っています。</p>
+          ) : (
+            <div className="space-y-3">
+              {stuck.map((u: any) => (
+                <div key={u.userId} className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-foreground">{u.name || '（お名前未設定）'}</span>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{u.key}</Badge>
+                      {!u.notifyEnabled && <Badge variant="secondary">案内OFF</Badge>}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{u.email}</p>
+                  <p className="text-sm text-foreground mt-2 whitespace-pre-wrap break-words">{u.message}</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {u.lastSentAt ? `最後に案内した日: ${fmt(u.lastSentAt)}` : 'まだ案内していません'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground mt-3">
+            同じ内容を、毎朝8時30分に公式LINEでもお伝えしています（同じ案内は3日おき・お客様が止めることもできます）。
           </p>
         </CardContent>
       </Card>

@@ -671,9 +671,10 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const s = (await db.getAutoPostSettings(user.id)) || {};
     const { plan } = await planOf(user.id);
     const maxPerDay = plan?.features.maxAutoPostsPerDay ?? 0;
+    const notify = await db.isNextActionNotifyEnabled(user.id);
     return [textWithQuick(
-      settingsSummary(s as any, { maxPerDay, planName: plan?.name }),
-      settingsQuick(s as any, maxPerDay),
+      settingsSummary(s as any, { maxPerDay, planName: plan?.name, nextActionNotify: notify }),
+      settingsQuick(s as any, maxPerDay, notify),
     )];
   }
   if (q.s === "plan") {
@@ -683,6 +684,23 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       MENU_HINT,
     )];
   }
+  // ── 「次にやること」の案内のON/OFF ──
+  if (q.n === "off") {
+    await db.setNextActionNotifyEnabled(user.id, false);
+    return [textWithQuick(
+      "承知しました。次にやることのご案内は、今後お送りしません。\n" +
+      "また受け取りたくなったら、「設定」からいつでも戻せます。",
+      MENU_HINT,
+    )];
+  }
+  if (q.n === "on") {
+    await db.setNextActionNotifyEnabled(user.id, true);
+    return [textWithQuick(
+      "次にやることのご案内を、またお送りします。",
+      MENU_HINT,
+    )];
+  }
+
   if (q.m === "addstaff") return issueStaffLinkCode(user.id);
   if (q.m === "sendq" && q.q) {
     await db.clearLineChatState(lineUserId);

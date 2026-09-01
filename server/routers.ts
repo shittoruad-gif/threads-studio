@@ -3471,6 +3471,31 @@ ${input.commentText}
         return { success: true } as const;
       }),
 
+    /** どのお客様が、どの段階で止まっているかの一覧（設定の取りこぼしを見つける） */
+    listStuckUsers: adminProcedure.query(async () => {
+      const { detectNextAction } = await import('./nextAction');
+      const users = await db.getAllUsers();
+      const out: any[] = [];
+      for (const u of users as any[]) {
+        try {
+          const action = await detectNextAction(u.id);
+          if (!action) continue;
+          out.push({
+            userId: u.id,
+            name: u.name,
+            email: u.email,
+            key: action.key,
+            message: action.text,
+            notifyEnabled: Number((u as any).nextActionNotifyEnabled ?? 1) === 1,
+            lastSentAt: (u as any).nextActionLastSentAt ?? null,
+          });
+        } catch (e) {
+          console.error('[Admin] 状態の判定に失敗 user=', u.id, e);
+        }
+      }
+      return out;
+    }),
+
     getAllUsers: adminProcedure.query(async () => {
       return await db.getAllUsers();
     }),
