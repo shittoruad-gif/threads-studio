@@ -614,7 +614,41 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     return startCounseling(lineUserId, accounts[0]?.id ?? null);
   }
   if (q.c === "acct" && q.a) {
+    // ★すでに登録済みのお店の情報があるなら、「それを使う」を先に出す。
+    //   紐づけたいだけなのに20問やり直させるのは、無駄な手間になる。
+    const usable = (await db.getUserProjects(user.id) || []).filter((pj: any) =>
+      !String(pj.id).startsWith("demo_") &&
+      pj.businessType && pj.area && pj.target && pj.mainProblem && pj.strength,
+    );
+    if (usable.length > 0) {
+      const items = usable.slice(0, 8).map((pj: any) => ({
+        label: `「${String(pj.storeName || pj.title || "登録済みの情報").slice(0, 12)}」を使う`,
+        data: `c=pin&a=${q.a}&p=${pj.id}`,
+      }));
+      return [textWithQuick(
+        "このアカウントで、どの情報を使いますか？\n" +
+        "登録済みの情報をそのまま使えます。別の内容にしたい場合は「新しく登録する」を選んでください。",
+        [...items, { label: "新しく登録する", data: `c=newpj&a=${q.a}` }],
+      )];
+    }
     return startCounseling(lineUserId, Number(q.a));
+  }
+  if (q.c === "newpj" && q.a) {
+    return startCounseling(lineUserId, Number(q.a));
+  }
+  if (q.c === "pin" && q.a && q.p) {
+    const accounts = await db.getThreadsAccountsByUserId(user.id);
+    const acc: any = accounts.find((a: any) => String(a.id) === String(q.a));
+    if (!acc) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    const projects = await db.getUserProjects(user.id) || [];
+    const pj: any = projects.find((x: any) => String(x.id) === String(q.p));
+    if (!pj) return [textWithQuick("その情報が見つかりませんでした。", MENU_HINT)];
+    await db.updateThreadsAccount(acc.id, { defaultProjectId: pj.id } as any);
+    return [textWithQuick(
+      `@${acc.threadsUsername} には「${pj.storeName || pj.title}」の内容で投稿します。\n\n` +
+      "内容を直したいときは「お店の情報」から確認・修正できます。",
+      MENU_HINT,
+    )];
   }
   if (q.c === "save" || q.c === "edit" || q.c === "pick") {
     const cur = await db.getLineChatState(lineUserId);
