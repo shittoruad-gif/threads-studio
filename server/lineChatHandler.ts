@@ -66,17 +66,87 @@ async function askReferralCode(lineUserId: string): Promise<unknown[]> {
   }];
 }
 
-function referralLink(lineUserId: string, code: string): Promise<unknown[]> | unknown[] {
+/**
+ * 紹介コードを受け取ったときの案内。
+ *
+ * ★決済リンクを先にお渡ししてはいけない。
+ *   お支払いとアプリのアカウントは「決済時のメールアドレス」で結び付けているため、
+ *   アプリ登録より先にお支払いされると、どなたの契約か分からず反映されない。
+ *   そのため必ず「登録 → 料金プランを選ぶ」の順にご案内する。
+ *   （登録直後は料金ページに着くようにしてあるので、実際の手数は変わらない）
+ */
+async function referralLink(lineUserId: string, code: string, userId?: number): Promise<unknown[]> {
   const base = process.env.APP_BASE_URL || "https://threads-studio.com";
-  const c = code.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 32);
+  const { normalizeCouponCode } = await import("@shared/inputNormalize");
+  const c = normalizeCouponCode(code).replace(/[^A-Z0-9_-]/g, "").slice(0, 32);
   if (!c) {
     return [{ type: "text", text: "コードを読み取れませんでした。もう一度送ってください。" }];
   }
+
+  // そのコードが本当に使えるかを確かめる（間違ったコードで登録まで進ませない）
+  let valid = false;
+  let planLines = "";
+  try {
+    const { validateCoupon } = await import("./coupon");
+    const v = await validateCoupon(c);
+    valid = Boolean(v.valid);
+    if (valid) {
+      const { campaignTierForCode, getCampaignCounterpart } = await import("@shared/plans");
+      const tier = campaignTierForCode(c);
+      const rows = ["light", "pro", "business"]
+        .map((id) => getCampaignCounterpart(id, tier))
+        .filter(Boolean)
+        .map((p: any) => `・${p.name}：月額 ${p.priceMonthly.toLocaleString()}円（税込）`);
+      if (rows.length) {
+        planLines = "\n\nこのコードで、次の価格でお申し込みいただけます。\n" + rows.join("\n");
+      }
+    }
+  } catch (e) {
+    console.error("[LineChat] 紹介コードの確認に失敗:", e);
+  }
+
+  if (!valid) {
+    const base2 = process.env.APP_BASE_URL || "https://threads-studio.com";
+    return [textWithQuick(
+      `「${c}」という紹介コードは見つかりませんでした。\n` +
+      "お手元の案内をもう一度ご確認のうえ、お送りください。\n\n" +
+      "コードをお持ちでなくても、通常価格でご登録いただけます。\n" +
+      `${base2}/register`,
+      [{ label: "担当者に聞く", data: "m=staff" }],
+    )];
+  }
+
+  // すでにアカウントとつながっている方は、その場でコードを適用して
+  // 料金ページ（キャンペーン価格が出た状態）へご案内する。
+  if (userId) {
+    let applied = false;
+    try {
+      const { applyCoupon } = await import("./coupon");
+      const res = await applyCoupon(userId, c);
+      applied = Boolean(res.success);
+    } catch (e) {
+      console.error("[LineChat] 紹介コードの適用に失敗:", e);
+    }
+    return [textWithQuick(
+      (applied
+        ? `紹介コード「${c}」を適用しました。`
+        : `紹介コード「${c}」は、すでに適用されています。`) +
+      planLines +
+      "\n\n下のリンクから、お申し込みいただけます。\n" +
+      `${base}/pricing?openExternalBrowser=1\n\n` +
+      "※ キャンペーン価格でのお申し込みには無料トライアルは付かず、お申し込み時に初回のお支払いが発生します。",
+      MENU_HINT,
+    )];
+  }
+
   return [textWithQuick(
-    `こちらのリンクから登録してください。紹介コード「${c}」が入った状態で開きます。\n` +
+    `紹介コード「${c}」を確認しました。` + planLines +
+    "\n\nこちらのリンクから、コードが入った状態でご登録いただけます。\n" +
     `${base}/register?code=${encodeURIComponent(c)}\n\n` +
-    "登録が終わったら、このトークで「連携する」を押してください。",
-    [{ label: "連携する", data: "m=link" }],
+    "ご登録が終わると、そのまま料金プランの画面が開きます。そこでプランを選ぶと、お支払いに進めます。\n" +
+    "※ キャンペーン価格でのお申し込みには無料トライアルは付かず、お申し込み時に初回のお支払いが発生します。\n\n" +
+    "お申し込みのあとで、このトークの「連携する」を押してください。",
+    [{ label: "連携する", data: "m=link" }, { label: "担当者に聞く", data: "m=staff" }],
   )];
 }
 
@@ -914,9 +984,12 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     if (pending?.state === "link_email") return sendLinkCodeByEmail(lineUserId, text);
     if (pending?.state === "signup_code") {
       await db.clearLineChatState(lineUserId);
-      return referralLink(lineUserId, text) as unknown[];
+      return referralLink(lineUserId, text);
     }
     if (/^(連携|れんけい|連携する)$/.test(text.trim())) return startLinking(lineUserId);
+    // ★紹介コードをそのまま送られることが多いので、メニューを押さなくても受け付ける。
+    //   （英数字・ハイフン・アンダースコアだけの短い文字列＝コードの見た目）
+    if (looksLikeReferralCode(text)) return referralLink(lineUserId, text);
     return notLinked();
   }
 
@@ -995,6 +1068,9 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   if (/(投稿|承認).{0,4}(確認|見たい|見る)|^今日の投稿$/.test(t)) return handlePostback(lineUserId, "m=posts");
   if (/^(設定|せってい)$/.test(t)) return handlePostback(lineUserId, "m=settings");
   if (/^(追加|ついか)$/.test(t)) return issueStaffLinkCode(user.id);
+  // ★紹介コードをそのまま送られた場合は、その場で適用して料金ページへご案内する。
+  if (looksLikeReferralCode(t)) return referralLink(lineUserId, t, user.id);
+
   // ★文章でのご質問は、まず自動でお答えする。
   //   （以前は「料金」などの言葉に反応して料金ページのリンクを返すだけで、
   //     「プロプランは何アカウントまで？」のような具体的なご質問に答えられていなかった）
@@ -1024,6 +1100,29 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     "ご用件を下から選んでください。ご質問は文章のままお送りいただければ、こちらでお答えします。",
     [{ label: "担当者に聞く", data: "m=staff" }, ...MENU_HINT],
   )];
+}
+
+/**
+ * 紹介コードらしい文字列か。
+ * 英数字とハイフン・アンダースコアだけで、4〜32文字、かつ数字だけではないもの。
+ * （「482913」のような数字だけは連携コードなので、ここでは拾わない）
+ */
+function looksLikeReferralCode(text: string): boolean {
+  const t = toHalfWidthLocal(text).trim();
+  if (!/^[A-Za-z0-9_-]{4,32}$/.test(t)) return false;
+  if (/^[0-9]+$/.test(t)) return false;
+  // ★英字だけの単語（Threads / instagram など）はコードではない。
+  //   実際のコードは英字と数字が混ざる（SEMINAR2026・CPMONITOR2026 など）。
+  //   ここを緩くすると、ふつうの単語に「コードが見つかりません」と返してしまう。
+  if (!/[0-9]/.test(t)) return false;
+  return /[A-Za-z]/.test(t);
+}
+
+/** 全角→半角（判定用の軽い変換） */
+function toHalfWidthLocal(s: string): string {
+  return String(s ?? "")
+    .replace(/[！-～]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    .replace(/　/g, " ");
 }
 
 /**
