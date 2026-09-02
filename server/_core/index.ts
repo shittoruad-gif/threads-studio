@@ -216,8 +216,20 @@ async function startServer() {
               await replyMessage(ev.replyToken, LINE_TEXTS.unlinked);
               continue;
             }
+            // ★ここで「数字を抜き出して6桁なら連携コード」と決めつけてはいけない。
+            //   連携の最初の手順ではメールアドレスを送っていただくが、
+            //   アドレスに数字がちょうど6つ含まれていると（例: name.201462@example.com）
+            //   それをコードとして扱ってしまい、「コードが違います」となって
+            //   永久に連携できなくなる。実際にお客様1名がこの状態で止まっていた。
+            //   入力待ちの状態があるときは、必ずそちら（handleFreeText）に渡す。
+            let awaitingInput = false;
+            try {
+              const st = await db.getLineChatState(lineUserId);
+              awaitingInput = Boolean(st?.state);
+            } catch { awaitingInput = false; }
+
             const code = text.replace(/[^0-9]/g, '');
-            if (code.length === 6) {
+            if (!awaitingInput && !text.includes('@') && code.length === 6) {
               // 表示名は設定画面の連携一覧用（取れなくても連携は成立させる）
               const { fetchLineDisplayName } = await import('../lineNotify');
               const displayName = await fetchLineDisplayName(lineUserId);
@@ -670,6 +682,12 @@ async function startServer() {
                 lastDunningReminderAt: null,
               });
               console.log(`[Univapay Webhook] サブスク更新→active: user=${user.id} plan=${planId}${isDuplicateCharge ? '（再送イベント・回数据え置き）' : ''}`);
+              // 上位プランに変わったら、自動投稿の回数を新しい上限まで引き上げる。
+              // （フリーのまま初期値1回で有料化して、1日1回しか投稿されない事故の防止）
+              try {
+                const { raiseAutoPostFrequencyOnUpgrade } = await import('../planUpgrade');
+                await raiseAutoPostFrequencyOnUpgrade(user.id, existing.planId, planId);
+              } catch (e) { console.error('[Univapay Webhook] 自動投稿回数の引き上げに失敗:', e); }
             } else {
               await db.createSubscription({
                 userId: user.id,
@@ -682,6 +700,11 @@ async function startServer() {
                 lastChargeEventId: chargeEventId ?? undefined,
               } as any);
               console.log(`[Univapay Webhook] サブスク新規作成→active: user=${user.id} plan=${planId}`);
+              // 初めての有料化。フリー（上限0）からの引き上げとして扱う。
+              try {
+                const { raiseAutoPostFrequencyOnUpgrade } = await import('../planUpgrade');
+                await raiseAutoPostFrequencyOnUpgrade(user.id, 'free', planId);
+              } catch (e) { console.error('[Univapay Webhook] 自動投稿回数の引き上げに失敗:', e); }
             }
 
             // ★#2 キャンペーン規定回数に達したときの処理。

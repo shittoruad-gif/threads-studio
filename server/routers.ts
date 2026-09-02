@@ -2931,6 +2931,12 @@ ${input.commentText}
           planId: input.newPlanId,
         });
 
+        // 上位プランへの変更なら、自動投稿の回数を新しい上限まで引き上げる。
+        try {
+          const { raiseAutoPostFrequencyOnUpgrade } = await import('./planUpgrade');
+          await raiseAutoPostFrequencyOnUpgrade(ctx.user.id, subscription.planId, input.newPlanId);
+        } catch (e) { console.error('[PlanChange] 自動投稿回数の引き上げに失敗:', e); }
+
         return {
           success: true,
           changeTiming: 'immediate' as const,
