@@ -149,8 +149,11 @@ export default function Register() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="storeName">
-                店舗名・屋号 <span className="text-muted-foreground text-xs font-normal">（任意・あとで変更できます）</span>
+              {/* ★Labelはflexなので、注記と横並びになって「店舗名・屋」「号」と
+                  語の途中で折り返されていた。折り返しを許して行ごと送る。 */}
+              <Label htmlFor="storeName" className="flex-wrap">
+                <span className="whitespace-nowrap">店舗名・屋号</span>
+                <span className="text-muted-foreground text-xs font-normal">（任意・あとで変更できます）</span>
               </Label>
               <Input
                 id="storeName"
@@ -254,7 +257,10 @@ export default function Register() {
                 disabled={registerMutation.isPending}
                 className="mt-0.5"
               />
-              <Label htmlFor="agree" className="text-xs font-normal leading-relaxed text-muted-foreground cursor-pointer">
+              {/* ★Labelの既定はflexなので、リンクと文字が1つずつ横並びの箱になり、
+                  スマホ幅では「利」「プライ」…と潰れて読めなくなっていた。
+                  同意文は法的に読めることが必須なので、通常の文章として流す。 */}
+              <Label htmlFor="agree" className="block text-xs font-normal leading-relaxed text-muted-foreground cursor-pointer">
                 <Link href="/terms" className="text-primary hover:underline">利用規約</Link>
                 、
                 <Link href="/privacy" className="text-primary hover:underline">プライバシーポリシー</Link>

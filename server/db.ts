@@ -3496,10 +3496,31 @@ export async function listEventPosts(userId: number, eventId: number) {
 }
 
 // ── LINEトーク内チャット操作の途中状態 ─────────────────────────
+/**
+ * 「はじめの設定」の途中経過の控えを置く場所。
+ * この表は1LINEユーザー1件しか持てないため、別の操作（NGワード登録など）を
+ * されると設定の回答がそのまま消えていた。消える前にここへ写しておく。
+ */
+export function counselingBackupKey(lineUserId: string): string {
+  return `${lineUserId}#counseling`;
+}
+
 /** 次に届くテキストの意味を保存する（書き直しの指示待ち等）。1LINEユーザー1件。 */
 export async function setLineChatState(lineUserId: string, state: string, payload?: string): Promise<void> {
   const database = await getDb();
   if (!database) return;
+  // ★設定の途中で別の操作をされたとき、回答を消さずに控えへ写す。
+  //   （10問答えたあとに「NGワードを追加」を押しただけで、全部消えていた）
+  if (state !== "counseling" && !lineUserId.includes("#")) {
+    try {
+      const cur = await getLineChatStateIgnoringTtl(lineUserId);
+      if (cur?.state === "counseling" && cur.payload) {
+        await setLineChatState(counselingBackupKey(lineUserId), "counseling", cur.payload);
+      }
+    } catch (e) {
+      console.error("[LineChat] 設定の途中経過の控えに失敗:", e);
+    }
+  }
   await database.execute(sql.raw(
     `INSERT INTO \`lineChatStates\` (\`lineUserId\`, \`state\`, \`payload\`) VALUES (${escapeSql(lineUserId)}, ${escapeSql(state)}, ${payload === undefined ? 'NULL' : escapeSql(payload)})
      ON DUPLICATE KEY UPDATE \`state\` = VALUES(\`state\`), \`payload\` = VALUES(\`payload\`)`
@@ -3523,6 +3544,37 @@ export async function getLineChatState(lineUserId: string): Promise<{ state: str
   const ttl = r.state === "counseling" ? 180 : 15;
   if (Number(r.ageMin) > ttl) return null;
   return { state: r.state, payload: r.payload ?? null };
+}
+
+/**
+ * 有効期限を無視して、保存されている状態をそのまま取り出す。
+ *
+ * ★「はじめの設定」の途中でお客様が施術に入り、数時間後に戻ってくることがある。
+ *   そのとき getLineChatState は null を返すため、続きの回答が「ご質問」として
+ *   扱われ、せっかくの回答が失われていた（2026-09-02に実際に発生）。
+ *   続きから再開できるように、期限切れでも中身を読めるようにする。
+ */
+export async function getLineChatStateIgnoringTtl(
+  lineUserId: string,
+): Promise<{ state: string; payload: string | null; ageMin: number } | null> {
+  const database = await getDb();
+  if (!database) return null;
+  const rows: any = await database.execute(sql.raw(
+    `SELECT \`state\`, \`payload\`, TIMESTAMPDIFF(MINUTE, \`updatedAt\`, NOW()) AS ageMin
+     FROM \`lineChatStates\` WHERE \`lineUserId\` = ${escapeSql(lineUserId)} LIMIT 1`
+  ));
+  const r = rows?.[0]?.[0];
+  if (!r) return null;
+  return { state: r.state, payload: r.payload ?? null, ageMin: Number(r.ageMin) };
+}
+
+/** 中身は変えずに、最終更新だけを今にする（続きから再開したときに期限を延ばす） */
+export async function touchLineChatState(lineUserId: string): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  await database.execute(sql.raw(
+    `UPDATE \`lineChatStates\` SET \`updatedAt\` = NOW() WHERE \`lineUserId\` = ${escapeSql(lineUserId)}`
+  ));
 }
 
 /** 状態を消す（1ステップ終わったら必ず呼ぶ） */

@@ -451,6 +451,82 @@ interface CounselingState {
   editing?: number | null;
   /** どのThreadsアカウントの設定か（複数運用時。1つだけなら未設定） */
   accountId?: number | null;
+  /**
+   * 時間が空いたあとに送られてきた文章。
+   * 「続きから再開する」を選ばれたら、いま出している質問への回答として使う。
+   * （再開の確認をしている間、お客様が書いた文章を捨てないため）
+   */
+  pending?: string | null;
+}
+
+/**
+ * 「はじめの設定」を続きから再開できる猶予。
+ * これを過ぎたものは、設定の途中ではなく通常のご質問として扱う。
+ */
+const COUNSELING_RESUME_LIMIT_MIN = 60 * 24 * 14;
+
+/**
+ * 中断している「はじめの設定」があれば、その中身を返す。
+ * いまの状態が別の操作で上書きされている場合は、控えの方を見る。
+ */
+async function unfinishedCounseling(lineUserId: string): Promise<CounselingState | null> {
+  const live = await db.getLineChatStateIgnoringTtl(lineUserId);
+  const raw = live?.state === "counseling" && live.payload
+    ? live
+    : await db.getLineChatStateIgnoringTtl(db.counselingBackupKey(lineUserId));
+  if (!raw || raw.state !== "counseling" || !raw.payload) return null;
+  if (raw.ageMin > COUNSELING_RESUME_LIMIT_MIN) return null;
+  try {
+    const cs: CounselingState = JSON.parse(raw.payload);
+    // 1問も答えていないものは、失うものが無いので再開を持ち出さない
+    if (!cs || typeof cs.step !== "number" || cs.step <= 0) return null;
+    return cs;
+  } catch {
+    return null;
+  }
+}
+
+/** 途中経過の控えを片づける（登録が終わった・やり直すと決めたとき） */
+async function clearCounselingBackup(lineUserId: string): Promise<void> {
+  try {
+    await db.clearLineChatState(db.counselingBackupKey(lineUserId));
+  } catch (e) {
+    console.error("[LineChat] 途中経過の控えの削除に失敗:", e);
+  }
+}
+
+/**
+ * 「続きから再開しますか？」とお尋ねする。
+ * ★お客様がいま書いた文章は payload に預かっておき、再開を選ばれたら回答として使う。
+ */
+async function offerCounselingResume(
+  lineUserId: string,
+  cs: CounselingState,
+  pending?: string,
+): Promise<unknown[]> {
+  const qs = questionsFor(cs.mode);
+  const done = Math.min(cs.step, qs.length);
+  if (pending !== undefined) {
+    cs.pending = pending.slice(0, 500);
+  }
+  // 控えの方に残っていた場合もあるので、いまの状態として書き戻しておく
+  await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
+  const atReview = cs.step >= qs.length;
+  const where = atReview
+    ? "最後の確認まで進んでいます。"
+    : `${qs.length}問のうち ${done}問目まで、お答えいただいています。`;
+  const kept = pending !== undefined && !atReview
+    ? "\n\nいま送っていただいた文章は、お預かりしています。「続きから」を選んでいただくと、そのまま次の回答として使います。"
+    : "";
+  return [textWithQuick(
+    "「はじめの設定」が途中のままになっています。\n" + where + kept +
+    "\n\nどちらになさいますか？",
+    [
+      { label: "続きから", data: "c=resume" },
+      { label: "最初からやり直す", data: `c=start&mode=${cs.mode}&fresh=1` },
+      { label: "設定はやめる", data: "m=cancel" },
+    ],
+  )];
 }
 
 function questionsFor(mode: "store" | "personal") {
@@ -514,6 +590,7 @@ async function advanceCounseling(userId: number, lineUserId: string, st: Counsel
   const a = answer.trim();
   if (/^(やめる|中止|キャンセル)$/.test(a)) {
     await db.clearLineChatState(lineUserId);
+    await clearCounselingBackup(lineUserId);
     return [textWithQuick("はじめの設定を中断しました。「はじめの設定」からいつでも再開できます。", MENU_HINT)];
   }
   // ★「戻る」＝1つ前の質問へ（直している最中なら確認画面へ戻る）
@@ -560,6 +637,7 @@ async function advanceCounseling(userId: number, lineUserId: string, st: Counsel
 /** 確認画面から「登録する」で保存する */
 async function saveCounselingFromChat(userId: number, lineUserId: string, st: CounselingState): Promise<unknown[]> {
   await db.clearLineChatState(lineUserId);
+  await clearCounselingBackup(lineUserId);
   const res = await saveCounselingAnswers({
     userId, projectId: st.projectId, mode: st.mode, answers: st.answers as any,
   });
@@ -792,7 +870,37 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       }];
     }
   }
+  if (q.c === "resume") {
+    const cs = await unfinishedCounseling(lineUserId);
+    if (!cs) {
+      return [textWithQuick("再開できる途中経過が見つかりませんでした。「はじめの設定」から始めてください。", MENU_HINT)];
+    }
+    // 期限を延ばしてから続ける（続けた直後にまた切れないように）
+    await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
+    await db.touchLineChatState(lineUserId);
+    await clearCounselingBackup(lineUserId);
+    const pending = cs.pending;
+    cs.pending = null;
+    await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
+    const qs = questionsFor(cs.mode);
+    if (cs.step >= qs.length) return reviewCounseling(cs);
+    // 預かっていた文章があれば、それを回答として使う（書き直させない）
+    if (pending) {
+      return [
+        { type: "text", text: "続きから再開します。" },
+        ...(await advanceCounseling(user.id, lineUserId, cs, pending)),
+      ];
+    }
+    return [{ type: "text", text: "続きから再開します。" }, ...askQuestion(cs)];
+  }
   if (q.c === "start" && (q.mode === "store" || q.mode === "personal")) {
+    // ★やり直すと、それまでの回答はすべて消える。
+    //   消す前に必ずお尋ねする（「fresh=1」＝やり直すと選んでいただいた場合だけ消す）。
+    if (!q.fresh) {
+      const unfinished = await unfinishedCounseling(lineUserId);
+      if (unfinished) return offerCounselingResume(lineUserId, unfinished);
+    }
+    await clearCounselingBackup(lineUserId);
     // ★どのお店の情報を書き換えるかを決める。
     //   アカウントが指定されていればそのアカウントに紐づく情報、無ければ既存の1件目。
     //   どちらも無ければ新規に作る（他のアカウントの情報を上書きしない）。
@@ -819,6 +927,9 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   if (q.m === "menu") return [textWithQuick("どれをご覧になりますか？", MENU_HINT)];
   if (q.m === "cancel") {
     await db.clearLineChatState(lineUserId);
+    // ★控えも消す。残したままだと、次に文章を送るたびに
+    //   「設定が途中です」とお尋ねし続けてしまう。
+    await clearCounselingBackup(lineUserId);
     return [textWithQuick("中断しました。", MENU_HINT)];
   }
   if (q.m === "link" || q.m === "signup") {
@@ -1072,6 +1183,13 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     ];
   }
   if (q.a === "rw" && q.i) {
+    // ★先に投稿を確かめる。確かめずに指示待ちにすると、お客様が書き直しの希望を
+    //   打ち込んだあとで「見つかりません」と返すことになる（「一部修正」は確認済み）。
+    const post = await ownedPost(user.id, Number(q.i));
+    if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
+    if (post.status !== "awaiting_approval") {
+      return [textWithQuick("この投稿はすでに確認が終わっています。", MENU_HINT)];
+    }
     const items = Object.entries(REWRITE_KINDS).map(([k, v]) => ({ label: v.label, data: `a=rw2&i=${q.i}&k=${k}${q.o ? "&o=1" : ""}` }));
     await db.setLineChatState(lineUserId, "rewrite_free", JSON.stringify({ i: q.i, o: q.o ? 1 : 0 }));
     return [textWithQuick(
@@ -1172,6 +1290,13 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   if (st?.state === "counseling" && st.payload) {
     try {
       const cs: CounselingState = JSON.parse(st.payload);
+      // ★「続きから」を押さずに、そのまま次の文章を送られた場合。
+      //   お預かりしていた文章は、いま届いた文章に置き換わる（同じ質問への答えなので）。
+      //   消しておかないと、あとで「続きから」を押されたときに二重に反映される。
+      if (cs.pending) {
+        cs.pending = null;
+        await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
+      }
       const qs = questionsFor(cs.mode);
       // 全問終わって確認画面を出している状態で数字が来たら「その項目を直す」
       const atReview = cs.step >= qs.length && (cs.editing === null || cs.editing === undefined);
@@ -1300,6 +1425,14 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   // ★紹介コードをそのまま送られた場合は、その場で適用して料金ページへご案内する。
   if (looksLikeReferralCode(t)) return referralLink(lineUserId, t, user.id);
 
+  // ★「はじめの設定」の途中で時間が空いた場合、この文章は回答の続きであることが多い。
+  //   ご質問として扱ってしまうと、お客様が書いた回答がそのまま失われる。
+  //   （実際に、5問答えた方の続きの回答が「お答えできないご質問」になっていた）
+  {
+    const unfinished = await unfinishedCounseling(lineUserId);
+    if (unfinished) return offerCounselingResume(lineUserId, unfinished, t);
+  }
+
   // ★文章でのご質問は、まず自動でお答えする。
   //   （以前は「料金」などの言葉に反応して料金ページのリンクを返すだけで、
   //     「プロプランは何アカウントまで？」のような具体的なご質問に答えられていなかった）
@@ -1366,6 +1499,24 @@ function looksLikeQuestion(t: string): boolean {
 }
 
 /**
+ * 「ご質問」ではなく「ご依頼」のとき、その種類を返す。
+ *
+ * ★お客様が投稿の材料（実績・お客様のエピソード）を送ってこられたり、
+ *   「こう投稿してほしい」と書かれることがある。これは質問ではないので、
+ *   「お答えできないご質問でした」と返すと的外れになる。
+ *   （2026-09-02、お客様が症例を3件送られたのに担当者送りになっていた）
+ */
+function requestKind(t: string): "post" | "material" | null {
+  // 「投稿してほしい」「告知したい」「ネタを作ってほしい」など
+  if (/(投稿|告知|発信|ポスト|ネタ)[^。！？\n]{0,12}(したい|して|作|つくっ|つくり|書い|書き|出し|載せ|上げ|流し)/.test(t)
+      || /(作っ|つくっ|書い|流し|載せ)[^。！？\n]{0,6}(ほしい|欲しい|ください|下さい|たい)/.test(t) && /(投稿|告知|発信|ポスト|ネタ)/.test(t)) return "post";
+  // 実績・症例・お客様のエピソードらしい文章（体験の記述で、依頼の形をしていない）
+  if (t.length >= 25 && /(来院|来店|患者|お客様|お客さん|施術|症状|改善|回復|復帰|卒業|通われ|いらっしゃ)/.test(t)
+      && !/[?？]$/.test(t)) return "material";
+  return null;
+}
+
+/**
  * ご質問に自動でお答えする。
  * 答えられた場合も「担当者に聞く」を必ず添えて、行き止まりにしない。
  */
@@ -1387,6 +1538,37 @@ async function autoAnswer(userId: number, lineUserId: string, question: string):
   //   的外れな返事になる（例：「資本金はいくらですか」に料金ページを出す）。
   //   判断できているときは、下手な当てずっぽうをせず担当者におつなぎする。
   if (res.available) {
+    // ただし「ご質問」ではなく「こう投稿してほしい」というご依頼のことがある。
+    // それに「お答えできないご質問でした」と返すのは的外れで、書いてくださった
+    // 内容もそのまま失われる。何がどこに反映されるのかをお伝えする。
+    const req = requestKind(question);
+    if (req === "material") {
+      return [textWithQuick(
+        "ありがとうございます。実績やお客様のエピソードは、「お店の情報」に登録されたものだけをAIが投稿に使います" +
+        "（登録されていない話を作ることはありません）。\n" +
+        "いただいた内容を投稿で使えるようにするには、「お店の情報」に登録してください。\n\n" +
+        "担当者に伝えたい場合は「担当者に聞く」を押してください。",
+        [
+          { label: "お店の情報", data: "m=profile" },
+          { label: "担当者に聞く", data: `m=staff${res.questionId ? `&q=${res.questionId}` : ""}` },
+          ...MENU_HINT,
+        ],
+      )];
+    }
+    if (req === "post") {
+      return [textWithQuick(
+        "投稿の内容についてのご依頼ですね。\n" +
+        "毎日の投稿はAIが自動で作ります。今日の分の言い回しを変えたい場合は「今日の投稿」から「書き直す」で、ご希望をそのまま文章でお伝えいただけます。\n" +
+        "プロフィールの一番上に置く固定投稿は、「固定投稿を作る」からこのトークで作れます。\n\n" +
+        "この場でご相談されたい場合は「担当者に聞く」を押してください。",
+        [
+          { label: "今日の投稿", data: "m=posts" },
+          { label: "固定投稿を作る", data: "m=makepin" },
+          { label: "担当者に聞く", data: `m=staff${res.questionId ? `&q=${res.questionId}` : ""}` },
+          ...MENU_HINT,
+        ],
+      )];
+    }
     return [textWithQuick(
       "申し訳ありません、こちらではお答えできないご質問でした。\n" +
       "担当者にお伝えしますので、下の「担当者に聞く」を押してください。",

@@ -52,7 +52,7 @@ export function DemoModeBanner() {
     <Alert className="border-primary/50 bg-primary/5 mb-6">
       <div className="flex items-start gap-3">
         <Sparkles className="w-5 h-5 text-primary mt-0.5" />
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <Badge variant="outline" className="border-primary text-primary">
               デモモード
@@ -63,7 +63,8 @@ export function DemoModeBanner() {
             現在、Threads連携なしでツールを体験できるデモモードで利用しています。
             実際にThreadsへ投稿するには、本番モードに切り替えてアカウントを連携してください。
           </AlertDescription>
-          <div className="flex gap-2">
+          {/* ★スマホ幅ではボタンが2つ並びきらず、右のボタンが画面外へ切れていた */}
+          <div className="flex flex-wrap gap-2">
             <Button 
               size="sm" 
               onClick={handleExitDemo}
