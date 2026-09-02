@@ -777,11 +777,19 @@ async function startServer() {
             // 既に課金済み(active)のユーザーには何もしない（トライアルへ巻き戻さない）
             console.log(`[Univapay Webhook] サブスク開始イベントだが既にactive: user=${user.id}（無視）`);
           } else {
-            const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+            // ★紹介コードによるキャンペーン価格は「無料トライアルなし・お申し込み時に初回のお支払い」。
+            //   ここを一律トライアル扱いにすると、即時課金の方に
+            //   「7日間無料です」とお伝えしてしまい、特商法の記載とも食い違う。
+            const planCfg = getPlan(planId);
+            const isCampaignPlan = Boolean(planCfg?.isCampaign);
+            const trialEndsAt = isCampaignPlan
+              ? null
+              : new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+            const status = isCampaignPlan ? 'active' : 'trialing';
             if (existing) {
               await db.updateSubscription(existing.id, {
                 planId,
-                status: 'trialing',
+                status,
                 trialEndsAt,
                 univapaySubscriptionId: univapaySubId ?? existing.univapaySubscriptionId ?? undefined,
                 currentPeriodEnd: trialEndsAt,
@@ -792,29 +800,41 @@ async function startServer() {
                 userId: user.id,
                 planId,
                 univapaySubscriptionId: univapaySubId ?? undefined,
-                status: 'trialing',
+                status,
                 trialEndsAt,
                 currentPeriodEnd: trialEndsAt,
               } as any);
             }
-            console.log(`[Univapay Webhook] トライアル開始→trialing: user=${user.id} plan=${planId} 終了=${trialEndsAt.toISOString()}`);
-            // トライアル開始メール（任意・失敗しても無視）
+            console.log(
+              `[Univapay Webhook] お申し込み→${status}: user=${user.id} plan=${planId} ` +
+              (trialEndsAt ? `トライアル終了=${trialEndsAt.toISOString()}` : 'トライアルなし（キャンペーン価格）'),
+            );
+            // お申し込みのご案内メール（任意・失敗しても無視）
             try {
-              const planName = getPlan(planId)?.name ?? 'プラン';
+              const planName = planCfg?.name ?? 'プラン';
               const { sendEmail } = await import('./notification');
               if (user.email) {
                 await sendEmail({
                   to: user.email,
-                  subject: '【Threads Studio】7日間の無料トライアルが始まりました',
-                  html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
-                    <h2>無料トライアルが始まりました</h2>
-                    <p>${planName} の全機能を、本日から7日間無料でお試しいただけます。</p>
-                    <p>トライアル終了後（8日目）に、登録いただいたカードへ初回のお支払いが発生します。
-                    期間中に停止をご希望の場合は、ダッシュボードからお手続きください。</p>
-                  </div>`,
+                  subject: isCampaignPlan
+                    ? '【Threads Studio】お申し込みありがとうございます'
+                    : '【Threads Studio】7日間の無料トライアルが始まりました',
+                  html: isCampaignPlan
+                    ? `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+                        <h2>お申し込みありがとうございます</h2>
+                        <p>${planName} のご利用を開始いただけます。本日から全機能をお使いいただけます。</p>
+                        <p>紹介コード適用のお申し込みのため、無料トライアルは付かず、初回のお支払いが発生しています。
+                        解約はダッシュボードからいつでもお手続きいただけます。</p>
+                      </div>`
+                    : `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+                        <h2>無料トライアルが始まりました</h2>
+                        <p>${planName} の全機能を、本日から7日間無料でお試しいただけます。</p>
+                        <p>トライアル終了後（8日目）に、登録いただいたカードへ初回のお支払いが発生します。
+                        期間中に停止をご希望の場合は、ダッシュボードからお手続きください。</p>
+                      </div>`,
                 });
               }
-            } catch (e) { console.error('[Univapay Webhook] trial-start mail error:', e); }
+            } catch (e) { console.error('[Univapay Webhook] 申し込み案内メールの送信に失敗:', e); }
           }
         } else {
           console.log(`[Univapay Webhook] 未分類イベント（無視・要構造確認）: event=${eventType} status=${status}`);

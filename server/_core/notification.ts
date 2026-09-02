@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { escapeHtml } from "../../shared/sanitize";
+import { RELATED_SERVICES_OVERVIEW_URL, type RelatedService } from "../../shared/relatedServices";
 
 export type NotificationPayload = {
   title: string;
@@ -222,10 +223,19 @@ const APP_BASE_URL =
 /**
  * 共通の見た目テンプレート
  */
-function emailShell(title: string, body: string, ctaLabel?: string, ctaUrl?: string): string {
+function emailShell(
+  title: string,
+  body: string,
+  ctaLabel?: string,
+  ctaUrl?: string,
+  // 決済以外の用途（サービスのご案内など）で、末尾の断り書きを差し替えるため
+  footerNote?: string,
+): string {
   const cta = ctaLabel && ctaUrl
     ? `<a href="${ctaUrl}" style="display: inline-block; background: #ef4444; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0; font-weight: bold;">${ctaLabel}</a>`
     : '';
+  const footer = footerNote
+    ?? 'このメールは Threads Studio の決済システムから自動送信されています。<br />お心当たりがない場合は、お手数ですがサポートまでご連絡ください。';
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #f9fafb;">
       <div style="background: white; border-radius: 12px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
@@ -234,8 +244,7 @@ function emailShell(title: string, body: string, ctaLabel?: string, ctaUrl?: str
         ${cta}
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
         <p style="color: #9ca3af; font-size: 12px;">
-          このメールは Threads Studio の決済システムから自動送信されています。<br />
-          お心当たりがない場合は、お手数ですがサポートまでご連絡ください。
+          ${footer}
         </p>
       </div>
     </div>
@@ -299,38 +308,88 @@ export async function sendPaymentFailedEmail(
 
 /**
  * 「他に興味のあるサービス」アンケートで選ばれたサービスの案内を、
- * 本人の登録メールへ自動送信する。services は {label, description} の配列。
+ * 本人の登録メールへ自動送信する。
+ *
+ * 書き方の方針:
+ *   ・選ばれたサービスごとに「実際のページ」を必ず見せる。
+ *     以前はメール本文に説明1行と返信用の相談ボタンしか無く、
+ *     ご興味をお持ちの方に「返信する」という一番重い動作しか用意できていなかった。
+ *   ・LPのように実物をお見せできるものは、サンプルのボタンを説明より先に置く。
+ *     見てから相談するほうが、話が早い。
+ *   ・料金は確定しているものだけ書く（shared/relatedServices.ts の price）。
+ *     ページが無いサービスは、説明と相談ボタンだけになる。
  */
-export async function sendRelatedServicesEmail(
-  to: string,
-  services: { label: string; description: string }[],
+export function renderRelatedServicesEmail(
+  services: RelatedService[],
   contactEmail: string,
-): Promise<boolean> {
-  if (services.length === 0) return false;
+): string {
+  const button = (label: string, url: string, primary: boolean) =>
+    `<a href="${url}" style="display:inline-block;${primary
+      ? 'background:#065f46;color:#ffffff;border:1px solid #065f46;'
+      : 'background:#ffffff;color:#065f46;border:1px solid #a7d7c5;'
+    }padding:9px 16px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:bold;margin:0 8px 8px 0;">${escapeHtml(label)}</a>`;
+
   const items = services
-    .map(
-      (s) => `
-        <div style="border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin:10px 0;">
-          <p style="margin:0 0 4px;font-weight:bold;color:#065f46;">${escapeHtml(s.label)}</p>
-          <p style="margin:0;color:#374151;font-size:14px;line-height:1.6;">${escapeHtml(s.description)}</p>
-        </div>`,
-    )
+    .map((s) => {
+      const price = s.price
+        ? `<p style="margin:8px 0 0;color:#065f46;font-size:13px;">料金：${escapeHtml(s.price)}</p>`
+        : '';
+      const sampleNote = s.sample?.note
+        ? `<p style="margin:8px 0 0;color:#6b7280;font-size:13px;line-height:1.6;">${escapeHtml(s.sample.note)}</p>`
+        : '';
+      const buttons = [
+        s.sample ? button(s.sample.label, s.sample.url, true) : '',
+        s.url ? button('サービスの詳細を見る', s.url, !s.sample) : '',
+      ].join('');
+      const buttonRow = buttons ? `<div style="margin-top:12px;">${buttons}</div>` : '';
+      return `
+        <div style="border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin:12px 0;">
+          <p style="margin:0 0 6px;font-weight:bold;color:#065f46;font-size:15px;">${escapeHtml(s.label)}</p>
+          <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;">${escapeHtml(s.description)}</p>
+          ${sampleNote}
+          ${price}
+          ${buttonRow}
+        </div>`;
+    })
     .join('');
+
+  // ページが無いサービスだけを選ばれた場合は、相談以外の導線が無い旨をぼかさず書く
+  const hasLink = services.some((s) => s.url || s.sample);
+  const closing = hasLink
+    ? '気になるものがあれば、上のボタンから中身をご覧ください。お見積り・ご相談は下のボタン、またはこのメールへのご返信でも承ります。'
+    : 'お店の状況をうかがったうえでご提案しますので、下のボタン、またはこのメールへのご返信でお気軽にご連絡ください。';
+
   const mailto = `mailto:${contactEmail}?subject=${encodeURIComponent('サービスの詳細希望')}`;
-  return sendEmail({
-    to,
-    subject: '【Threads Studio】ご興味をお持ちのサービスのご案内',
-    html: emailShell(
+  return emailShell(
       'ご興味をお持ちのサービスのご案内',
       `
         <p>この度は Threads Studio をご利用いただきありがとうございます。</p>
-        <p>アンケートでご興味をお選びいただいた、集客に役立つサービスをご案内します。</p>
+        <p>アンケートでお選びいただいたサービスをご案内します。</p>
         ${items}
-        <p>詳しい資料のご請求・ご相談は、下のボタンからお気軽にご連絡ください（このメールへのご返信でも承ります）。</p>
+        <p style="font-size:14px;line-height:1.7;">${closing}</p>
+        <p style="font-size:13px;color:#6b7280;line-height:1.7;">
+          集客の流れ（ページ作成 → 広告 → SNS → 公式LINE → 計測）の全体像は
+          <a href="${RELATED_SERVICES_OVERVIEW_URL}" style="color:#065f46;">こちらのご案内ページ</a>にまとめています。
+        </p>
       `,
       'このサービスについて相談する',
       mailto,
-    ),
+      'このメールは、Threads Studio のアンケートで「メールでの案内を希望する」とお選びいただいた方にお送りしています。<br />'
+      + `今後のご案内が不要な場合は、このメールへのご返信、または ${escapeHtml(contactEmail)} までその旨をお知らせください。`,
+  );
+}
+
+/** アンケートで選ばれたサービスの案内を、本人の登録メールへ送る。 */
+export async function sendRelatedServicesEmail(
+  to: string,
+  services: RelatedService[],
+  contactEmail: string,
+): Promise<boolean> {
+  if (services.length === 0) return false;
+  return sendEmail({
+    to,
+    subject: '【Threads Studio】ご興味をお持ちのサービスのご案内',
+    html: renderRelatedServicesEmail(services, contactEmail),
   });
 }
 
