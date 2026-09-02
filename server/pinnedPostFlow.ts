@@ -20,6 +20,10 @@ import { generateThreadsPrompt } from "@shared/threadsPrompts";
 export type PinnedDraft = {
   postId: number;
   content: string;
+  /** どのアカウント用の案か（複数アカウント運用で取り違えないための表示用） */
+  accountUsername: string;
+  /** 「作り直す」で同じアカウントに作り直すためのID */
+  accountId: number;
 };
 
 const JSON_SCHEMA = {
@@ -40,21 +44,21 @@ const JSON_SCHEMA = {
 } as const;
 
 /**
- * Threadsの1投稿上限（500文字）に対する安全網。
- * 固定投稿のノウハウは本文400〜500字でじっくり読ませる構成なので、
- * 上限ぎりぎりの490まで許す（460だとノウハウ通りの本文が途中で切れる）。
+ * Threadsの1投稿上限（500文字）への収め方。
+ * 「…」で機械的に切ると文の途中で終わった投稿がそのまま公開される
+ * （実際に多発・2026-09-02指摘）。段落単位で後ろから落とし、
+ * 締めの一言（コメント欄への誘導）は必ず残す。
  */
-function capLength(s: string): string {
-  const LIMIT = 490;
-  const chars = Array.from(s);
-  return chars.length > LIMIT ? chars.slice(0, LIMIT - 1).join("") + "…" : s;
-}
+const PINNED_CHAR_BUDGET = 490;
 
 /**
  * 固定投稿を1件つくり、承認待ちとして保存する。
  * まだThreadsには出ない（お客様が内容を見て「これで投稿する」を押してから公開する）。
+ *
+ * @param accountId どのアカウント用に作るか。複数アカウント運用では呼び出し側で
+ *   選んでもらってから渡す（省略時は1つ目＝単一アカウント運用向け）。
  */
-export async function createPinnedDraft(userId: number): Promise<PinnedDraft | { error: string }> {
+export async function createPinnedDraft(userId: number, accountId?: number | null): Promise<PinnedDraft | { error: string }> {
   const accounts = (await db.getThreadsAccountsByUserId(userId).catch(() => [])) || [];
   const active = accounts.filter((a: any) => a.isActive !== false);
   if (active.length === 0) {
@@ -70,8 +74,13 @@ export async function createPinnedDraft(userId: number): Promise<PinnedDraft | {
     return { error: "まだ「お店の情報」が登録されていないため、投稿を作れません。先に「はじめの設定」をお願いします。" };
   }
 
-  // 紐づけがあればその店舗、なければ最初の店舗を使う
-  const account: any = active[0];
+  // 指定されたアカウント（本人のもの限定）。指定が無ければ1つ目。
+  const account: any = accountId
+    ? active.find((a: any) => Number(a.id) === Number(accountId))
+    : active[0];
+  if (!account) {
+    return { error: "そのアカウントが見つかりませんでした。「固定投稿」からやり直してください。" };
+  }
   const project: any =
     (account.defaultProjectId && usable.find((p: any) => p.id === account.defaultProjectId)) || usable[0];
 
@@ -138,7 +147,8 @@ export async function createPinnedDraft(userId: number): Promise<PinnedDraft | {
     const main = String(parsed.mainPost || "").trim();
     const cta = String(parsed.cta || "").trim();
     if (!main) throw new Error("本文が空です");
-    content = capLength(cta ? `${main}\n\n${cta}` : main);
+    const { trimToBudget } = await import("../shared/postLength");
+    content = trimToBudget(main, cta || null, PINNED_CHAR_BUDGET);
   } catch (e) {
     console.error("[PinnedFlow] 固定投稿の生成に失敗:", e);
     return { error: "投稿をうまく作れませんでした。少し時間をおいて、もう一度お試しください。" };
@@ -169,7 +179,7 @@ export async function createPinnedDraft(userId: number): Promise<PinnedDraft | {
     const mine = all
       .filter((p: any) => p.status === "awaiting_approval" && p.postContent === content)
       .sort((a: any, b: any) => Number(b.id) - Number(a.id));
-    if (mine[0]) return { postId: Number(mine[0].id), content };
+    if (mine[0]) return { postId: Number(mine[0].id), content, accountUsername: String(account.threadsUsername || ""), accountId: Number(account.id) };
   } catch (e) {
     console.error("[PinnedFlow] 保存した投稿の取得に失敗:", e);
   }

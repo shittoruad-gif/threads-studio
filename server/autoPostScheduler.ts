@@ -10,7 +10,7 @@ import cron from "node-cron";
 import * as db from "./db";
 import { getPlan } from "../shared/plans";
 import { buildCtaText } from "../shared/autoPostCta";
-import { charBudgetFor, resolveWithAlternation, POST_LENGTHS } from "../shared/postLength";
+import { charBudgetFor, resolveWithAlternation, POST_LENGTHS, trimToBudget } from "../shared/postLength";
 import { checkNaturalized, polishPunctuation } from "../shared/jpQualityGuard";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
@@ -237,37 +237,6 @@ ${text}
   }
 }
 
-/**
- * 本文を段落単位で文字数予算内に収める。
- * 文の途中でぶつ切りにせず、後ろの段落から丸ごと落とす（最低1段落は残す）。
- * CTA付きの場合はCTA段落を保持し、本文側の段落を削る。
- */
-function trimToBudget(mainPost: string, cta: string | null, budget: number): string {
-  const parts = mainPost.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
-  const ctaPart = (cta || '').trim();
-  const len = (s: string) => Array.from(s).length;
-  const assemble = (blocks: string[], withCta: boolean) =>
-    [...blocks, ...(withCta && ctaPart ? [ctaPart] : [])].join('\n\n');
-
-  let blocks = parts;
-  while (blocks.length > 1 && len(assemble(blocks, true)) > budget) {
-    blocks = blocks.slice(0, -1);
-  }
-
-  // ★本文の保護：CTAを守るために本文が1段落（フックだけ）まで削られたら、
-  //   CTAを落として本文を優先する。「9割が知らないこと。」とだけ書いて
-  //   中身が無い投稿が実際に配信された（2026-08-26 検出・投稿725）。
-  //   フックは中身の予告なので、中身が無いならフック＋CTAは成立しない。
-  if (ctaPart && blocks.length === 1 && parts.length > 1) {
-    let bodyOnly = parts;
-    while (bodyOnly.length > 1 && len(assemble(bodyOnly, false)) > budget) {
-      bodyOnly = bodyOnly.slice(0, -1);
-    }
-    if (bodyOnly.length > 1) return assemble(bodyOnly, false);
-  }
-
-  return assemble(blocks, true);
-}
 
 // Optimal posting times (JST hours)
 // 2026-08 実測分析（114アカウント・3.2万投稿）の結果で全面更新:

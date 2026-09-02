@@ -890,13 +890,26 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   }
   // ── 固定投稿：作る → 内容を見る → 公開する まで、トークの中で終わらせる ──
   if (q.m === "makepin") {
+    // ★複数アカウント運用では、先にどのアカウント用かを選んでもらう。
+    //   固定投稿はアカウント（＝お店）ごとに必要で、黙って1つ目に作ると
+    //   別のお店のプロフィールに違う店の入口が固定される事故になる。
+    //   （「はじめの設定」の c=acct と同じ考え方）
+    if (!q.a) {
+      const accounts = (await db.getThreadsAccountsByUserId(user.id)).filter((a: any) => a.isActive !== false);
+      if (accounts.length >= 2) {
+        return [textWithQuick(
+          "どのアカウントの固定投稿を作りますか？\nアカウントごとに、紐づいたお店の情報で作ります。",
+          accounts.slice(0, 10).map((a: any) => ({ label: `@${a.threadsUsername}`, data: `m=makepin&a=${a.id}` })),
+        )];
+      }
+    }
     const { createPinnedDraft } = await import("./pinnedPostFlow");
-    const res = await createPinnedDraft(user.id);
+    const res = await createPinnedDraft(user.id, q.a ? Number(q.a) : null);
     if ("error" in res) {
       return [textWithQuick(res.error, MENU_HINT)];
     }
     return [
-      { type: "text", text: "固定投稿の案ができました。内容をご確認ください。" },
+      { type: "text", text: `固定投稿の案ができました（@${res.accountUsername} 用）。内容をご確認ください。` },
       { type: "text", text: res.content },
       textWithQuick(
         "この内容でよろしければ「これで投稿する」を押してください。\n" +
@@ -905,7 +918,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         [
           { label: "これで投稿する", data: `a=ok&i=${res.postId}` },
           { label: "一部修正", data: `a=selfedit&i=${res.postId}` },
-          { label: "作り直す", data: "m=makepin" },
+          { label: "作り直す", data: `m=makepin&a=${res.accountId}` },
           { label: "やめる", data: "m=menu" },
         ],
       ),

@@ -28,7 +28,8 @@ describe("固定投稿プロンプトのノウハウ反映", () => {
 
   it("構成ルール（7つの必須要素）が入る", () => {
     expect(prompt).toContain("固定投稿（プロフィール固定用）の構成ルール");
-    expect(prompt).toContain("400〜500文字");
+    expect(prompt).toContain("350〜430文字");
+    expect(prompt).toContain("合計を必ず470文字以内");
     expect(prompt).toContain("固定投稿表示5万3000回"); // 実例の勝ちパターン
   });
 
