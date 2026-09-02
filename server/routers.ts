@@ -2065,6 +2065,19 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           const isMedia = input.mediaType && input.mediaType !== 'TEXT';
           const segments = isMedia ? [] : splitThreadSegments(input.text);
 
+          // ★連続投稿（2件目以降）は「返信を作成する」操作＝threads_manage_replies が必要。
+          //   権限の無い連携でツリーを投げると、1件目だけ公開→2件目で権限エラーになり、
+          //   「エラー表示なのにThreadsには途中まで載っている」という最悪の状態になる
+          //   （2026-09-02 梅原様で発生）。投稿を始める前に止める。
+          if (!isMedia && segments.length > 1 && (account as any).hasReplyScope === false) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message:
+                '連続投稿（ツリー）は、Meta社の追加審査の承認待ちのため、この連携ではまだ使えません。\n' +
+                'お手数ですが、ツリーなし（1投稿・500文字以内）で作り直してから投稿してください。承認され次第、そのまま使えるようになります。',
+            });
+          }
+
           // トピックタグ（設定ONのとき、店舗情報から1つ自動付与。発見性UP）
           let topicTag: string | undefined;
           if (ctx.user && (ctx.user as any).autoTopicTag !== false) {
@@ -2117,9 +2130,22 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           };
         } catch (error) {
           console.error('[Threads Post Error]', error);
-          throw new TRPCError({ 
-            code: 'INTERNAL_SERVER_ERROR', 
-            message: `投稿に失敗しました: ${toPublicErrorMessage(error)}` 
+          // ★ツリーの途中失敗：1件目はThreads上に公開済み。
+          //   「投稿に失敗しました」とだけ出すと、公開済みなのに作り直して
+          //   再投稿→1件目が二重、という事故になる。事実をそのまま伝える。
+          const { PartialThreadError } = await import('./threadsPost');
+          if (error instanceof PartialThreadError) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message:
+                '1件目の投稿はThreadsに公開されています。続き（2件目以降）の公開に失敗しました。\n' +
+                '同じ投稿を作り直して再投稿しないでください（1件目が二重になります）。' +
+                '続きを載せたい場合は、Threadsアプリでその投稿に返信の形で追加してください。',
+            });
+          }
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `投稿に失敗しました: ${toPublicErrorMessage(error)}`
           });
         }
       }),

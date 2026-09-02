@@ -2254,6 +2254,12 @@ export default function AIGenerate() {
               disabled={publishNow.isPending || !selectedAccountId || !editedPost}
               onClick={() => {
                 if (!selectedAccountId || !editedPost) return;
+                // ★ツリー投稿は返信権限（Meta審査承認待ち）が必要。権限の無い連携で
+                //   送ると1件目だけ公開される事故になるため、送信前に案内して止める。
+                if (editedPost.treePosts.length > 0 && (selectedAccount as any)?.hasReplyScope === false) {
+                  toast.error(t('連続投稿（ツリー）は、Meta社の追加審査の承認待ちのため、この連携ではまだ使えません。ツリーなし（1投稿）で作り直してから投稿してください。'));
+                  return;
+                }
                 const text = buildThreadContent(editedPost);
                 publishNow.mutate({
                   accountId: selectedAccountId,

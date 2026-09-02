@@ -756,6 +756,7 @@ export const dict: Record<string, string> = {
   "開く": "Open",
   "表示名（例: LINE登録）": "Display name (e.g. LINE sign-up)",
   "URLを追加": "Add a URL",
+  "連続投稿（ツリー）は、Meta社の追加審査の承認待ちのため、この連携ではまだ使えません。ツリーなし（1投稿）で作り直してから投稿してください。": "Threaded posts (replies) are pending Meta's additional review and aren't available for this connection yet. Please regenerate as a single post and try again.",
   "お客様をご案内したい先を1つ登録すれば十分です。全部埋める必要はありません。おすすめは公式LINEです。": "Registering just one destination is enough — you don't need to fill in everything. We recommend your official LINE.",
   "公式LINEが無い場合（Web予約・ホームページなどを登録する）": "No official LINE? (register a booking page, website, etc.)",
   "URLを追加（1つで十分です。全部埋める必要はありません）": "Add a URL (one is enough — no need to fill in everything)",
