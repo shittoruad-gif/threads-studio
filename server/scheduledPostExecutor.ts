@@ -263,17 +263,42 @@ export async function executePendingPosts() {
         //   本文にURLを貼るとThreadsで到達が落ちるため、本文は「コメント欄から」へ誘導し、
         //   実際のURLはこのコメントに置く（固定投稿の集客導線の要）。
         //   公式LINEが未登録なら出さない（辿り着けない窓口へ誘導しない）。
-        if ((post as any).angle === 'pinned' && !(post as any).replyToThreadsId && canReply) {
+        if ((post as any).angle === 'pinned' && !(post as any).replyToThreadsId) {
           try {
             const { attachLineUrlComment } = await import('./pinnedPostFlow');
-            const replyId = await attachLineUrlComment({
-              accessToken,
-              threadsUserId: account.threadsUserId,
-              rootThreadsPostId: result.id,
-              project: postProject as any,
-            });
-            if (replyId) console.log(`[Scheduled Post] Pinned LINE comment posted for post ${post.id} (reply=${replyId})`);
-            else console.log(`[Scheduled Post] pinned LINE comment skipped for post ${post.id} (公式LINE未登録)`);
+            if (canReply) {
+              const replyId = await attachLineUrlComment({
+                accessToken,
+                threadsUserId: account.threadsUserId,
+                rootThreadsPostId: result.id,
+                project: postProject as any,
+              });
+              if (replyId) console.log(`[Scheduled Post] Pinned LINE comment posted for post ${post.id} (reply=${replyId})`);
+              else console.log(`[Scheduled Post] pinned LINE comment skipped for post ${post.id} (公式LINE未登録)`);
+            } else {
+              // ★返信権限（threads_manage_replies）がMeta審査の承認待ちのアカウントでは
+              //   自動でコメントを付けられない。黙ってスキップすると本文が
+              //   「コメント欄のリンクから」と案内しているのにリンクが無い投稿になるため、
+              //   コピーして貼るだけのコメント文をLINEでお渡しし、手動1回で済むようにする。
+              const { parseProjectLinks } = await import('../shared/projectLinks');
+              const links = parseProjectLinks((postProject as any)?.links || null);
+              const lineLink = links.find((l) => l.type === 'line' && !!l.url);
+              if (lineLink) {
+                const { pushMessages } = await import('./lineNotify');
+                const targets = await db.getLineUserIdsForUser(post.userId);
+                for (const to of targets) {
+                  await pushMessages(to, [
+                    { type: 'text', text:
+                      '固定投稿を公開しました。あとひとつだけお願いがあります。\n\n' +
+                      '公式LINEへのリンクを自動でコメントする機能が、現在Meta社の審査の承認待ちです。\n' +
+                      'お手数ですが、Threadsアプリで先ほどの固定投稿を開き、下の文をそのままコメントしてください。' },
+                    { type: 'text', text: `LINEのご登録・ご相談はこちらから↓\n${lineLink.url}` },
+                    { type: 'text', text: '上の文を長押しでコピー → 固定投稿の「返信を追加」に貼り付けて送信、で完了です。\nこのコメントが、固定投稿からLINEへつながる入口になります。' },
+                  ]);
+                }
+                console.log(`[Scheduled Post] Pinned LINE comment: manual-guide sent for post ${post.id} (返信権限の承認待ち)`);
+              }
+            }
           } catch (e) {
             // コメントは付加機能。失敗しても本体投稿は成功として扱う。
             console.error(`[Scheduled Post] pinned LINE comment failed for post ${post.id}:`, e);
