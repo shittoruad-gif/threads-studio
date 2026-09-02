@@ -900,9 +900,11 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       { type: "text", text: res.content },
       textWithQuick(
         "この内容でよろしければ「これで投稿する」を押してください。\n" +
-        "押すとThreadsに公開されます。公開のあと、プロフィールへのピン留めが必要です。",
+        "押すとThreadsに公開されます。公開のあと、プロフィールへのピン留めが必要です。\n" +
+        "ご自身で直したいときは「一部修正」を押してください。",
         [
           { label: "これで投稿する", data: `a=ok&i=${res.postId}` },
+          { label: "一部修正", data: `a=selfedit&i=${res.postId}` },
           { label: "作り直す", data: "m=makepin" },
           { label: "やめる", data: "m=menu" },
         ],
@@ -988,6 +990,22 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     return [
       { type: "text", text: "取り消しました。もう一度ご確認ください。" },
       buildPostCards([withName]),
+    ];
+  }
+  // ── 一部修正：AIを通さず、ご自身で直した全文にそのまま置き換える ──
+  //   「作り直す」(AI再生成)・「書き直す」(AIに指示)との違いは、
+  //   ご本人の言葉がそのまま最終文になること。微調整したいだけの方向け。
+  if (q.a === "selfedit" && q.i) {
+    const post = await ownedPost(user.id, Number(q.i));
+    if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
+    if (post.status !== "awaiting_approval") {
+      return [textWithQuick("この投稿はすでに確認が終わっています。", MENU_HINT)];
+    }
+    await db.setLineChatState(lineUserId, "self_edit", JSON.stringify({ i: Number(q.i), o: q.o ? 1 : 0 }));
+    return [
+      { type: "text", text: "下の全文を長押しでコピーし、直したい箇所を変えて、そのまま送り返してください。届いた文にまるごと置き換えます。" },
+      { type: "text", text: post.postContent || "" },
+      textWithQuick("やめる場合は「やめる」と送ってください。", [{ label: "やめる", data: "m=cancel" }]),
     ];
   }
   if (q.a === "rw" && q.i) {
@@ -1124,10 +1142,39 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   // ★入力待ちの途中で「やめる」と打たれたら、その言葉を内容として使わずに抜ける。
   //   （NGワード待ち・書き直し待ちでこれが無く、「やめる」がそのまま
   //     NGワードや書き直し指示として使われてしまっていた）
-  if ((st?.state === "ngword" || st?.state === "rewrite_free") &&
+  if ((st?.state === "ngword" || st?.state === "rewrite_free" || st?.state === "self_edit") &&
       /^(やめる|中止|キャンセル|戻る|終わり|終了)$/.test(text.trim())) {
     await db.clearLineChatState(lineUserId);
     return [textWithQuick("わかりました。中止しました。", MENU_HINT)];
+  }
+  // ── 一部修正：送られてきた全文で、そのまま置き換える ──
+  if (st?.state === "self_edit" && st.payload) {
+    let postId = 0, one = false;
+    try { const p = JSON.parse(st.payload); postId = Number(p.i); one = !!p.o; } catch { postId = Number(st.payload); }
+    const next = text.trim();
+    // Threadsの1投稿上限（500字）。超えたら状態を保ったまま、削ってもらう
+    if (Array.from(next).length > 500) {
+      return [{ type: "text", text: `文字数が${Array.from(next).length}字あります。Threadsは1投稿500字までのため、${Array.from(next).length - 500}字ほど削って、もう一度お送りください。` }];
+    }
+    if (next.length < 10) {
+      return [{ type: "text", text: "内容が短すぎるようです。全文をコピーして直したものをお送りください。やめる場合は「やめる」と送ってください。" }];
+    }
+    await db.clearLineChatState(lineUserId);
+    const post = await ownedPost(user.id, postId);
+    if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
+    if (post.status !== "awaiting_approval") {
+      return [textWithQuick("この投稿はすでに確認が終わっています。", MENU_HINT)];
+    }
+    await db.updateScheduledPost(postId, { postContent: next });
+    return [
+      { type: "text", text: "直しました。この内容でよろしければ「これで投稿する」を押してください。" },
+      { type: "text", text: next },
+      textWithQuick("さらに直す場合は「一部修正」を押してください。", [
+        { label: "これで投稿する", data: `a=ok&i=${postId}${one ? "&o=1" : ""}` },
+        { label: "一部修正", data: `a=selfedit&i=${postId}${one ? "&o=1" : ""}` },
+        { label: "やめる", data: "m=cancel" },
+      ]),
+    ];
   }
   if (st?.state === "rewrite_free" && st.payload) {
     await db.clearLineChatState(lineUserId);
