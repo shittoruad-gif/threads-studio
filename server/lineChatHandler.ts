@@ -604,10 +604,28 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
       [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT],
     )];
   }
+  // ★契約中の方には、最後に「自動投稿を始めるか」をご本人に決めていただく。
+  //   黙ってONで始めると、心の準備がないうちにお店の名前で投稿が公開される。
+  //   逆に黙ってOFFだと「契約したのに何も起きない」になる。どちらも避ける。
+  let curSettings: any = null;
+  try { curSettings = await db.getAutoPostSettings(userId); } catch { curSettings = null; }
+  const want = curSettings?.autoPostFrequency === "three_daily" ? 3
+    : curSettings?.autoPostFrequency === "twice_daily" ? 2 : 1;
+  const perDay = Math.min(want, maxPerDay);
+  const approvalNote = curSettings?.autoPostRequireApproval
+    ? "公開する前に、このトークで内容を確認できます。\n"
+    : "確認なしでそのまま公開されます（「設定」で公開前の確認に変えられます）。\n";
   return [textWithQuick(
     head +
-    "この内容をもとに、AIが毎日の投稿を作ります。できあがった投稿は、このトークでお知らせします。",
-    MENU_HINT,
+    "最後に1つだけ、お伺いします。\n\n" +
+    "毎日の自動投稿を、いまから始めますか？\n\n" +
+    `始めると、明日から1日${perDay}回、この内容をもとにAIが投稿を作ります。\n` +
+    approvalNote +
+    "\nあとから「設定」でいつでも切り替えられます。",
+    [
+      { label: "自動投稿を始める", data: "c=setupauto&v=on" },
+      { label: "いまは始めない", data: "c=setupauto&v=off" },
+    ],
   )];
 }
 
@@ -710,6 +728,39 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   }
   if (q.c === "newpj" && q.a) {
     return startCounseling(lineUserId, Number(q.a));
+  }
+  // はじめの設定の最後で「自動投稿を始めますか？」にお答えいただいたとき。
+  if (q.c === "setupauto") {
+    const on = q.v === "on";
+    // 念のため、自動投稿が使えないプランでONにしない（案内と実態の食い違いを防ぐ）
+    const { plan } = await planOf(user.id);
+    const maxPerDay = Number(plan?.features?.maxAutoPostsPerDay ?? 0);
+    if (on && maxPerDay <= 0) {
+      const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+      return [textWithQuick(
+        `ご利用中の${plan?.name ?? "プラン"}では、自動投稿はご利用いただけません。\n` +
+        `毎日の自動投稿をご利用になるには、プランのご変更が必要です。\n${base}/pricing?openExternalBrowser=1`,
+        MENU_HINT,
+      )];
+    }
+    await db.updateAutoPostSettings(user.id, { autoPostEnabled: on });
+    if (!on) {
+      return [textWithQuick(
+        "承知しました。自動投稿は始めずにおきます。\n\n" +
+        "始めたくなったら「設定」からいつでもONにできます。\n" +
+        "その場でお試しの投稿を作ることもできます。",
+        [{ label: "やっぱり始める", data: "c=setupauto&v=on" }, ...MENU_HINT],
+      )];
+    }
+    let s: any = null;
+    try { s = await db.getAutoPostSettings(user.id); } catch { s = null; }
+    const want = s?.autoPostFrequency === "three_daily" ? 3 : s?.autoPostFrequency === "twice_daily" ? 2 : 1;
+    return [textWithQuick(
+      `自動投稿を始めました。明日から1日${Math.min(want, maxPerDay)}回、投稿を作ります。\n` +
+      "できあがった投稿は、このトークでお知らせします。\n\n" +
+      "止めたくなったら「設定」からいつでもOFFにできます。",
+      [{ label: "やっぱり止める", data: "c=setupauto&v=off" }, ...MENU_HINT],
+    )];
   }
   if (q.c === "pin" && q.a && q.p) {
     const accounts = await db.getThreadsAccountsByUserId(user.id);
