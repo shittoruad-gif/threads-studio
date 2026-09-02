@@ -1244,9 +1244,17 @@ ${postTypeDescription}${localNote}${trendNote}${seasonalNote}${regionalRefNote}$
 ${treeCount === 0 ? 'ツリーは使わず、本文のみで完結させてください。treePostsは空配列にしてください。' : `★treePosts 配列は「ちょうど ${treeCount} 個」の文字列要素にすること。${treeCount - 1}個や${treeCount + 1}個は不可。過不足があれば内容を分割・統合して必ず${treeCount}個に揃えてから出力すること。`}
 必ずJSON形式で出力してください。`;
 
+  // ★固定投稿は、実測ノウハウの構成ルール（POST_TYPE_SUPPLEMENTS.pinned：
+  //   7つの必須要素・信頼感のあるトーン・400〜500字・実例の勝ちパターン）を
+  //   末尾に必ず足す。定義だけあって配線されておらず、固定投稿が
+  //   ノウハウを無視した内容で出ていた（2026-09-02検出）。
+  //   末尾に置くのは、末尾の指示が最も守られやすいため（angleNoteと同じ考え方）。
+  //   他タイプのSUPPLEMENTSは毎日の自動投稿の出方が大きく変わるため、検証してから配線する。
+  const pinnedSupplement = input.postType === 'pinned' ? POST_TYPE_SUPPLEMENTS.pinned : '';
+
   // 空セクションが連結して 3 連以上の空行を作るのを正規化（トークン浪費防止）。
   // 行末の空白も除去。意味は変えず見た目だけ整える。
-  return assembled
+  return (assembled + pinnedSupplement)
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

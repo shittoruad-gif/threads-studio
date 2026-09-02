@@ -39,9 +39,13 @@ const JSON_SCHEMA = {
   },
 } as const;
 
-/** 480文字を超えないように切る（Threadsの1投稿上限に対する安全網） */
+/**
+ * Threadsの1投稿上限（500文字）に対する安全網。
+ * 固定投稿のノウハウは本文400〜500字でじっくり読ませる構成なので、
+ * 上限ぎりぎりの490まで許す（460だとノウハウ通りの本文が途中で切れる）。
+ */
 function capLength(s: string): string {
-  const LIMIT = 460;
+  const LIMIT = 490;
   const chars = Array.from(s);
   return chars.length > LIMIT ? chars.slice(0, LIMIT - 1).join("") + "…" : s;
 }
@@ -78,6 +82,21 @@ export async function createPinnedDraft(userId: number): Promise<PinnedDraft | {
   const { parseProjectLinks } = await import("../shared/projectLinks");
   const projectLinks = parseProjectLinks(project.links || null);
 
+  // ★アプリの生成経路（project.generatePost）と同じ材料をそろえる。
+  //   ここが欠けると、固定投稿のノウハウ（カウンセリング結果・口調の好み・
+  //   NGワード・地域語の承認済みリスト）が反映されず、劣化版の固定投稿になる。
+  const { parseNgWords } = await import("../shared/ngwords");
+  const { approvedLocalTerms } = await import("./localGeo");
+  const ngWords = parseNgWords(project.ngWords || null);
+  let counselingResult: any = null;
+  if (project.counselingResult) {
+    try { counselingResult = JSON.parse(project.counselingResult); } catch { /* 壊れていれば無し扱い */ }
+  }
+  let stylePreference: any = null;
+  if (project.stylePreference) {
+    try { stylePreference = JSON.parse(project.stylePreference); } catch { /* 同上 */ }
+  }
+
   let content = "";
   try {
     const prompt = generateThreadsPrompt({
@@ -86,11 +105,12 @@ export async function createPinnedDraft(userId: number): Promise<PinnedDraft | {
       storeName: project.storeName,
       businessType: project.businessType,
       area: project.area,
-      localTerms: project.localTerms,
+      localTerms: approvedLocalTerms(project),
       target: project.target,
       mainProblem: project.mainProblem,
       strength: project.strength,
       proof: project.proof,
+      styleSamples: project.styleSamples || undefined,
       usp: project.usp,
       n1Customer: project.n1Customer,
       belief: project.belief,
@@ -98,13 +118,18 @@ export async function createPinnedDraft(userId: number): Promise<PinnedDraft | {
       customerWords: project.customerWords,
       ctaLink: project.ctaLink,
       links: projectLinks.map((l) => ({ type: l.type, label: l.label, url: l.url })),
-      useThreadsKnowhow: project.useThreadsKnowhow,
-      stylePreference: project.stylePreference,
-      ngWords: project.ngWords,
+      counseling: counselingResult,
+      useThreadsKnowhow: project.useThreadsKnowhow !== false,
+      stylePreference,
+      ngWords,
     } as any);
 
+    // 個人ブランディングモードの店舗は、発信者設定を最優先で上書き（アプリ経路と同じ）
+    const { isPersonalMode, personalModePromptOverride } = await import("../shared/personalBrand");
+    const personalOverride = isPersonalMode(project.mode) ? personalModePromptOverride() : "";
+
     const res: any = await invokeLLM({
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "user", content: prompt + personalOverride }],
       response_format: JSON_SCHEMA as any,
     });
     const raw = res?.choices?.[0]?.message?.content;
