@@ -837,6 +837,27 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     await resetToDefaultRichMenu(lineUserId);
     return [{ type: "text", text: LINE_TEXTS.unlinked }];
   }
+  // ── 固定投稿：作る → 内容を見る → 公開する まで、トークの中で終わらせる ──
+  if (q.m === "makepin") {
+    const { createPinnedDraft } = await import("./pinnedPostFlow");
+    const res = await createPinnedDraft(user.id);
+    if ("error" in res) {
+      return [textWithQuick(res.error, MENU_HINT)];
+    }
+    return [
+      { type: "text", text: "固定投稿の案ができました。内容をご確認ください。" },
+      { type: "text", text: res.content },
+      textWithQuick(
+        "この内容でよろしければ「これで投稿する」を押してください。\n" +
+        "押すとThreadsに公開されます。公開のあと、プロフィールへのピン留めが必要です。",
+        [
+          { label: "これで投稿する", data: `a=ok&i=${res.postId}` },
+          { label: "作り直す", data: "m=makepin" },
+          { label: "やめる", data: "m=menu" },
+        ],
+      ),
+    ];
+  }
   if (q.m === "addstaff") return issueStaffLinkCode(user.id);
   if (q.m === "sendq" && q.q) {
     await db.clearLineChatState(lineUserId);
@@ -871,6 +892,24 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     if (q.o) {
       const next = await replyOneWaiting(user.id, done + "\n（間違えた場合は「取り消す」を押してください）");
       return next;
+    }
+    // ★固定投稿を公開したときは、そのままピン留めまで案内する。
+    //   公開しただけではプロフィールの入口にならないため、ここで切らさない。
+    //   （まだ一度もピン留めの確認をしていない方にだけお伝えする）
+    let needPinGuide = false;
+    try { needPinGuide = !(await db.isPinnedPostConfirmed(user.id)); } catch { needPinGuide = false; }
+    if (needPinGuide) {
+      const { pinGuideText } = await import("@shared/pinGuide");
+      return [
+        textWithQuick(done + "\n\n間違えて押した場合は「取り消す」で元に戻せます。", undo),
+        textWithQuick(
+          "公開されたら、最後にひとつだけお願いします。\n\n" +
+          // ここは公開の手続きが済んだ直後なので、公開の手順は出さない
+          pinGuideText({ withPublishSteps: false }) +
+          "\n\n終わったら、下の「ピン留めしました」を押してください。",
+          [{ label: "ピン留めしました", data: "n=pinned" }],
+        ),
+      ];
     }
     return [textWithQuick(done + "\n\n間違えて押した場合は「取り消す」で元に戻せます。", undo)];
   }

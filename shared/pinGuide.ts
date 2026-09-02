@@ -44,13 +44,23 @@ export const PIN_NOTES: string[] = [
   "内容を作り直したときは、新しい投稿をあらためてピン留めしてください",
 ];
 
-/** LINE・メール本文用のプレーンテキスト */
-export function pinGuideText(): string {
+/**
+ * LINE・メール本文用のプレーンテキスト。
+ *
+ * withPublishSteps=false は「すでに公開まで終わっている方」向け。
+ * 公開したばかりの方に「先に公開してください」と出すと矛盾するため、
+ * 呼ぶ側で切り替える。
+ */
+export function pinGuideText(opts: { withPublishSteps?: boolean } = {}): string {
+  const withPublish = opts.withPublishSteps !== false;
+  const publishPart = withPublish
+    ? "【先に、Threadsへ公開してください】\n" +
+      PIN_PREREQ_STEPS.map((s, i) => `${i + 1}. ${s}`).join("\n") +
+      "\n\n【そのあと、Threadsアプリでピン留めします】\n"
+    : "【Threadsアプリでのピン留めのしかた】\n";
   return (
     `${PIN_WHY}\n\n` +
-    "【先に、Threadsへ公開してください】\n" +
-    PIN_PREREQ_STEPS.map((s, i) => `${i + 1}. ${s}`).join("\n") +
-    "\n\n【そのあと、Threadsアプリでピン留めします】\n" +
+    publishPart +
     PIN_STEPS.map((s, i) => `${i + 1}. ${s}`).join("\n") +
     "\n\n" +
     PIN_NOTES.map((n) => `※ ${n}`).join("\n")

@@ -240,9 +240,9 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
       text:
         "次にやることが1つあります。\n\n" +
         "プロフィールに固定しておく「固定投稿」がまだ作られていません。\n" +
-        "はじめて見に来た方が最初に読む投稿なので、集客の入口になります。\n" +
-        `こちらから作れます。\n${base}/ai-generate?pinned=1&openExternalBrowser=1`,
-      buttons: [],
+        "はじめて見に来た方が最初に読む投稿なので、集客の入口になります。\n\n" +
+        "下のボタンを押すと、このトークの中で作って、そのまま公開できます。",
+      buttons: [{ label: "固定投稿を作る", data: "m=makepin" }],
     };
   }
 
@@ -258,10 +258,13 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
         "次にやることが1つあります。\n\n" +
         "固定投稿は作れていますが、まだThreadsに公開されていません。\n" +
         "AIで作った時点では、その投稿はまだThreadsに出ていない状態です。\n\n" +
-        "できあがった内容を確認して「今すぐThreadsに投稿」を押すと、Threadsに公開されます。\n" +
-        `${base}/ai-generate?pinned=1&openExternalBrowser=1\n\n` +
-        "公開できたら、そのあとThreadsアプリでプロフィールにピン留めしてください。",
-      buttons: [{ label: "ピン留めのやり方", data: "n=pinhow" }],
+        "下の「今日の投稿」を押すと、公開をお待ちしている投稿を確認して、その場で公開できます。\n" +
+        "新しく作り直す場合は「固定投稿を作る」を押してください。",
+      buttons: [
+        { label: "今日の投稿", data: "m=posts" },
+        { label: "固定投稿を作る", data: "m=makepin" },
+        { label: "ピン留めのやり方", data: "n=pinhow" },
+      ],
     };
   }
 

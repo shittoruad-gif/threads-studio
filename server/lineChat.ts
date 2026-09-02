@@ -167,6 +167,7 @@ export const HELP_TOPICS: Array<{ key: string; q: string; a: string; action?: Qu
   { key: "multi", q: "2つ目のアカウントをつなぎたい",
     a: "プロプランはThreadsアカウントを3つまで、ビジネスプランは10までつなげます。\n下のボタンで、いま何件つないでいるか・あと何件つなげるかと、連携ページのリンクをお送りします。\n連携だけはMeta（Threads）の認証画面を通るため、LINEの中ではなく通常のブラウザで開いてください。",
     action: { label: "アカウント連携", data: "m=connect" } },
+  { key: "makepin", q: "固定投稿を作りたい", a: "", directPostback: "m=makepin" },
   { key: "pin", q: "固定投稿のピン留めのやり方",
     a: "", directPostback: "n=pinhow" },
   { key: "stop", q: "しばらく投稿を止めたい",
