@@ -2499,6 +2499,21 @@ ${input.commentText}
           throw new TRPCError({ code: 'NOT_FOUND', message: 'アカウントが見つかりません。' });
         }
 
+        // ★ツリー（2件目以降＝返信）は threads_manage_replies が必要。
+        //   権限の無い連携で予約を受け付けると、実行時に1本目しか公開されず
+        //   「途中で切れた投稿」になる。予約の時点で明確に断る。
+        {
+          const { splitThreadSegments } = await import('./threadsPost');
+          if (splitThreadSegments(input.postContent).length > 1 && (account as any).hasReplyScope === false) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message:
+                '連続投稿（ツリー）は、Meta社の追加審査の承認待ちのため、この連携ではまだ使えません。\n' +
+                'ツリーなし（1投稿・500文字以内）に直してから予約してください。',
+            });
+          }
+        }
+
         // Check scheduled post limit
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
         const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);

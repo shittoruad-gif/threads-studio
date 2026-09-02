@@ -119,6 +119,11 @@ export default function AIGenerate() {
   const evaluateMutation = trpc.project.evaluateOptions.useMutation();
   const [isGeneratingSingle, setIsGeneratingSingle] = useState(false);
   const { selectedAccount, selectedAccountId, accounts: connectedAccounts } = useThreadsAccount();
+  // ★ツリー（2件目以降＝返信）は threads_manage_replies が必要。
+  //   権限がMeta審査の承認待ちの連携では、生成の段階からツリーを作らない
+  //   （作れても投稿できず、途中まで公開される事故のもとになるため）。
+  const canTree = (selectedAccount as any)?.hasReplyScope !== false;
+  const effectiveTreeCount = canTree ? treeCount : 0;
 
   // ★アカウント切替に生成対象の店舗を追随させる。
   //   マウント直後は動かさない（履歴・テンプレ等の明示的なproject指定を壊さない）。
@@ -551,7 +556,7 @@ export default function AIGenerate() {
       const data = await generateMutation.mutateAsync({
         projectId,
         postType,
-        treeCount: postType === 'pinned' ? 0 : treeCount,
+        treeCount: postType === 'pinned' ? 0 : effectiveTreeCount,
         trendWord: postType === 'trend' ? trendWord : undefined,
         seasonalTopic: seasonalTopic || undefined,
         buzzPattern: buzzPatternValue || undefined,
@@ -593,7 +598,7 @@ export default function AIGenerate() {
             .mutateAsync({
               projectId,
               postType: pt,
-              treeCount: pt === 'pinned' ? 0 : treeCount,
+              treeCount: pt === 'pinned' ? 0 : effectiveTreeCount,
               trendWord: pt === 'trend' ? trendWord : undefined,
               seasonalTopic: seasonalTopic || undefined,
               buzzPattern: buzzPatternValue || undefined,
@@ -1217,8 +1222,15 @@ export default function AIGenerate() {
                   )}
                 </div>
 
-                {/* 固定投稿は常に1投稿のみ。treeCount セレクタは隠す。 */}
-                {postType !== 'pinned' ? (
+                {/* 固定投稿は常に1投稿のみ。treeCount セレクタは隠す。
+                    返信権限（Meta審査承認待ち）の無い連携でも隠す（生成段階から排除）。 */}
+                {postType !== 'pinned' && !canTree ? (
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-sm text-muted-foreground">
+                      {t("この連携では1投稿のみで生成します。追加の返信投稿（ツリー）は、Meta社の追加審査の承認待ちのため一時的にご利用いただけません。")}
+                    </p>
+                  </div>
+                ) : postType !== 'pinned' ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-1.5">
                       <Label>{t("追加の返信投稿（任意）")}</Label>
