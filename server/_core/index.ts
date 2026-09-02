@@ -859,6 +859,14 @@ async function startServer() {
               `[Univapay Webhook] お申し込み→${status}: user=${user.id} plan=${planId} ` +
               (trialEndsAt ? `トライアル終了=${trialEndsAt.toISOString()}` : 'トライアルなし（キャンペーン価格）'),
             );
+            // ★お申し込みの時点で、自動投稿の回数をそのプランの上限まで引き上げる。
+            //   セミナー価格・紹介コードのお客様はこの経路だけを通るので、
+            //   ここが抜けていると「プロなのに1日1回」のまま始まってしまう。
+            //   トライアル中もプランの機能は使えるため、同じ扱いにする。
+            try {
+              const { raiseAutoPostFrequencyOnUpgrade } = await import('../planUpgrade');
+              await raiseAutoPostFrequencyOnUpgrade(user.id, existing?.planId ?? 'free', planId);
+            } catch (e) { console.error('[Univapay Webhook] 自動投稿回数の引き上げに失敗:', e); }
             // お申し込みのご案内メール（任意・失敗しても無視）
             try {
               const planName = planCfg?.name ?? 'プラン';
