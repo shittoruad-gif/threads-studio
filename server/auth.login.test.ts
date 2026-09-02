@@ -4,7 +4,7 @@ import * as db from './db';
 
 describe('auth.login', () => {
   const testEmail = 'test-login@example.com';
-  const testPassword = 'Test1234!';
+  const testPassword = 'Test12345!';
   let testUserId: number;
 
   const caller = appRouter.createCaller({
@@ -34,6 +34,7 @@ describe('auth.login', () => {
       name: 'Test Login User',
       email: testEmail,
       password: testPassword,
+      agreedToTerms: true,
     });
     testUserId = result.userId;
   });

@@ -46,20 +46,23 @@ describe('Email Authentication', () => {
   });
 
   describe('Password Validation', () => {
+    // 現在のルール: 10文字以上、英字・数字・記号のうち2種類以上（server/auth-helpers.ts）
     it('should accept valid password', () => {
-      expect(isValidPassword('Test123!')).toBe(true);
-      expect(isValidPassword('password1')).toBe(true);
-      expect(isValidPassword('Pass@word')).toBe(true);
+      expect(isValidPassword('Test123456!')).toBe(true);
+      expect(isValidPassword('password12')).toBe(true);
+      expect(isValidPassword('Pass@word!!')).toBe(true);
     });
 
-    it('should reject password less than 8 characters', () => {
+    it('should reject password less than 10 characters', () => {
       expect(isValidPassword('Test1!')).toBe(false);
       expect(isValidPassword('abc123')).toBe(false);
+      expect(isValidPassword('Pass1234!')).toBe(false); // 9文字
     });
 
-    it('should reject password without number or special character', () => {
-      expect(isValidPassword('password')).toBe(false);
-      expect(isValidPassword('Password')).toBe(false);
+    it('should reject password with only one kind of character', () => {
+      expect(isValidPassword('passwordpassword')).toBe(false);
+      expect(isValidPassword('Passwordonly')).toBe(false);
+      expect(isValidPassword('1234567890')).toBe(false);
     });
   });
 

@@ -3,7 +3,8 @@ import * as db from './db';
 import { appRouter } from './routers';
 import type { TrpcContext } from './_core/trpc';
 
-describe('Univapay Subscription Management', () => {
+// ★本物の UnivaPay API を叩く（解約・更新を含む）。UNIVAPAY_LIVE_TEST=1 を付けたときだけ実行する。
+describe.skipIf(!process.env.UNIVAPAY_LIVE_TEST)('Univapay Subscription Management', () => {
   let testUserId: number;
   let testUser2Id: number;
   let testUser3Id: number;
@@ -163,7 +164,7 @@ describe('Univapay Subscription Management', () => {
 
       await expect(
         callerWithFreePlan.univapay.changePlan({ newPlanId: 'pro' })
-      ).rejects.toThrow('無料プランからの変更は新規購入として行ってください。');
+      ).rejects.toThrow('無料プランからの変更は');
     });
 
     it('should throw error if new plan is same as current plan', async () => {

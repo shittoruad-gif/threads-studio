@@ -3,7 +3,8 @@ import * as db from './db';
 import { appRouter } from './routers';
 import type { TrpcContext } from './_core/trpc';
 
-describe('Univapay Plan Change Timing', () => {
+// ★本物の UnivaPay API を叩く（解約・更新を含む）。UNIVAPAY_LIVE_TEST=1 を付けたときだけ実行する。
+describe.skipIf(!process.env.UNIVAPAY_LIVE_TEST)('Univapay Plan Change Timing', () => {
   let testUserId: number;
 
   const mockContext: TrpcContext = {

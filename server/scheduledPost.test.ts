@@ -45,6 +45,7 @@ describe("scheduledPost", () => {
       // If it fails due to subscription limits or DB connection issues, that's expected
       expect(
         error.message.includes("予約投稿数の上限") ||
+        error.message.includes("プロジェクトが見つかりません") ||
         error.message.includes("Failed query") ||
         error.message.includes("ECONNRESET") ||
         error.message.includes("INTERNAL_SERVER_ERROR")

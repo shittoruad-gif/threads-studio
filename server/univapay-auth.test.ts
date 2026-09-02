@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { env } from './_core/env';
 
-describe('Univapay Authentication Test', () => {
+// ★本物の UnivaPay API を叩く（解約・更新を含む）。UNIVAPAY_LIVE_TEST=1 を付けたときだけ実行する。
+describe.skipIf(!process.env.UNIVAPAY_LIVE_TEST)('Univapay Authentication Test', () => {
   it('should have UNIVAPAY_STORE_ID environment variable', () => {
     expect(env.univapayStoreId).toBeDefined();
     expect(env.univapayStoreId).toBe('11ede839-5914-9a14-895e-7babc94774af');

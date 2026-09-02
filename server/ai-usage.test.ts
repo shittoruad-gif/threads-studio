@@ -177,7 +177,7 @@ describe('AI Generation Usage Tracking', () => {
     expect(canGenerate).toBe(true);
   });
 
-  it('should return 0 limit for free plan', async () => {
+  it('should return the free plan limit for a user without subscription', async () => {
     // Create another user with no subscription (free plan)
     await db.upsertUser({
       openId: 'test-free-user',
@@ -190,10 +190,10 @@ describe('AI Generation Usage Tracking', () => {
     if (!freeUser) throw new Error('Failed to create free user');
 
     const usage = await db.getAiGenerationUsage(freeUser.id);
-    expect(usage.limit).toBe(0); // No AI generation for free plan
+    // フリープランにもお試しの生成枠がある（shared/plans.ts が唯一の正）
+    expect(usage.limit).toBe(PLANS.free.features.maxAiGenerations);
 
-    // Should not be able to generate
     const canGenerate = await db.checkAiGenerationLimit(freeUser.id);
-    expect(canGenerate).toBe(false);
+    expect(canGenerate).toBe(usage.count < usage.limit);
   });
 });

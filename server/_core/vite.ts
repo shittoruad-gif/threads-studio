@@ -61,7 +61,14 @@ export function serveStatic(app: Express) {
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
+  app.use("*", (req, res) => {
+    // ★ビルド済みのJS/CSS（/assets/xxx-<hash>.js）が無いときにHTMLを返すと、
+    //   ブラウザ側で「'text/html' is not a valid JavaScript MIME type」になり、
+    //   本来の原因（デプロイで古いチャンクが消えた）が見えなくなる。素直に404を返す。
+    if (req.originalUrl.startsWith("/assets/")) {
+      res.status(404).type("text/plain").send("Not Found");
+      return;
+    }
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

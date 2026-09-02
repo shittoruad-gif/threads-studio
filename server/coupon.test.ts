@@ -1,4 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { eq } from "drizzle-orm";
+import { getDb } from "./db";
+import { coupons } from "../drizzle/schema";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
@@ -27,16 +30,40 @@ function createTestContext(userId: number = 1): TrpcContext {
   };
 }
 
+// ★DBに入っているクーポンは環境ごとに違うため、テスト用のコードを自分で入れて自分で消す
+const TEST_COUPONS = [
+  { code: "TEST_FOREVER_FREE", type: "forever_free" as const },
+  { code: "TEST_TRIAL_30", type: "trial_30" as const },
+  { code: "TEST_TRIAL_14", type: "trial_14" as const },
+];
+
 describe("Coupon System", () => {
+  beforeAll(async () => {
+    const db = await getDb();
+    if (!db) return;
+    for (const c of TEST_COUPONS) {
+      await db.delete(coupons).where(eq(coupons.code, c.code));
+      await db.insert(coupons).values({ code: c.code, type: c.type, description: "vitest用", isActive: true, usedCount: 0 });
+    }
+  });
+
+  afterAll(async () => {
+    const db = await getDb();
+    if (!db) return;
+    for (const c of TEST_COUPONS) {
+      await db.delete(coupons).where(eq(coupons.code, c.code));
+    }
+  });
+
 
   it("should validate a valid coupon code", async () => {
     const ctx = createTestContext();
     const caller = appRouter.createCaller(ctx);
-    const result = await caller.coupon.validate({ code: "FOREVER_FREE" });
+    const result = await caller.coupon.validate({ code: "TEST_FOREVER_FREE" });
 
     expect(result.valid).toBe(true);
     expect(result.coupon).toBeDefined();
-    expect(result.coupon?.code).toBe("FOREVER_FREE");
+    expect(result.coupon?.code).toBe("TEST_FOREVER_FREE");
     expect(result.coupon?.type).toBe("forever_free");
   });
 
@@ -52,22 +79,22 @@ describe("Coupon System", () => {
   it("should validate TRIAL_30 coupon", async () => {
     const ctx = createTestContext();
     const caller = appRouter.createCaller(ctx);
-    const result = await caller.coupon.validate({ code: "TRIAL_30" });
+    const result = await caller.coupon.validate({ code: "TEST_TRIAL_30" });
 
     expect(result.valid).toBe(true);
     expect(result.coupon).toBeDefined();
-    expect(result.coupon?.code).toBe("TRIAL_30");
+    expect(result.coupon?.code).toBe("TEST_TRIAL_30");
     expect(result.coupon?.type).toBe("trial_30");
   });
 
   it("should validate TRIAL_14 coupon", async () => {
     const ctx = createTestContext();
     const caller = appRouter.createCaller(ctx);
-    const result = await caller.coupon.validate({ code: "TRIAL_14" });
+    const result = await caller.coupon.validate({ code: "TEST_TRIAL_14" });
 
     expect(result.valid).toBe(true);
     expect(result.coupon).toBeDefined();
-    expect(result.coupon?.code).toBe("TRIAL_14");
+    expect(result.coupon?.code).toBe("TEST_TRIAL_14");
     expect(result.coupon?.type).toBe("trial_14");
   });
 
@@ -84,6 +111,6 @@ describe("Coupon System", () => {
     const caller = appRouter.createCaller(unauthCtx);
     
     // Should throw UNAUTHORIZED error
-    await expect(caller.coupon.validate({ code: "FOREVER_FREE" })).rejects.toThrow();
+    await expect(caller.coupon.validate({ code: "TEST_FOREVER_FREE" })).rejects.toThrow();
   });
 });

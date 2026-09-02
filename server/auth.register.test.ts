@@ -23,7 +23,8 @@ describe('auth.register', () => {
     const result = await caller.auth.register({
       name: 'Test User',
       email: 'test-register@example.com',
-      password: 'Test1234!',
+      password: 'Test12345!',
+      agreedToTerms: true,
     });
 
     expect(result.success).toBe(true);
@@ -44,7 +45,8 @@ describe('auth.register', () => {
       caller.auth.register({
         name: 'Test User',
         email: 'invalid-email',
-        password: 'Test1234!',
+        password: 'Test12345!',
+      agreedToTerms: true,
       })
     ).rejects.toThrow();
   });
@@ -55,6 +57,7 @@ describe('auth.register', () => {
         name: 'Test User',
         email: 'test-weak@example.com',
         password: 'weak',
+        agreedToTerms: true,
       })
     ).rejects.toThrow();
   });
@@ -64,7 +67,19 @@ describe('auth.register', () => {
       caller.auth.register({
         name: '',
         email: 'test-noname@example.com',
-        password: 'Test1234!',
+        password: 'Test12345!',
+      agreedToTerms: true,
+      })
+    ).rejects.toThrow();
+  });
+
+  it('should reject registration without agreeing to terms', async () => {
+    await expect(
+      caller.auth.register({
+        name: 'Test User',
+        email: 'test-noagree@example.com',
+        password: 'Test12345!',
+        agreedToTerms: false,
       })
     ).rejects.toThrow();
   });
@@ -74,7 +89,8 @@ describe('auth.register', () => {
     await caller.auth.register({
       name: 'Test User',
       email: 'test-duplicate@example.com',
-      password: 'Test1234!',
+      password: 'Test12345!',
+      agreedToTerms: true,
     });
 
     // Second registration with same email should fail
@@ -82,7 +98,8 @@ describe('auth.register', () => {
       caller.auth.register({
         name: 'Another User',
         email: 'test-duplicate@example.com',
-        password: 'Test1234!',
+        password: 'Test12345!',
+      agreedToTerms: true,
       })
     ).rejects.toThrow('このメールアドレスは既に登録されています');
 
@@ -94,11 +111,12 @@ describe('auth.register', () => {
   });
 
   it('should hash password before storing', async () => {
-    const password = 'Test1234!';
+    const password = 'Test12345!';
     const result = await caller.auth.register({
       name: 'Test User',
       email: 'test-hash@example.com',
       password,
+      agreedToTerms: true,
     });
 
     const user = await db.getUserByEmail('test-hash@example.com');

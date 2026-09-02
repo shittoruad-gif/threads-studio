@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { AlertTriangle, RotateCcw, Trash2 } from "lucide-react";
 import { Component, ReactNode } from "react";
+import { isStaleChunkError, reloadOnceForStaleChunk } from "@/lib/staleChunk";
 
 interface Props {
   children: ReactNode;
@@ -22,6 +23,8 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // デプロイ跨ぎで旧チャンクが読めなかっただけなら、エラー画面を出さずに1回だけ再読み込みする
+    if (isStaleChunkError(error) && reloadOnceForStaleChunk()) return;
     console.error("[ErrorBoundary]", error.message, error.stack);
     // Send error to server for debugging
     fetch("/api/client-error", {

@@ -8,6 +8,17 @@ import App from "./App";
 import { getLoginUrl } from "./const";
 import { applyFontScale, getStoredFontScale } from "./hooks/useFontScale";
 import "./index.css";
+import { clearStaleChunkFlag, isStaleChunkError, reloadOnceForStaleChunk } from "./lib/staleChunk";
+
+// デプロイ跨ぎで旧チャンクが読めなくなったら、1回だけ自動で再読み込みする
+window.addEventListener("vite:preloadError", (event) => {
+  if (reloadOnceForStaleChunk()) event.preventDefault();
+});
+window.addEventListener("unhandledrejection", (event) => {
+  if (isStaleChunkError(event.reason) && reloadOnceForStaleChunk()) event.preventDefault();
+});
+// 正常に立ち上がったら、次回のために「再読み込み済み」フラグを消す
+window.setTimeout(clearStaleChunkFlag, 10_000);
 
 // 「文字を大きく」設定を描画前に復元（ちらつき防止）
 applyFontScale(getStoredFontScale());

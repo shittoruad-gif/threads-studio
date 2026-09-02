@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { ENV } from "./_core/env";
 
-describe("Univapay JWT Token Validation", () => {
+// ★本物の UnivaPay API を叩く（解約・更新を含む）。UNIVAPAY_LIVE_TEST=1 を付けたときだけ実行する。
+describe.skipIf(!process.env.UNIVAPAY_LIVE_TEST)("Univapay JWT Token Validation", () => {
   it("should have UNIVAPAY_JWT_TOKEN configured", () => {
     expect(ENV.univapayJwtToken).toBeDefined();
     expect(ENV.univapayJwtToken).not.toBe("");
