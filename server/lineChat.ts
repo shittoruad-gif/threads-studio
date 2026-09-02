@@ -138,7 +138,10 @@ export const MENU_ITEMS: QuickItem[] = [
   { label: "コメント", data: "m=comments" },
   { label: "設定", data: "m=settings" },
   { label: "投稿の成績", data: "m=stats" },
+  { label: "固定投稿を作る", data: "m=makepin" },
   { label: "お店の情報", data: "m=profile" },
+  // ★リッチメニュー（6枠）から「使い方」を外したので、
+  //   どの返信からも1タップで開けるよう、ここには必ず残す。
   { label: "使い方", data: "m=help" },
   { label: "はじめの設定", data: "m=setup" },
   { label: "アカウント連携", data: "m=connect" },

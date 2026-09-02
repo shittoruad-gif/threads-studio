@@ -83,10 +83,12 @@ describe("カウンセリングの選択肢", () => {
   });
 });
 
-describe("公式LINEから来た方の連携導線", () => {
-  it("あいさつは連携を促す文面になっている（アプリの設定画面を探させない）", async () => {
+describe("公式LINEから来た方の導線", () => {
+  it("あいさつは会員登録を起点にしている（アカウントを持っている前提にしない）", async () => {
     const { LINE_TEXTS } = await import("./lineNotify");
-    expect(LINE_TEXTS.greeting).toContain("連携する");
+    // 2026-09-02: はじめての方が最初に押すのは「連携する」ではなく「会員登録する」。
+    expect(LINE_TEXTS.greeting).toContain("会員登録する");
+    expect(LINE_TEXTS.greeting).toContain("登録済みの方はこちら");
     expect(LINE_TEXTS.greeting).not.toContain("設定画面で表示される6桁");
   });
 

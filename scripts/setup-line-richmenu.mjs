@@ -2,8 +2,9 @@
  * 公式LINE「Threads Studio 通知」のリッチメニューを作成して既定に設定する。
  *
  * リッチメニューを2種類つくって設置する。
- *   ① onboarding（未連携の方むけ・2ボタン）… 既定メニュー。「連携する」「アカウントを持っていない」
+ *   ① onboarding（未連携の方むけ・2ボタン）… 既定メニュー。「会員登録する」「登録済みの方はこちら」
  *   ② main（連携済みの方むけ・6ボタン）… 連携が成立した人だけ、この menu に切り替える
+ *    ※「使い方」はメニュー枠が6つのため外し、各返信のボタンと自由入力で受ける
  * ★アプリ（LIFF）は開かない。すべて postback でサーバーに届き、
  *   トーク内の返信だけで承認・書き直し・設定変更まで完結する。
  * ※ 既定を onboarding にしているのは、すでに友だち追加済みの方にも
@@ -23,8 +24,8 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-const MAIN_NAME = 'threads-studio-main-v7';
-const ONBOARDING_NAME = 'threads-studio-onboarding-v1';
+const MAIN_NAME = 'threads-studio-main-v8';
+const ONBOARDING_NAME = 'threads-studio-onboarding-v2';
 const W = 2500;
 const H = 1686;
 // ★2026-09-01: Webビュー（LIFF）を開かず、トーク内のやり取りで完結させる。
@@ -34,8 +35,10 @@ const buttons = [
   { label1: 'コメント', label2: '新着の確認', data: 'm=comments' },
   { label1: '設定', label2: '自動投稿・確認・NGワード', data: 'm=settings' },
   { label1: '投稿の成績', label2: '直近の投稿数と反応', data: 'm=stats' },
+  // ★固定投稿はプロフィールの入口。作成から公開までトークの中で終わるので、
+  //   メニューからも直接入れるようにする（2026-09-02 追加）。
+  { label1: '固定投稿', label2: '作って公開・ピン留め', data: 'm=makepin' },
   { label1: 'お店・アカウント', label2: '登録内容・Threads連携', data: 'm=account' },
-  { label1: '使い方', label2: '困ったらまずここ', data: 'm=help' },
 ];
 
 // 未連携の方むけ（既定メニュー）。会員登録が起点なので、それを先頭に置く。
