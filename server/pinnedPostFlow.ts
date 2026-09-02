@@ -49,7 +49,7 @@ const JSON_SCHEMA = {
  * （実際に多発・2026-09-02指摘）。段落単位で後ろから落とし、
  * 締めの一言（コメント欄への誘導）は必ず残す。
  */
-const PINNED_CHAR_BUDGET = 490;
+const PINNED_CHAR_BUDGET = 495;
 
 /**
  * 固定投稿を1件つくり、承認待ちとして保存する。
