@@ -689,6 +689,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       [
         { label: "Threadsアカウントを追加", data: "m=connect" },
         { label: "お店の情報を登録・やり直す", data: "m=setup" },
+        { label: "公式LINEのURLを登録", data: "c=seturl" },
         { label: "登録内容を見る", data: "m=profile" },
       ],
     )];
@@ -903,6 +904,24 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         )];
       }
     }
+    // ★公式LINEのURLが未登録なら、先に登録を勧める（固定投稿はLINE誘導が本命のため）。
+    //   URLなしでも作れるが、コメント欄のリンクが付かず効果が大きく落ちる。
+    if (!q.nourl) {
+      const pjsForUrl = ((await db.getUserProjects(user.id)) || []).filter((pj: any) => !String(pj.id).startsWith("demo_"));
+      const { parseProjectLinks } = await import("../shared/projectLinks");
+      const hasLine = pjsForUrl.some((pj: any) => parseProjectLinks(pj.links || null).some((l) => l.type === "line" && !!l.url));
+      if (!hasLine && pjsForUrl.length > 0) {
+        return [textWithQuick(
+          "固定投稿を作る前に、公式LINEの友だち追加URLの登録をおすすめします。\n" +
+          "固定投稿のコメント欄にこのURLが付き、集客の入口になります。",
+          [
+            { label: "URLを登録する", data: "c=seturl" },
+            { label: "URLなしで作る", data: `m=makepin&nourl=1${q.a ? `&a=${q.a}` : ""}` },
+            { label: "やめる", data: "m=menu" },
+          ],
+        )];
+      }
+    }
     const { createPinnedDraft } = await import("./pinnedPostFlow");
     const res = await createPinnedDraft(user.id, q.a ? Number(q.a) : null);
     if ("error" in res) {
@@ -1003,6 +1022,37 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     return [
       { type: "text", text: "取り消しました。もう一度ご確認ください。" },
       buildPostCards([withName]),
+    ];
+  }
+  // ── 公式LINEのURL登録：LINEトークの中だけで誘導先を持てるようにする ──
+  //   カウンセリング全20問にURLの質問が無く、LINE完結のお客様は誘導先を
+  //   一度も登録できなかった（固定投稿のコメントにも入れられない）。
+  if (q.c === "seturl") {
+    const usable = ((await db.getUserProjects(user.id)) || []).filter((pj: any) =>
+      !String(pj.id).startsWith("demo_") && pj.businessType,
+    );
+    if (usable.length === 0) {
+      return [textWithQuick("先に「はじめの設定」でお店の情報をご登録ください。", [{ label: "はじめの設定", data: "m=setup" }, ...MENU_HINT])];
+    }
+    // 複数店舗なら、どのお店のURLかを選んでもらう
+    if (usable.length >= 2 && !q.p) {
+      return [textWithQuick(
+        "どのお店の公式LINEのURLを登録しますか？",
+        usable.slice(0, 10).map((pj: any) => ({ label: String(pj.storeName || pj.title || "お店").slice(0, 16), data: `c=seturl&p=${pj.id}` })),
+      )];
+    }
+    const pj: any = q.p ? usable.find((x: any) => String(x.id) === String(q.p)) : usable[0];
+    if (!pj) return [textWithQuick("そのお店の情報が見つかりませんでした。", MENU_HINT)];
+    await db.setLineChatState(lineUserId, "set_line_url", String(pj.id));
+    const { parseProjectLinks } = await import("../shared/projectLinks");
+    const cur = parseProjectLinks(pj.links || null).find((l) => l.type === "line");
+    return [
+      { type: "text", text:
+        (cur ? `いま登録されているのは\n${cur.url}\nです。新しいURLに置き換えます。\n\n` : "") +
+        "公式LINEの友だち追加URLを、そのまま送ってください。\n" +
+        "（例：https://lin.ee/xxxxx）\n\n" +
+        "LINE公式アカウントの管理画面 →「友だち追加ガイド」→「URLを作成」でコピーできます。\n" +
+        "やめる場合は「やめる」と送ってください。" },
     ];
   }
   // ── 一部修正：AIを通さず、ご自身で直した全文にそのまま置き換える ──
@@ -1155,10 +1205,35 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   // ★入力待ちの途中で「やめる」と打たれたら、その言葉を内容として使わずに抜ける。
   //   （NGワード待ち・書き直し待ちでこれが無く、「やめる」がそのまま
   //     NGワードや書き直し指示として使われてしまっていた）
-  if ((st?.state === "ngword" || st?.state === "rewrite_free" || st?.state === "self_edit") &&
+  if ((st?.state === "ngword" || st?.state === "rewrite_free" || st?.state === "self_edit" || st?.state === "set_line_url") &&
       /^(やめる|中止|キャンセル|戻る|終わり|終了)$/.test(text.trim())) {
     await db.clearLineChatState(lineUserId);
     return [textWithQuick("わかりました。中止しました。", MENU_HINT)];
+  }
+  // ── 公式LINEのURL登録：送られてきたURLを保存する ──
+  if (st?.state === "set_line_url" && st.payload) {
+    const projectId = String(st.payload);
+    const raw = text.trim();
+    let parsedUrl: URL | null = null;
+    try { parsedUrl = new URL(raw); } catch { parsedUrl = null; }
+    if (!parsedUrl || !/^https?:$/.test(parsedUrl.protocol)) {
+      return [{ type: "text", text: "URLの形になっていないようです。https:// から始まるURLをそのまま送ってください。\nやめる場合は「やめる」と送ってください。" }];
+    }
+    await db.clearLineChatState(lineUserId);
+    const pj: any = await db.getProjectById(projectId);
+    if (!pj || pj.userId !== user.id) return [textWithQuick("お店の情報が見つかりませんでした。", MENU_HINT)];
+    const { parseProjectLinks } = await import("../shared/projectLinks");
+    const links = parseProjectLinks(pj.links || null);
+    const existing = links.find((l) => l.type === "line");
+    const next = existing
+      ? links.map((l) => (l.type === "line" ? { ...l, url: raw } : l))
+      : [...links, { id: `line_${Date.now().toString(36)}`, type: "line" as const, label: "LINE公式", url: raw, isDefault: true }];
+    await db.updateProject(projectId, { links: JSON.stringify(next) } as any);
+    return [textWithQuick(
+      `公式LINEのURLを登録しました。\n${raw}\n\n` +
+      "毎日の投稿の誘導と、固定投稿のコメント欄のリンクに使われます。",
+      [{ label: "固定投稿を作る", data: "m=makepin" }, ...MENU_HINT],
+    )];
   }
   // ── 一部修正：送られてきた全文で、そのまま置き換える ──
   if (st?.state === "self_edit" && st.payload) {
