@@ -130,19 +130,28 @@ export default function Pricing() {
     undefined,
     { enabled: isAuthenticated }
   );
+  // 決済ページのURL。取得できたのに開けなかった場合は、押せるリンクとして画面に出す。
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+
   const createCheckout = trpc.subscription.createCheckout.useMutation({
     onSuccess: (data) => {
-      if (data.url) {
-        // 決済メール≠登録メールだとWebhookでユーザー特定できず自動反映されないため、
-        // 遷移の瞬間に必ず注意を出す。
-        toast.info('決済ページに移動します...', {
-          description: user?.email
-            ? `お支払い画面では、ご登録のメールアドレス（${user.email}）をご入力ください。`
-            : 'お支払い画面では、アプリにご登録のメールアドレスをご入力ください。',
-          duration: 10000,
-        });
-        window.open(data.url, '_blank');
-      }
+      if (!data.url) return;
+      // 決済メール≠登録メールだとWebhookでユーザー特定できず自動反映されないため、
+      // 遷移の瞬間に必ず注意を出す。
+      toast.info('決済ページに移動します...', {
+        description: user?.email
+          ? `お支払い画面では、ご登録のメールアドレス（${user.email}）をご入力ください。`
+          : 'お支払い画面では、アプリにご登録のメールアドレスをご入力ください。',
+        duration: 10000,
+      });
+
+      // ★ここは window.open にしてはいけない。
+      //   通信が終わったあとに呼ぶ window.open は「利用者の操作から離れた」
+      //   ポップアップとみなされ、スマホのブラウザやLINE内ブラウザで遮断される。
+      //   実際に「申し込むボタンを押しても画面が切り替わらない」というご連絡があった。
+      //   同じタブで移動すれば遮断されない。
+      setCheckoutUrl(data.url);
+      window.location.href = data.url;
     },
     onError: (error) => {
       toast.error(error.message);
@@ -385,6 +394,23 @@ export default function Pricing() {
             );
           })}
         </div>
+
+        {/* ★万一、自動で決済ページに移れなかったときの受け皿。
+            スマホのブラウザ設定によっては移動が止められることがあるため、
+            押せるリンクを必ず画面に残しておく（「押しても何も起きない」を防ぐ）。 */}
+        {checkoutUrl && (
+          <div className="max-w-3xl mx-auto -mt-8 mb-8 text-center">
+            <div className="inline-block rounded-lg border-2 border-emerald-300 bg-emerald-50 px-5 py-4 dark:border-emerald-800 dark:bg-emerald-950/30">
+              <p className="text-sm text-foreground font-bold">お支払い画面が開かない場合はこちら</p>
+              <a
+                href={checkoutUrl}
+                className="mt-2 inline-flex items-center justify-center rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"
+              >
+                お支払い画面を開く
+              </a>
+            </div>
+          </div>
+        )}
 
         {/* 決済メール＝登録メールの注意（Webhook自動反映のため） */}
         {isAuthenticated && (
