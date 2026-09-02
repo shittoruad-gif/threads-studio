@@ -1442,6 +1442,17 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     if (answered) return answered;
   }
 
+  // ★固定投稿は名指しでご依頼いただくことが多いので、そのまま作る画面へお通しする。
+  if (/(固定投稿|ピン留め|ピン止め|プロフィールの一番上)/.test(t)) return handlePostback(lineUserId, "m=makepin");
+
+  // ★「投稿して」「ネタ作って」のような短いご依頼は、ご質問の形をしていないため
+  //   自動応答（looksLikeQuestion）を通らず、受け皿の一般的なご案内に落ちていた。
+  //   ご依頼だと分かるものは、自動応答が動いたときと同じ内容をお返しする。
+  {
+    const req = requestKind(t);
+    if (req) return replyToRequest(req);
+  }
+
   // 短い言葉での操作指示・自動応答で答えられなかったときの受け皿。
   if (/(料金|価格|値段|いくら|プラン|課金|支払|請求)/.test(t)) return handlePostback(lineUserId, "s=plan");
   if (/(解約|退会|やめたい|停止|キャンセルしたい)/.test(t)) {
@@ -1517,6 +1528,37 @@ function requestKind(t: string): "post" | "material" | null {
 }
 
 /**
+ * 「ご質問」ではなく「ご依頼」だったときの返し方。
+ *
+ * ★自動応答が動いたときも、動かなかったとき（短い一言のご依頼）も、
+ *   同じ内容をお返しするために切り出している。
+ */
+function replyToRequest(req: "post" | "material", questionId?: number | string | null): unknown[] {
+  const staff = { label: "担当者に聞く", data: `m=staff${questionId ? `&q=${questionId}` : ""}` };
+  if (req === "material") {
+    return [textWithQuick(
+      "ありがとうございます。実績やお客様のエピソードは、「お店の情報」に登録されたものだけをAIが投稿に使います" +
+      "（登録されていない話を作ることはありません）。\n" +
+      "いただいた内容を投稿で使えるようにするには、「お店の情報」に登録してください。\n\n" +
+      "担当者に伝えたい場合は「担当者に聞く」を押してください。",
+      [{ label: "お店の情報", data: "m=profile" }, staff, ...MENU_HINT],
+    )];
+  }
+  return [textWithQuick(
+    "投稿の内容についてのご依頼ですね。\n" +
+    "毎日の投稿はAIが自動で作ります。今日の分の言い回しを変えたい場合は「今日の投稿」から「書き直す」で、ご希望をそのまま文章でお伝えいただけます。\n" +
+    "プロフィールの一番上に置く固定投稿は、「固定投稿を作る」からこのトークで作れます。\n\n" +
+    "この場でご相談されたい場合は「担当者に聞く」を押してください。",
+    [
+      { label: "今日の投稿", data: "m=posts" },
+      { label: "固定投稿を作る", data: "m=makepin" },
+      staff,
+      ...MENU_HINT,
+    ],
+  )];
+}
+
+/**
  * ご質問に自動でお答えする。
  * 答えられた場合も「担当者に聞く」を必ず添えて、行き止まりにしない。
  */
@@ -1542,33 +1584,7 @@ async function autoAnswer(userId: number, lineUserId: string, question: string):
     // それに「お答えできないご質問でした」と返すのは的外れで、書いてくださった
     // 内容もそのまま失われる。何がどこに反映されるのかをお伝えする。
     const req = requestKind(question);
-    if (req === "material") {
-      return [textWithQuick(
-        "ありがとうございます。実績やお客様のエピソードは、「お店の情報」に登録されたものだけをAIが投稿に使います" +
-        "（登録されていない話を作ることはありません）。\n" +
-        "いただいた内容を投稿で使えるようにするには、「お店の情報」に登録してください。\n\n" +
-        "担当者に伝えたい場合は「担当者に聞く」を押してください。",
-        [
-          { label: "お店の情報", data: "m=profile" },
-          { label: "担当者に聞く", data: `m=staff${res.questionId ? `&q=${res.questionId}` : ""}` },
-          ...MENU_HINT,
-        ],
-      )];
-    }
-    if (req === "post") {
-      return [textWithQuick(
-        "投稿の内容についてのご依頼ですね。\n" +
-        "毎日の投稿はAIが自動で作ります。今日の分の言い回しを変えたい場合は「今日の投稿」から「書き直す」で、ご希望をそのまま文章でお伝えいただけます。\n" +
-        "プロフィールの一番上に置く固定投稿は、「固定投稿を作る」からこのトークで作れます。\n\n" +
-        "この場でご相談されたい場合は「担当者に聞く」を押してください。",
-        [
-          { label: "今日の投稿", data: "m=posts" },
-          { label: "固定投稿を作る", data: "m=makepin" },
-          { label: "担当者に聞く", data: `m=staff${res.questionId ? `&q=${res.questionId}` : ""}` },
-          ...MENU_HINT,
-        ],
-      )];
-    }
+    if (req) return replyToRequest(req, res.questionId);
     return [textWithQuick(
       "申し訳ありません、こちらではお答えできないご質問でした。\n" +
       "担当者にお伝えしますので、下の「担当者に聞く」を押してください。",

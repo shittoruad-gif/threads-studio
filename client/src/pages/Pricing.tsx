@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -457,8 +457,8 @@ export default function Pricing() {
                 </thead>
                 <tbody>
                   {COMPARISON_FEATURES.map((category, catIndex) => (
-                    <>
-                      <tr key={`cat-${catIndex}`} className="bg-muted/50">
+                    <Fragment key={`cat-${catIndex}`}>
+                      <tr className="bg-muted/50">
                         <td
                           colSpan={6}
                           className="p-3 text-foreground font-semibold text-sm border-b border-border"
@@ -491,7 +491,7 @@ export default function Pricing() {
                           </td>
                         </tr>
                       ))}
-                    </>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
