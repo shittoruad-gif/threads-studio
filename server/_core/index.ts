@@ -181,9 +181,11 @@ async function startServer() {
             const { replyMessages } = await import('../lineNotify');
             const { textWithQuick } = await import('../lineChat');
             await replyMessages(ev.replyToken, [
+              // ★会員登録が起点。はじめての方が最初に押すものを先頭に置く。
               textWithQuick(LINE_TEXTS.greeting, [
-                { label: '連携する', data: 'm=link' },
-                { label: 'アカウントを持っていない', data: 'm=signup' },
+                { label: '会員登録する', data: 'm=signup' },
+                { label: '登録済みの方はこちら', data: 'm=link' },
+                { label: '紹介コードをお持ちの方', data: 'm=refcode' },
               ]),
             ]);
             continue;

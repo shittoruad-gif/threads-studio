@@ -23,11 +23,13 @@ const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
  */
 function notLinked(): unknown[] {
   return [textWithQuick(
-    "まだアカウントとつながっていません。\n" +
-    "下のボタンから、このトークの中で連携できます。",
+    "ご利用にはアカウントの登録が必要です。\n\n" +
+    "はじめての方は「会員登録する」から、3分ほどで作れます。\n" +
+    "すでにご登録済みの方は「登録済みの方はこちら」を押してください。",
     [
-      { label: "連携する", data: "m=link" },
-      { label: "アカウントを持っていない", data: "m=signup" },
+      { label: "会員登録する", data: "m=signup" },
+      { label: "登録済みの方はこちら", data: "m=link" },
+      { label: "紹介コードをお持ちの方", data: "m=refcode" },
     ],
   )];
 }
@@ -47,12 +49,14 @@ async function startLinking(lineUserId: string): Promise<unknown[]> {
 function signupGuide(): unknown[] {
   const base = process.env.APP_BASE_URL || "https://threads-studio.com";
   return [textWithQuick(
-    "アカウントの作成は、こちらのページからお願いします（3分ほどで終わります）。\n" +
+    "こちらのページから、会員登録をお願いします（3分ほどで終わります）。\n" +
     `${base}/register\n\n` +
-    "作成が終わったら、このトークで「連携する」を押してください。",
+    "ご登録が終わると、そのまま料金プランの画面が開きます。\n" +
+    "無料のフリープランから始めることもできます。\n\n" +
+    "登録が終わったら、このトークで「登録済みの方はこちら」を押してください。",
     [
-      { label: "紹介コードをお持ちの方はこちら", data: "m=refcode" },
-      { label: "連携する", data: "m=link" },
+      { label: "紹介コードをお持ちの方", data: "m=refcode" },
+      { label: "登録済みの方はこちら", data: "m=link" },
     ],
   )];
 }

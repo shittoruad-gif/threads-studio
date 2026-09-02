@@ -16,6 +16,18 @@
 export const PIN_WHY =
   "固定投稿は、Threadsのプロフィールの一番上に固定して、はじめて集客の入口になります。作っただけでは、他の投稿と一緒に流れていってしまいます。";
 
+/**
+ * ピン留めの前に必要なこと。
+ * ★AIで作っただけでは、その投稿はまだThreads上に存在しない。
+ *   Threadsに公開して、はじめてピン留めできる。
+ *   実際に「固定投稿を3件作ったが1件も公開しておらず、
+ *   ピン留めしようにも見つからない」というお客様がいた。
+ */
+export const PIN_PREREQ_STEPS: string[] = [
+  "Threads Studio の「AI投稿を作る」で固定投稿を作ります",
+  "できあがった内容を確認し、「今すぐThreadsに投稿」を押します（ここを押さないとThreadsには出ません）",
+];
+
 /** 手順（順番どおり） */
 export const PIN_STEPS: string[] = [
   "Threadsアプリを開き、右下のアイコンから自分のプロフィールを表示します",
@@ -36,7 +48,9 @@ export const PIN_NOTES: string[] = [
 export function pinGuideText(): string {
   return (
     `${PIN_WHY}\n\n` +
-    "【ピン留めのしかた】\n" +
+    "【先に、Threadsへ公開してください】\n" +
+    PIN_PREREQ_STEPS.map((s, i) => `${i + 1}. ${s}`).join("\n") +
+    "\n\n【そのあと、Threadsアプリでピン留めします】\n" +
     PIN_STEPS.map((s, i) => `${i + 1}. ${s}`).join("\n") +
     "\n\n" +
     PIN_NOTES.map((n) => `※ ${n}`).join("\n")

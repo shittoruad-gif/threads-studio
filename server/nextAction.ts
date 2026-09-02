@@ -113,9 +113,25 @@ export async function getSetupSteps(userId: number): Promise<SetupStep[]> {
     actionLabel: "作成する",
   });
 
-  // ★作っただけでは効果が出ない。Threadsのプロフィールに固定して、はじめて入口になる。
-  //   ピン留めはThreadsのAPIでは操作も確認もできないため、ご本人の申告で完了とする。
+  // ★「作った」と「Threadsに出した」は別。生成しただけでは、その投稿は
+  //   まだThreads上に存在せず、ピン留めしようにも見つからない。
+  //   （固定投稿を3件作ったが1件も公開していないお客様がいた）
+  let postedCount = 0;
+  try { postedCount = await db.countPostedPosts(userId); } catch { postedCount = 0; }
   if (hasPinned) {
+    steps.push({
+      id: "not_posted",
+      label: "作った投稿をThreadsに公開する",
+      done: postedCount > 0,
+      path: "/ai-generate?pinned=1",
+      actionLabel: "公開する",
+      important: true,
+    });
+  }
+
+  // ★公開したあと、Threadsのプロフィールに固定して、はじめて入口になる。
+  //   ピン留めはThreadsのAPIでは操作も確認もできないため、ご本人の申告で完了とする。
+  if (hasPinned && postedCount > 0) {
     let confirmed = false;
     try { confirmed = await db.isPinnedPostConfirmed(userId); } catch { confirmed = false; }
     steps.push({
@@ -230,7 +246,26 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
     };
   }
 
-  // ⑥ 固定投稿は作ったが、Threads側でピン留めがまだ。
+  // ⑥ 固定投稿は作ったが、まだThreadsに公開していない。
+  //    公開していない投稿はピン留めできないので、先にここを案内する。
+  let postedCount = 1;
+  try { postedCount = await db.countPostedPosts(userId); } catch { postedCount = 1; }
+  if (postedCount === 0) {
+    const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+    return {
+      key: "not_posted",
+      text:
+        "次にやることが1つあります。\n\n" +
+        "固定投稿は作れていますが、まだThreadsに公開されていません。\n" +
+        "AIで作った時点では、その投稿はまだThreadsに出ていない状態です。\n\n" +
+        "できあがった内容を確認して「今すぐThreadsに投稿」を押すと、Threadsに公開されます。\n" +
+        `${base}/ai-generate?pinned=1&openExternalBrowser=1\n\n` +
+        "公開できたら、そのあとThreadsアプリでプロフィールにピン留めしてください。",
+      buttons: [{ label: "ピン留めのやり方", data: "n=pinhow" }],
+    };
+  }
+
+  // ⑦ 公開はしたが、Threads側でピン留めがまだ。
   //    ここを飛ばすと「固定投稿を作ったのに効果がない」ということになる。
   {
     let confirmed = false;
@@ -249,7 +284,7 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
     }
   }
 
-  // ⑦ プランでは自動投稿が使えるのに、OFFのまま。
+  // ⑧ プランでは自動投稿が使えるのに、OFFのまま。
   const settings: any = await db.getAutoPostSettings(userId).catch(() => null);
   if (maxPerDay > 0 && settings && settings.autoPostEnabled === false) {
     return {
@@ -262,7 +297,7 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
     };
   }
 
-  // ⑧ 公開前の確認がOFFのまま。最初のうちは中身を見てからのほうが安心。
+  // ⑨ 公開前の確認がOFFのまま。最初のうちは中身を見てからのほうが安心。
   //    （一度もご自身の投稿を承認したことがない方にだけお伝えする）
   if (maxPerDay > 0 && settings && settings.autoPostRequireApproval === false) {
     const approved = await db.countApprovedPosts(userId).catch(() => 1);

@@ -3538,6 +3538,16 @@ function escapeSql(v: string): string {
 }
 
 
+/** Threadsに公開できた投稿の件数（0なら、まだ1件もThreadsに出ていない） */
+export async function countPostedPosts(userId: number): Promise<number> {
+  const database = await getDb();
+  if (!database) return 0;
+  const rows: any = await database.execute(sql.raw(
+    `SELECT COUNT(*) AS c FROM \`scheduledPosts\` WHERE \`userId\` = ${Number(userId)} AND \`status\` = 'posted'`
+  ));
+  return Number(rows?.[0]?.[0]?.c ?? 0);
+}
+
 // ── 固定投稿のピン留め確認 ───────────────────────────────────
 /** 「Threadsでピン留めしました」を記録する */
 export async function confirmPinnedPost(userId: number): Promise<void> {

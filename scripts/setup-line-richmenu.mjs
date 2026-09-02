@@ -38,10 +38,10 @@ const buttons = [
   { label1: '使い方', label2: '困ったらまずここ', data: 'm=help' },
 ];
 
-// 未連携の方むけ（既定メニュー）。まず連携してもらうことだけに絞る。
+// 未連携の方むけ（既定メニュー）。会員登録が起点なので、それを先頭に置く。
 const onboardingButtons = [
-  { label1: '連携する', label2: 'ご登録のアカウントとつなぐ', data: 'm=link' },
-  { label1: 'アカウントを持っていない', label2: 'まずは新規登録から', data: 'm=signup' },
+  { label1: '会員登録する', label2: 'はじめての方はこちら（3分）', data: 'm=signup' },
+  { label1: '登録済みの方はこちら', label2: 'アカウントとつなぐ', data: 'm=link' },
 ];
 
 // ── メニュー画像（SVG→PNG）。ブランド色はアプリと同系のグリーン ──
