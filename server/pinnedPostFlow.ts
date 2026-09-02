@@ -33,8 +33,8 @@ const JSON_SCHEMA = {
     schema: {
       type: "object",
       properties: {
-        mainPost: { type: "string", description: "固定投稿の本文" },
-        cta: { type: "string", description: "最後に添える一言（予約・LINE登録への案内）" },
+        mainPost: { type: "string", description: "固定投稿の本文（400〜470文字。住所・営業時間・免責の羅列は書かない）" },
+        cta: { type: "string", description: "コメント欄のリンクへ誘導する一言だけ（20文字前後・1行。住所や注意書きは書かない）" },
       },
       required: ["mainPost", "cta"],
       additionalProperties: false,
@@ -147,8 +147,15 @@ export async function createPinnedDraft(userId: number, accountId?: number | nul
     const main = String(parsed.mainPost || "").trim();
     const cta = String(parsed.cta || "").trim();
     if (!main) throw new Error("本文が空です");
+    // ★ctaの暴走ガード：指示しても住所・免責の羅列を詰め込むことがある
+    //   （氷見様データで528字のctaが出た・2026-09-02）。1行目だけを使い、
+    //   長すぎる場合は既定の誘導文に差し替える。
+    const ctaLine = cta.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "";
+    const safeCta = ctaLine && Array.from(ctaLine).length <= 60
+      ? ctaLine
+      : "LINEのご登録はコメント欄のリンクからどうぞ。";
     const { trimToBudget } = await import("../shared/postLength");
-    content = trimToBudget(main, cta || null, PINNED_CHAR_BUDGET);
+    content = trimToBudget(main, safeCta, PINNED_CHAR_BUDGET);
   } catch (e) {
     console.error("[PinnedFlow] 固定投稿の生成に失敗:", e);
     return { error: "投稿をうまく作れませんでした。少し時間をおいて、もう一度お試しください。" };

@@ -32,6 +32,9 @@ describe("固定投稿プロンプトのノウハウ反映", () => {
     expect(prompt).toContain("合計を必ず495文字以内");
     expect(prompt).toContain("50字ルールは適用しない");
     expect(prompt).toContain("固定投稿表示5万3000回"); // 実例の勝ちパターン
+    // 住所・免責の羅列で埋める暴走の禁止（氷見様データで528字のctaが出た）
+    expect(prompt).toContain("免責・注意書きの列挙");
+    expect(prompt).toContain("コメント欄への誘導1行だけ");
   });
 
   it("URLは本文でなくコメント欄へ誘導する指示が入る", () => {
