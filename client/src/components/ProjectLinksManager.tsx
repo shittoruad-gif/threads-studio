@@ -44,6 +44,8 @@ export default function ProjectLinksManager({
   const { t } = useLang();
   const [links, setLinks] = useState<ProjectLink[]>(() => parseProjectLinks(initialLinksJson));
   const [dirty, setDirty] = useState(false);
+  // 追加ボタンの種別一覧。既定は「公式LINEだけ」を見せる（全部埋めなくてよいと分かる形）
+  const [showOtherAddTypes, setShowOtherAddTypes] = useState(false);
 
   // Re-hydrate when the underlying project data changes (e.g. after save +
   // refetch) so external edits don't get clobbered by stale local state.
@@ -209,23 +211,47 @@ export default function ProjectLinksManager({
           </div>
         )}
 
-        {/* Add link buttons */}
+        {/* Add link buttons
+            ★おすすめは公式LINEの1本。全種別を横並びにすると
+              「全部埋めないといけない」と誤解される事例が多発したため、
+              LINEを主役にし、他は折りたたみの中に置く。 */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">{t("URLを追加")}</p>
-          <div className="flex flex-wrap gap-2">
-            {LINK_TYPES_LIST.map(cfg => (
-              <Button
-                key={cfg.type}
-                variant="outline"
-                size="sm"
-                onClick={() => addLink(cfg.type)}
-                className="gap-1"
+          <p className="text-xs text-muted-foreground mb-2">
+            {t("URLを追加（1つで十分です。全部埋める必要はありません）")}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => addLink('line')}
+              className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <Plus className="w-3 h-3" />
+              <span className="text-base leading-none">{LINK_TYPES.line.emoji}</span>
+              {t("LINE公式（おすすめ）")}
+            </Button>
+            {!showOtherAddTypes ? (
+              <button
+                type="button"
+                onClick={() => setShowOtherAddTypes(true)}
+                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
               >
-                <Plus className="w-3 h-3" />
-                <span className="text-base leading-none">{cfg.emoji}</span>
-                {t(cfg.name)}
-              </Button>
-            ))}
+                {t("公式LINEが無い場合（Web予約・ホームページなど）")}
+              </button>
+            ) : (
+              LINK_TYPES_LIST.filter(cfg => cfg.type !== 'line').map(cfg => (
+                <Button
+                  key={cfg.type}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addLink(cfg.type)}
+                  className="gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span className="text-base leading-none">{cfg.emoji}</span>
+                  {t(cfg.name)}
+                </Button>
+              ))
+            )}
           </div>
         </div>
 

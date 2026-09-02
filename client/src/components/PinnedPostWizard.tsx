@@ -152,6 +152,8 @@ export default function PinnedPostWizard({
   const [showAddForm, setShowAddForm] = useState(links.length === 0);
   const [isSavingLinks, setIsSavingLinks] = useState(false);
   const [showUrlHelp, setShowUrlHelp] = useState(false);
+  // 種別一覧の表示。既定は「公式LINEだけ」を見せる（全部埋めなくてよいと分かる形）
+  const [showOtherTypes, setShowOtherTypes] = useState(false);
 
   // ── Step 2 state ──
   const [selectedLinkType, setSelectedLinkType] = useState<ProjectLinkType | null>(null);
@@ -351,7 +353,7 @@ export default function PinnedPostWizard({
             {t("URLを登録する")}
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {t("LINE・予約ページなどのURLを共有するだけでOK。固定投稿のCTAで自動的に使われます。")}
+            {t("お客様をご案内したい先を1つ登録すれば十分です。全部埋める必要はありません。おすすめは公式LINEです。")}
           </p>
         </div>
 
@@ -399,33 +401,52 @@ export default function PinnedPostWizard({
         {showAddForm ? (
           <div className="rounded-lg border border-dashed border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/10 p-4 space-y-3">
             <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">{t("URLを追加")}</p>
-            {/* タイプ選択 */}
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-              {(['line', 'reservation', 'website', 'instagram', 'youtube', 'other'] as ProjectLinkType[]).map(type => {
-                const cfg = LINK_TYPES[type];
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => { setNewLinkType(type); setShowUrlHelp(false); }}
-                    className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-xs transition-colors ${
-                      newLinkType === type
-                        ? 'border-emerald-500 bg-emerald-100 dark:bg-emerald-900/40 font-semibold'
-                        : 'border-border hover:border-emerald-300'
-                    }`}
-                  >
-                    <span className="text-lg">{cfg.emoji}</span>
-                    <span className="truncate w-full text-center">{t(cfg.name)}</span>
-                  </button>
-                );
-              })}
-            </div>
+            {/* ★おすすめは公式LINEの1本。種別を横一列に並べると
+                「全部埋めないといけない」と誤解されて全種別が登録される事例が
+                多発したため、既定はLINEに固定し、他は折りたたみの中に置く。 */}
+            {newLinkType === 'line' && !showOtherTypes ? (
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-400 bg-emerald-100/60 dark:bg-emerald-900/30 px-3 py-2">
+                <span className="text-lg">{LINK_TYPES.line.emoji}</span>
+                <span className="text-sm font-semibold">{t("LINE公式")}</span>
+                <Badge className="bg-emerald-600 text-white text-[10px] px-1.5 py-0">{t("おすすめ")}</Badge>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                {(['line', 'reservation', 'website', 'instagram', 'youtube', 'other'] as ProjectLinkType[]).map(type => {
+                  const cfg = LINK_TYPES[type];
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => { setNewLinkType(type); setShowUrlHelp(false); }}
+                      className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-xs transition-colors ${
+                        newLinkType === type
+                          ? 'border-emerald-500 bg-emerald-100 dark:bg-emerald-900/40 font-semibold'
+                          : 'border-border hover:border-emerald-300'
+                      }`}
+                    >
+                      <span className="text-lg">{cfg.emoji}</span>
+                      <span className="truncate w-full text-center">{t(cfg.name)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <Input
               placeholder={LINK_TYPES[newLinkType].hint}
               value={newLinkUrl}
               onChange={e => setNewLinkUrl(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAddLink()}
             />
+            {newLinkType === 'line' && !showOtherTypes && (
+              <button
+                type="button"
+                onClick={() => setShowOtherTypes(true)}
+                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+              >
+                {t("公式LINEが無い場合（Web予約・ホームページなどを登録する）")}
+              </button>
+            )}
 
             {/* URLの取得方法ヘルプ（アコーディオン） */}
             {URL_HELP[newLinkType] && (
