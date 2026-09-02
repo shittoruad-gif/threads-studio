@@ -2021,6 +2021,9 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         mediaType: z.enum(["TEXT", "IMAGE", "VIDEO", "CAROUSEL"]).optional(),
         imageUrl: z.string().optional(),
         videoUrl: z.string().optional(),
+        // 固定投稿の公開時、このプロジェクトの公式LINE URLを
+        // 1件目のコメントとして自動添付する（本文にURLを貼らない方式の受け皿）
+        pinnedLineCommentProjectId: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { createAndPublishPost, createAndPublishThread, splitThreadSegments } = await import("./threadsPost");
@@ -2087,8 +2090,28 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
                 topicTag,
               });
 
-          return { 
-            success: true, 
+          // ★固定投稿：公式LINEのURLを1件目のコメントとして自動添付。
+          //   コメントは付加機能なので、失敗しても本体投稿は成功として返す。
+          if (input.pinnedLineCommentProjectId) {
+            try {
+              const pj = await db.getProjectById(input.pinnedLineCommentProjectId);
+              if (pj && pj.userId === ctx.user.id) {
+                const { attachLineUrlComment } = await import('./pinnedPostFlow');
+                const replyId = await attachLineUrlComment({
+                  accessToken: account.accessToken,
+                  threadsUserId: account.threadsUserId,
+                  rootThreadsPostId: result.id,
+                  project: pj as any,
+                });
+                if (replyId) console.log(`[Threads Post] Pinned LINE comment posted (root=${result.id} reply=${replyId})`);
+              }
+            } catch (e) {
+              console.error('[Threads Post] pinned LINE comment failed:', e);
+            }
+          }
+
+          return {
+            success: true,
             postId: result.id,
             message: 'Threadsに投稿しました'
           };

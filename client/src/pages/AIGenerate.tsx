@@ -2255,7 +2255,12 @@ export default function AIGenerate() {
               onClick={() => {
                 if (!selectedAccountId || !editedPost) return;
                 const text = buildThreadContent(editedPost);
-                publishNow.mutate({ accountId: selectedAccountId, text });
+                publishNow.mutate({
+                  accountId: selectedAccountId,
+                  text,
+                  // 固定投稿は、公式LINEのURLを1件目のコメントとして自動添付する
+                  ...(postType === 'pinned' && projectId ? { pinnedLineCommentProjectId: projectId } : {}),
+                });
               }}
             >
               {publishNow.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t('投稿中...')}</> : t('投稿する')}

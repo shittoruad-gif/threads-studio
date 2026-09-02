@@ -258,6 +258,28 @@ export async function executePendingPosts() {
         executed++;
         console.log(`[Scheduled Post] Successfully published post ${post.id} to Threads (${result.id})`);
 
+        // ★固定投稿のLINE URLコメント：固定投稿（angle='pinned'）の公開直後に、
+        //   自分の投稿へ1件だけ返信し、公式LINEのURLを添付する。
+        //   本文にURLを貼るとThreadsで到達が落ちるため、本文は「コメント欄から」へ誘導し、
+        //   実際のURLはこのコメントに置く（固定投稿の集客導線の要）。
+        //   公式LINEが未登録なら出さない（辿り着けない窓口へ誘導しない）。
+        if ((post as any).angle === 'pinned' && !(post as any).replyToThreadsId && canReply) {
+          try {
+            const { attachLineUrlComment } = await import('./pinnedPostFlow');
+            const replyId = await attachLineUrlComment({
+              accessToken,
+              threadsUserId: account.threadsUserId,
+              rootThreadsPostId: result.id,
+              project: postProject as any,
+            });
+            if (replyId) console.log(`[Scheduled Post] Pinned LINE comment posted for post ${post.id} (reply=${replyId})`);
+            else console.log(`[Scheduled Post] pinned LINE comment skipped for post ${post.id} (公式LINE未登録)`);
+          } catch (e) {
+            // コメントは付加機能。失敗しても本体投稿は成功として扱う。
+            console.error(`[Scheduled Post] pinned LINE comment failed for post ${post.id}:`, e);
+          }
+        }
+
         // ★流入計測コメント：自動投稿のメイン公開直後に、自分の投稿へ1件だけ返信し、
         //   お問い合わせキーワードを案内する。
         //   - キーワードは自然な一言をローテーション（数字コードは違和感があるため不使用）。

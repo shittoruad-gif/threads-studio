@@ -129,6 +129,9 @@ export async function createPinnedDraft(userId: number): Promise<PinnedDraft | {
       postContent: content,
       status: "awaiting_approval",
       source: "manual",
+      // 固定投稿の印。公開時に、コメント欄へ公式LINEのURLを自動で添付するために使う
+      // （本文にURLを貼るとThreadsで到達が落ちるため、URLはコメント欄に置く方式）。
+      angle: "pinned",
     } as any);
   } catch (e) {
     console.error("[PinnedFlow] 固定投稿の保存に失敗:", e);
@@ -146,4 +149,39 @@ export async function createPinnedDraft(userId: number): Promise<PinnedDraft | {
     console.error("[PinnedFlow] 保存した投稿の取得に失敗:", e);
   }
   return { error: "投稿は作成しましたが、うまく表示できませんでした。「今日の投稿」からご確認ください。" };
+}
+
+/**
+ * 固定投稿の公開直後に、公式LINEのURLを1件目のコメントとして添付する。
+ *
+ * 本文にURLを貼るとThreadsで到達が落ちるため、本文は「コメント欄から」へ誘導し、
+ * 実際のURLはここで付ける（固定投稿の集客導線の要）。
+ * 公式LINEが未登録なら何もしない（辿り着けない窓口へ誘導しない）。
+ *
+ * 呼び出し元: scheduledPostExecutor（LINE経由の固定投稿）/ threads.post（アプリのウィザード）。
+ * コメントは付加機能なので、失敗しても本体投稿の成否には影響させないこと（呼び出し側でcatch）。
+ *
+ * @returns 添付したら reply の Threads 投稿ID、添付しなかったら null
+ */
+export async function attachLineUrlComment(opts: {
+  accessToken: string;
+  threadsUserId: string;
+  /** 公開できたメイン投稿（固定投稿）の Threads 投稿ID */
+  rootThreadsPostId: string;
+  /** links列（JSON文字列）を持つプロジェクト */
+  project: { links?: string | null } | null | undefined;
+}): Promise<string | null> {
+  const { parseProjectLinks } = await import("../shared/projectLinks");
+  const links = parseProjectLinks(opts.project?.links || null);
+  const lineLink = links.find((l) => l.type === "line" && !!l.url);
+  if (!lineLink) return null;
+  const { createAndPublishPost } = await import("./threadsPost");
+  const reply = await createAndPublishPost({
+    accessToken: opts.accessToken,
+    threadsUserId: opts.threadsUserId,
+    text: `LINEのご登録・ご相談はこちらから↓\n${lineLink.url}`,
+    mediaType: "TEXT",
+    replyToId: opts.rootThreadsPostId,
+  });
+  return reply.id;
 }
