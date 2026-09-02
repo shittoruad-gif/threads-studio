@@ -210,10 +210,22 @@ async function startServer() {
           if (ev.type === 'message' && ev.message?.type === 'text') {
             const text = String(ev.message.text || '').trim();
             if (text === '解除') {
-              await db.unlinkLineByLineUserId(lineUserId);
-              const { resetToDefaultRichMenu } = await import('../lineNotify');
-              await resetToDefaultRichMenu(lineUserId);
-              await replyMessage(ev.replyToken, LINE_TEXTS.unlinked);
+              // ★以前は「解除」の一言で即座に連携が切れていた。
+              //   誤って送ると通知も操作もすべて止まり、しかもご本人は
+              //   何が起きたか分からない。一度だけ確認する。
+              const { replyMessages } = await import('../lineNotify');
+              const { textWithQuick } = await import('../lineChat');
+              await replyMessages(ev.replyToken, [
+                textWithQuick(
+                  'アカウントとの連携を解除しますか？\n' +
+                  '解除すると、投稿のお知らせや設定の変更がこのトークからできなくなります。\n' +
+                  '（もう一度つなぎ直すことはできます）',
+                  [
+                    { label: '解除する', data: 'm=unlink' },
+                    { label: 'やめる', data: 'm=menu' },
+                  ],
+                ),
+              ]);
               continue;
             }
             // ★ここで「数字を抜き出して6桁なら連携コード」と決めつけてはいけない。
@@ -228,8 +240,21 @@ async function startServer() {
               awaitingInput = Boolean(st?.state);
             } catch { awaitingInput = false; }
 
-            const code = text.replace(/[^0-9]/g, '');
-            if (!awaitingInput && !text.includes('@') && code.length === 6) {
+            // ★すでに連携済みの方は、コードを送る場面がない。
+            //   ここでコード扱いすると「2026年9月2日」のような
+            //   ふつうの文章（数字がちょうど6つ）まで
+            //   「コードが違います」と返してしまい、会話が壊れる。
+            //   連携し直したい場合は「解除」してからになる。
+            let alreadyLinked = false;
+            try {
+              alreadyLinked = Boolean(await db.getUserByLineUserId(lineUserId));
+            } catch { alreadyLinked = false; }
+
+            // 全角で送られても拾えるようにする（日本語キーボードでは起こりやすい）
+            const { extractDigits, toHalfWidth } = await import('@shared/inputNormalize');
+            const code = extractDigits(text);
+            const looksLikeEmail = toHalfWidth(text).includes('@');
+            if (!alreadyLinked && !awaitingInput && !looksLikeEmail && code.length === 6) {
               // 表示名は設定画面の連携一覧用（取れなくても連携は成立させる）
               const { fetchLineDisplayName } = await import('../lineNotify');
               const displayName = await fetchLineDisplayName(lineUserId);

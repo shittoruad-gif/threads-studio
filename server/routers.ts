@@ -2,6 +2,7 @@ import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
+import { normalizeEmail, normalizeCouponCode } from "@shared/inputNormalize";
 import { toPublicErrorMessage, stripRawUrls } from "../shared/sanitize";
 import { CONCEPT_DESIGN_PROMPT } from "../shared/conceptDesign";
 import { z } from "zod";
@@ -146,11 +147,19 @@ export const appRouter = router({
     // Email + Password Registration
     register: publicProcedure
       .input(z.object({
-        email: z.string().email(),
+        // 全角の英数字・＠や、コピー時に付いた前後の空白で弾かれないよう、
+        // 検証の前に整形する（お客様には原因が分からないため）
+        email: z.preprocess(
+          (v) => (typeof v === 'string' ? normalizeEmail(v) : v),
+          z.string().email(),
+        ),
         password: z.string().min(10),
         name: z.string().min(1, '名前を入力してください'),
         storeName: z.string().max(255).optional(), // 店舗名・屋号（任意）
-        couponCode: z.string().optional(),
+        couponCode: z.preprocess(
+          (v) => (typeof v === 'string' ? normalizeCouponCode(v) : v),
+          z.string().optional(),
+        ),
         // #28 紹介コード（/register?ref=XXX から取得）
         referralCode: z.string().trim().min(1).max(16).optional(),
         // ★規約同意（後日の紛争に備えて記録する。false では登録できない）
@@ -273,7 +282,12 @@ export const appRouter = router({
     // Email + Password Login
     login: publicProcedure
       .input(z.object({
-        email: z.string().email(),
+        // 全角の英数字・＠や、コピー時に付いた前後の空白で弾かれないよう、
+        // 検証の前に整形する（お客様には原因が分からないため）
+        email: z.preprocess(
+          (v) => (typeof v === 'string' ? normalizeEmail(v) : v),
+          z.string().email(),
+        ),
         password: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -349,7 +363,12 @@ export const appRouter = router({
     // Request Password Reset
     requestPasswordReset: publicProcedure
       .input(z.object({
-        email: z.string().email(),
+        // 全角の英数字・＠や、コピー時に付いた前後の空白で弾かれないよう、
+        // 検証の前に整形する（お客様には原因が分からないため）
+        email: z.preprocess(
+          (v) => (typeof v === 'string' ? normalizeEmail(v) : v),
+          z.string().email(),
+        ),
       }))
       .mutation(async ({ ctx, input }) => {
         const { generateToken } = await import('./auth-helpers');

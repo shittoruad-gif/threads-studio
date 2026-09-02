@@ -86,7 +86,8 @@ function referralLink(lineUserId: string, code: string): Promise<unknown[]> | un
  */
 async function sendLinkCodeByEmail(lineUserId: string, email: string): Promise<unknown[]> {
   await db.clearLineChatState(lineUserId);
-  const addr = email.trim().toLowerCase();
+  const { normalizeEmail } = await import("@shared/inputNormalize");
+  const addr = normalizeEmail(email);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) {
     await db.setLineChatState(lineUserId, "link_email");
     return [{ type: "text", text: "メールアドレスの形式が正しくないようです。もう一度送ってください。" }];
@@ -756,6 +757,12 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     )];
   }
 
+  if (q.m === "unlink") {
+    await db.unlinkLineByLineUserId(lineUserId);
+    const { resetToDefaultRichMenu, LINE_TEXTS } = await import("./lineNotify");
+    await resetToDefaultRichMenu(lineUserId);
+    return [{ type: "text", text: LINE_TEXTS.unlinked }];
+  }
   if (q.m === "addstaff") return issueStaffLinkCode(user.id);
   if (q.m === "sendq" && q.q) {
     await db.clearLineChatState(lineUserId);

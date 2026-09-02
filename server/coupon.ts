@@ -1,6 +1,7 @@
 import { eq, and, isNull, gt, lt } from "drizzle-orm";
 import { getDb } from "./db";
 import { coupons, userCoupons, subscriptions, type Coupon, type InsertCoupon, type InsertUserCoupon } from "../drizzle/schema";
+import { normalizeCouponCode } from "@shared/inputNormalize";
 
 /**
  * Validate and retrieve a coupon by code
@@ -14,7 +15,7 @@ export async function validateCoupon(code: string): Promise<{ valid: boolean; co
   const result = await db
     .select()
     .from(coupons)
-    .where(eq(coupons.code, code.toUpperCase()))
+    .where(eq(coupons.code, normalizeCouponCode(code)))
     .limit(1);
 
   if (result.length === 0) {
