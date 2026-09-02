@@ -71,6 +71,13 @@ export async function createPinnedDraft(userId: number): Promise<PinnedDraft | {
   const project: any =
     (account.defaultProjectId && usable.find((p: any) => p.id === account.defaultProjectId)) || usable[0];
 
+  // ★links はDBにJSON文字列で入っている。配列に直してから渡す。
+  //   文字列のまま渡すと、プロンプト組み立ての中で links.find が呼べず
+  //   「投稿をうまく作れませんでした」になる（お客様の固定投稿が全部これで失敗していた）。
+  //   他の生成経路（自動投稿・予約投稿・アプリ）は、いずれもここで parse している。
+  const { parseProjectLinks } = await import("../shared/projectLinks");
+  const projectLinks = parseProjectLinks(project.links || null);
+
   let content = "";
   try {
     const prompt = generateThreadsPrompt({
@@ -90,7 +97,7 @@ export async function createPinnedDraft(userId: number): Promise<PinnedDraft | {
       catchphrase: project.catchphrase,
       customerWords: project.customerWords,
       ctaLink: project.ctaLink,
-      links: project.links,
+      links: projectLinks.map((l) => ({ type: l.type, label: l.label, url: l.url })),
       useThreadsKnowhow: project.useThreadsKnowhow,
       stylePreference: project.stylePreference,
       ngWords: project.ngWords,
