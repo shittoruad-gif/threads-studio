@@ -39,7 +39,19 @@ const STEP_LABEL: Record<string, string> = {
   pin_not_confirmed: "固定投稿のピン留めが未確認",
   auto_off: "自動投稿がOFF",
   approval_off: "公開前の確認がOFF",
+  // 複数アカウント運用（アカウント別。キーは "acct_pinned:12" の形）
+  acct_project: "使うお店の情報が未設定",
+  acct_pinned: "固定投稿が未作成",
+  acct_posted: "固定投稿がThreads未公開",
+  acct_pin: "固定投稿のピン留めが未確認",
 };
+
+/** 工程キー → 社内向けの短い表記（アカウント別なら「@xxx：」を頭に付ける） */
+function labelFor(action: { key: string; accountName?: string }): string {
+  const base = action.key.split(":")[0];
+  const label = STEP_LABEL[base] ?? action.key;
+  return action.accountName ? `${action.accountName}：${label}` : label;
+}
 
 export async function runOpsDigestJob(): Promise<void> {
   const { getPlan, resolveEffectivePlanId } = await import("@shared/plans");
@@ -73,7 +85,7 @@ export async function runOpsDigestJob(): Promise<void> {
       // 「公開前の確認がOFF」はご本人の好みなので、社内報告には出さない
       if (action.key === "approval_off") continue;
 
-      const label = STEP_LABEL[action.key] ?? action.key;
+      const label = labelFor(action);
       if (paid) {
         const posted = await db.countPostedPosts(u.id).catch(() => 1);
         const mark = posted === 0 ? "（まだ1件も投稿されていません）" : "";

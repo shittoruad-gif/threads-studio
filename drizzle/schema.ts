@@ -341,6 +341,9 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   // 「店舗Aのアカウントに店舗Bの内容」を防ぐための紐付け。
   // null の場合は全プロジェクトを日替わりローテーション（従来挙動）。
   defaultProjectId: varchar("defaultProjectId", { length: 50 }).references(() => projects.id, { onDelete: "set null" }),
+  // このアカウントの固定投稿を「Threadsでピン留めした」とご本人が申告した時刻。
+  // ピン留めはAPIで操作も確認もできないため申告制。複数アカウント運用ではアカウントごとに持つ。
+  pinnedPostConfirmedAt: timestamp("pinnedPostConfirmedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

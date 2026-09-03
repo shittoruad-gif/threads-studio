@@ -3655,6 +3655,65 @@ export async function isPinnedPostConfirmed(userId: number): Promise<boolean> {
   return Boolean(rows?.[0]?.v);
 }
 
+// ── 固定投稿の進み具合（アカウント単位） ─────────────────────
+/**
+ * このアカウントの固定投稿が「作られた」「Threadsに出た」か。
+ * ★複数アカウント運用では、固定投稿はアカウント（＝お店）ごとに必要。
+ *   ユーザー単位で数えると、片方に作っただけでもう片方も完了扱いになり、
+ *   2つ目のアカウントの抜けが見えなくなる（2026-09-03）。
+ * 作成の判定は、LINEで作った下書き（scheduledPosts.angle='pinned'）と
+ * アプリで作った生成履歴（aiGenerationHistory.postType='pinned'・お店の情報単位）の両方を見る。
+ */
+export async function getAccountPinnedProgress(
+  userId: number,
+  accountId: number,
+  projectId?: string | null,
+): Promise<{ created: boolean; posted: boolean }> {
+  const database = await getDb();
+  if (!database) return { created: false, posted: false };
+  const rows: any = await database.execute(sql.raw(
+    `SELECT
+       SUM(CASE WHEN \`angle\` = 'pinned' THEN 1 ELSE 0 END) AS created,
+       SUM(CASE WHEN \`angle\` = 'pinned' AND \`status\` = 'posted' THEN 1 ELSE 0 END) AS posted
+     FROM \`scheduledPosts\`
+     WHERE \`userId\` = ${Number(userId)} AND \`threadsAccountId\` = ${Number(accountId)}`
+  ));
+  const r = rows?.[0]?.[0] ?? {};
+  let created = Number(r.created ?? 0) > 0;
+  let posted = Number(r.posted ?? 0) > 0;
+  if (!created && projectId) {
+    created = await hasGeneratedPinnedPost(userId, projectId).catch(() => false);
+    // アプリ経由で公開した固定投稿は angle を持たないので、そのお店の公開済み投稿があれば公開済みとみなす
+    if (created && !posted) {
+      const pr: any = await database.execute(sql.raw(
+        `SELECT COUNT(*) AS c FROM \`scheduledPosts\`
+         WHERE \`userId\` = ${Number(userId)} AND \`threadsAccountId\` = ${Number(accountId)} AND \`status\` = 'posted'`
+      ));
+      posted = Number(pr?.[0]?.[0]?.c ?? 0) > 0;
+    }
+  }
+  return { created, posted };
+}
+
+/** このアカウントの固定投稿を「ピン留めしました」と記録する */
+export async function confirmPinnedPostForAccount(accountId: number): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  const { threadsAccounts } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  await database.update(threadsAccounts).set({ pinnedPostConfirmedAt: new Date() } as any).where(eq(threadsAccounts.id, accountId));
+}
+
+/** このアカウントでピン留め済みと申告されているか */
+export async function isPinnedPostConfirmedForAccount(accountId: number): Promise<boolean> {
+  const database = await getDb();
+  if (!database) return false;
+  const { threadsAccounts } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  const rows = await database.select({ v: threadsAccounts.pinnedPostConfirmedAt }).from(threadsAccounts).where(eq(threadsAccounts.id, accountId)).limit(1);
+  return Boolean(rows?.[0]?.v);
+}
+
 // ── 公式LINEに先に友だち追加した方 ─────────────────────────────
 /** 友だち追加を記録する（すでにあれば何もしない） */
 export async function recordLineFollow(lineUserId: string): Promise<void> {

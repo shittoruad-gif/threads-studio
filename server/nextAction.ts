@@ -17,12 +17,14 @@
 import * as db from "./db";
 
 export type NextAction = {
-  /** 案内の種類。同じものを繰り返し送らないための目印 */
+  /** 案内の種類。同じものを繰り返し送らないための目印（アカウント別の工程は "acct_pinned:12" のようにIDを含む） */
   key: string;
   /** LINEにお送りする本文 */
   text: string;
   /** そのまま押せるボタン（postbackのデータ） */
   buttons: { label: string; data: string }[];
+  /** どのThreadsアカウントの工程か（複数アカウント運用のときだけ。社内報告で「@xxx の固定投稿が未作成」と出すため） */
+  accountName?: string;
 };
 
 /**
@@ -41,7 +43,75 @@ export type SetupStep = {
   actionLabel?: string;
   /** 未完了だと実害が出る工程（画面で強調する） */
   important?: boolean;
+  /** どのThreadsアカウントの工程か（複数アカウント運用のときだけ） */
+  accountId?: number;
+  accountName?: string;
 };
+
+/** 表示用のアカウント名（@付き） */
+function acctName(a: any): string {
+  return `@${a?.threadsUsername || a?.threadsUserId || "account"}`;
+}
+
+/**
+ * 複数アカウント運用のときの、アカウント別の工程。
+ * ★「お店の情報の紐づけ → 固定投稿を作る → 公開する → ピン留めする」はアカウントごとに必要。
+ *   ユーザー単位で判定すると、1つ目のアカウントで済ませただけで2つ目も完了に見えてしまい、
+ *   もう片方のプロフィールに入口が無いまま放置される（2026-09-03 三上様指摘）。
+ */
+async function accountSteps(userId: number, accounts: any[], usable: any[]): Promise<SetupStep[]> {
+  const out: SetupStep[] = [];
+  for (const a of accounts) {
+    const name = acctName(a);
+    const id = Number(a.id);
+    const project = a.defaultProjectId ? usable.find((p: any) => p.id === a.defaultProjectId) : null;
+    out.push({
+      id: `acct_project:${id}`,
+      label: `${name}：使うお店の情報を決める`,
+      done: Boolean(project),
+      path: "/threads-connect",
+      actionLabel: "決める",
+      important: true,
+      accountId: id, accountName: name,
+    });
+    let prog = { created: false, posted: false };
+    try { prog = await db.getAccountPinnedProgress(userId, id, project?.id ?? null); } catch { /* 取れなければ未作成扱い */ }
+    const pinPath = project ? `/ai-generate?project=${project.id}&postType=pinned` : "/ai-generate?pinned=1";
+    out.push({
+      id: `acct_pinned:${id}`,
+      label: `${name}：固定投稿をAIで作成（集客の入口）`,
+      done: prog.created,
+      path: pinPath,
+      actionLabel: "作成する",
+      accountId: id, accountName: name,
+    });
+    if (prog.created) {
+      out.push({
+        id: `acct_posted:${id}`,
+        label: `${name}：固定投稿をThreadsに公開する`,
+        done: prog.posted,
+        path: "/posts",
+        actionLabel: "公開する",
+        important: true,
+        accountId: id, accountName: name,
+      });
+    }
+    if (prog.created && prog.posted) {
+      let confirmed = false;
+      try { confirmed = await db.isPinnedPostConfirmedForAccount(id); } catch { confirmed = false; }
+      out.push({
+        id: `acct_pin:${id}`,
+        label: `${name}：固定投稿をThreadsでピン留めする`,
+        done: confirmed,
+        path: pinPath,
+        actionLabel: "やり方を見る",
+        important: true,
+        accountId: id, accountName: name,
+      });
+    }
+  }
+  return out;
+}
 
 /** お店の情報として「使える」状態か（自動投稿の対象条件と同じ） */
 function isUsableProject(p: any): boolean {
@@ -92,17 +162,30 @@ export async function getSetupSteps(userId: number): Promise<SetupStep[]> {
     },
   ];
 
-  // ★複数アカウントを運用しているときだけ意味を持つ工程。
-  //   1アカウントなら紐づけが無くてもそのお店の内容が使われるので、工程には出さない。
+  // ★複数アカウントを運用しているときは、紐づけ・固定投稿・公開・ピン留めを
+  //   アカウントごとに出す（どのアカウントの工程かが必ず分かるようにする）。
   if (active.length > 1) {
-    steps.push({
-      id: "account_unpinned",
-      label: "アカウントごとに使うお店の情報を決める",
-      done: unlinked.length === 0,
-      path: "/threads-connect",
-      actionLabel: "決める",
-      important: true,
-    });
+    void unlinked;
+    steps.push(...(await accountSteps(userId, active, usable)));
+    if (maxPerDay > 0) {
+      steps.push({
+        id: "auto_off",
+        label: "自動投稿をONにする",
+        done: settings?.autoPostEnabled !== false,
+        path: "/settings",
+        actionLabel: "ONにする",
+      });
+    }
+    return steps;
+  }
+
+  // ★1アカウント運用：LINEで作った固定投稿（scheduledPosts.angle='pinned'）も数える。
+  //   以前は アプリの生成履歴だけを見ていたため、LINEで作った方が「未作成」のままだった。
+  if (!hasPinned && active[0]) {
+    try {
+      const prog = await db.getAccountPinnedProgress(userId, Number(active[0].id), (active[0] as any).defaultProjectId ?? null);
+      hasPinned = prog.created;
+    } catch { /* そのまま */ }
   }
 
   steps.push({
@@ -134,6 +217,9 @@ export async function getSetupSteps(userId: number): Promise<SetupStep[]> {
   if (hasPinned && postedCount > 0) {
     let confirmed = false;
     try { confirmed = await db.isPinnedPostConfirmed(userId); } catch { confirmed = false; }
+    if (!confirmed && active[0]) {
+      try { confirmed = await db.isPinnedPostConfirmedForAccount(Number(active[0].id)); } catch { /* そのまま */ }
+    }
     steps.push({
       id: "pin_not_confirmed",
       label: "作った固定投稿をThreadsでピン留めする",
@@ -197,6 +283,58 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
     };
   }
 
+  // ③' 複数アカウント運用：紐づけ・固定投稿・公開・ピン留めをアカウントごとに見て、
+  //     最初に止まっているアカウントの工程を、アカウント名つきで案内する。
+  const activeAccounts = (accounts || []).filter((a: any) => a.isActive !== false);
+  if (activeAccounts.length > 1) {
+    const perAccount = await accountSteps(userId, activeAccounts, usable);
+    const first = perAccount.find((st) => !st.done);
+    if (first) {
+      const name = first.accountName ?? "";
+      const id = first.accountId ?? 0;
+      const kind = first.id.split(":")[0];
+      const { pinGuideText } = await import("@shared/pinGuide");
+      const byKind: Record<string, Omit<NextAction, "key" | "accountName">> = {
+        acct_project: {
+          text:
+            "次にやることが1つあります。\n\n" +
+            `${name} に、そのアカウント用の「お店の情報」がまだ決まっていません。\n` +
+            "このままだと、別のアカウント向けに作った内容がそのまま投稿されてしまいます。\n\n" +
+            "下のボタンを押すと、登録済みの情報を選ぶか、このアカウント用に新しく登録できます。",
+          buttons: [{ label: `${name} の設定をする`, data: `c=acct&a=${id}` }],
+        },
+        acct_pinned: {
+          text:
+            "次にやることが1つあります。\n\n" +
+            `${name} の「固定投稿」がまだ作られていません。\n` +
+            "プロフィールに固定しておく投稿で、はじめて見に来た方が最初に読む集客の入口です。\n\n" +
+            "下のボタンを押すと、このアカウント用に作って、そのまま公開できます。",
+          buttons: [{ label: `${name} の固定投稿を作る`, data: `m=makepin&a=${id}` }],
+        },
+        acct_posted: {
+          text:
+            "次にやることが1つあります。\n\n" +
+            `${name} の固定投稿は作れていますが、まだThreadsに公開されていません。\n\n` +
+            "下の「今日の投稿」から、公開をお待ちしている投稿を確認して、その場で公開できます。",
+          buttons: [
+            { label: "今日の投稿", data: "m=posts" },
+            { label: `${name} 用に作り直す`, data: `m=makepin&a=${id}` },
+          ],
+        },
+        acct_pin: {
+          text:
+            "次にやることが1つあります。\n\n" +
+            `${name} の固定投稿は公開できていますが、まだThreadsでピン留めされていないようです。\n\n` +
+            pinGuideText({ withPublishSteps: false }) +
+            `\n\n${name} でピン留めが終わったら、下の「ピン留めしました」を押してください。`,
+          buttons: [{ label: `${name} ピン留めしました`, data: `n=pinned&a=${id}` }],
+        },
+      };
+      const body = byKind[kind];
+      if (body) return { key: first.id, accountName: name, ...body };
+    }
+  }
+
   // ③ お店の情報が紐づいていないアカウントがある。
   //    お店の情報が1件しかない状態で複数アカウントを連携すると、
   //    別ジャンルのアカウントに同じ内容が流れてしまう。
@@ -233,6 +371,12 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
   //    アプリのチェックリストでも最初の工程に置いている。案内側でも同じ扱いにする。
   let hasPinned = false;
   try { hasPinned = await db.hasGeneratedPinnedPost(userId); } catch { hasPinned = true; }
+  if (!hasPinned && activeAccounts[0]) {
+    try {
+      const prog = await db.getAccountPinnedProgress(userId, Number(activeAccounts[0].id), (activeAccounts[0] as any).defaultProjectId ?? null);
+      hasPinned = prog.created;
+    } catch { /* そのまま */ }
+  }
   if (!hasPinned) {
     const base = process.env.APP_BASE_URL || "https://threads-studio.com";
     return {
@@ -273,6 +417,9 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
   {
     let confirmed = false;
     try { confirmed = await db.isPinnedPostConfirmed(userId); } catch { confirmed = true; }
+    if (!confirmed && activeAccounts[0]) {
+      try { confirmed = await db.isPinnedPostConfirmedForAccount(Number(activeAccounts[0].id)); } catch { /* そのまま */ }
+    }
     if (!confirmed) {
       const { pinGuideText } = await import("@shared/pinGuide");
       return {

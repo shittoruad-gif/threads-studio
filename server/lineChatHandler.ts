@@ -443,8 +443,23 @@ async function repliesForProfile(userId: number): Promise<unknown[]> {
 
 // ══════════ はじめの設定（20問）をトーク内で1問ずつ聞く ══════════
 // 状態: state="counseling" / payload={mode, step, answers, projectId}
+/**
+ * 「@xxx の」という接頭辞（複数アカウント運用のときだけ。1つなら空文字）。
+ * どのアカウントの操作かが常に分かるようにするため。
+ */
+async function accountLabel(userId: number, accountId: number): Promise<string> {
+  try {
+    const accts = (await db.getThreadsAccountsByUserId(userId)).filter((a: any) => a.isActive !== false);
+    if (accts.length < 2) return "";
+    const a: any = accts.find((x: any) => Number(x.id) === Number(accountId));
+    return a ? `@${a.threadsUsername || a.threadsUserId} の` : "";
+  } catch { return ""; }
+}
+
 interface CounselingState {
   mode: "store" | "personal";
+  /** どのアカウントの設定かの表示名（複数運用時のみ。質問の見出しに出す） */
+  accountName?: string | null;
   step: number;
   answers: Record<string, string>;
   projectId: string;
@@ -540,9 +555,10 @@ function askQuestion(st: CounselingState): unknown[] {
   const q: any = qs[st.step];
   const total = qs.length;
   const editing = st.editing !== null && st.editing !== undefined;
+  const who = st.accountName ? `${st.accountName} の設定　` : "";
   const head = editing
-    ? `【${st.step + 1}問目を直します】\n${q.prompt}`
-    : `【${st.step + 1}／${total}】\n${q.prompt}`;
+    ? `【${who}${st.step + 1}問目を直します】\n${q.prompt}`
+    : `【${who}${st.step + 1}／${total}】\n${q.prompt}`;
   const hint = q.helper ? `\n\n${q.helper}` : "";
   const skip = q.required ? "" : "\n\n（なければ下の「スキップ」を押してください）";
   const back = editing
@@ -918,10 +934,16 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         : ((projects?.[0] as any)?.id ?? undefined);
     }
     if (!projectId) projectId = `line_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-    const st: CounselingState = { mode: q.mode, step: 0, answers: {}, projectId, accountId };
+    // 複数アカウント運用なら、どのアカウントの設定かを毎回の質問に出す
+    let accountName: string | null = null;
+    if (accountId) {
+      const lbl = await accountLabel(user.id, accountId);
+      accountName = lbl ? lbl.replace(/ の$/, "") : null;
+    }
+    const st: CounselingState = { mode: q.mode, step: 0, answers: {}, projectId, accountId, accountName };
     await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
     return [
-      { type: "text", text: q.mode === "personal" ? "「個人にファンをつける」で進めます。" : "「お店の集客」で進めます。" },
+      { type: "text", text: (accountName ? `${accountName} の設定として、` : "") + (q.mode === "personal" ? "「個人にファンをつける」で進めます。" : "「お店の集客」で進めます。") },
       ...askQuestion(st),
     ];
   }
@@ -973,18 +995,31 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     )];
   }
   if (q.n === "pinned") {
-    await db.confirmPinnedPost(user.id);
+    // ★複数アカウント運用では「どのアカウントでピン留めしたか」を記録する。
+    //   片方だけ済ませてもう片方が抜ける、を検知するため。
+    const accts = (await db.getThreadsAccountsByUserId(user.id)).filter((a: any) => a.isActive !== false);
+    if (!q.a && accts.length >= 2) {
+      return [textWithQuick(
+        "どのアカウントでピン留めしましたか？",
+        accts.slice(0, 10).map((a: any) => ({ label: `@${a.threadsUsername}`, data: `n=pinned&a=${a.id}` })),
+      )];
+    }
+    const target: any = q.a ? accts.find((a: any) => String(a.id) === String(q.a)) : accts[0];
+    if (target) await db.confirmPinnedPostForAccount(Number(target.id));
+    if (accts.length <= 1 || !q.a) await db.confirmPinnedPost(user.id);
+    const who = target && accts.length >= 2 ? `@${target.threadsUsername} の` : "";
     return [textWithQuick(
-      "ありがとうございます。ピン留めを記録しました。\n" +
+      `ありがとうございます。${who}ピン留めを記録しました。\n` +
       "プロフィールを見に来た方が、最初にこの投稿を読む形になります。",
       MENU_HINT,
     )];
   }
   if (q.n === "pinhow") {
     const { pinGuideText } = await import("@shared/pinGuide");
+    const a = q.a ? `&a=${q.a}` : "";
     return [textWithQuick(
       pinGuideText() + "\n\n終わったら、下の「ピン留めしました」を押してください。",
-      [{ label: "ピン留めしました", data: "n=pinned" }, ...MENU_HINT],
+      [{ label: "ピン留めしました", data: `n=pinned${a}` }, ...MENU_HINT],
     )];
   }
   if (q.n === "on") {
@@ -1093,18 +1128,28 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     // ★固定投稿を公開したときは、そのままピン留めまで案内する。
     //   公開しただけではプロフィールの入口にならないため、ここで切らさない。
     //   （まだ一度もピン留めの確認をしていない方にだけお伝えする）
+    // ★固定投稿のときだけ案内する（通常投稿の承認で毎回ピン留めの話をしない）。
+    //   複数アカウント運用では、その投稿のアカウントで未確認なら案内し、ボタンにアカウントを添える。
     let needPinGuide = false;
-    try { needPinGuide = !(await db.isPinnedPostConfirmed(user.id)); } catch { needPinGuide = false; }
+    const pinAcct = (post as any).threadsAccountId ? Number((post as any).threadsAccountId) : null;
+    if ((post as any).angle === "pinned") {
+      try {
+        needPinGuide = pinAcct
+          ? !(await db.isPinnedPostConfirmedForAccount(pinAcct))
+          : !(await db.isPinnedPostConfirmed(user.id));
+      } catch { needPinGuide = false; }
+    }
     if (needPinGuide) {
       const { pinGuideText } = await import("@shared/pinGuide");
+      const acctLabel = pinAcct ? await accountLabel(user.id, pinAcct) : "";
       return [
         textWithQuick(done + "\n\n間違えて押した場合は「取り消す」で元に戻せます。", undo),
         textWithQuick(
-          "公開されたら、最後にひとつだけお願いします。\n\n" +
+          `${acctLabel}公開されたら、最後にひとつだけお願いします。\n\n` +
           // ここは公開の手続きが済んだ直後なので、公開の手順は出さない
           pinGuideText({ withPublishSteps: false }) +
           "\n\n終わったら、下の「ピン留めしました」を押してください。",
-          [{ label: "ピン留めしました", data: "n=pinned" }],
+          [{ label: "ピン留めしました", data: `n=pinned${pinAcct ? `&a=${pinAcct}` : ""}` }],
         ),
       ];
     }
@@ -1120,11 +1165,12 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const now = new Date();
     const approvedIds: number[] = [];
     let hasPinned = false;
+    const pinnedAccts = new Set<number>();
     for (const p of waiting as any[]) {
       const past = !p.scheduledAt || new Date(p.scheduledAt) <= now;
       await db.updateScheduledPost(Number(p.id), { status: "pending", ...(past ? { scheduledAt: now } : {}) });
       approvedIds.push(Number(p.id));
-      if (p.angle === "pinned") hasPinned = true;
+      if (p.angle === "pinned") { hasPinned = true; if (p.threadsAccountId) pinnedAccts.add(Number(p.threadsAccountId)); }
     }
     const times = (waiting as any[])
       .map((p) => (!p.scheduledAt || new Date(p.scheduledAt) <= now ? "まもなく" : fmtJst(p.scheduledAt)))
@@ -1134,15 +1180,20 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const undo = [{ label: "すべて取り消す", data: `a=undoall&ids=${approvedIds.slice(0, 20).join(",")}` }, ...MENU_HINT];
     const out: unknown[] = [textWithQuick(done + "\n\n間違えて押した場合は「すべて取り消す」で元に戻せます。", undo)];
     if (hasPinned) {
-      let needPinGuide = false;
-      try { needPinGuide = !(await db.isPinnedPostConfirmed(user.id)); } catch { needPinGuide = false; }
-      if (needPinGuide) {
-        const { pinGuideText } = await import("@shared/pinGuide");
+      const { pinGuideText } = await import("@shared/pinGuide");
+      const targets: (number | null)[] = pinnedAccts.size > 0 ? Array.from(pinnedAccts) : [null];
+      for (const acct of targets) {
+        let needPinGuide = false;
+        try {
+          needPinGuide = acct ? !(await db.isPinnedPostConfirmedForAccount(acct)) : !(await db.isPinnedPostConfirmed(user.id));
+        } catch { needPinGuide = false; }
+        if (!needPinGuide) continue;
+        const acctLabel = acct ? await accountLabel(user.id, acct) : "";
         out.push(textWithQuick(
-          "固定投稿も含まれています。公開されたら、最後にひとつだけお願いします。\n\n" +
+          `${acctLabel}固定投稿も含まれています。公開されたら、最後にひとつだけお願いします。\n\n` +
           pinGuideText({ withPublishSteps: false }) +
           "\n\n終わったら、下の「ピン留めしました」を押してください。",
-          [{ label: "ピン留めしました", data: "n=pinned" }],
+          [{ label: "ピン留めしました", data: `n=pinned${acct ? `&a=${acct}` : ""}` }],
         ));
       }
     }
