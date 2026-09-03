@@ -798,6 +798,16 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   await clearPendingTextInput(lineUserId, q);
 
   // ── メニュー ──
+  // ★連携済みの方が、切り替え前の登録用メニューの「紹介コードを入力」を押したとき。
+  //   連携後はコードをそのまま送れば適用されるので、その案内だけ返す
+  //   （以前は該当処理が無く「うまく受け取れませんでした」になっていた）。
+  if (q.m === "refcode") {
+    return [textWithQuick(
+      "お持ちの紹介コードを、このトークにそのまま送ってください。\n" +
+      "適用されると、料金プランの画面にそのコードの価格が表示されます。",
+      MENU_HINT,
+    )];
+  }
   if (q.m === "posts") return repliesForPosts(user.id, q.one ? "one" : q.all ? "all" : undefined);
   if (q.m === "stats") return repliesForStats(user.id);
   if (q.m === "profile") return repliesForProfile(user.id);
