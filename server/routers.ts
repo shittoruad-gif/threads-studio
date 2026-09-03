@@ -1978,6 +1978,14 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           hasReplyScope: process.env.THREADS_MANAGE_REPLIES_APPROVED === "true",
         } as any);
 
+        // ★Threadsがつながった時点で、デモモードは自動で終了する。
+        //   以前は「本番モードに切り替える」を別途押す必要があり、連携済みなのに
+        //   「体験版として利用中」の帯が出続ける方がいた（2026-09-03 三上様指示）。
+        //   連携＝本番で使う意思なので、ここで切り替える。
+        await db.setUserDemoMode(ctx.user.id, false).catch((e) => {
+          console.error(`[ThreadsConnect] デモモード解除に失敗 user=${ctx.user.id}:`, e);
+        });
+
         // 連携できた瞬間に、今日の分の投稿を作る（朝6時を待たない）
         import('./autoPostScheduler')
           .then(({ runAutoPostCatchUpForUser }) => runAutoPostCatchUpForUser(ctx.user.id, 'Threads連携'))

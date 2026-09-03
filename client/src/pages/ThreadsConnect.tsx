@@ -111,9 +111,12 @@ export default function ThreadsConnect() {
     new URLSearchParams(window.location.search).get('from') === 'line';
   const [justConnected, setJustConnected] = useState(false);
 
+  const utils = trpc.useUtils();
   const handleCallback = trpc.threads.handleCallback.useMutation({
     onSuccess: (data) => {
       setIsProcessingCallback(false);
+      // 連携と同時にサーバー側でデモモードが解除されるので、帯（DemoModeBanner）を即座に消す
+      utils.setup.getDemoMode.invalidate();
       if (data.isReconnection) {
         // If the user clicked "別のThreadsアカウントを連携" but ended up reconnecting
         // the SAME account, show a guide explaining how to switch Threads account.

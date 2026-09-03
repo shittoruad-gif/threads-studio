@@ -113,6 +113,9 @@ export default function AICounseling() {
   // 真っ白な新規入力ではなく既存の回答を開く（「入力が消えた」ように見える誤解の防止。
   // 2026-08-14 滝本さんで実際に発生）。新店舗の追加は /ai-project-create 経由なので影響しない。
   const { data: existingProjects } = trpc.project.list.useQuery(undefined, { enabled: isNew });
+  // 公式LINEの友だち追加URL（はじめの設定はLINEのトークで進めるのを推奨するため）
+  const lineStatusForHint = trpc.lineNotify.getStatus.useQuery(undefined, { enabled: isNew, retry: false });
+  const lineAddUrlForHint: string | null = (lineStatusForHint.data as any)?.addFriendUrl ?? null;
   // ★切替中アカウントの既定店舗を最優先で開く（アカウント切替追随）。
   //   アカウント読込中に誤って[0]へ飛ばないよう、読込完了を待つ。
   const { selectedAccount: counselingAccount, isLoading: accountsLoading } = useThreadsAccount();
@@ -467,6 +470,20 @@ export default function AICounseling() {
               : 'いくつかの質問に答えるだけで、お店の情報が登録され、すぐに投稿を作れるようになります。答えた内容だけをAIは「事実」として使います。')
             : 'ここで答えてもらった内容だけをAIは「事実」として使います。書かれていない数字・エピソードを勝手に作ることはありません。'}
         </p>
+        {/* ★はじめの設定はLINEのトークで進めるのを推奨（2026-09-03 三上様指示） */}
+        {isNew && view !== 'review' && (
+          <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-900 leading-relaxed">
+            <span className="font-semibold">おすすめ：</span>
+            この設定は、公式LINEのトークで答えるのがいちばん簡単です（スマホで、続きからいつでも再開できます）。
+            友だち追加のあと、メニューの「はじめの設定」を押してください。
+            {lineAddUrlForHint && (
+              <a href={lineAddUrlForHint} target="_blank" rel="noreferrer" className="ml-1 underline font-semibold text-emerald-700">
+                公式LINEを友だち追加
+              </a>
+            )}
+            <span className="block mt-1 text-emerald-800/80">このままアプリで進めることもできます。</span>
+          </div>
+        )}
       </div>
 
       {view === 'review' ? (

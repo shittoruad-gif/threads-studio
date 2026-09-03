@@ -58,6 +58,9 @@ export function SetupProgress() {
   };
   const isAutoPostEnabled = autoPostSettings?.autoPostEnabled ?? false;
   const isDemoMode = demoModeData?.isDemoMode ?? true;
+  // 公式LINEの友だち追加URL（「はじめの設定」はLINEのトークで進めるのを推奨するため）
+  const lineStatus = trpc.lineNotify.getStatus.useQuery(undefined, { retry: false });
+  const lineAddUrl: string | null = (lineStatus.data as any)?.addFriendUrl ?? null;
 
   // 自動投稿カードまでスクロールして注目させる（ダッシュボード内のトグルへ誘導）
   const scrollToAutoPost = () => {
@@ -197,6 +200,25 @@ export function SetupProgress() {
           </div>
         ))}
       </div>
+
+      {/* ★はじめの設定はLINEのトークで進めるのを推奨（2026-09-03 三上様指示）。
+          アプリの画面より、スマホのLINEで質問に答えるほうが途中で止まりにくい。 */}
+      {nextStep?.id === "no_project" && (
+        <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-900 leading-relaxed">
+          <span className="font-semibold">{t("おすすめ：")}</span>
+          {t("「お店の情報」は公式LINEのトークで答えるのがいちばん簡単です。友だち追加のあと、メニューの「はじめの設定」を押してください。")}
+          {lineAddUrl && (
+            <a
+              href={lineAddUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-1 underline font-semibold text-emerald-700"
+            >
+              {t("公式LINEを友だち追加")}
+            </a>
+          )}
+        </div>
+      )}
 
       {/* 次にやること（最重要の1アクションを大きく提示） */}
       {nextStep && (
