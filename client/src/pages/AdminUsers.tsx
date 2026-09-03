@@ -8,13 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Key, AlertTriangle, Mail, RefreshCw, Search, Download } from 'lucide-react';
+import { Loader2, Key, AlertTriangle, Mail, RefreshCw, Search, Download, ArrowLeftRight, Copy } from 'lucide-react';
 import { toast } from 'sonner';
+import { PLANS } from '@shared/plans';
 
 // プラン表示名
-const PLAN_LABELS: Record<string, string> = {
-  free: '無料', light: 'ライト', standard: 'スタンダード', pro: 'プロ', premium: 'プレミアム',
-};
+const PLAN_LABELS: Record<string, string> = Object.fromEntries(
+  Object.values(PLANS).map((p) => [p.id, p.name]),
+);
 const planLabel = (planId: string | null) => (planId ? (PLAN_LABELS[planId] || planId) : '無料');
 
 // サブスク状態バッジ
@@ -56,6 +57,24 @@ export default function AdminUsers() {
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+
+  // プラン変更ダイアログ
+  const [planDialogUser, setPlanDialogUser] = useState<any | null>(null);
+  const [planId, setPlanId] = useState('pro');
+  const [billing, setBilling] = useState<'guide_link' | 'univapay_amount' | 'none'>('guide_link');
+  const [sendGuideEmail, setSendGuideEmail] = useState(false);
+  const [cancelOld, setCancelOld] = useState(false);
+  const [planNote, setPlanNote] = useState('');
+  const [planResult, setPlanResult] = useState<{ paymentLink: string | null; warnings: string[]; emailSent: boolean } | null>(null);
+  const setUserPlan = trpc.admin.setUserPlan.useMutation({
+    onSuccess: (r) => { setPlanResult({ paymentLink: r.paymentLink, warnings: r.warnings, emailSent: r.emailSent }); toast.success('プランを変更しました'); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const openPlanDialog = (u: any) => {
+    setPlanDialogUser(u); setPlanId(u.planId && u.planId !== 'free' ? u.planId : 'pro');
+    setBilling(u.subscriptionStatus === 'active' && !String(u.planId ?? '').includes('_') ? 'univapay_amount' : 'guide_link');
+    setSendGuideEmail(false); setCancelOld(false); setPlanNote(''); setPlanResult(null);
+  };
 
   const { data: users, isLoading, refetch } = trpc.admin.getAllUsers.useQuery();
   const setMonitorMutation = trpc.admin.setUserMonitor.useMutation({
@@ -256,17 +275,28 @@ export default function AdminUsers() {
                     {user.createdAt ? new Date(user.createdAt).toLocaleDateString('ja-JP') : '-'}
                   </TableCell>
                   <TableCell>
-                    {user.authProvider === 'email' && (
+                    <div className="flex gap-1">
                       <Button
                         variant="outline"
                         size="sm"
                         className="h-7 text-xs whitespace-nowrap"
-                        onClick={() => openResetDialog(user.id)}
+                        onClick={() => openPlanDialog(u)}
                       >
-                        <Key className="h-3.5 w-3.5 mr-1" />
-                        PW再設定
+                        <ArrowLeftRight className="h-3.5 w-3.5 mr-1" />
+                        プラン変更
                       </Button>
-                    )}
+                      {user.authProvider === 'email' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs whitespace-nowrap"
+                          onClick={() => openResetDialog(user.id)}
+                        >
+                          <Key className="h-3.5 w-3.5 mr-1" />
+                          PW再設定
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
                 );
@@ -276,6 +306,81 @@ export default function AdminUsers() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── プラン変更（管理者側からの切り替え） ── */}
+      <Dialog open={!!planDialogUser} onOpenChange={(o) => { if (!o) setPlanDialogUser(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>プランを変更：{planDialogUser?.name || planDialogUser?.email}</DialogTitle>
+            <DialogDescription>
+              現在：{planLabel(planDialogUser?.planId ?? null)}／{statusBadge(planDialogUser?.subscriptionStatus ?? null, planDialogUser?.trialEndsAt ?? null).label}
+            </DialogDescription>
+          </DialogHeader>
+          {planResult ? (
+            <div className="space-y-3 text-sm">
+              <Alert><AlertDescription>変更しました。{planResult.emailSent ? ' 案内メールを送信済みです。' : ''}</AlertDescription></Alert>
+              {planResult.paymentLink && (
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-muted-foreground mb-1">お客様に送る支払いリンク（登録メールと同じアドレスで入力してもらう）</div>
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs break-all flex-1">{planResult.paymentLink}</code>
+                    <Button size="sm" variant="outline" className="h-7" onClick={() => { navigator.clipboard.writeText(planResult.paymentLink!); toast.success('コピーしました'); }}>
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {planResult.warnings.map((w) => (
+                <Alert key={w} variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertDescription>{w}</AlertDescription></Alert>
+              ))}
+              <DialogFooter><Button onClick={() => setPlanDialogUser(null)}>閉じる</Button></DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4 text-sm">
+              <div className="space-y-1">
+                <Label>変更後のプラン</Label>
+                <select className="w-full rounded-md border bg-background px-3 py-2" value={planId} onChange={(e) => setPlanId(e.target.value)}>
+                  {Object.values(PLANS).filter((p) => p.id !== 'agency_client').map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}（{p.priceMonthly === 0 ? '無料' : `月${p.priceMonthly.toLocaleString()}円`}{p.isCampaign ? '・キャンペーン' : ''}）</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>決済の扱い</Label>
+                {([
+                  ['guide_link', '支払いリンクを案内する', 'アプリ側は先に切り替え、お客様にはこのプランの支払いリンクを送る（セミナー価格・キャンペーン価格はこれ）'],
+                  ['univapay_amount', 'UnivaPayの継続金額を変更する', '契約中の定期課金の金額を新プランの額に変える（通常プラン同士だけ）'],
+                  ['none', '課金なしで付与する', '無償提供・別途請求など。支払いリンクは出さない'],
+                ] as const).map(([v, label, desc]) => (
+                  <label key={v} className={`flex items-start gap-2 rounded-md border p-2 cursor-pointer ${billing === v ? 'border-emerald-400 bg-emerald-50' : ''}`}>
+                    <input type="radio" className="mt-1" checked={billing === v} onChange={() => setBilling(v)} />
+                    <span><span className="font-medium">{label}</span><br /><span className="text-xs text-muted-foreground">{desc}</span></span>
+                  </label>
+                ))}
+              </div>
+              {billing !== 'none' && (
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sendGuideEmail} onChange={(e) => setSendGuideEmail(e.target.checked)} />お客様に案内メールを送る（支払いリンク付き）</label>
+              )}
+              {planDialogUser?.subscriptionStatus === 'active' && billing !== 'univapay_amount' && (
+                <label className="flex items-center gap-2"><input type="checkbox" checked={cancelOld} onChange={(e) => setCancelOld(e.target.checked)} />旧契約のUnivaPay定期課金を解約する（二重課金防止）</label>
+              )}
+              <div className="space-y-1">
+                <Label>メモ（社内向け・任意）</Label>
+                <Input value={planNote} onChange={(e) => setPlanNote(e.target.value)} placeholder="例：セミナー参加者・9/3口頭で合意" />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPlanDialogUser(null)}>キャンセル</Button>
+                <Button
+                  disabled={setUserPlan.isPending}
+                  onClick={() => setUserPlan.mutate({ userId: planDialogUser.id, planId, billing, sendEmail: sendGuideEmail, cancelOldUnivapay: cancelOld, note: planNote || undefined })}
+                >
+                  {setUserPlan.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : '変更する'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
         <DialogContent>

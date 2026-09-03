@@ -3655,6 +3655,123 @@ ${input.commentText}
     }),
 
     // モニターフラグの ON/OFF（DB/SSH不要で運営者が切替できるように）
+    // ★管理者がプランを切り替える（こちら側からのプラン変更・2026-09-03 三上様指示）。
+    //   決済の扱いは3通り:
+    //   - guide_link   : アプリ側を先に切り替え、お客様には支払いリンクを案内（セミナー価格など、
+    //                    UnivaPayの金額変更ができない契約に使う）
+    //   - univapay_amount: 契約中のUnivaPayの継続金額を新プランの額に変更（通常プラン同士のみ）
+    //   - none         : 課金なしで付与（無償提供・別途請求など）
+    setUserPlan: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        planId: z.string().min(1).max(50),
+        billing: z.enum(['guide_link', 'univapay_amount', 'none']),
+        sendEmail: z.boolean().default(false),
+        cancelOldUnivapay: z.boolean().default(false),
+        note: z.string().max(300).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const user = await db.getUserById(input.userId);
+        if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'ユーザーが見つかりません' });
+        const plan = getPlan(input.planId);
+        if (!plan || input.planId === 'agency_client') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'そのプランは指定できません' });
+        }
+        const existing = await db.getSubscriptionByUserId(user.id);
+        const prevPlanId = existing?.planId ?? 'free';
+        const warnings: string[] = [];
+        let paymentLink: string | null = null;
+
+        if (input.billing === 'univapay_amount') {
+          if (!existing?.univapaySubscriptionId) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '契約中のUnivaPay定期課金がありません。「支払いリンクを案内」を使ってください。' });
+          }
+          const prev = getPlan(prevPlanId);
+          if (plan.isCampaign || prev?.isCampaign) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'キャンペーン価格（セミナー価格）はUnivaPayの金額変更ができません。「支払いリンクを案内」を使ってください。' });
+          }
+          const univapay = await import('./univapay');
+          await univapay.updateSubscriptionNextAmount(existing.univapaySubscriptionId, plan.priceMonthly);
+          await db.updateSubscription(existing.id, { planId: plan.id, cancelAtPeriodEnd: false });
+        } else {
+          if (input.billing === 'guide_link') {
+            paymentLink = plan.univapayLinkUrl ?? null;
+            if (!paymentLink) warnings.push('このプランには支払いリンクが登録されていません。');
+          }
+          // 旧契約が残っていれば、明示された場合だけUnivaPay側を解約する（二重課金防止）
+          if (existing?.univapaySubscriptionId && existing.status !== 'canceled') {
+            if (input.cancelOldUnivapay) {
+              try {
+                const univapay = await import('./univapay');
+                await univapay.cancelSubscription(existing.univapaySubscriptionId);
+                warnings.push(`旧契約（${existing.univapaySubscriptionId}）をUnivaPayで解約しました。`);
+              } catch (e) {
+                warnings.push(`旧契約（${existing.univapaySubscriptionId}）のUnivaPay解約に失敗しました。UnivaPay管理画面で確認してください。`);
+              }
+            } else {
+              warnings.push(`旧契約（${existing.univapaySubscriptionId}・${prevPlanId}）のUnivaPay定期課金は残っています。二重課金にならないよう解約が必要です。`);
+            }
+          }
+          const patch = {
+            planId: plan.id,
+            status: 'active' as const,
+            trialEndsAt: null,
+            currentPeriodEnd: null,
+            cancelAtPeriodEnd: false,
+            campaignChargeCount: 0,
+            // 支払い待ちの間は旧IDを残さない（Webhookで新契約のIDが入る）
+            univapaySubscriptionId: input.cancelOldUnivapay ? null : (existing?.univapaySubscriptionId ?? null),
+          };
+          if (existing) await db.updateSubscription(existing.id, patch as any);
+          else await db.createSubscription({ userId: user.id, ...patch } as any);
+        }
+
+        // キャンペーン価格のプランなら、料金プラン画面にもその価格が出るようにする（クーポン適用と同じ状態）
+        if (plan.isCampaign) {
+          const { campaignTierForCode } = await import('@shared/plans');
+          const tier = plan.id.endsWith('_seminar') ? campaignTierForCode('SEMINAR2026') : campaignTierForCode('CPMONITOR2026');
+          await db.setUserMonitor(user.id, true).catch(() => {});
+          try {
+            const { users: usersT } = await import('../drizzle/schema');
+            const { eq: eqOp } = await import('drizzle-orm');
+            const database = await (await import('./db')).getDb();
+            if (database) await database.update(usersT).set({ campaignTier: tier } as any).where(eqOp(usersT.id, user.id));
+          } catch (e) { console.error('[admin.setUserPlan] campaignTier更新に失敗:', e); }
+        }
+
+        // 上位プランなら自動投稿の回数を引き上げる
+        try {
+          const { raiseAutoPostFrequencyOnUpgrade } = await import('./planUpgrade');
+          await raiseAutoPostFrequencyOnUpgrade(user.id, prevPlanId, plan.id);
+        } catch (e) { console.error('[admin.setUserPlan] 自動投稿回数の引き上げに失敗:', e); }
+
+        // お客様への案内メール（管理者が明示した場合だけ）
+        let emailSent = false;
+        if (input.sendEmail && user.email && input.billing !== 'none') {
+          const { sendPlanGuideEmail } = await import('./_core/notification');
+          emailSent = await sendPlanGuideEmail({
+            to: user.email,
+            name: user.name,
+            planName: plan.name,
+            priceMonthly: plan.priceMonthly,
+            paymentLink: input.billing === 'guide_link' ? paymentLink : null,
+            isCampaign: Boolean(plan.isCampaign),
+            campaignCharges: plan.campaignCharges ?? null,
+          });
+        }
+
+        console.log(`[admin.setUserPlan] by=${ctx.user.id} user=${user.id} ${prevPlanId}→${plan.id} billing=${input.billing} email=${emailSent} note=${input.note ?? ''}`);
+        try {
+          const { notifyOwner } = await import('./_core/notification');
+          await notifyOwner({
+            title: `プラン変更（管理者）: ${user.name ?? user.email} ${prevPlanId}→${plan.id}`,
+            content: `決済の扱い: ${input.billing}\n案内メール: ${emailSent ? '送信' : 'なし'}\n${warnings.join('\n')}${input.note ? `\nメモ: ${input.note}` : ''}`,
+          });
+        } catch { /* 通知失敗は無視 */ }
+
+        return { success: true, prevPlanId, planId: plan.id, paymentLink, warnings, emailSent };
+      }),
+
     setUserMonitor: adminProcedure
       .input(z.object({ userId: z.number(), isMonitor: z.boolean() }))
       .mutation(async ({ input }) => {

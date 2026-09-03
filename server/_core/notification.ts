@@ -462,6 +462,46 @@ export async function sendRelatedServicesEmail(
 }
 
 /**
+ * 管理者がプランを切り替えたときの、お客様へのご案内（支払いリンク付き）。
+ * ★リンクフォームはメールアドレスで契約を突き合わせるため、登録アドレスと同じもので入力してもらう。
+ */
+export async function sendPlanGuideEmail(params: {
+  to: string;
+  name?: string | null;
+  planName: string;
+  priceMonthly: number;
+  paymentLink: string | null;
+  isCampaign: boolean;
+  campaignCharges: number | null;
+}): Promise<boolean> {
+  const greet = params.name ? `${escapeHtml(params.name)} 様` : 'ご担当者様';
+  const price = `月額 ${params.priceMonthly.toLocaleString('ja-JP')}円（税込）`;
+  const campaignNote = params.isCampaign
+    ? `<p>こちらはキャンペーン価格のプランです。無料トライアルは付かず、お申し込み時に初回のお支払いが発生します。${params.campaignCharges ? `${params.campaignCharges}回のお支払いのあと、通常価格に自動で切り替わります。` : ''}</p>`
+    : '';
+  const linkPart = params.paymentLink
+    ? `<p>下のボタンからお支払いのご登録をお願いいたします。<br /><strong>ご登録のメールアドレス（${escapeHtml(params.to)}）と同じアドレス</strong>でご入力ください（違うと自動で反映されません）。</p>`
+    : '<p>お支払いのご案内は、担当者より別途ご連絡いたします。</p>';
+  return sendEmail({
+    to: params.to,
+    subject: `【Threads Studio】${params.planName} のご案内（お支払い登録のお願い）`,
+    html: emailShell(
+      `${escapeHtml(params.planName)} のご案内`,
+      `
+        <p>${greet}</p>
+        <p>Threads Studio のプランを <strong>${escapeHtml(params.planName)}</strong>（${price}）でご利用いただけるよう設定しました。機能はすでにお使いいただけます。</p>
+        ${campaignNote}
+        ${linkPart}
+        <p style="font-size:13px;color:#6b7280;">ご不明な点は、このメールへのご返信でお気軽にどうぞ。</p>
+      `,
+      params.paymentLink ? 'お支払いを登録する' : undefined,
+      params.paymentLink ?? undefined,
+      'このメールは、Threads Studio の担当者がプランを設定した際にお送りしています。',
+    ),
+  });
+}
+
+/**
  * 決済失敗が続き、猶予期間を過ぎてサービスを自動停止したときの通知メール。
  * フリープランに戻った旨と、再開（再登録）の導線を案内する。
  */
