@@ -26,15 +26,44 @@ describe("固定投稿プロンプトのノウハウ反映", () => {
     ngWords: ["根本改善"],
   } as any);
 
-  it("構成ルール（7つの必須要素）が入る", () => {
+  it("構成ルールと長さの制約が入る", () => {
     expect(prompt).toContain("固定投稿（プロフィール固定用）の構成ルール");
     expect(prompt).toContain("400〜470文字");
     expect(prompt).toContain("合計を必ず495文字以内");
     expect(prompt).toContain("50字ルールは適用しない");
-    expect(prompt).toContain("固定投稿表示5万3000回"); // 実例の勝ちパターン
     // 住所・免責の羅列で埋める暴走の禁止（氷見様データで528字のctaが出た）
     expect(prompt).toContain("免責・注意書きの列挙");
     expect(prompt).toContain("コメント欄への誘導1行だけ");
+  });
+
+  /**
+   * 2026-09-03: 三上さんが手直しした玉島店の固定投稿を「この品質で作れるように」
+   * とのご指示。その投稿の骨格（思い込みの否定→入力済みの事実で裏づけ→
+   * お客様の言葉→断る自由を渡す締め）をプロンプトに落とし込んだ。
+   */
+  it("承認された固定投稿の骨格が指示に入る", () => {
+    expect(prompt).toContain("世間で信じられていることを1つ");
+    expect(prompt).toContain("入力済みの事実だけ");
+    expect(prompt).toContain("来店する前」に口にする言葉");
+    // 実在しない「お客様の声」を作らせない（体験後の感想は使わせない）
+    expect(prompt).toContain("施術後の感想・成果の声");
+    expect(prompt).toContain("断る自由を明示");
+  });
+
+  /**
+   * 旧プロンプトは「○○で悩んでませんか？」で始めろ・「実は私も○○でした」と
+   * 書け・悩みを箇条書きにしろ、と指示していた。いずれも
+   * jpQualityGuard の禁止事項や業種インサイトの負け筋と正面から矛盾していた。
+   */
+  it("ガードや実測と矛盾する指示を出さない", () => {
+    const ng = prompt.slice(prompt.indexOf("書いてはいけないもの"));
+    // かつては「〜で悩んでませんか？」で始めろ・「実は私も」と書け、が"指示"だった。
+    // いまはどちらも禁止側にだけ登場すること。
+    expect(ng).toContain("実は私も");
+    expect(prompt.slice(0, prompt.indexOf("書いてはいけないもの"))).not.toContain("実は私も");
+    expect(prompt).toContain("同意を求める確認疑問");
+    expect(prompt).toContain("「〜な人へ」という呼びかけで始めない");
+    expect(prompt).toContain("担当者の資格を勝手に書かない");
   });
 
   it("URLは本文でなくコメント欄へ誘導する指示が入る", () => {
