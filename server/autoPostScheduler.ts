@@ -11,7 +11,7 @@ import * as db from "./db";
 import { getPlan } from "../shared/plans";
 import { buildCtaText } from "../shared/autoPostCta";
 import { charBudgetFor, resolveWithAlternation, POST_LENGTHS, trimToBudget } from "../shared/postLength";
-import { checkNaturalized, polishPunctuation } from "../shared/jpQualityGuard";
+import { checkNaturalized, findBannedTic, polishPunctuation } from "../shared/jpQualityGuard";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle } from "../shared/postAngles";
@@ -498,8 +498,30 @@ async function generateAutoPost(
       allowQuestionEnding: CONVERSATION_POST_TYPES.has(postType),
     });
     if (!verdict.ok) {
-      console.warn(`[AutoPost] naturalize rejected (${verdict.reason}) — リライト前の文を使用 userId=${userId}`);
-      naturalMain = beforeNaturalize;
+      // ★差し戻し先（＝生成そのままの文）も決まり文句を検査する。
+      //   checkNaturalized はリライト後しか見ないため、生成本文に
+      //   「思っていませんか？」等が入っていると素通りしていた
+      //   （2026-09-03の週次リサーチで実際に2本の公開を検出: id 745 / 753）。
+      //   決まり文句は絶対条件、差し戻し理由は相対条件なので、
+      //   「差し戻し先に決まり文句があり、リライト後には無い」ときだけリライトを残す。
+      const ticInOriginal = findBannedTic(beforeNaturalize);
+      if (ticInOriginal && !findBannedTic(naturalMain)) {
+        console.warn(
+          `[AutoPost] naturalize rejected (${verdict.reason}) が、差し戻し先に決まり文句「${ticInOriginal}」— リライト後の文を採用 userId=${userId}`,
+        );
+      } else {
+        console.warn(`[AutoPost] naturalize rejected (${verdict.reason}) — リライト前の文を使用 userId=${userId}`);
+        naturalMain = beforeNaturalize;
+      }
+    }
+
+    // 両方の候補に決まり文句が残った場合は、機械で削ると新しい不自然を作るので
+    // 公開はするが必ず記録に残す（週次リサーチがこのログで検出しプロンプトを直す）。
+    const ticLeft = findBannedTic(naturalMain);
+    if (ticLeft) {
+      console.warn(
+        `[AutoPost] bannedTic「${ticLeft}」が残存（生成側の要修正） userId=${userId} projectId=${project.id}`,
+      );
     }
 
     try {

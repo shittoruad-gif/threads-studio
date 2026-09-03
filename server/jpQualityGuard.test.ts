@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   checkNaturalized, hiraganaRatio, endsWithQuestion, countNdesu,
-  countEmoji, hasRepeatedEnding, polishPunctuation,
+  countEmoji, hasRepeatedEnding, polishPunctuation, findBannedTic,
   HIRAGANA_RATIO_MAX, NDESU_MAX,
 } from "../shared/jpQualityGuard";
 
@@ -12,6 +12,16 @@ import {
 
 const NO_Q = { allowQuestionEnding: false };
 const OK_Q = { allowQuestionEnding: true };
+
+describe("findBannedTic（リライト前の文も検査するための単体判定）", () => {
+  it("生成本文に混ざった決まり文句を見つける（2026-09-03に公開を検出した経路）", () => {
+    expect(findBannedTic("ピラティス、体が硬いと無理だと思っていませんか？")).toBe("いませんか？");
+  });
+
+  it("決まり文句が無ければ null", () => {
+    expect(findBannedTic("倉敷市玉島で、体が硬い方も通っています。")).toBeNull();
+  });
+});
 
 describe("実際に起きた劣化の検出", () => {
   it("お手本コピー「同じ悩みの方、いませんか」を落とす", () => {
