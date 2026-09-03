@@ -8,7 +8,7 @@
 import * as db from "./db";
 import {
   buildPostCards, textWithQuick, textWithChoices, parsePostback, fmtJst, REWRITE_KINDS,
-  MENU_ITEMS, HELP_TOPICS, helpQuick, settingsQuick, settingsSummary,
+  MENU_ITEMS, HELP_TOPICS, helpQuick, settingsQuick, settingsSummary, shouldClearPendingInput,
 } from "./lineChat";
 import { COUNSELING_QUESTIONS } from "../shared/counseling";
 import { applyPersonalOverrides } from "../shared/personalBrand";
@@ -748,6 +748,19 @@ async function startCounseling(lineUserId: string, accountId?: number | null): P
 }
 
 /**
+ * 文章の入力待ちのまま別のボタンを押されたときに、その待ち状態をやめる。
+ * どの状態をやめるかの判断は shouldClearPendingInput（lineChat.ts）にある。
+ */
+async function clearPendingTextInput(lineUserId: string, q: Record<string, string>): Promise<void> {
+  try {
+    const st = await db.getLineChatState(lineUserId);
+    if (shouldClearPendingInput(st?.state, q)) await db.clearLineChatState(lineUserId);
+  } catch {
+    // 状態を消せなくても、ボタンの処理そのものは続ける
+  }
+}
+
+/**
  * postback（ボタン）を処理して返信メッセージを返す。
  */
 export async function handlePostback(lineUserId: string, data: string): Promise<unknown[]> {
@@ -770,6 +783,19 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     }
     return notLinked();
   }
+
+  // ★文章の入力をお待ちしている途中で、別のボタンを押されたら、その待ち状態をやめる。
+  //
+  //   これが無いと、お客様が「NGワードを追加」を押したあと気が変わってメニューへ
+  //   移られても待ち状態が残り、次に打たれた文章が言葉として登録されてしまう。
+  //   実際に「プロプランは1日何回まで投稿できますか？」というご質問が、そのまま
+  //   使わない言葉として登録される（＝以後の投稿がその言い回しを避ける）状態だった。
+  //   公式LINEのURL待ちでも同じで、何を打っても「URLの形になっていない」と返り、
+  //   「やめる」と打つまで抜け出せなかった。
+  //
+  //   「はじめの設定」(counseling) と連携の途中(link_email/signup_code)は、
+  //   ボタン操作も含めて流れの一部なので消さない。
+  await clearPendingTextInput(lineUserId, q);
 
   // ── メニュー ──
   if (q.m === "posts") return repliesForPosts(user.id, q.one ? "one" : q.all ? "all" : undefined);
@@ -1204,7 +1230,9 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       return [
         textWithQuick(done + "\n\n間違えて押した場合は「取り消す」で元に戻せます。", undo),
         textWithQuick(
-          `${acctLabel}公開されたら、最後にひとつだけお願いします。\n\n` +
+          // ★acctLabel は「@name の」という形なので、必ず後ろに名詞を置く。
+          //   「@name の公開されたら」という壊れた日本語になっていた。
+          `${acctLabel}固定投稿が公開されたら、最後にひとつだけお願いします。\n\n` +
           // ここは公開の手続きが済んだ直後なので、公開の手順は出さない
           pinGuideText({ withPublishSteps: false }) +
           "\n\n終わったら、下の「ピン留めしました」を押してください。",
@@ -1810,13 +1838,15 @@ async function issueStaffLinkCode(userId: number): Promise<unknown[]> {
     return [textWithQuick("コードを発行できませんでした。時間をおいてもう一度お試しください。", MENU_HINT)];
   }
 
+  const limitLabel = cap.limit < 0 ? "人数の制限なし" : `最大 ${cap.limit} 人`;
   const rest = cap.limit < 0 ? "無制限" : `あと ${cap.limit - cap.used} 人`;
   return [textWithQuick(
     `追加用のコードは【${code}】です（10分間有効）。\n\n` +
     "追加したい方に、次の2つをお伝えください。\n" +
     "1. Threads Studio の公式LINEを友だち追加する\n" +
     `2. そのトークに「${code}」とそのまま送る\n\n` +
-    `これで、その方も投稿の確認や設定ができるようになります。（${rest}追加できます）`,
+    `これで、その方も投稿の確認や設定ができるようになります。\n` +
+    `（ご契約のプランは${limitLabel}まで操作できます。いま${cap.used}人・${rest}追加できます）`,
     MENU_HINT,
   )];
 }
