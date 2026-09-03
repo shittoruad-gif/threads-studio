@@ -49,39 +49,41 @@ export function DemoModeBanner() {
 
   return (
     <>
+    {/* ★Alert は grid（1列目=アイコン用・幅0、2列目=本文）。
+        以前は本文を <div> で包んで1列目に入れていたため、スマホ幅で本文が
+        幅ゼロの列に押し込まれ、1文字ずつ縦に折れて表示されていた（2026-09-03 指摘）。
+        アイコンは Alert の直下に置き、本文は2列目（col-start-2）に置く。 */}
     <Alert className="border-primary/50 bg-primary/5 mb-6">
-      <div className="flex items-start gap-3">
-        <Sparkles className="w-5 h-5 text-primary mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
-            <Badge variant="outline" className="border-primary text-primary">
-              デモモード
-            </Badge>
-            <span className="text-sm font-semibold">体験版として利用中</span>
-          </div>
-          <AlertDescription className="text-sm text-muted-foreground mb-3">
-            現在、Threads連携なしでツールを体験できるデモモードで利用しています。
-            実際にThreadsへ投稿するには、本番モードに切り替えてアカウントを連携してください。
-          </AlertDescription>
-          {/* ★スマホ幅ではボタンが2つ並びきらず、右のボタンが画面外へ切れていた */}
-          <div className="flex flex-wrap gap-2">
-            <Button 
-              size="sm" 
-              onClick={handleExitDemo}
-              disabled={exitDemoModeMutation.isPending}
-            >
-              本番モードに切り替える
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={() => setLocation("/guide")}
-            >
-              <Info className="w-4 h-4 mr-2" />
-              使い方を見る
-            </Button>
-          </div>
+      <Sparkles className="text-primary" />
+      <div className="col-start-2 min-w-0">
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <Badge variant="outline" className="border-primary text-primary">
+            デモモード
+          </Badge>
+          <span className="text-sm font-semibold">体験版として利用中</span>
+        </div>
+        <AlertDescription className="text-sm text-muted-foreground mb-3 block">
+          現在、Threads連携なしでツールを体験できるデモモードで利用しています。
+          実際にThreadsへ投稿するには、本番モードに切り替えてアカウントを連携してください。
+        </AlertDescription>
+        {/* ★スマホ幅ではボタンが2つ並びきらず、右のボタンが画面外へ切れていた */}
+        <div className="flex flex-wrap gap-2">
+          <Button 
+            size="sm" 
+            onClick={handleExitDemo}
+            disabled={exitDemoModeMutation.isPending}
+          >
+            本番モードに切り替える
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+          <Button 
+            size="sm" 
+            variant="outline"
+            onClick={() => setLocation("/guide")}
+          >
+            <Info className="w-4 h-4 mr-2" />
+            使い方を見る
+          </Button>
         </div>
       </div>
     </Alert>

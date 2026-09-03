@@ -42,6 +42,7 @@ const demoSteps = [
     image: "/demo/register.jpg",
     alt: "Threads Studio の会員登録画面",
     portrait: true,
+    caption: "実際の登録画面です",
   },
   {
     step: 2,
@@ -51,6 +52,7 @@ const demoSteps = [
     image: "/demo/richmenu.jpg",
     alt: "公式LINEのメニュー（今日の投稿・コメント・設定・投稿の成績・固定投稿・お店とアカウント）",
     portrait: false,
+    caption: "公式LINEのトーク下部に出る実際のメニューです",
   },
   {
     step: 3,
@@ -60,6 +62,7 @@ const demoSteps = [
     image: "/demo/counseling-sp.jpg",
     alt: "はじめの設定（20問）の画面",
     portrait: true,
+    caption: "実際の画面です（サンプル店舗のデータ）",
   },
   {
     step: 4,
@@ -69,15 +72,17 @@ const demoSteps = [
     image: "/demo/dashboard-sp.jpg",
     alt: "セットアップ状況の画面（アカウント作成・お店の情報・Threads連携・固定投稿）",
     portrait: true,
+    caption: "実際の画面です（サンプル店舗のデータ）",
   },
   {
     step: 5,
-    title: "毎日、投稿が届く。押すだけ",
+    title: "毎日、LINEに投稿が届く。押すだけ",
     time: "毎日1タップ",
-    description: "実測で反応が高い15時・21時・22時に合わせて、AIが投稿を用意します。LINEに届いた投稿を見て「これで投稿する」を押すだけ。複数あるときは「すべて承認する」で一度に終わります。慣れたら確認なしの完全自動にもできます。",
-    image: "/demo/posts.jpg",
-    alt: "投稿の確認・予定の画面（承認して投稿）",
+    description: "実測で反応が高い15時・21時・22時に合わせて、AIが投稿を用意します。公式LINEに届いたカードを見て「これで投稿する」を押すだけ。気に入らなければ「書き直す」「見送る」もその場で。慣れたら確認なしの完全自動にもできます。",
+    image: "/demo/line-card.jpg",
+    alt: "公式LINEに届く投稿カード（これで投稿する・書き直す・見送る）",
     portrait: false,
+    caption: "公式LINEに実際に届くカードです（LINE公式の表示で描画・サンプル店舗の投稿）",
   },
 ];
 
@@ -193,7 +198,7 @@ function VideoDemoSection() {
                       className={`w-full h-auto block ${stepData.portrait ? "max-h-[520px] object-cover object-top" : ""}`}
                     />
                   </div>
-                  <p className="text-[11px] text-muted-foreground text-center mt-2">実際の画面です（サンプル店舗のデータ）</p>
+                  <p className="text-[11px] text-muted-foreground text-center mt-2">{stepData.caption}</p>
                 </div>
               </div>
             </div>
