@@ -5,6 +5,7 @@ import { useIsMobile } from "@/hooks/useMobile";
 import { cn } from "@/lib/utils";
 import MonitorFeedbackWidget from "./MonitorFeedbackWidget";
 import { SubscriptionAlertBanner } from "./SubscriptionAlertBanner";
+import { LineFirstBanner } from "./LineFirstBanner";
 import {
   BarChart3,
   BookOpen,
@@ -520,6 +521,9 @@ export default function DashboardLayout({
 
         {/* 決済失敗時の警告バナー — past_due / unpaid / incomplete のみ表示 */}
         <SubscriptionAlertBanner />
+
+        {/* 公式LINEでの運用のおすすめ（未連携の方だけ・全画面共通） */}
+        <LineFirstBanner />
 
         {/* Page Content。スマホでは下部タブバーに隠れないよう余白を多めに確保 */}
         {/* pb-44: 下タブ(64px)＋右下のフローティングボタン2つが最下部のボタンを隠さない余白 */}

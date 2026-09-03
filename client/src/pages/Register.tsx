@@ -111,6 +111,10 @@ export default function Register() {
           <CardDescription>
             アカウントを作成して、AI投稿生成を始めましょう
           </CardDescription>
+          <p className="mt-2 rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-[12px] text-emerald-900 leading-relaxed">
+            <span className="font-semibold">公式LINEでの運用をおすすめします。</span>
+            登録後は、はじめの設定から毎日の投稿の確認まで、公式LINEのトークの中だけで終わります。
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           {error && (
