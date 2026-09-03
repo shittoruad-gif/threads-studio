@@ -379,7 +379,70 @@ export function renderRelatedServicesEmail(
   );
 }
 
-/** アンケートで選ばれたサービスの案内を、本人の登録メールへ送る。 */
+/**
+ * サービス1件ぶんの案内メール（アンケートでチェックされたサービスごとに1通）。
+ * 中身は紹介ページ（/services/<slug>）と同じ定義（shared/relatedServices.ts）から作る。
+ * ★料金は確定しているものだけが定義に入っている。ここで金額を書き足さない。
+ */
+export function renderServiceIntroEmail(service: RelatedService, pageUrl: string, contactEmail: string): string {
+  const p = service.page;
+  const li = (items: string[]) => items.map((t) => `<li style="margin:0 0 6px;">${escapeHtml(t)}</li>`).join('');
+  const steps = p.steps
+    .map((st, i) =>
+      `<tr><td style="vertical-align:top;padding:6px 8px 6px 0;color:#065f46;font-weight:bold;white-space:nowrap;">${i + 1}. ${escapeHtml(st.who)}</td>` +
+      `<td style="vertical-align:top;padding:6px 0;color:#374151;line-height:1.6;">${escapeHtml(st.text)}</td></tr>`)
+    .join('');
+  const price = service.price
+    ? `<p style="margin:16px 0 0;padding:12px 14px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;color:#065f46;font-size:14px;line-height:1.6;"><strong>料金</strong>：${escapeHtml(service.price)}</p>`
+    : `<p style="margin:16px 0 0;color:#6b7280;font-size:13px;line-height:1.6;">料金は、お店の状況をうかがったうえでお見積りします。</p>`;
+  const sample = service.sample
+    ? `<p style="margin:12px 0 0;"><a href="${service.sample.url}" style="color:#065f46;font-weight:bold;">${escapeHtml(service.sample.label)}</a>` +
+      (service.sample.note ? `<br /><span style="color:#6b7280;font-size:13px;">${escapeHtml(service.sample.note)}</span>` : '') + `</p>`
+    : '';
+  const mailto = `mailto:${contactEmail}?subject=${encodeURIComponent(`${service.label}について`)}`;
+  return emailShell(
+    escapeHtml(service.label),
+    `
+      <p style="font-size:16px;font-weight:bold;color:#1f2937;line-height:1.6;margin:0 0 8px;">${escapeHtml(p.headline)}</p>
+      <p style="color:#374151;font-size:14px;line-height:1.7;">${escapeHtml(service.description)}</p>
+      <p style="margin:18px 0 6px;font-weight:bold;color:#1f2937;">こんなお悩みに</p>
+      <ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:1.6;">${li(p.pains)}</ul>
+      <p style="margin:18px 0 6px;font-weight:bold;color:#1f2937;">流れ</p>
+      <table style="border-collapse:collapse;font-size:14px;">${steps}</table>
+      <p style="margin:18px 0 6px;font-weight:bold;color:#1f2937;">得られるもの</p>
+      <ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:1.6;">${li(p.outputs)}</ul>
+      ${price}
+      ${sample}
+      <p style="margin:16px 0 0;font-size:14px;line-height:1.7;">くわしい内容は下のボタンからご覧ください。お見積り・ご相談は
+        <a href="${mailto}" style="color:#065f46;">こちら</a>、またはこのメールへのご返信でも承ります。</p>
+    `,
+    `${service.label} の案内ページを見る`,
+    pageUrl,
+    'このメールは、Threads Studio のアンケートで「メールでの案内を希望する」とお選びいただいた方にお送りしています。<br />'
+    + `今後のご案内が不要な場合は、このメールへのご返信、または ${escapeHtml(contactEmail)} までその旨をお知らせください。`,
+  );
+}
+
+/** チェックされたサービスごとに1通ずつ案内を送る。戻り値は送れた件数 */
+export async function sendServiceIntroEmails(
+  to: string,
+  services: RelatedService[],
+  contactEmail: string,
+  pageUrlFor: (service: RelatedService) => string,
+): Promise<number> {
+  let sent = 0;
+  for (const s of services) {
+    const ok = await sendEmail({
+      to,
+      subject: `【Threads Studio】${s.label} のご案内`,
+      html: renderServiceIntroEmail(s, pageUrlFor(s), contactEmail),
+    });
+    if (ok !== false) sent++;
+  }
+  return sent;
+}
+
+/** アンケートで選ばれたサービスの案内を、本人の登録メールへ送る（まとめて1通の旧形式。いまは未使用） */
 export async function sendRelatedServicesEmail(
   to: string,
   services: RelatedService[],

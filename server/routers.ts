@@ -4059,13 +4059,17 @@ ${input.commentText}
         await db.upsertContentInterestSurvey(ctx.user.id, interestsStr, input.freeText?.trim() || null, input.sendInfo);
 
         // ★案内希望かつ該当サービスがあれば、本人の登録メールへ自動でご案内を送る。
+        //   サービスごとに1通ずつ（それぞれの紹介ページ /services/<slug> へのリンク付き）。
+        //   1通にまとめると読まれにくく、どれに興味があったのかも本人に伝わりにくいため。
         if (input.sendInfo && ctx.user.email && input.interests.length > 0) {
           try {
-            const { servicesFromLabels, RELATED_SERVICES_CONTACT_EMAIL } = await import('../shared/relatedServices');
+            const { servicesFromLabels, servicePageUrl, RELATED_SERVICES_CONTACT_EMAIL } = await import('../shared/relatedServices');
             const matched = servicesFromLabels(input.interests);
             if (matched.length > 0) {
-              const { sendRelatedServicesEmail } = await import('./_core/notification');
-              await sendRelatedServicesEmail(ctx.user.email, matched, RELATED_SERVICES_CONTACT_EMAIL);
+              const { sendServiceIntroEmails } = await import('./_core/notification');
+              const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
+              const sent = await sendServiceIntroEmails(ctx.user.email, matched, RELATED_SERVICES_CONTACT_EMAIL, (s) => servicePageUrl(base, s));
+              console.log(`[survey] 案内メール ${sent}/${matched.length}通 → ${ctx.user.email}`);
             }
           } catch (e) { console.error('[survey] 案内メール送信失敗:', e); }
         }
