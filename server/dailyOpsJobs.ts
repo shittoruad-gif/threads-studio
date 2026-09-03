@@ -254,14 +254,15 @@ export async function runCommentWatchJob(): Promise<void> {
         to: fullUser.email,
         subject: `【Threads Studio】あなたの投稿にコメントが${newComments.length}件届いています`,
         html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
-          <h2>コメントが届いています 🎉</h2>
+          <h2>コメントが届いています</h2>
           <p>あなたの投稿に新しいコメントが <strong>${newComments.length}件</strong> 届きました。</p>
           ${previews}
           <p style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:13px;">
-            💡 <strong>返信が早いほど、投稿はもっと多くの人に表示されます。</strong><br/>
-            返信の文章はAIが作ってくれるので、確認して送るだけでOKです。
+            <strong>返信が早いほど、投稿はもっと多くの人に表示されます。</strong><br/>
+            返信の文案はAIが作ります。文案をコピーして、Threadsアプリから返信してください。<br/>
+            <span style="color:#6b7280;">※ ここから直接送信する機能は、Meta社の追加審査の承認待ちです。承認され次第、ボタンひとつで送れるようになります。</span>
           </p>
-          <a href="${base}/comment-manager" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin:12px 0;">AIで返信を作る</a>
+          <a href="${base}/comment-manager" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin:12px 0;">返信の文案を作る</a>
         </div>`,
       });
       notified++;

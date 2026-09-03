@@ -67,11 +67,16 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
   }
 
   try {
+    // ★返信先は会社の窓口メールにする。
+    //   差出人は noreply@ のため、本文で「このメールにご返信ください」と案内していても
+    //   返信先を指定しないと誰にも届かない（2026-09-03 点検で発見）。
+    const replyTo = process.env.SUPPORT_REPLY_TO || 'shittoru@s-toru.com';
     const { error } = await resend.emails.send({
       from: getFromEmail(),
       to: payload.to,
       subject: payload.subject,
       html: payload.html,
+      replyTo: replyTo,
     });
 
     if (error) {
@@ -140,7 +145,7 @@ export async function sendTrialReminderEmail(to: string, daysLeft: number, planN
   // ★旧 Railway URL がハードコードされていたバグを修正。
   // 本番ドメインは APP_BASE_URL（環境変数）から取得し、未設定時のみ
   // threads.shittoru.com にフォールバックする。
-  const baseUrl = process.env.APP_BASE_URL || process.env.VITE_APP_URL || 'https://threads.shittoru.com';
+  const baseUrl = process.env.APP_BASE_URL || process.env.VITE_APP_URL || 'https://threads-studio.com';
   return sendEmail({
     to,
     subject: `【Threads Studio】無料トライアルがあと${daysLeft}日で終了します`,
@@ -218,7 +223,7 @@ export async function notifyOwner(payload: NotificationPayload): Promise<boolean
 
 const APP_BASE_URL =
   process.env.APP_BASE_URL ||
-  'https://threads.shittoru.com';
+  'https://threads-studio.com';
 
 /**
  * 共通の見た目テンプレート

@@ -423,7 +423,7 @@ export const appRouter = router({
           process.env.APP_BASE_URL ||
           process.env.VITE_APP_URL ||
           ctx.req.headers.origin ||
-          'https://threads.shittoru.com';
+          'https://threads-studio.com';
         if (user.email) {
           await sendPasswordResetEmail(user.email, token, baseUrl);
         }
