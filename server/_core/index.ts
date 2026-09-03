@@ -509,7 +509,17 @@ async function startServer() {
           return res.json({ received: true, note: 'email not found' });
         }
 
-        const user = await db.getUserByEmail(email);
+        let user = await db.getUserByEmail(email);
+        // ★決済フォームのメールがアプリ登録と違うことがある（別のメールを入力される）。
+        //   その場合でも、契約IDが既にアプリに紐づいていればそこから持ち主を辿る。
+        //   （2026-09-03: 6,980円お支払い済みなのに「未登録メール」で弾かれ、
+        //     プランがフリーのまま放置される事故が起きた）
+        if (!user && univapaySubId) {
+          user = await db.getUserByUnivapaySubscriptionId(univapaySubId).catch(() => null) as any;
+          if (user) {
+            console.log(`[Univapay Webhook] メール不一致だが契約IDで特定: sub=${univapaySubId} user=${user.id}（決済メール=${email} / 登録メール=${user.email}）`);
+          }
+        }
         if (!user) {
           console.warn(`[Univapay Webhook] 未登録メール: ${email}（決済したがアプリ未登録の可能性）`);
           // ★UnivaPayストアは他事業（LP制作・Keiro等）と共用のため、Threads Studioの

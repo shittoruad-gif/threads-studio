@@ -298,6 +298,27 @@ export async function createSubscription(data: InsertSubscription): Promise<void
   await db.insert(subscriptions).values(data);
 }
 
+/**
+ * UnivaPayの定期課金IDから、その契約の持ち主を引く。
+ *
+ * ★Webhookは決済時のメールアドレスでお客様を特定するが、
+ *   決済フォームにアプリ登録と違うメールを入れる方がいる
+ *   （2026-09-03: 6,980円お支払い済みなのにプランが反映されず、フリーのままだった）。
+ *   一度でも紐づいた契約なら、以後はこのIDで辿れるようにして取りこぼしを防ぐ。
+ */
+export async function getUserByUnivapaySubscriptionId(univapaySubscriptionId: string) {
+  const database = await getDb();
+  if (!database) return null;
+  const rows = await database
+    .select({ userId: subscriptions.userId })
+    .from(subscriptions)
+    .where(eq(subscriptions.univapaySubscriptionId, univapaySubscriptionId))
+    .limit(1);
+  const userId = rows[0]?.userId;
+  if (!userId) return null;
+  return await getUserById(userId);
+}
+
 export async function getSubscriptionByUserId(userId: number): Promise<Subscription | undefined> {
   const db = await getDb();
   if (!db) return undefined;
