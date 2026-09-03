@@ -1678,8 +1678,9 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   if (/(解約|退会|やめたい|停止|キャンセルしたい)/.test(t)) {
     const base = process.env.APP_BASE_URL || "https://threads-studio.com";
     return [textWithQuick(
-      "ご解約は、アプリの設定画面からお手続きいただけます。\n" +
-      `${base}/settings?openExternalBrowser=1\n\n` +
+      "ご解約は、アプリのホーム画面にある契約状況の「解約」からお手続きいただけます。\n" +
+      "無料トライアル中に解約された場合、料金は一切発生しません。\n" +
+      `${base}/dashboard?openExternalBrowser=1\n\n` +
       "お手続きが分からない場合や、その前にご相談されたい場合は、下の「担当者に聞く」を押してください。",
       [{ label: "担当者に聞く", data: "m=staff" }, ...MENU_HINT],
     )];
