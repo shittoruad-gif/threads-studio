@@ -26,8 +26,10 @@ export interface RelatedServicePage {
 export interface RelatedService {
   /** アンケートに保存されるラベル（表示名。これで突き合わせる） */
   label: string;
-  /** 紹介ページのURLの一部（/services/<slug>）。メールのリンク先にもなる */
+  /** サービスの識別子（案内メールのログや切り分けに使う） */
   slug: string;
+  /** Notionのサービス資料（社外共有OK）の該当項目。LPが無いサービスは案内メールの主リンクになる */
+  notionUrl: string;
   /** 紹介ページの中身 */
   page: RelatedServicePage;
   /** 一言説明（ダイアログ・メール共通） */
@@ -44,6 +46,7 @@ export const RELATED_SERVICES: RelatedService[] = [
   {
     label: 'LPの作成',
     slug: 'lp-seisaku',
+    notionUrl: 'https://purring-tricorne-930.notion.site/f9d00d64051344108df37994ed9ea0f7#980b472ac046499092f457a9154fd055',
     page: {
       headline: '申し込みに直結する「1枚ページ」をつくります',
       pains: [
@@ -77,6 +80,7 @@ export const RELATED_SERVICES: RelatedService[] = [
   {
     label: 'Instagram広告の運用代行',
     slug: 'ig-ads-agency',
+    notionUrl: 'https://purring-tricorne-930.notion.site/f9d00d64051344108df37994ed9ea0f7#c5d3e1b157514c74a25357f028377116',
     page: {
       headline: 'Instagram広告を、企画から毎日の数値チェックまでまるごと代行',
       pains: [
@@ -105,6 +109,7 @@ export const RELATED_SERVICES: RelatedService[] = [
   {
     label: 'Instagram広告を自分で運用（マカセル）',
     slug: 'makaseru',
+    notionUrl: 'https://purring-tricorne-930.notion.site/f9d00d64051344108df37994ed9ea0f7#a60ffa1de3e643c4b3f424f4cbfc915a',
     page: {
       headline: '広告文・画像・動画をAIがつくる、セルフ運用の広告ソフト',
       pains: [
@@ -131,6 +136,7 @@ export const RELATED_SERVICES: RelatedService[] = [
   {
     label: '公式LINEの作成',
     slug: 'line-create',
+    notionUrl: 'https://purring-tricorne-930.notion.site/f9d00d64051344108df37994ed9ea0f7#9c98326001d044c79f8050507e0808be',
     page: {
       headline: '予約と再来の受け皿になる公式LINEを、開設から作り込みまで代行',
       pains: [
@@ -158,6 +164,7 @@ export const RELATED_SERVICES: RelatedService[] = [
   {
     label: '公式LINEトラッキングツール',
     slug: 'line-tracking',
+    notionUrl: 'https://purring-tricorne-930.notion.site/f9d00d64051344108df37994ed9ea0f7#9c98326001d044c79f8050507e0808be',
     page: {
       headline: '「どこから公式LINEに登録されたか」を、認証画面なしで計測',
       pains: [
@@ -184,6 +191,7 @@ export const RELATED_SERVICES: RelatedService[] = [
   {
     label: '口コミ生成アプリ',
     slug: 'kuchikomi',
+    notionUrl: 'https://purring-tricorne-930.notion.site/f9d00d64051344108df37994ed9ea0f7#b14d0d16223d4ded85808defd6809f06',
     page: {
       headline: '「口コミを書いてください」が、投稿まで届くようになります',
       pains: [
@@ -209,6 +217,7 @@ export const RELATED_SERVICES: RelatedService[] = [
   {
     label: '予約・店舗運営システム（サロンカルテ）',
     slug: 'salon-karte',
+    notionUrl: 'https://purring-tricorne-930.notion.site/f9d00d64051344108df37994ed9ea0f7#eb1f12452a4d482fb5d8d1c88487674e',
     page: {
       headline: 'アプリ不要・ログイン不要。お店専用のネット予約と運営管理',
       pains: [
@@ -238,6 +247,7 @@ export const RELATED_SERVICES: RelatedService[] = [
   {
     label: '交通事故の患者さん対応サポート',
     slug: 'jiko-support',
+    notionUrl: 'https://purring-tricorne-930.notion.site/f9d00d64051344108df37994ed9ea0f7#038bb8bdf113435c970bc939c7732b84',
     page: {
       headline: '交通事故の患者さんの受け入れから、保険会社対応・院内体制まで',
       pains: [
@@ -262,6 +272,7 @@ export const RELATED_SERVICES: RelatedService[] = [
   {
     label: '店舗集客まるっとパック（オールインワン）',
     slug: 'all-in-one',
+    notionUrl: 'https://purring-tricorne-930.notion.site/f9d00d64051344108df37994ed9ea0f7#59cfdf46861a41f3b26da5c03589838a',
     page: {
       headline: 'LP → 広告 → Threads → 公式LINE → 口コミ → 予約まで、一気通貫でお任せ',
       pains: [
@@ -313,7 +324,12 @@ export function serviceBySlug(slug: string): RelatedService | undefined {
   return RELATED_SERVICES.find((s) => s.slug === slug);
 }
 
-/** サービス紹介ページのURL（Threads Studio 内の /services/<slug>） */
-export function servicePageUrl(base: string, service: RelatedService): string {
-  return `${base.replace(/\/$/, '')}/services/${service.slug}`;
+/**
+ * 案内メールの「くわしく見る」の飛び先。
+ * ★アプリ内の紹介ページ（/services）は廃止（2026-09-04 三上様指示：案内はNotionと各LPを使う）。
+ *   LPがあるサービスはLP（1サービスに絞ってスマホで読め、申し込み導線がある）、
+ *   無いサービスはNotionのサービス資料の該当項目へ。
+ */
+export function serviceIntroUrl(service: RelatedService): string {
+  return service.url ?? service.notionUrl;
 }

@@ -44,20 +44,33 @@ async function univapayRequest(
     options.body = JSON.stringify(body);
   }
 
-  try {
-    const response = await fetch(url, options);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Univapay] API error:', response.status, errorText);
-      throw new Error(`Univapay API error: ${response.status} ${errorText}`);
-    }
+  // ★429（レート制限）は少し待って再試行する。管理画面の契約一覧が
+  //   トークン照会を連続で呼ぶと 429 が続き、契約が欠けて表示されていた（2026-09-03）。
+  const MAX_TRY = 4;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const response = await fetch(url, options);
 
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('[Univapay] Request error:', error);
-    throw error;
+      if (response.status === 429 && attempt < MAX_TRY) {
+        const ra = Number(response.headers.get('retry-after'));
+        const waitMs = Number.isFinite(ra) && ra > 0 ? ra * 1000 : 800 * attempt;
+        console.warn(`[Univapay] 429 rate limited → ${waitMs}ms 待って再試行 (${attempt}/${MAX_TRY - 1}) ${endpoint}`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Univapay] API error:', response.status, errorText);
+        throw new Error(`Univapay API error: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('[Univapay] Request error:', error);
+      throw error;
+    }
   }
 }
 

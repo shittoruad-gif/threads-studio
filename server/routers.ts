@@ -3354,10 +3354,12 @@ ${input.commentText}
       const linkDesc = new Map<string, string>();
       for (const l of links) linkDesc.set(l.id, l.description || '');
 
-      // トークン照会でメールを解決（同時8件まで・失敗は無視）
+      // トークン照会でメールを解決（同時2件まで・失敗は無視）
+      // ★8並列だとUnivaPayの上限に当たり 429 が連発して契約が欠けていた。
+      //   univapayRequest 側の再試行と合わせ、並列数を絞る（100件でも十数秒で終わる）
       const rows: any[] = [];
       const queue = [...subs];
-      const workers = Array.from({ length: 8 }, async () => {
+      const workers = Array.from({ length: 2 }, async () => {
         while (queue.length > 0) {
           const s = queue.shift();
           if (!s) break;
@@ -4180,12 +4182,11 @@ ${input.commentText}
         //   1通にまとめると読まれにくく、どれに興味があったのかも本人に伝わりにくいため。
         if (input.sendInfo && ctx.user.email && input.interests.length > 0) {
           try {
-            const { servicesFromLabels, servicePageUrl, RELATED_SERVICES_CONTACT_EMAIL } = await import('../shared/relatedServices');
+            const { servicesFromLabels, serviceIntroUrl, RELATED_SERVICES_CONTACT_EMAIL } = await import('../shared/relatedServices');
             const matched = servicesFromLabels(input.interests);
             if (matched.length > 0) {
               const { sendServiceIntroEmails } = await import('./_core/notification');
-              const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
-              const sent = await sendServiceIntroEmails(ctx.user.email, matched, RELATED_SERVICES_CONTACT_EMAIL, (s) => servicePageUrl(base, s));
+              const sent = await sendServiceIntroEmails(ctx.user.email, matched, RELATED_SERVICES_CONTACT_EMAIL, (s) => serviceIntroUrl(s));
               console.log(`[survey] 案内メール ${sent}/${matched.length}通 → ${ctx.user.email}`);
             }
           } catch (e) { console.error('[survey] 案内メール送信失敗:', e); }

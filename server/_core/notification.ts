@@ -405,6 +405,11 @@ export function renderServiceIntroEmail(service: RelatedService, pageUrl: string
       (service.sample.note ? `<br /><span style="color:#6b7280;font-size:13px;">${escapeHtml(service.sample.note)}</span>` : '') + `</p>`
     : '';
   const mailto = `mailto:${contactEmail}?subject=${encodeURIComponent(`${service.label}について`)}`;
+  // 主リンクがLPのときは、資料（Notion）も副リンクとして添える
+  const docs = service.url
+    ? `<p style="margin:10px 0 0;font-size:13px;"><a href="${service.notionUrl}" style="color:#065f46;">資料（PDF）を見る</a>
+         <span style="color:#6b7280;">　サービス紹介・はじめての方向け・ご導入後の3点をまとめています</span></p>`
+    : '';
   return emailShell(
     escapeHtml(service.label),
     `
@@ -418,10 +423,11 @@ export function renderServiceIntroEmail(service: RelatedService, pageUrl: string
       <ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:1.6;">${li(p.outputs)}</ul>
       ${price}
       ${sample}
+      ${docs}
       <p style="margin:16px 0 0;font-size:14px;line-height:1.7;">くわしい内容は下のボタンからご覧ください。お見積り・ご相談は
         <a href="${mailto}" style="color:#065f46;">こちら</a>、またはこのメールへのご返信でも承ります。</p>
     `,
-    `${service.label} の案内ページを見る`,
+    service.url ? `${service.label} の紹介ページを見る` : `${service.label} の資料を見る`,
     pageUrl,
     'このメールは、Threads Studio のアンケートで「メールでの案内を希望する」とお選びいただいた方にお送りしています。<br />'
     + `今後のご案内が不要な場合は、このメールへのご返信、または ${escapeHtml(contactEmail)} までその旨をお知らせください。`,

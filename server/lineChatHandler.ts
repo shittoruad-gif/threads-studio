@@ -1654,6 +1654,9 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   //   （以前は「料金」などの言葉に反応して料金ページのリンクを返すだけで、
   //     「プロプランは何アカウントまで？」のような具体的なご質問に答えられていなかった）
   //   自動で答えられなかったときだけ、下のキーワード案内にまわす。
+  // ★投稿文の貼り付けは、ご質問として自動応答に回さない（的外れな返事・担当者への誤通知を防ぐ）
+  if (isPastedContent(t)) return replyToRequest("pasted");
+
   if (looksLikeQuestion(t)) {
     const answered = await autoAnswer(user.id, lineUserId, t);
     if (answered) return answered;
@@ -1734,7 +1737,22 @@ function looksLikeQuestion(t: string): boolean {
  *   「お答えできないご質問でした」と返すと的外れになる。
  *   （2026-09-02、お客様が症例を3件送られたのに担当者送りになっていた）
  */
-function requestKind(t: string): "post" | "material" | null {
+/**
+ * 投稿用の文章をそのまま貼られたか。
+ * ★長文・改行あり・疑問符なし（＋絵文字やハッシュタグが混じる）は、ご質問ではなく
+ *   「投稿文の貼り付け」であることがほとんど。ご質問扱いにすると自動応答が的外れな
+ *   返事をし、担当者にも「質問」として上がってくる（2026-09-03 に2件発生）。
+ */
+function isPastedContent(t: string): boolean {
+  if (/[?？]/.test(t)) return false;
+  const lines = t.split(/\r?\n/).filter((l) => l.trim()).length;
+  // 絵文字（サロゲートペア）・記号・ハッシュタグ（サーバーのビルド対象がES5のため u フラグは使わない）
+  const decorated = /[#＃]|[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|‼|⁉/.test(t);
+  return (t.length >= 150 && lines >= 3) || (t.length >= 120 && decorated);
+}
+
+function requestKind(t: string): "post" | "material" | "pasted" | null {
+  if (isPastedContent(t)) return "pasted";
   // 「投稿してほしい」「告知したい」「ネタを作ってほしい」など
   if (/(投稿|告知|発信|ポスト|ネタ)[^。！？\n]{0,12}(したい|して|作|つくっ|つくり|書い|書き|出し|載せ|上げ|流し)/.test(t)
       || /(作っ|つくっ|書い|流し|載せ)[^。！？\n]{0,6}(ほしい|欲しい|ください|下さい|たい)/.test(t) && /(投稿|告知|発信|ポスト|ネタ)/.test(t)) return "post";
@@ -1750,8 +1768,18 @@ function requestKind(t: string): "post" | "material" | null {
  * ★自動応答が動いたときも、動かなかったとき（短い一言のご依頼）も、
  *   同じ内容をお返しするために切り出している。
  */
-function replyToRequest(req: "post" | "material", questionId?: number | string | null): unknown[] {
+function replyToRequest(req: "post" | "material" | "pasted", questionId?: number | string | null): unknown[] {
   const staff = { label: "担当者に聞く", data: `m=staff${questionId ? `&q=${questionId}` : ""}` };
+  if (req === "pasted") {
+    return [textWithQuick(
+      "文章をお送りいただき、ありがとうございます。\n" +
+      "このトークは、毎日の投稿の確認・承認と設定の操作にお使いいただけます（お送りいただいた文章がそのまま投稿されることはありません）。\n\n" +
+      "・この文章をThreadsに投稿したい場合：アプリの「AI投稿を作る」で本文をこの文章に書き換えて投稿できます\n" +
+      "・実績やお客様の声として今後の投稿に使いたい場合：「お店の情報」に登録してください\n" +
+      "・担当者に伝えたい場合：「担当者に聞く」を押してください",
+      [{ label: "お店の情報", data: "m=profile" }, staff, ...MENU_HINT],
+    )];
+  }
   if (req === "material") {
     return [textWithQuick(
       "ありがとうございます。実績やお客様のエピソードは、「お店の情報」に登録されたものだけをAIが投稿に使います" +
