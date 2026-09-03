@@ -144,11 +144,17 @@ export default function ThreadsAccountSwitcher({ compact = false, className = ''
         }`}
       >
         {selectedAccount?.profilePictureUrl ? (
-          <img
-            src={selectedAccount.profilePictureUrl}
-            alt={`${selectedAccount.threadsUsername}のプロフィール画像`}
-            className="w-6 h-6 rounded-full object-cover flex-shrink-0"
-          />
+          <>
+            <img
+              src={selectedAccount.profilePictureUrl}
+              alt={`${selectedAccount.threadsUsername}のプロフィール画像`}
+              className="w-6 h-6 rounded-full object-cover flex-shrink-0"
+              onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }}
+            />
+            <div className="hidden w-6 h-6 rounded-full bg-emerald-100 items-center justify-center flex-shrink-0 [&:not(.hidden)]:flex">
+              <User className="w-3.5 h-3.5 text-emerald-600" />
+            </div>
+          </>
         ) : (
           <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
             <User className="w-3 h-3 text-emerald-600" />
@@ -189,11 +195,17 @@ export default function ThreadsAccountSwitcher({ compact = false, className = ''
                   }`}
                 >
                   {account.profilePictureUrl ? (
-                    <img
-                      src={account.profilePictureUrl}
-                      alt={`${account.threadsUsername}のプロフィール画像`}
-                      className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                    />
+                    <>
+                      <img
+                        src={account.profilePictureUrl}
+                        alt={`${account.threadsUsername}のプロフィール画像`}
+                        className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                        onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }}
+                      />
+                      <div className="hidden w-8 h-8 rounded-full bg-emerald-100 items-center justify-center flex-shrink-0 [&:not(.hidden)]:flex">
+                        <User className="w-4 h-4 text-emerald-600" />
+                      </div>
+                    </>
                   ) : (
                     <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
                       <User className="w-4 h-4 text-emerald-600" />

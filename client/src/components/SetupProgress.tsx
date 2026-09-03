@@ -163,16 +163,28 @@ export function SetupProgress() {
               </div>
             )}
 
-            {/* Label */}
-            <span
-              className={`flex-1 text-sm ${
-                item.completed
-                  ? "text-muted-foreground"
-                  : "text-foreground font-medium"
-              }`}
-            >
-              {t(item.label)}
-            </span>
+            {/* Label
+                ★アカウント別の工程は「@アカウント名：工程名」で、@名が長いと折り返せず
+                  右の「完了」やボタンが画面外に押し出されていた（本番375pxで確認・2026-09-04）。
+                  min-w-0 で縮められるようにし、@名は1行目に分けて break-all で折る。 */}
+            {(() => {
+              const raw = t(item.label);
+              const m = item.id.startsWith("acct_") ? raw.match(/^(@[^：]+)：(.+)$/) : null;
+              return (
+                <span
+                  className={`flex-1 min-w-0 text-sm leading-snug ${
+                    item.completed ? "text-muted-foreground" : "text-foreground font-medium"
+                  }`}
+                >
+                  {m ? (
+                    <>
+                      <span className="block text-[11px] font-mono text-muted-foreground break-all">{m[1]}</span>
+                      <span className="block">{m[2]}</span>
+                    </>
+                  ) : raw}
+                </span>
+              );
+            })()}
 
             {/* Action button */}
             {!item.completed && item.action && (

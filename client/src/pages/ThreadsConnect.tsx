@@ -432,11 +432,17 @@ export default function ThreadsConnect() {
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
               <div className="flex items-center gap-4 min-w-0">
                 {account.profilePictureUrl ? (
-                  <img
-                    src={account.profilePictureUrl}
-                    alt={`${account.threadsUsername || 'user'} ${t('のプロフィール画像')}`}
-                    className="w-14 h-14 rounded-full object-cover border-2 border-border/50 shrink-0"
-                  />
+                  <>
+                    <img
+                      src={account.profilePictureUrl}
+                      alt={`${account.threadsUsername || 'user'} ${t('のプロフィール画像')}`}
+                      className="w-14 h-14 rounded-full object-cover border-2 border-border/50 shrink-0"
+                      onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }}
+                    />
+                    <div className="hidden w-14 h-14 rounded-full bg-emerald-100 items-center justify-center shrink-0 [&:not(.hidden)]:flex">
+                      <User className="w-7 h-7 text-emerald-600" />
+                    </div>
+                  </>
                 ) : (
                   <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
                     <User className="w-7 h-7 text-emerald-600" />
