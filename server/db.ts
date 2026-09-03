@@ -751,6 +751,27 @@ export async function countAccountScheduledPosts(threadsAccountId: number): Prom
  * 当月の「使用枠」＝当月公開済み(posted) ＋ 当月に予約済み(pending, scheduledAt が当月) の合計。
  * 月間上限の判定に使う（予約だけで当月枠を超過するのを防ぐ / B-5）。月境界はJST。
  */
+/**
+ * このアカウントで「今日（日本時間）」に予約済み・承認待ち・公開済みの本数。
+ * お申し込み直後の当日補充で、足りない分だけ作るために使う。
+ */
+export async function countAccountPostsScheduledToday(accountId: number): Promise<number> {
+  const database = await getDb();
+  if (!database) return 0;
+  const [row] = await database
+    .select({ n: sql<number>`COUNT(*)` })
+    .from(scheduledPosts)
+    .where(
+      and(
+        eq(scheduledPosts.threadsAccountId, accountId),
+        sql`${scheduledPosts.status} IN ('pending', 'awaiting_approval', 'posted', 'processing')`,
+        sql`${scheduledPosts.replyToThreadsId} IS NULL`,
+        sql`DATE(DATE_ADD(${scheduledPosts.scheduledAt}, INTERVAL 9 HOUR)) = DATE(DATE_ADD(NOW(), INTERVAL 9 HOUR))`,
+      ),
+    );
+  return Number(row?.n ?? 0);
+}
+
 export async function countAccountMonthlyUsage(threadsAccountId: number): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
@@ -2410,7 +2431,7 @@ export async function deleteUser(userId: number): Promise<void> {
  * - Has active subscription (not free)
  * - Has at least one active Threads account
  */
-export async function getAutoPostEligibleUsers() {
+export async function getAutoPostEligibleUsers(onlyUserId?: number) {
   const database = await getDb();
   if (!database) return [];
 
@@ -2432,6 +2453,8 @@ export async function getAutoPostEligibleUsers() {
         eq(users.autoPostEnabled, true),
         sql`${subscriptions.status} IN ('active', 'trialing')`,
         eq(threadsAccounts.isActive, true),
+        // 1人だけ対象にするとき（お申し込み直後の当日補充・「今すぐ作る」ボタン）
+        ...(onlyUserId ? [eq(users.id, onlyUserId)] : []),
       )
     );
 

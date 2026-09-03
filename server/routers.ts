@@ -1978,6 +1978,11 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           hasReplyScope: process.env.THREADS_MANAGE_REPLIES_APPROVED === "true",
         } as any);
 
+        // 連携できた瞬間に、今日の分の投稿を作る（朝6時を待たない）
+        import('./autoPostScheduler')
+          .then(({ runAutoPostCatchUpForUser }) => runAutoPostCatchUpForUser(ctx.user.id, 'Threads連携'))
+          .catch(() => {});
+
         return { success: true, profile, isReconnection: isReconnection || isReactivation };
       }),
 
@@ -4667,6 +4672,12 @@ ${CONCEPT_DESIGN_PROMPT}`;
       }))
       .mutation(async ({ ctx, input }) => {
         await db.updateAutoPostSettings(ctx.user.id, input);
+        // 自動投稿をONにした／回数を増やしたときは、今日の不足分をすぐ作る
+        if (input.autoPostEnabled === true || input.autoPostFrequency) {
+          import('./autoPostScheduler')
+            .then(({ runAutoPostCatchUpForUser }) => runAutoPostCatchUpForUser(ctx.user.id, '自動投稿の設定変更'))
+            .catch(() => {});
+        }
         return { success: true };
       }),
 
@@ -4692,7 +4703,9 @@ ${CONCEPT_DESIGN_PROMPT}`;
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Threadsアカウントを連携してください。' });
       }
 
-      const result = await processAutoPostGeneration();
+      // ★押した本人の分だけ、今日の不足分を作る。
+      //   以前は全ユーザー分を回していた（1人のボタンで全員に生成が走る）。
+      const result = await processAutoPostGeneration({ onlyUserId: ctx.user.id, fillToday: true });
       return result;
     }),
   }),

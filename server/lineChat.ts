@@ -69,7 +69,7 @@ export function fmtJst(v: Date | string | null): string {
  */
 export function buildPostCards(
   posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null; accountName?: string | null }>,
-  opts: { one?: boolean } = {},
+  opts: { one?: boolean; bulk?: boolean } = {},
 ): unknown {
   const suffix = opts.one ? "&o=1" : "";
   const bubbles = posts.slice(0, 5).map((p) => ({
@@ -105,11 +105,23 @@ export function buildPostCards(
       ],
     },
   }));
-  return {
+  const msg: any = {
     type: "flex",
     altText: `承認待ちの投稿が${posts.length}件あります`,
     contents: bubbles.length === 1 ? bubbles[0] : { type: "carousel", contents: bubbles },
   };
+  // ★2件以上まとめて見るときは「すべて承認する」を足す。
+  //   1件ずつ「これで投稿する」を押していくのが手間、というご要望（2026-09-03）。
+  //   1件だけのときは出さない（個別ボタンと意味が同じで迷うだけ）。
+  if (opts.bulk && posts.length > 1) {
+    msg.quickReply = {
+      items: [
+        { type: "action", action: { type: "postback", label: `すべて承認する（${posts.length}件）`, data: "a=okall", displayText: "すべて承認する" } },
+        { type: "action", action: { type: "postback", label: "1件ずつ確認する", data: "m=posts&one=1", displayText: "1件ずつ確認する" } },
+      ],
+    };
+  }
+  return msg;
 }
 
 /** 書き直しの方向（クイックリプライの選択肢） */

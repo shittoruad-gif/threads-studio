@@ -246,14 +246,15 @@ async function repliesForPosts(userId: number, mode?: "one" | "all"): Promise<un
       [
         { label: "1件ずつ確認する", data: "m=posts&one=1" },
         { label: "まとめて見る", data: "m=posts&all=1" },
+        { label: `すべて承認する（${waiting.length}件）`, data: "a=okall" },
       ],
     )];
   }
   if (mode === "one" || waiting.length === 1) return replyOneWaiting(userId);
   const withNames = await withAccountNames(userId, waiting);
   return [
-    { type: "text", text: `確認をお待ちしている投稿が${waiting.length}件あります。内容を見て、下のボタンを押してください。` },
-    buildPostCards(withNames as any),
+    { type: "text", text: `確認をお待ちしている投稿が${waiting.length}件あります。内容を見て、下のボタンを押してください。\n全部そのままでよければ「すべて承認する」で一度に終わります。` },
+    buildPostCards(withNames as any, { bulk: true }),
   ];
 }
 
@@ -1108,6 +1109,59 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       ];
     }
     return [textWithQuick(done + "\n\n間違えて押した場合は「取り消す」で元に戻せます。", undo)];
+  }
+  // ★すべて承認（確認待ちを一度に公開予約へ）。1件ずつ押す手間をなくす。
+  if (q.a === "okall") {
+    const all = await db.getScheduledPostsByUserId(user.id);
+    const waiting = all
+      .filter((p: any) => p.status === "awaiting_approval")
+      .sort((a: any, b: any) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+    if (waiting.length === 0) return [textWithQuick("確認をお待ちしている投稿はありません。", MENU_HINT)];
+    const now = new Date();
+    const approvedIds: number[] = [];
+    let hasPinned = false;
+    for (const p of waiting as any[]) {
+      const past = !p.scheduledAt || new Date(p.scheduledAt) <= now;
+      await db.updateScheduledPost(Number(p.id), { status: "pending", ...(past ? { scheduledAt: now } : {}) });
+      approvedIds.push(Number(p.id));
+      if (p.angle === "pinned") hasPinned = true;
+    }
+    const times = (waiting as any[])
+      .map((p) => (!p.scheduledAt || new Date(p.scheduledAt) <= now ? "まもなく" : fmtJst(p.scheduledAt)))
+      .join(" / ");
+    const done = `${approvedIds.length}件すべて承認しました。\n公開予定: ${times}`;
+    // 取り消しは、まとめて元に戻せるようにIDを持たせる（LINEのpostbackは300字まで。5件なら十分）
+    const undo = [{ label: "すべて取り消す", data: `a=undoall&ids=${approvedIds.slice(0, 20).join(",")}` }, ...MENU_HINT];
+    const out: unknown[] = [textWithQuick(done + "\n\n間違えて押した場合は「すべて取り消す」で元に戻せます。", undo)];
+    if (hasPinned) {
+      let needPinGuide = false;
+      try { needPinGuide = !(await db.isPinnedPostConfirmed(user.id)); } catch { needPinGuide = false; }
+      if (needPinGuide) {
+        const { pinGuideText } = await import("@shared/pinGuide");
+        out.push(textWithQuick(
+          "固定投稿も含まれています。公開されたら、最後にひとつだけお願いします。\n\n" +
+          pinGuideText({ withPublishSteps: false }) +
+          "\n\n終わったら、下の「ピン留めしました」を押してください。",
+          [{ label: "ピン留めしました", data: "n=pinned" }],
+        ));
+      }
+    }
+    return out;
+  }
+  if (q.a === "undoall" && q.ids) {
+    const ids = String(q.ids).split(",").map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0);
+    let reverted = 0;
+    let alreadyPosted = 0;
+    for (const id of ids) {
+      const post = await ownedPost(user.id, id);
+      if (!post) continue;
+      if (post.status === "posted") { alreadyPosted++; continue; }
+      if (post.status !== "pending") continue;
+      await db.updateScheduledPost(id, { status: "awaiting_approval" });
+      reverted++;
+    }
+    const note = alreadyPosted > 0 ? `\n${alreadyPosted}件はすでに公開されていたため戻せません（Threadsアプリから削除できます）。` : "";
+    return [textWithQuick(`${reverted}件を確認待ちに戻しました。${note}`, [{ label: "今日の投稿", data: "m=posts" }, ...MENU_HINT])];
   }
   if (q.a === "skip" && q.i) {
     const post = await ownedPost(user.id, Number(q.i));

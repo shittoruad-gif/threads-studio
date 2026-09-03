@@ -85,5 +85,10 @@ export async function saveCounselingAnswers(params: {
   if (!(project as any).belief && result.industryMyths.length > 0) patch.belief = result.industryMyths.join("\n");
 
   await db.updateProject(params.projectId, patch);
+  // お店の情報がそろった瞬間に、今日の分の投稿を作る（朝6時を待たない）。
+  // 条件が足りなければ中で何もしない。保存の応答は待たせない。
+  import("./autoPostScheduler")
+    .then(({ runAutoPostCatchUpForUser }) => runAutoPostCatchUpForUser(params.userId, "お店の情報の登録完了"))
+    .catch(() => { /* 補充は付加機能。失敗しても保存には影響させない */ });
   return { ok: true, projectId: params.projectId };
 }

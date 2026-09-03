@@ -184,6 +184,12 @@ export async function applyCoupon(
     }
   }
 
+  // 無料トライアルが始まった瞬間に、今日の分の投稿を作る（朝6時を待たない）。
+  // Threads未連携・お店の情報が未登録なら中で何もしない。
+  import("./autoPostScheduler")
+    .then(({ runAutoPostCatchUpForUser }) => runAutoPostCatchUpForUser(userId, "無料トライアル開始"))
+    .catch(() => {});
+
   // monitor / monitor_only クーポンはユーザーをモニターに設定
   if (coupon.type === "monitor" || coupon.type === "monitor_only") {
     const { users } = await import("../drizzle/schema");

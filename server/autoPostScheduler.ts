@@ -309,6 +309,62 @@ function getNextPostingTime(index: number, customHours?: number[] | null): Date 
 }
 
 /**
+ * ★当日分の補充（登録したその日に、その日の本数ぶん投稿するための時刻決め）
+ *
+ * なぜ要るか:
+ *   毎日の生成は朝6時にしか走らない。夜21時にお申し込みいただいた方は、
+ *   その日は1本も投稿されず、翌朝まで何も起きなかった（1日3投稿のプランなのに）。
+ *   お申し込み直後に「今日はあと何本出せるか」を数えて、残り時間に配置する。
+ *
+ * 時刻の決め方:
+ *   1. 実測で伸びる時間帯（15/21/22時＋22〜23時も1.19倍なので23時）のうち、
+ *      今日まだ来ていないものを優先して使う。
+ *   2. それでも本数が足りなければ、今から23:50までを等間隔に割る。
+ *      ただし投稿同士は最低 MIN_GAP_MINUTES あける（短時間の連投は
+ *      スパム扱いで到達が落ちる。Moveact IGで連投分だけ消された実例あり）。
+ *   3. 間隔を守ると入りきらない場合（深夜のお申し込み）は、入る本数だけにする。
+ *      無理に詰め込んで投稿を消されるより、翌朝から満額のほうが良い。
+ */
+const SAME_DAY_EXTRA_HOURS = [23];
+const MIN_GAP_MINUTES = 25;
+
+export function buildSameDaySlots(count: number, preferred: number[] | null | undefined, now: Date = new Date()): Date[] {
+  if (count <= 0) return [];
+  const jst = new Date(now.getTime() + JST_OFFSET_MS);
+  const y = jst.getUTCFullYear(), m = jst.getUTCMonth(), d = jst.getUTCDate();
+  const at = (h: number, mi: number) => Date.UTC(y, m, d, h, mi, 0) - JST_OFFSET_MS;
+  const earliest = now.getTime() + 10 * 60_000;   // 生成直後すぐは避ける（承認の余地を残す）
+  const latest = at(23, 50);
+  if (latest <= earliest) return [];
+  const gap = MIN_GAP_MINUTES * 60_000;
+
+  // 1. 勝ち時間帯のうち今日まだ来ていないもの
+  const base = preferred && preferred.length > 0 ? preferred : POSTING_HOURS;
+  const pool = Array.from(new Set([...base, ...SAME_DAY_EXTRA_HOURS])).sort((a, b) => a - b);
+  const preferredSlots: number[] = [];
+  for (const h of pool) {
+    const t = at(h, Math.floor(Math.random() * 30));
+    if (t >= earliest && t <= latest) preferredSlots.push(t);
+  }
+  preferredSlots.sort((a, b) => a - b);
+  const spaced: number[] = [];
+  for (const t of preferredSlots) {
+    if (spaced.length === 0 || t - spaced[spaced.length - 1] >= gap) spaced.push(t);
+    if (spaced.length >= count) break;
+  }
+  if (spaced.length >= count) return spaced.slice(0, count).map((t) => new Date(t));
+
+  // 2. 足りない分は残り時間を等間隔に割る（最低間隔は守る）
+  const span = latest - earliest;
+  const maxFit = Math.floor(span / gap) + 1;
+  const n = Math.max(1, Math.min(count, maxFit));
+  const step = n > 1 ? span / (n - 1) : 0;
+  const even: Date[] = [];
+  for (let i = 0; i < n; i++) even.push(new Date(Math.round(earliest + step * i)));
+  return even;
+}
+
+/**
  * Generate a single auto-post for a user
  */
 async function generateAutoPost(
@@ -321,6 +377,8 @@ async function generateAutoPost(
   requireApproval: boolean = false,
   bestHours: number[] | null = null,
   postLength: string | null = null,
+  // 当日補充のときは時刻を外で決めて渡す（null なら従来どおり翌回の勝ち時間帯）
+  fixedScheduledAt: Date | null = null,
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
   const purpose = PURPOSES[purposeIndex % PURPOSES.length];
@@ -571,7 +629,7 @@ async function generateAutoPost(
     }
 
     // Schedule the post
-    const scheduledAt = getNextPostingTime(postingTimeIndex, bestHours);
+    const scheduledAt = fixedScheduledAt ?? getNextPostingTime(postingTimeIndex, bestHours);
 
     await db.createScheduledPost({
       userId,
@@ -627,14 +685,24 @@ function getPostCount(frequency: string): number {
 /**
  * Process all eligible users and generate auto-posts
  */
-export async function processAutoPostGeneration(): Promise<{ processed: number; generated: number; failed: number }> {
+export type AutoPostRunOptions = {
+  /** この1人だけを対象にする（「今すぐ作る」ボタン・お申し込み直後の当日補充） */
+  onlyUserId?: number;
+  /**
+   * 当日分の補充モード。今日すでに予約・公開済みの本数を数え、足りない分だけを
+   * 今日の残り時間に配置する。朝6時の定例では false（翌回の勝ち時間帯に置く）。
+   */
+  fillToday?: boolean;
+};
+
+export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): Promise<{ processed: number; generated: number; failed: number }> {
   let processed = 0;
   let generated = 0;
   let failed = 0;
 
   try {
     // Get all users eligible for auto-posting
-    const users = await db.getAutoPostEligibleUsers();
+    const users = await db.getAutoPostEligibleUsers(opts.onlyUserId);
 
     if (!users || users.length === 0) {
       console.log('[AutoPost] No eligible users found');
@@ -719,7 +787,22 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
             continue;
           }
 
-          for (let i = 0; i < postCount; i++) {
+          // ★当日補充: 今日すでにある分を引いて、残り時間に入る本数だけ作る
+          let todayCount = postCount;
+          let sameDaySlots: Date[] | null = null;
+          if (opts.fillToday) {
+            const already = await db.countAccountPostsScheduledToday(account.id).catch(() => 0);
+            const shortfall = Math.max(0, postCount - already);
+            sameDaySlots = buildSameDaySlots(shortfall, bestHours);
+            todayCount = sameDaySlots.length;
+            console.log(
+              `[AutoPost] 当日補充 user=${user.id} account=${account.id} 上限${postCount} 既存${already} ` +
+              `→ ${todayCount}本を配置 (${sameDaySlots.map((t) => new Date(t.getTime() + JST_OFFSET_MS).toISOString().slice(11, 16)).join(' / ') || 'なし'})`,
+            );
+            if (todayCount === 0) continue;
+          }
+
+          for (let i = 0; i < todayCount; i++) {
             const project = pinnedProject || eligibleProjects[(dayOffset + i) % eligibleProjects.length];
 
             const success = await generateAutoPost(
@@ -732,6 +815,7 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
               user.autoPostRequireApproval ?? false,
               bestHours,
               (user as any).postLength ?? null,
+              sameDaySlots ? sameDaySlots[i] : null,
             );
 
             if (success) {
@@ -806,6 +890,28 @@ export async function processAutoPostGeneration(): Promise<{ processed: number; 
   }
 
   return { processed, generated, failed };
+}
+
+/**
+ * ★お申し込み・連携・自動投稿ONの直後に呼ぶ「今日の分をいま作る」。
+ *
+ * 呼び出し元（どれか1つで条件がそろった瞬間に動く。何度呼んでも今日の不足分しか作らない）:
+ *   ・決済完了（UnivaPay webhook）
+ *   ・Threadsアカウント連携
+ *   ・お店の情報の登録完了
+ *   ・設定で自動投稿をON／回数を増やした
+ * 条件がそろっていなければ何もしない（getAutoPostEligibleUsers が0件を返す）。
+ * 本体の処理を待たせないよう、呼び出し側は await せず投げっぱなしにしてよい。
+ */
+export async function runAutoPostCatchUpForUser(userId: number, reason: string): Promise<void> {
+  try {
+    const r = await processAutoPostGeneration({ onlyUserId: userId, fillToday: true });
+    if (r.processed > 0) {
+      console.log(`[AutoPost] 当日補充完了 user=${userId} (${reason}) generated=${r.generated} failed=${r.failed}`);
+    }
+  } catch (e) {
+    console.error(`[AutoPost] 当日補充に失敗 user=${userId} (${reason}):`, e);
+  }
 }
 
 /**

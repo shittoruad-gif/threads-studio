@@ -177,12 +177,21 @@ export async function sendApprovalPush(
 ): Promise<boolean> {
   if (!lineNotifyEnabled() || posts.length === 0) return false;
   const { buildPostCards } = await import("./lineChat");
+  // ★「今日」か「明日」かは予定時刻で決める。
+  //   朝6時の定例は当日15/21/22時に置くので「今日」、お申し込み直後の当日補充も「今日」。
+  //   以前は常に「明日の投稿」と書いていて、実際には数時間後に公開されていた。
+  const jstDate = (d: Date) => new Date(d.getTime() + 9 * 3600_000).toISOString().slice(0, 10);
+  const first = posts
+    .map((p) => (p.scheduledAt ? new Date(p.scheduledAt as any) : null))
+    .filter((d): d is Date => !!d && !isNaN(d.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+  const label = !first || jstDate(first) === jstDate(new Date()) ? "今日" : "明日";
+  const tail = posts.length > 1
+    ? "内容を見て、下のボタンを押すだけで終わります。まとめて承認するときは「すべて承認する」を押してください。"
+    : "内容を見て、下のボタンを押すだけで終わります。";
   return pushMessage(lineUserId, [
-    {
-      type: "text",
-      text: `明日の投稿が${posts.length}件できました。\n内容を見て、下のボタンを押すだけで終わります。`,
-    },
-    buildPostCards(posts as any),
+    { type: "text", text: `${label}の投稿が${posts.length}件できました。\n${tail}` },
+    buildPostCards(posts as any, { bulk: true }),
   ]);
 }
 

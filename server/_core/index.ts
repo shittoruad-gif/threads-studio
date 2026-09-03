@@ -734,6 +734,12 @@ async function startServer() {
               } catch (e) { console.error('[Univapay Webhook] 自動投稿回数の引き上げに失敗:', e); }
             }
 
+            // 決済が通った瞬間に、今日の分の投稿を作る（夜のお申し込みでも当日から投稿）。
+            // Threads未連携・お店の情報が未登録なら中で何もしない。Webhookの応答は待たせない。
+            import('../autoPostScheduler')
+              .then(({ runAutoPostCatchUpForUser }) => runAutoPostCatchUpForUser(user.id, '決済完了'))
+              .catch(() => {});
+
             // ★#2 キャンペーン規定回数に達したときの処理。
             //   再送イベントでは発火させない（!isDuplicateCharge）。
             //   ・既定: アプリ側から自動解約（過剰課金防止／従来動作）。
