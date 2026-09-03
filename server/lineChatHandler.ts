@@ -822,7 +822,14 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       ],
     )];
   }
-  if (q.m === "help") return [textWithQuick("よくあるご質問です。知りたいものを選んでください。", helpQuick())];
+  if (q.m === "help") return [textWithQuick("よくあるご質問です。知りたいことの分類をお選びください。", helpQuick())];
+  // 分類を選んだとき＝その分類の質問一覧を出す
+  if (q.hc) {
+    const { HELP_CATEGORIES, helpCategoryQuick } = await import("./lineChat");
+    const c = HELP_CATEGORIES.find((x) => x.key === q.hc);
+    if (!c) return [textWithQuick("その分類が見つかりませんでした。", helpQuick())];
+    return [textWithQuick(`「${c.label}」でよくあるご質問です。`, helpCategoryQuick(c.key))];
+  }
   if (q.m === "setup") {
     // ★複数アカウントを運用している場合、どのアカウントの設定かを先に選んでもらう。
     //   選ばないと1つ目のお店の情報を上書きしてしまうため。
