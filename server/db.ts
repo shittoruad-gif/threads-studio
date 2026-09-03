@@ -3590,6 +3590,18 @@ function escapeSql(v: string): string {
 }
 
 
+/** 直近 days 日で公開に失敗した投稿の件数（社内報告で「投稿が止まっている方」を拾う） */
+export async function countFailedPostsSince(userId: number, days: number): Promise<number> {
+  const database = await getDb();
+  if (!database) return 0;
+  const rows: any = await database.execute(sql.raw(
+    `SELECT COUNT(*) AS c FROM \`scheduledPosts\`
+      WHERE \`userId\` = ${Number(userId)} AND \`status\` = 'failed'
+        AND \`scheduledAt\` >= DATE_SUB(NOW(), INTERVAL ${Number(days)} DAY)`
+  ));
+  return Number(rows?.[0]?.[0]?.c ?? 0);
+}
+
 /** Threadsに公開できた投稿の件数（0なら、まだ1件もThreadsに出ていない） */
 export async function countPostedPosts(userId: number): Promise<number> {
   const database = await getDb();

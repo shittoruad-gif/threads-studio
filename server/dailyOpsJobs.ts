@@ -359,6 +359,12 @@ export function initDailyOpsSchedulers(): void {
     const { runLineFollowerNudgeJob } = await import("./lineFollowerNudgeJob");
     await runTrackedJob("line_follower_nudge", runLineFollowerNudgeJob);
   });
+  // 9:30 JST = 0:30 UTC — しっとる社内への朝の報告（お客様には送らない）
+  cron.schedule("30 0 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runOpsDigestJob } = await import("./opsDigestJob");
+    await runTrackedJob("ops_digest", runOpsDigestJob);
+  });
   // コメント即応：3時間おき（8〜23時JSTのみ＝深夜は通知しない）。
   // 高頻度ジョブなので起動時キャッチアップの対象外（次の回がすぐ来るため。
   // jobRunnerのレジストリには登録しない）。失敗通報はrunTrackedJobが担う。
@@ -366,5 +372,5 @@ export function initDailyOpsSchedulers(): void {
     const { runTrackedJob } = await import("./jobRunner");
     await runTrackedJob("comment_watch", runCommentWatchJob);
   });
-  console.log("[DailyOps] Schedulers initialized (analytics 7:00 / approval 8:00 / next-action 8:30 / onboarding-mail 9:00 / line-nudge 9:10 / comments 8:20-20:20 JST)");
+  console.log("[DailyOps] Schedulers initialized (analytics 7:00 / approval 8:00 / next-action 8:30 / onboarding-mail 9:00 / line-nudge 9:10 / ops-digest 9:30 / comments 8:20-20:20 JST)");
 }
