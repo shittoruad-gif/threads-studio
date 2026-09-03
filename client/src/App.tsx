@@ -237,7 +237,9 @@ function App() {
         <SubscriptionProvider>
           <ThreadsAccountProvider>
             <TooltipProvider>
-              <Toaster />
+              {/* ★スマホは下部タブバー（64px＋セーフエリア）とフローティングボタンがあるので、
+                  通知（トースト）はその上に出す。以前は「10投稿達成」等の通知がタブに重なって読めなかった */}
+              <Toaster mobileOffset={{ bottom: 96 }} />
               <CelebrationProvider />
               <Suspense fallback={<PageLoading />}>
                 <Router />
