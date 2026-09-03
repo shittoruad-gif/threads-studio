@@ -344,6 +344,11 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   // このアカウントの固定投稿を「Threadsでピン留めした」とご本人が申告した時刻。
   // ピン留めはAPIで操作も確認もできないため申告制。複数アカウント運用ではアカウントごとに持つ。
   pinnedPostConfirmedAt: timestamp("pinnedPostConfirmedAt"),
+  // 投稿設定のアカウント別の上書き（NULL＝共通設定に従う）。shared/accountSettings.ts で合成する。
+  autoPostEnabled: boolean("autoPostEnabled"),
+  autoPostRequireApproval: boolean("autoPostRequireApproval"),
+  autoPostFrequency: varchar("autoPostFrequency", { length: 20 }),
+  postLength: varchar("postLength", { length: 20 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

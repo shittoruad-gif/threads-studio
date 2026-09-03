@@ -443,6 +443,13 @@ async function repliesForProfile(userId: number): Promise<unknown[]> {
 
 // ══════════ はじめの設定（20問）をトーク内で1問ずつ聞く ══════════
 // 状態: state="counseling" / payload={mode, step, answers, projectId}
+/** a= で指定されたアカウント（本人のもの限定）。指定が無ければ null */
+async function ownedAccountOrNull(userId: number, a?: string): Promise<any | null> {
+  if (!a) return null;
+  const acct: any = await db.getThreadsAccountById(Number(a)).catch(() => null);
+  return acct && acct.userId === userId ? acct : null;
+}
+
 /**
  * 「@xxx の」という接頭辞（複数アカウント運用のときだけ。1つなら空文字）。
  * どのアカウントの操作かが常に分かるようにするため。
@@ -968,15 +975,67 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       MENU_HINT,
     )];
   }
-  if (q.m === "settings") {
+  if (q.m === "settings" || q.s === "common") {
     const s = (await db.getAutoPostSettings(user.id)) || {};
     const { plan } = await planOf(user.id);
     const maxPerDay = plan?.features.maxAutoPostsPerDay ?? 0;
     const notify = await db.isNextActionNotifyEnabled(user.id);
+    // ★複数アカウント運用：まずアカウントごとの状態を一覧し、変える対象を選んでもらう。
+    //   （共通設定だけ変えると、片方だけ止めたい・片方だけ確認ありにしたい、ができない）
+    const accts = (await db.getThreadsAccountsByUserId(user.id)).filter((a: any) => a.isActive !== false);
+    if (q.m === "settings" && accts.length >= 2 && maxPerDay > 0) {
+      const { effectiveAccountSettings, FREQ_LABEL, LENGTH_LABEL } = await import("../shared/accountSettings");
+      const lines = accts.map((a: any) => {
+        const e = effectiveAccountSettings(s as any, a);
+        const mark = Object.values(e.overridden).some(Boolean) ? "（個別設定あり）" : "（共通設定）";
+        return `・@${a.threadsUsername}${mark}\n　自動投稿：${e.autoPostEnabled ? `ON・${FREQ_LABEL[e.autoPostFrequency]}` : "OFF"}／公開前の確認：${e.autoPostRequireApproval ? "する" : "しない"}／長さ：${LENGTH_LABEL[e.postLength]}`;
+      });
+      return [textWithQuick(
+        (plan?.name ? `ご契約：${plan.name}\n\n` : "") +
+        "いまの設定です（アカウントごと）。\n" + lines.join("\n") + "\n\n" +
+        "変えたいアカウントを選んでください。全部まとめて変えるときは「共通の設定」を押してください。",
+        [
+          ...accts.slice(0, 6).map((a: any) => ({ label: `@${String(a.threadsUsername).slice(0, 14)} の設定`, data: `s=acct&a=${a.id}` })),
+          { label: "共通の設定", data: "s=common" },
+          { label: "NGワードを追加", data: "s=ng" },
+        ],
+      )];
+    }
     return [textWithQuick(
       settingsSummary(s as any, { maxPerDay, planName: plan?.name, nextActionNotify: notify }),
       settingsQuick(s as any, maxPerDay, notify),
     )];
+  }
+  // ── アカウント別の設定画面 ──
+  if (q.s === "acct" && q.a) {
+    const acct: any = await db.getThreadsAccountById(Number(q.a));
+    if (!acct || acct.userId !== user.id) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    const s = (await db.getAutoPostSettings(user.id)) || {};
+    const { effectiveAccountSettings, FREQ_LABEL, LENGTH_LABEL } = await import("../shared/accountSettings");
+    const e = effectiveAccountSettings(s as any, acct);
+    const src = (k: keyof typeof e.overridden) => (e.overridden[k] ? "個別" : "共通");
+    const a = `&a=${acct.id}`;
+    return [textWithQuick(
+      `@${acct.threadsUsername} の設定です。\n` +
+      `・自動投稿：${e.autoPostEnabled ? `ON・${FREQ_LABEL[e.autoPostFrequency]}` : "OFF"}（${src("autoPostEnabled")}）\n` +
+      `・公開前の確認：${e.autoPostRequireApproval ? "する" : "しない"}（${src("autoPostRequireApproval")}）\n` +
+      `・投稿の長さ：${LENGTH_LABEL[e.postLength]}（${src("postLength")}）\n\n` +
+      "変えたいものを選んでください。このアカウントだけに効きます。\n（1日の回数はアプリの「設定」から変えられます）",
+      [
+        { label: e.autoPostEnabled ? "自動投稿を止める" : "自動投稿を始める", data: `s=auto&v=${e.autoPostEnabled ? "off" : "on"}${a}` },
+        { label: e.autoPostRequireApproval ? "確認なしにする" : "公開前に確認する", data: `s=appr&v=${e.autoPostRequireApproval ? "off" : "on"}${a}` },
+        { label: "短め にする", data: `s=len&v=short${a}` },
+        { label: "長め にする", data: `s=len&v=long${a}` },
+        { label: "共通設定に戻す", data: `s=inherit${a}` },
+        { label: "設定に戻る", data: "m=settings" },
+      ],
+    )];
+  }
+  if (q.s === "inherit" && q.a) {
+    const acct: any = await db.getThreadsAccountById(Number(q.a));
+    if (!acct || acct.userId !== user.id) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    await db.updateThreadsAccount(acct.id, { autoPostEnabled: null, autoPostRequireApproval: null, autoPostFrequency: null, postLength: null } as any);
+    return [textWithQuick(`@${acct.threadsUsername} の個別設定を外し、共通設定に戻しました。`, [{ label: "設定に戻る", data: "m=settings" }, ...MENU_HINT])];
   }
   if (q.s === "plan") {
     const base = process.env.APP_BASE_URL || "https://threads-studio.com";
@@ -1323,29 +1382,47 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         )];
       }
     }
-    await db.updateAutoPostSettings(user.id, { autoPostEnabled: q.v === "on" });
+    // ★a= があればそのアカウントだけ（複数アカウント運用のアカウント別設定）
+    const target = await ownedAccountOrNull(user.id, q.a);
+    if (q.a && !target) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    if (target) await db.updateThreadsAccount(target.id, { autoPostEnabled: q.v === "on" } as any);
+    else await db.updateAutoPostSettings(user.id, { autoPostEnabled: q.v === "on" });
+    const who = target ? `@${target.threadsUsername} の` : "";
+    const a = target ? `&a=${target.id}` : "";
     return [textWithQuick(
-      (q.v === "on" ? "自動投稿を始めました。明日から毎日投稿します。" : "自動投稿を止めました。再開したいときは「設定」からどうぞ。") +
+      (q.v === "on" ? `${who}自動投稿を始めました。明日から毎日投稿します。` : `${who}自動投稿を止めました。再開したいときは「設定」からどうぞ。`) +
       "\n\n間違えた場合は「元に戻す」を押してください。",
-      [{ label: "元に戻す", data: `s=auto&v=${q.v === "on" ? "off" : "on"}` }, ...MENU_HINT],
+      [{ label: "元に戻す", data: `s=auto&v=${q.v === "on" ? "off" : "on"}${a}` }, ...MENU_HINT],
     )];
   }
   if (q.s === "appr") {
-    await db.updateAutoPostSettings(user.id, { autoPostRequireApproval: q.v === "on" });
+    const target = await ownedAccountOrNull(user.id, q.a);
+    if (q.a && !target) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    if (target) await db.updateThreadsAccount(target.id, { autoPostRequireApproval: q.v === "on" } as any);
+    else await db.updateAutoPostSettings(user.id, { autoPostRequireApproval: q.v === "on" });
+    const who = target ? `@${target.threadsUsername} は、` : "";
+    const a = target ? `&a=${target.id}` : "";
     return [textWithQuick(
-      (q.v === "on" ? "公開前に、このトークで確認できるようにしました。" : "確認なしで公開するようにしました。おまかせで毎日投稿されます。") +
+      who + (q.v === "on" ? "公開前に、このトークで確認できるようにしました。" : "確認なしで公開するようにしました。おまかせで毎日投稿されます。") +
       "\n\n間違えた場合は「元に戻す」を押してください。",
-      [{ label: "元に戻す", data: `s=appr&v=${q.v === "on" ? "off" : "on"}` }, ...MENU_HINT],
+      [{ label: "元に戻す", data: `s=appr&v=${q.v === "on" ? "off" : "on"}${a}` }, ...MENU_HINT],
     )];
   }
   if (q.s === "len") {
-    const prev = (await db.getAutoPostSettings(user.id))?.postLength || "short";
+    const target = await ownedAccountOrNull(user.id, q.a);
+    if (q.a && !target) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    const common = (await db.getAutoPostSettings(user.id)) || {};
+    const { effectiveAccountSettings } = await import("../shared/accountSettings");
+    const prev = target ? effectiveAccountSettings(common as any, target).postLength : ((common as any).postLength || "short");
     const v = q.v === "long" ? "long" : q.v === "alt" ? "alternate" : "short";
-    await db.updateAutoPostSettings(user.id, { postLength: v });
+    if (target) await db.updateThreadsAccount(target.id, { postLength: v } as any);
+    else await db.updateAutoPostSettings(user.id, { postLength: v });
     const jp = (x: string) => (x === "long" ? "長め" : x === "alternate" ? "交互" : "短め");
+    const who = target ? `@${target.threadsUsername} の` : "";
+    const a = target ? `&a=${target.id}` : "";
     return [textWithQuick(
-      `投稿の長さを「${jp(v)}」に変えました。\n\n間違えた場合は「元に戻す」を押してください。`,
-      [{ label: `元に戻す（${jp(prev)}）`, data: `s=len&v=${prev === "alternate" ? "alt" : prev}` }, ...MENU_HINT],
+      `${who}投稿の長さを「${jp(v)}」に変えました。\n\n間違えた場合は「元に戻す」を押してください。`,
+      [{ label: `元に戻す（${jp(prev)}）`, data: `s=len&v=${prev === "alternate" ? "alt" : prev}${a}` }, ...MENU_HINT],
     )];
   }
   if (q.s === "ng") {

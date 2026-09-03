@@ -168,13 +168,19 @@ export async function getSetupSteps(userId: number): Promise<SetupStep[]> {
     void unlinked;
     steps.push(...(await accountSteps(userId, active, usable)));
     if (maxPerDay > 0) {
-      steps.push({
-        id: "auto_off",
-        label: "自動投稿をONにする",
-        done: settings?.autoPostEnabled !== false,
-        path: "/settings",
-        actionLabel: "ONにする",
-      });
+      // 自動投稿のON/OFFもアカウント別（共通設定をアカウント側で上書きできる）
+      const { effectiveAccountSettings } = await import("@shared/accountSettings");
+      for (const a of active) {
+        const eff = effectiveAccountSettings(settings, a as any);
+        steps.push({
+          id: `acct_auto:${Number(a.id)}`,
+          label: `${acctName(a)}：自動投稿をONにする`,
+          done: eff.autoPostEnabled,
+          path: "/settings",
+          actionLabel: "ONにする",
+          accountId: Number(a.id), accountName: acctName(a),
+        });
+      }
     }
     return steps;
   }
@@ -332,6 +338,26 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
       };
       const body = byKind[kind];
       if (body) return { key: first.id, accountName: name, ...body };
+    }
+    // アカウント別の自動投稿OFF
+    if (maxPerDay > 0) {
+      const settingsM: any = await db.getAutoPostSettings(userId).catch(() => null);
+      const { effectiveAccountSettings } = await import("@shared/accountSettings");
+      const off = activeAccounts.find((a: any) => !effectiveAccountSettings(settingsM, a).autoPostEnabled);
+      if (off) {
+        const name = acctName(off);
+        return {
+          key: `acct_auto:${Number(off.id)}`,
+          accountName: name,
+          text:
+            "次にやることが1つあります。\n\n" +
+            `${name} の毎日の自動投稿がOFFになっています。このままではこのアカウントの投稿が作られません。\n` +
+            "下のボタンで、いますぐ始められます。",
+          buttons: [{ label: `${name} の自動投稿を始める`, data: `s=auto&v=on&a=${Number(off.id)}` }],
+        };
+      }
+      // 以降のユーザー単位の判定（⑧⑨）は複数運用では重複するので、ここで終える
+      return null;
     }
   }
 

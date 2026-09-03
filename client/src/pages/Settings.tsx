@@ -13,6 +13,7 @@ import { useFontScale } from "@/hooks/useFontScale";
 import { useLang } from "@/i18n";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { AccountSettingsCard } from "@/components/AccountSettingsCard";
 
 export default function Settings() {
   const { user, refresh, logout } = useAuth();
@@ -340,8 +341,10 @@ export default function Settings() {
                 </div>
               )}
 
-              {/* 投稿の長さ（shared/postLength.ts） */}
-              <div className="flex items-start justify-between gap-4">
+              {/* 投稿の長さ（shared/postLength.ts）
+                  ★スマホ幅では説明文が細い列に押し込まれて1文字ずつ縦に折れていたため、
+                    狭い画面ではボタンを説明文の下に落とす */}
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                 <div className="min-w-0">
                   <Label className="text-sm font-medium text-foreground">{t("投稿の長さ")}</Label>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -350,7 +353,7 @@ export default function Settings() {
                     {t("交互を選ぶと、短めと長めを1本ずつ入れ替えて出し、どちらが効くか実データで比べます。")}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-1 rounded-lg border border-border p-1">
+                <div className="flex shrink-0 gap-1 rounded-lg border border-border p-1 self-start">
                   {(["short", "long", "alternate"] as const).map((v) => {
                     const active = ((autoPostSettings as any)?.postLength ?? "short") === v;
                     return (
@@ -464,6 +467,9 @@ export default function Settings() {
             </div>
           )}
         </Card>
+
+        {/* ── アカウントごとの設定（複数アカウント運用のときだけ表示） ── */}
+        <AccountSettingsCard maxPerDay={(subscription as any)?.plan?.features?.maxAutoPostsPerDay ?? 0} />
 
         {/* ── アカウント設定 ── */}
         <Card className="p-6">

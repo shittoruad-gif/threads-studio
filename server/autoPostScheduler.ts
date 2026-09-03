@@ -747,8 +747,10 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         }
         const monthlyCap = plan?.features.maxScheduledPosts ?? -1;
 
-        // Determine how many posts to generate（ユーザー設定の頻度をプラン上限で頭打ち）
-        const postCount = Math.min(getPostCount(user.autoPostFrequency), maxPerDay);
+        // ★投稿設定はアカウント別の上書きを合成して使う（shared/accountSettings.ts）。
+        //   各アカウントのループで上書きを反映する。
+        const { effectiveAccountSettings } = await import('../shared/accountSettings');
+        let anyApproval = false;
 
         // ★本人の実績から「反応が高い時間帯」を取得（データ8件未満はnull＝デフォルト時刻）。
         //   使うほど、その先生の当たり時間に自動で寄っていく。
@@ -787,6 +789,16 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             continue;
           }
 
+          // ★このアカウントの実効設定（アカウント別 → 無ければ共通）
+          const eff = effectiveAccountSettings(user as any, account as any);
+          if (!eff.autoPostEnabled) {
+            console.log(`[AutoPost] account ${account.id} は自動投稿OFF（${eff.overridden.autoPostEnabled ? 'アカウント別設定' : '共通設定'}）のためスキップ`);
+            continue;
+          }
+          if (eff.autoPostRequireApproval) anyApproval = true;
+          // 1日の回数（アカウント別の設定をプラン上限で頭打ち）
+          const postCount = Math.min(getPostCount(eff.autoPostFrequency), maxPerDay);
+
           // ★当日補充: 今日すでにある分を引いて、残り時間に入る本数だけ作る
           let todayCount = postCount;
           let sameDaySlots: Date[] | null = null;
@@ -812,9 +824,9 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
               purposeIdx,
               account.id,
               i,
-              user.autoPostRequireApproval ?? false,
+              eff.autoPostRequireApproval,
               bestHours,
-              (user as any).postLength ?? null,
+              eff.postLength,
               sameDaySlots ? sameDaySlots[i] : null,
             );
 
@@ -837,7 +849,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         // ★承認モードONのユーザーには、作成した直後に1通だけまとめて案内する。
         //   予定時刻を過ぎるまで気づけず投稿がゼロになる、という事故を防ぐため。
         //   メール内で本文を読み、そのまま承認できる（ログイン不要）。
-        if (user.autoPostRequireApproval) {
+        if (anyApproval) {
           try {
             const fresh = await db.getRecentAwaitingApprovalPosts(user.id, 30);
             const owner = fresh.length > 0 ? await db.getUserById(user.id) : null;

@@ -2438,6 +2438,7 @@ export async function getAutoPostEligibleUsers(onlyUserId?: number) {
   const eligibleUsers = await database
     .select({
       id: users.id,
+      autoPostEnabled: users.autoPostEnabled,
       autoPostFrequency: users.autoPostFrequency,
       autoPostRequireApproval: users.autoPostRequireApproval,
       lastAutoPostTypeIndex: users.lastAutoPostTypeIndex,
@@ -2450,7 +2451,8 @@ export async function getAutoPostEligibleUsers(onlyUserId?: number) {
     .innerJoin(threadsAccounts, eq(users.id, threadsAccounts.userId))
     .where(
       and(
-        eq(users.autoPostEnabled, true),
+        // 共通設定がONか、いずれかのアカウントで個別にONにしている（アカウント別設定）
+        sql`(${users.autoPostEnabled} = true OR ${threadsAccounts.autoPostEnabled} = true)`,
         sql`${subscriptions.status} IN ('active', 'trialing')`,
         eq(threadsAccounts.isActive, true),
         // 1人だけ対象にするとき（お申し込み直後の当日補充・「今すぐ作る」ボタン）

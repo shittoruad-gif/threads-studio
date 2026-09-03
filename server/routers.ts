@@ -2007,6 +2007,34 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         return { success: true };
       }),
 
+    // ★アカウント別の投稿設定（自動投稿ON/OFF・公開前の確認・回数・長さ）。
+    //   null を渡した項目は「共通設定に従う」に戻る。
+    updateAccountSettings: protectedProcedure
+      .input(z.object({
+        accountId: z.number(),
+        autoPostEnabled: z.boolean().nullable().optional(),
+        autoPostRequireApproval: z.boolean().nullable().optional(),
+        autoPostFrequency: z.enum(['daily', 'twice_daily', 'three_daily']).nullable().optional(),
+        postLength: z.enum(['short', 'long', 'alternate']).nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const account = await db.getThreadsAccountById(input.accountId);
+        if (!account || account.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found' });
+        }
+        const { accountId, ...patch } = input;
+        // 自動投稿が使えないプランで、アカウント別にONにさせない（共通設定と同じ守り）
+        if (patch.autoPostEnabled === true) {
+          const sub = await db.getSubscriptionByUserId(ctx.user.id);
+          const plan = getPlan(resolveEffectivePlanId(sub?.planId, sub?.status));
+          if ((plan?.features.maxAutoPostsPerDay ?? 0) <= 0) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'ご利用中のプランでは自動投稿はご利用いただけません。' });
+          }
+        }
+        await db.updateThreadsAccount(accountId, patch as any);
+        return { success: true };
+      }),
+
     // ★複数店舗対応：このアカウントの自動投稿に使う「店舗(プロジェクト)」を設定する。
     //   projectId=null で「全店舗を日替わりローテーション」（従来挙動）に戻す。
     setDefaultProject: protectedProcedure

@@ -44,6 +44,7 @@ const STEP_LABEL: Record<string, string> = {
   acct_pinned: "固定投稿が未作成",
   acct_posted: "固定投稿がThreads未公開",
   acct_pin: "固定投稿のピン留めが未確認",
+  acct_auto: "自動投稿がOFF",
 };
 
 /** 工程キー → 社内向けの短い表記（アカウント別なら「@xxx：」を頭に付ける） */
