@@ -28,60 +28,57 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { useState, useEffect, useCallback } from "react";
 
-/* ─── Demo Steps Data ─── */
+/* ─── Demo Steps Data ───
+ * 実際の使い方（2026-09 現在の流れ）。画像はすべて実際のアプリ画面・公式LINEのメニュー。
+ * 以前は「テンプレート選択→情報入力→AI生成→予約」という、いまは存在しない流れの
+ * 作り物の画面を見せていた（お客様が実物と違うと戸惑う）。
+ */
 const demoSteps = [
   {
     step: 1,
-    title: "テンプレートを選択",
-    description: "業種に合わせたテンプレートを選びます",
-    icon: FileText,
-    mockUI: {
-      type: "template-select" as const,
-      templates: [
-        { name: "キャンペーン告知", category: "集客", selected: false },
-        { name: "新メニュー紹介", category: "商品", selected: true },
-        { name: "お客様の声", category: "口コミ", selected: false },
-        { name: "スタッフ紹介", category: "信頼", selected: false },
-      ]
-    }
+    title: "会員登録",
+    time: "3分",
+    description: "お名前・メールアドレス・パスワードだけで登録できます。紹介コードをお持ちの方は、ここで入力します。無料のフリープランから始められます。",
+    image: "/demo/register.jpg",
+    alt: "Threads Studio の会員登録画面",
+    portrait: true,
   },
   {
     step: 2,
-    title: "情報を入力",
-    description: "テンプレートに必要な情報を入力します",
-    icon: Wand2,
-    mockUI: {
-      type: "form-input" as const,
-      fields: [
-        { label: "店舗名", value: "リラク整体院 岡山店" },
-        { label: "メニュー名", value: "春の肩こり解消コース" },
-        { label: "料金", value: "初回限定 3,980円" },
-        { label: "特徴", value: "国家資格保有スタッフが施術" },
-      ]
-    }
+    title: "公式LINEを友だち追加して、つなぐ",
+    time: "1分",
+    description: "登録後に公式LINEを友だち追加し、「登録済みの方はこちら」から会員情報とつなぎます。以降の操作は、このメニューからすべてLINEのトーク内で終わります。",
+    image: "/demo/richmenu.jpg",
+    alt: "公式LINEのメニュー（今日の投稿・コメント・設定・投稿の成績・固定投稿・お店とアカウント）",
+    portrait: false,
   },
   {
     step: 3,
-    title: "AIが投稿文を生成",
-    description: "入力情報をもとにAIが魅力的な文章を作成",
-    icon: Sparkles,
-    mockUI: {
-      type: "ai-generate" as const,
-      generatedText: "\u{1F338} 春の肩こり解消コース 新登場！\n\nデスクワークで凝り固まった肩、放置していませんか？\n\nリラク整体院 岡山店では、国家資格保有スタッフが\nお一人おひとりに合わせた施術をご提供。\n\n\u2728 初回限定 3,980円\n\u{1F4C5} ご予約はDMまたはプロフィールのリンクから\n\n#整体 #肩こり #岡山"
-    }
+    title: "「はじめの設定」に答える",
+    time: "10〜15分",
+    description: "20問に答えるだけで、お店の情報が登録されます。答えた内容だけをAIが事実として使うので、書いていない実績や料金が投稿に出ることはありません。LINEのトークからも、アプリからも進められます。",
+    image: "/demo/counseling-sp.jpg",
+    alt: "はじめの設定（20問）の画面",
+    portrait: true,
   },
   {
     step: 4,
-    title: "投稿を予約・公開",
-    description: "日時を指定して予約、または今すぐ投稿",
-    icon: Send,
-    mockUI: {
-      type: "schedule" as const,
-      date: "2026年2月10日",
-      time: "12:00",
-      status: "予約完了"
-    }
-  }
+    title: "Threadsアカウントを連携",
+    time: "3分",
+    description: "セットアップ状況に沿って進めると、残りが一目で分かります。Threadsの連携だけは、パソコンからの操作がおすすめです。",
+    image: "/demo/dashboard-sp.jpg",
+    alt: "セットアップ状況の画面（アカウント作成・お店の情報・Threads連携・固定投稿）",
+    portrait: true,
+  },
+  {
+    step: 5,
+    title: "毎日、投稿が届く。押すだけ",
+    time: "毎日1タップ",
+    description: "実測で反応が高い15時・21時・22時に合わせて、AIが投稿を用意します。LINEに届いた投稿を見て「これで投稿する」を押すだけ。複数あるときは「すべて承認する」で一度に終わります。慣れたら確認なしの完全自動にもできます。",
+    image: "/demo/posts.jpg",
+    alt: "投稿の確認・予定の画面（承認して投稿）",
+    portrait: false,
+  },
 ];
 
 /* ─── Video Demo Section ─── */
@@ -90,7 +87,6 @@ function VideoDemoSection() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
-  const [typingIndex, setTypingIndex] = useState(0);
 
   const stepData = demoSteps[currentStep];
 
@@ -100,105 +96,23 @@ function VideoDemoSection() {
         setIsPlaying(false);
         return prev;
       }
-      setTypingIndex(0);
       return prev + 1;
     });
   }, []);
 
   useEffect(() => {
     if (!isPlaying) return;
-    const timer = setTimeout(advanceStep, 3500);
+    const timer = setTimeout(advanceStep, 6000);
     return () => clearTimeout(timer);
   }, [isPlaying, currentStep, advanceStep]);
 
-  useEffect(() => {
-    if (currentStep !== 2 || !isPlaying) return;
-    const mock = demoSteps[2].mockUI;
-    if (mock.type !== "ai-generate") return;
-    const fullText = mock.generatedText;
-    if (typingIndex >= fullText.length) return;
-    const timer = setTimeout(() => {
-      setTypingIndex((prev) => Math.min(prev + 3, fullText.length));
-    }, 20);
-    return () => clearTimeout(timer);
-  }, [currentStep, typingIndex, isPlaying]);
-
-  const handlePlay = () => { setIsPlaying(true); setHasStarted(true); setCurrentStep(0); setTypingIndex(0); };
-  const handlePause = () => { setIsPlaying(false); };
-  const handleReset = () => { setIsPlaying(false); setHasStarted(false); setCurrentStep(0); setTypingIndex(0); };
-
-  const renderMockUI = () => {
-    const mock = stepData.mockUI;
-    if (mock.type === "template-select") {
-      return (
-        <div className="grid grid-cols-2 gap-3 p-4">
-          {mock.templates.map((t, i) => (
-            <div key={i} className={`p-3 rounded-lg border-2 transition-all duration-500 ${t.selected ? "border-primary bg-primary/5 scale-105" : "border-border bg-white"}`}>
-              <div className="flex items-center gap-2 mb-1">
-                <FileText className={`w-4 h-4 ${t.selected ? "text-primary" : "text-muted-foreground"}`} />
-                <span className={`text-sm font-medium ${t.selected ? "text-primary" : "text-foreground"}`}>{t.name}</span>
-              </div>
-              <span className="text-xs text-muted-foreground">{t.category}</span>
-              {t.selected && <div className="mt-1"><CheckCircle2 className="w-4 h-4 text-primary" /></div>}
-            </div>
-          ))}
-        </div>
-      );
-    }
-    if (mock.type === "form-input") {
-      return (
-        <div className="space-y-3 p-4">
-          {mock.fields.map((f, i) => (
-            <div key={i} className="space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">{f.label}</label>
-              <div className="bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground">{f.value}</div>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    if (mock.type === "ai-generate") {
-      const displayText = mock.generatedText.slice(0, typingIndex);
-      return (
-        <div className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles className="w-4 h-4 text-primary animate-pulse" />
-            <span className="text-xs text-primary font-medium">AIが生成中...</span>
-          </div>
-          <div className="bg-muted/30 border border-border rounded-md p-3 text-sm whitespace-pre-wrap min-h-[120px] text-foreground">
-            {displayText}
-            {typingIndex < mock.generatedText.length && <span className="inline-block w-0.5 h-4 bg-primary animate-pulse ml-0.5" />}
-          </div>
-        </div>
-      );
-    }
-    if (mock.type === "schedule") {
-      return (
-        <div className="p-4 space-y-4">
-          <div className="flex gap-4">
-            <div className="flex-1 space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">投稿日</label>
-              <div className="bg-muted/50 border border-border rounded-md px-3 py-2 text-sm flex items-center gap-2 text-foreground">
-                <Calendar className="w-4 h-4 text-muted-foreground" />{mock.date}
-              </div>
-            </div>
-            <div className="flex-1 space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">投稿時間</label>
-              <div className="bg-muted/50 border border-border rounded-md px-3 py-2 text-sm flex items-center gap-2 text-foreground">
-                <Clock className="w-4 h-4 text-muted-foreground" />{mock.time}
-              </div>
-            </div>
-          </div>
-          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 text-center">
-            <CheckCircle2 className="w-8 h-8 text-primary mx-auto mb-2" />
-            <p className="text-primary font-semibold">{mock.status}</p>
-            <p className="text-xs text-muted-foreground mt-1">投稿は指定日時に自動で公開されます</p>
-          </div>
-        </div>
-      );
-    }
-    return null;
+  const handlePlay = () => {
+    // 切り替え時に画像が遅れて出ないよう、5枚をまとめて先読みする
+    for (const st of demoSteps) { const im = new Image(); im.src = st.image; }
+    setIsPlaying(true); setHasStarted(true); setCurrentStep(0);
   };
+  const handlePause = () => { setIsPlaying(false); };
+  const handleReset = () => { setIsPlaying(false); setHasStarted(false); setCurrentStep(0); };
 
   return (
     <section ref={ref} className="py-24 px-4 bg-muted/30">
@@ -206,27 +120,27 @@ function VideoDemoSection() {
         <div className={`text-center mb-12 fade-in-up ${isVisible ? 'visible' : ''}`}>
           <span className="section-label mb-3 block">HOW IT WORKS</span>
           <h2 className="text-3xl md:text-4xl font-bold mb-4 text-foreground">実際の使い方を見てみましょう</h2>
-          <p className="text-muted-foreground text-lg">わずか30秒でThreads投稿が完成する様子をご覧ください</p>
+          <p className="text-muted-foreground text-lg">登録から毎日の投稿まで、実際の画面でご覧ください</p>
         </div>
 
         <div className={`relative rounded-2xl overflow-hidden border border-border bg-white shadow-lg fade-in-up delay-200 ${isVisible ? 'visible' : ''}`}>
           {!hasStarted ? (
             <div className="aspect-video bg-gradient-to-br from-primary/5 to-primary/10 flex items-center justify-center">
               <div className="text-center">
-                <button onClick={handlePlay} className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4 hover:scale-110 hover:bg-primary/20 transition-all cursor-pointer">
+                <button onClick={handlePlay} className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4 hover:scale-110 hover:bg-primary/20 transition-all cursor-pointer" aria-label="デモを再生">
                   <Play className="w-10 h-10 text-primary ml-1" />
                 </button>
                 <p className="text-lg font-medium text-foreground">デモを再生</p>
-                <p className="text-sm text-muted-foreground mt-2">テンプレート選択から投稿までの流れ</p>
+                <p className="text-sm text-muted-foreground mt-2">会員登録から、毎日の投稿までの流れ（5ステップ）</p>
               </div>
             </div>
           ) : (
             <div className="bg-white">
-              <div className="flex items-center justify-between px-6 py-3 border-b border-border">
-                <div className="flex items-center gap-4">
+              <div className="flex items-center justify-between px-4 md:px-6 py-3 border-b border-border gap-2">
+                <div className="flex items-center gap-1.5 md:gap-3 overflow-x-auto">
                   {demoSteps.map((s, i) => (
-                    <button key={i} onClick={() => { setCurrentStep(i); setTypingIndex(0); }}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                    <button key={i} onClick={() => { setCurrentStep(i); }}
+                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer shrink-0 ${
                         i === currentStep ? "bg-primary/10 text-primary" : i < currentStep ? "text-primary" : "text-muted-foreground"
                       }`}>
                       {i < currentStep ? <CheckCircle2 className="w-3.5 h-3.5" /> : (
@@ -234,43 +148,52 @@ function VideoDemoSection() {
                           i === currentStep ? "border-primary bg-primary text-white" : "border-muted-foreground"
                         }`}>{s.step}</span>
                       )}
-                      <span className="hidden sm:inline">{s.title}</span>
+                      <span className="hidden md:inline">{s.title}</span>
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={isPlaying ? handlePause : handlePlay} className="p-1.5 rounded-full hover:bg-muted transition-colors">
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={isPlaying ? handlePause : handlePlay} className="p-1.5 rounded-full hover:bg-muted transition-colors" aria-label={isPlaying ? "一時停止" : "再生"}>
                     {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                   </button>
-                  <button onClick={handleReset} className="p-1.5 rounded-full hover:bg-muted transition-colors">
+                  <button onClick={handleReset} className="p-1.5 rounded-full hover:bg-muted transition-colors" aria-label="最初から">
                     <RotateCcw className="w-4 h-4" />
                   </button>
                 </div>
               </div>
               <div className="flex flex-col md:flex-row min-h-[350px]">
-                <div className="md:w-1/3 p-6 flex flex-col justify-center border-r border-border">
-                  <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-                    <stepData.icon className="w-7 h-7 text-primary" />
-                  </div>
-                  <div className="text-xs text-primary font-semibold mb-1">STEP {stepData.step} / {demoSteps.length}</div>
+                <div className="md:w-2/5 p-6 flex flex-col justify-center md:border-r border-border">
+                  <div className="text-xs text-primary font-semibold mb-1">STEP {stepData.step} / {demoSteps.length}<span className="ml-2 text-muted-foreground font-normal">所要 {stepData.time}</span></div>
                   <h3 className="text-xl font-bold mb-2 text-foreground">{stepData.title}</h3>
-                  <p className="text-sm text-muted-foreground">{stepData.description}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{stepData.description}</p>
                   <div className="mt-6 flex gap-1.5">
                     {demoSteps.map((_, i) => (
                       <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-500 ${i <= currentStep ? "bg-primary" : "bg-muted"}`} />
                     ))}
                   </div>
-                </div>
-                <div className="md:w-2/3 p-2">
-                  <div className="bg-muted/20 rounded-xl border border-border h-full overflow-hidden">
-                    <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border">
-                      <div className="w-2.5 h-2.5 rounded-full bg-red-400/60" />
-                      <div className="w-2.5 h-2.5 rounded-full bg-yellow-400/60" />
-                      <div className="w-2.5 h-2.5 rounded-full bg-green-400/60" />
-                      <span className="text-[12px] text-muted-foreground ml-2">Threads Studio</span>
-                    </div>
-                    {renderMockUI()}
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      onClick={() => setCurrentStep((p) => Math.max(0, p - 1))}
+                      disabled={currentStep === 0}
+                      className="text-xs px-3 py-1.5 rounded-md border border-border disabled:opacity-40 hover:bg-muted transition-colors"
+                    >前へ</button>
+                    <button
+                      onClick={() => setCurrentStep((p) => Math.min(demoSteps.length - 1, p + 1))}
+                      disabled={currentStep === demoSteps.length - 1}
+                      className="text-xs px-3 py-1.5 rounded-md border border-border disabled:opacity-40 hover:bg-muted transition-colors"
+                    >次へ</button>
                   </div>
+                </div>
+                <div className="md:w-3/5 p-3 md:p-4 bg-muted/20">
+                  <div className={`mx-auto rounded-xl border border-border bg-white overflow-hidden ${stepData.portrait ? "max-w-[300px]" : "max-w-full"}`}>
+                    <img
+                      key={stepData.image}
+                      src={stepData.image}
+                      alt={stepData.alt}
+                      className={`w-full h-auto block ${stepData.portrait ? "max-h-[520px] object-cover object-top" : ""}`}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground text-center mt-2">実際の画面です（サンプル店舗のデータ）</p>
                 </div>
               </div>
             </div>
@@ -279,8 +202,8 @@ function VideoDemoSection() {
 
         <div className={`grid md:grid-cols-3 gap-6 mt-12 fade-in-up delay-300 ${isVisible ? 'visible' : ''}`}>
           {[
-            { value: "30秒", label: "投稿作成時間" },
-            { value: "3ステップ", label: "簡単な操作" },
+            { value: "10〜15分", label: "はじめの設定にかかる時間" },
+            { value: "1タップ", label: "毎日の確認はLINEで押すだけ" },
             { value: "0円", label: "無料で始められる" },
           ].map((item, i) => (
             <div key={i} className="clean-card rounded-xl p-6 text-center">
@@ -335,8 +258,8 @@ export default function Landing() {
   };
 
   const features = [
-    { icon: <Sparkles className="w-7 h-7" />, title: "AIアシスト生成", description: "テンプレートを選んで情報を入力するだけで、効果的なThreads投稿が数秒で完成します。" },
-    { icon: <Clock className="w-7 h-7" />, title: "予約投稿", description: "最適なタイミングで自動投稿。スケジュール管理で投稿を忘れる心配はありません。" },
+    { icon: <Sparkles className="w-7 h-7" />, title: "AIが毎日つくる", description: "はじめに登録したお店の情報だけを事実として使い、AIが毎日の投稿を用意します。届いた投稿を確認して押すだけです。" },
+    { icon: <Clock className="w-7 h-7" />, title: "伸びる時間に自動公開", description: "実測で反応が高い15時・21時・22時に合わせて自動で公開。投稿を忘れる心配はありません。" },
     { icon: <Shield className="w-7 h-7" />, title: "安全フィルタ", description: "広告規制・誇大表現を自動で回避。コンプライアンスを守りながら効果的な訴求が可能です。" },
     { icon: <BarChart3 className="w-7 h-7" />, title: "複数アカウント管理", description: "複数のThreadsアカウントを一元管理。店舗ごと、ブランドごとに使い分けられます。" }
   ];
