@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPostCards, parsePostback, textWithQuick, textWithChoices, settingsQuick, settingsSummary, helpQuick } from "./lineChat";
+import { buildPostCards, parsePostback, textWithQuick, textWithChoices, settingsQuick, settingsSummary, helpQuick, shouldClearPendingInput } from "./lineChat";
 
 describe("LINEチャット完結UI", () => {
   it("投稿カードのボタンはすべてpostback（Webビューを開かない）", () => {
@@ -121,5 +121,41 @@ describe("入力のやり直し", () => {
   it("押し間違い用の取り消しボタンを作れる", () => {
     const msg: any = textWithQuick("承認しました", [{ label: "取り消す", data: "a=undo&i=12" }]);
     expect(msg.quickReply.items[0].action.data).toBe("a=undo&i=12");
+  });
+});
+
+describe("文章の入力待ちの途中で別のボタンを押されたとき", () => {
+  const on = (state: string, data: string) => shouldClearPendingInput(state, parsePostback(data));
+
+  it("メニューへ移られたら、待ち状態をやめる（打った文章が登録されないように）", () => {
+    // ★NGワード待ちのまま残ると、次に届いたご質問が「使わない言葉」になる
+    expect(on("ngword", "m=menu")).toBe(true);
+    expect(on("ngword", "m=posts")).toBe(true);
+    expect(on("set_line_url", "m=posts")).toBe(true);
+    expect(on("self_edit", "m=settings")).toBe(true);
+    expect(on("rewrite_free", "m=menu")).toBe(true);
+    expect(on("staff_message", "m=posts")).toBe(true);
+  });
+
+  it("同じ待ち状態を作り直すボタンでは、やめない", () => {
+    expect(on("ngword", "s=ng")).toBe(false);
+    expect(on("set_line_url", "c=seturl&p=12")).toBe(false);
+    expect(on("self_edit", "a=selfedit&i=7")).toBe(false);
+    expect(on("rewrite_free", "a=rw&i=7")).toBe(false);
+    expect(on("staff_message", "m=staff&q=3")).toBe(false);
+  });
+
+  it("はじめの設定と連携の途中は、ボタン操作も流れの一部なので消さない", () => {
+    expect(on("counseling", "m=menu")).toBe(false);
+    expect(on("counseling", "c=save")).toBe(false);
+    expect(on("counseling", "c=resume")).toBe(false);
+    expect(on("link_email", "m=signup")).toBe(false);
+    expect(on("signup_code", "m=refcode")).toBe(false);
+  });
+
+  it("待ち状態が無いときは、何もしない", () => {
+    expect(on("", "m=menu")).toBe(false);
+    expect(shouldClearPendingInput(null, parsePostback("m=menu"))).toBe(false);
+    expect(shouldClearPendingInput(undefined, parsePostback("m=menu"))).toBe(false);
   });
 });

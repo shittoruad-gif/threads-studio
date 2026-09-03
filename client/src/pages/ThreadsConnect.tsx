@@ -27,6 +27,9 @@ import { getLoginUrl } from '@/const';
 import PageGuide from '@/components/PageGuide';
 import { useEffect, useState, useRef } from 'react';
 
+/** LINEから来られたことを、OAuthの往復をまたいで覚えておくための印 */
+const FROM_LINE_KEY = 'ts-oauth-from-line';
+
 export default function ThreadsConnect() {
   const { isAuthenticated, loading } = useAuth();
   const { t, lang } = useLang();
@@ -107,8 +110,24 @@ export default function ThreadsConnect() {
   const [showSameAccountGuide, setShowSameAccountGuide] = useState(false);
 
   // ★LINEから来た場合は、連携後に「LINEに戻る」導線を出す（?from=line）
-  const fromLine = typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).get('from') === 'line';
+  //
+  //   Threadsからの戻り先は redirect_uri（/threads-connect）だけで、`from=line` は
+  //   往路で消える。さらに mount 直後に replaceState でクエリを丸ごと落としている。
+  //   そのため毎回の描画で window.location.search を見ていると、連携が終わった
+  //   （justConnected）ときには必ず false になり、「LINEに戻る」が一度も出ない。
+  //   （2026-09-03、連携できているお客様から「LINEに戻りません」とご連絡があった）
+  //   往路で印を残し、初回描画のときに一度だけ読んで覚えておく。
+  //   ★印を消すのはここではなく、連携の処理が終わったあと（onSuccess / onError）。
+  //     この画面は認証の解決などで作り直されることがあり、描画のときに消すと
+  //     作り直された2回目で印が無くなって、結局「LINEに戻る」が出なくなる。
+  const [fromLine] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    if (new URLSearchParams(window.location.search).get('from') === 'line') return true;
+    try {
+      return localStorage.getItem(FROM_LINE_KEY) === '1';
+    } catch { /* localStorageが使えなくても、従来どおり出さないだけ */ }
+    return false;
+  });
   const [justConnected, setJustConnected] = useState(false);
 
   const utils = trpc.useUtils();
@@ -130,6 +149,8 @@ export default function ThreadsConnect() {
       }
       setJustConnected(true);
       userIntentRef.current = null;
+      // 役目を終えた印を消す（1回の連携ぶんだけ覚えておけばよい）
+      try { localStorage.removeItem(FROM_LINE_KEY); } catch { /* 消せなくても支障はない */ }
       refetch();
     },
     onError: (error) => {
@@ -137,6 +158,7 @@ export default function ThreadsConnect() {
       console.error('[Threads OAuth] Callback error:', error);
       callbackProcessed.current = false;
       userIntentRef.current = null;
+      try { localStorage.removeItem(FROM_LINE_KEY); } catch { /* 消せなくても支障はない */ }
       toast.error(`${t('連携エラー')}: ${error.message}`);
     },
   });
@@ -210,6 +232,9 @@ export default function ThreadsConnect() {
     try {
       const currentUrl = window.location.href;
       localStorage.setItem('ts-pre-oauth-url', currentUrl);
+      // ★LINEから来られた方は、戻ってきたときに「LINEに戻る」を出す必要がある。
+      //   往路のクエリはThreadsの戻り先に引き継がれないので、ここで印を残す。
+      if (fromLine) localStorage.setItem(FROM_LINE_KEY, '1');
     } catch (e) {
       // Ignore localStorage errors
     }

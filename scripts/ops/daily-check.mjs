@@ -101,9 +101,16 @@ async function main() {
       };
       const s = await call('autoPost.getSettings');
       const accs = await call('threads.list');
+      const pjs = await call('project.list');
       const FREQ = { daily: '1日1回', twice_daily: '1日2回', three_daily: '1日3回' };
-      const unpinned = (accs || []).filter(a => !a.defaultProjectId).length;
-      console.log(`  ${String(u.name || '').padEnd(14)} ${plan.padEnd(16)} 自動投稿:${s?.autoPostEnabled ? FREQ[s.autoPostFrequency] || s.autoPostFrequency : 'OFF'} / 公開前確認:${s?.autoPostRequireApproval ? 'する' : 'しない'} / 連携${(accs || []).length}件${unpinned ? ` (★未紐づけ${unpinned}件)` : ''}`);
+      // ★「未紐づけ」は、お店の情報が複数あるときだけ困りごとになる。
+      //   情報が1件しかなければ、アプリはその1件を使うので実害はない
+      //   （server/nextAction.ts も accounts > usable のときだけご案内している）。
+      //   条件を付けずに出していたため、問題のない方まで毎朝★が付いていた。
+      const usable = (pjs || []).filter(p => !String(p.id).startsWith('demo_') && p.businessType && p.area && p.target && p.strength);
+      const unlinked = (accs || []).filter(a => !a.defaultProjectId).length;
+      const risky = unlinked > 0 && (accs || []).length > usable.length;
+      console.log(`  ${String(u.name || '').padEnd(14)} ${plan.padEnd(16)} 自動投稿:${s?.autoPostEnabled ? FREQ[s.autoPostFrequency] || s.autoPostFrequency : 'OFF'} / 公開前確認:${s?.autoPostRequireApproval ? 'する' : 'しない'} / 連携${(accs || []).length}件${risky ? ` (★お店の情報が未紐づけ${unlinked}件・取り違えの恐れ)` : ''}`);
     } catch (err) {
       console.log(`  ${u.name}: 取得できず (${String(err.message).slice(0, 40)})`);
     }
