@@ -1743,11 +1743,35 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
         await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
         return askQuestion(cs);
       }
-      if (atReview && /^(登録|登録する|これでOK|ok)$/i.test(text.trim())) {
+      // ★確認画面でも「やめる」で抜けられるようにする。
+      //   はじめの設定を始めるときに「途中でやめたいときは『やめる』と送ってください」と
+      //   ご案内しているのに、最後の確認画面だけ効かず、ボタンを押すまで抜け出せなかった。
+      if (atReview && /^(やめる|中止|キャンセル)$/.test(text.trim())) {
+        await db.clearLineChatState(lineUserId);
+        await clearCounselingBackup(lineUserId);
+        return [textWithQuick("はじめの設定を中断しました。「はじめの設定」からいつでも再開できます。", MENU_HINT)];
+      }
+      // ★「はい」で登録できるようにする。
+      //   「この内容でよろしければ」とお尋ねしているので、ボタンを押さずに
+      //   「はい」「大丈夫です」とお答えになる方が多い。以前は登録されず、
+      //   確認画面がそのまま出し直されるだけで、伝わっていないことにも気づけなかった。
+      if (atReview && /^(登録|登録する|登録して|これで登録|この内容で登録|確定|保存|はい|はいお願いします|OK|OKです|これでOK|大丈夫|大丈夫です|いいです|これでいい|これでいいです|これでお願いします|お願いします|この内容で)$/i.test(text.trim())) {
         return saveCounselingFromChat(user.id, lineUserId, cs);
       }
       if (atReview) {
-        return reviewCounseling(cs);
+        // ★聞き取れなかったときに確認画面を丸ごと出し直すと、長い文章が3通も
+        //   届くだけで「伝わらなかった」ことが分からない。短くやることをお伝えする。
+        return [textWithQuick(
+          "すみません、そのお返事は読み取れませんでした。\n\n" +
+          "・この内容で進めてよければ「登録する」\n" +
+          "・直したい項目があれば、その番号（1〜" + qs.length + "）を送ってください\n" +
+          "・やめる場合は「やめる」と送ってください",
+          [
+            { label: "この内容で登録する", data: "c=save" },
+            { label: "一言を書き直す", data: "c=oneline" },
+            { label: "直す", data: "c=edit" },
+          ],
+        )];
       }
       return await advanceCounseling(user.id, lineUserId, cs, text);
     } catch {
