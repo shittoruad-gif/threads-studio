@@ -10,6 +10,7 @@
  */
 
 import type { PostType } from './threadsPrompts';
+import { BUSINESS_TYPE_SUGGESTIONS } from './industryProfiles';
 
 /**
  * カウンセリング1問あたりの定義
@@ -101,12 +102,10 @@ export const COUNSELING_QUESTIONS: CounselingQuestion[] = [
     helper: '近いものをタップ。違う場合は自由に入力してOK。',
     required: true,
     ui: 'textarea',
-    suggestions: [
-      '整体院', '整骨院・接骨院', '鍼灸院', 'カイロプラクティック',
-      '美容サロン（エステ）', 'リラクゼーション・もみほぐし',
-      '小顔・美容矯正', 'パーソナルジム', 'ヨガ・ピラティス',
-    ],
-    examples: ['例：「産後ケア専門の整体院」「女性専用の小顔矯正サロン」'],
+    // ★候補は特定の業種に寄せない（治療院ばかり並べない）。
+    //   ここで答えていただいた内容で、以降の質問の候補・例文が切り替わる。
+    suggestions: BUSINESS_TYPE_SUGGESTIONS,
+    examples: ['例：「産後ケア専門の整体院」「駅前の小さなカフェ」「未経験の大人向けピアノ教室」'],
   },
   {
     id: 'areaRaw',
@@ -124,7 +123,7 @@ export const COUNSELING_QUESTIONS: CounselingQuestion[] = [
     helper: '自己紹介・固定投稿などで使います。',
     required: false,
     ui: 'textarea',
-    examples: ['例：「○○整体院」「サロン○○」'],
+    examples: ['例：「○○整体院」「○○珈琲店」「サロン○○」'],
     allowEmptyShortcut: true,
   },
   {
@@ -218,7 +217,7 @@ export const COUNSELING_QUESTIONS: CounselingQuestion[] = [
   {
     id: 'menuRaw',
     prompt:
-      '実際に提供している「主なメニュー・コース」を教えてください。\n\nここで挙げたものだけを AI は施術内容として投稿に使います（やっていないメニューを勝手に作りません）。',
+      '実際に提供している「主なメニュー・コース」を教えてください。\n\nここで挙げたものだけを AI は施術の内容として投稿に使います（やっていないメニューを勝手に作りません）。',
     helper: '近いものをタップ→自院の呼び方に直してください。なければ「なし」でOK。',
     required: true,
     ui: 'multiline-list',
@@ -318,7 +317,7 @@ export const COUNSELING_QUESTIONS: CounselingQuestion[] = [
   {
     id: 'benefitsDailyRaw',
     prompt:
-      '施術・サービスのあと、お客さんの「毎日の生活」はどう変わりますか？\n\nできるだけ具体的な“場面”で書いてください（症状名より、生活シーンの方が刺さります）。',
+      '施術のあと、お客さんの「毎日の生活」はどう変わりますか？\n\nできるだけ具体的な“場面”で書いてください（メニュー名や専門用語より、生活シーンの方が刺さります）。',
     helper: '近いものをタップ→自院のお客さん像に合わせて直してください。なければ「なし」でOK。',
     required: false,
     ui: 'multiline-list',
@@ -464,7 +463,7 @@ export const COUNSELING_QUESTIONS: CounselingQuestion[] = [
     required: false,
     ui: 'multi-choice',
     choices: [
-      { value: 'local', label: '📍 地元ネタ型', description: '地域名+症状で集客直結（おすすめ）' },
+      { value: 'local', label: '📍 地元ネタ型', description: '地域名+お悩みで集客直結（おすすめ）' },
       { value: 'proof', label: '📊 実績・体験談型', description: '数字や事例で信頼を作る（おすすめ）' },
       { value: 'empathy', label: '💙 共感型', description: '悩みを代弁して刺す' },
       { value: 'story', label: '📖 ストーリー型', description: '実話を語って心を動かす' },

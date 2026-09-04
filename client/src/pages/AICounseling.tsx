@@ -16,6 +16,7 @@ import { useThreadsAccount } from '@/components/ThreadsAccountSwitcher';
 import { cn } from '@/lib/utils';
 import ProjectLinksManager from '@/components/ProjectLinksManager';
 import { applyPersonalOverrides } from '@shared/personalBrand';
+import { applyIndustryOverrides } from '@shared/industryProfiles';
 import {
   COUNSELING_QUESTIONS,
   type CounselingAnswers,
@@ -24,6 +25,14 @@ import {
 
 /** レビュー画面で使う、各設問の短いラベル */
 const QUESTION_LABELS: Record<string, string> = {
+  // ★最初の6問だけ名前が無く、確認画面で「質問1」〜「質問6」と出ていた。
+  //   どれを直せばいいのか分からないため、名前を付ける。
+  businessTypeRaw: '業種',
+  areaRaw: 'お店の場所',
+  storeNameRaw: 'お店の名前',
+  targetRaw: '来てほしいお客さん',
+  mainProblemRaw: 'お客さんの悩み',
+  strengthRaw: '強み',
   brandVoiceRaw: '口調・話し方',
   uspRaw: '選ばれる理由（USP）',
   menuRaw: '主なメニュー・コース',
@@ -313,7 +322,11 @@ export default function AICounseling() {
     );
   }
 
-  const questions = mode === 'personal' ? applyPersonalOverrides(COUNSELING_QUESTIONS) : COUNSELING_QUESTIONS;
+  // ★1問目で答えていただいた業種に合わせて、以降の候補・例文・言い回しを差し替える。
+  //   全業種に治療院の候補（骨盤矯正・痛い施術ですか？など）を見せないため。
+  const questions = mode === 'personal'
+    ? applyPersonalOverrides(COUNSELING_QUESTIONS)
+    : applyIndustryOverrides(COUNSELING_QUESTIONS, answers.businessTypeRaw);
   const totalSteps = questions.length;
   const isLast = stepIndex === totalSteps - 1;
   const isFirst = stepIndex === 0;

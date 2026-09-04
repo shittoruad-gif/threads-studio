@@ -11,6 +11,7 @@ import {
   MENU_ITEMS, HELP_TOPICS, helpQuick, settingsQuick, settingsSummary, shouldClearPendingInput,
 } from "./lineChat";
 import { COUNSELING_QUESTIONS } from "../shared/counseling";
+import { applyIndustryOverrides } from "../shared/industryProfiles";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 
@@ -574,7 +575,7 @@ async function offerCounselingResume(
   cs: CounselingState,
   pending?: string,
 ): Promise<unknown[]> {
-  const qs = questionsFor(cs.mode);
+  const qs = questionsFor(cs.mode, cs.answers);
   const done = Math.min(cs.step, qs.length);
   if (pending !== undefined) {
     cs.pending = pending.slice(0, 500);
@@ -599,13 +600,16 @@ async function offerCounselingResume(
   )];
 }
 
-function questionsFor(mode: "store" | "personal") {
-  return mode === "personal" ? applyPersonalOverrides(COUNSELING_QUESTIONS) : COUNSELING_QUESTIONS;
+function questionsFor(mode: "store" | "personal", answers?: Record<string, string>) {
+  if (mode === "personal") return applyPersonalOverrides(COUNSELING_QUESTIONS);
+  // ★1問目で答えていただいた業種に合わせて、候補と例文を出し分ける。
+  //   これがないと、カフェや教室のお客様に「骨盤矯正」「痛い施術ですか？」が出る。
+  return applyIndustryOverrides(COUNSELING_QUESTIONS, answers?.businessTypeRaw);
 }
 
 /** n問目を出す（選択肢はタップで送れるようにする） */
 function askQuestion(st: CounselingState): unknown[] {
-  const qs = questionsFor(st.mode);
+  const qs = questionsFor(st.mode, st.answers);
   const q: any = qs[st.step];
   const total = qs.length;
   const editing = st.editing !== null && st.editing !== undefined;
@@ -633,7 +637,7 @@ function askQuestion(st: CounselingState): unknown[] {
  * ここから「◯番を直す」で1問だけ直せる（直したらまたこの画面に戻る）。
  */
 function reviewCounseling(st: CounselingState): unknown[] {
-  const qs = questionsFor(st.mode);
+  const qs = questionsFor(st.mode, st.answers);
   const lines = qs.map((q: any, i: number) => {
     const v = (st.answers[q.id] ?? "").trim();
     const shown = v ? (v.length > 40 ? v.slice(0, 40) + "…" : v) : "（未記入）";
@@ -656,7 +660,7 @@ function reviewCounseling(st: CounselingState): unknown[] {
 
 /** 回答を受け取り、次の質問へ進む。全問終わったら確認画面を出す。 */
 async function advanceCounseling(userId: number, lineUserId: string, st: CounselingState, answer: string): Promise<unknown[]> {
-  const qs = questionsFor(st.mode);
+  const qs = questionsFor(st.mode, st.answers);
   const q: any = qs[st.step];
   const a = answer.trim();
   if (/^(やめる|中止|キャンセル)$/.test(a)) {
@@ -978,7 +982,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const cs: CounselingState = JSON.parse(cur.payload);
     if (q.c === "save") return saveCounselingFromChat(user.id, lineUserId, cs);
     if (q.c === "edit") {
-      const qs = questionsFor(cs.mode);
+      const qs = questionsFor(cs.mode, cs.answers);
       return [{
         type: "text",
         text: `直したい項目の番号（1〜${qs.length}）を送ってください。\n例：「3」と送ると3番目の質問をもう一度お聞きします。`,
@@ -997,7 +1001,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const pending = cs.pending;
     cs.pending = null;
     await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
-    const qs = questionsFor(cs.mode);
+    const qs = questionsFor(cs.mode, cs.answers);
     if (cs.step >= qs.length) return reviewCounseling(cs);
     // 預かっていた文章があれば、それを回答として使う（書き直させない）
     if (pending) {
@@ -1693,7 +1697,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
         cs.pending = null;
         await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
       }
-      const qs = questionsFor(cs.mode);
+      const qs = questionsFor(cs.mode, cs.answers);
       // 全問終わって確認画面を出している状態で数字が来たら「その項目を直す」
       const atReview = cs.step >= qs.length && (cs.editing === null || cs.editing === undefined);
       const num = Number(text.trim());
