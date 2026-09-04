@@ -37,6 +37,8 @@ export async function saveCounselingAnswers(params: {
   projectId: string;
   mode: "store" | "personal";
   answers: CounselingAnswersInput;
+  /** お客様が書き換えた「一言でいうと」。無ければ回答から下書きする */
+  oneLine?: string;
 }): Promise<{ ok: true; projectId: string } | { ok: false; reason: string }> {
   const a = normalize(params.answers);
   const trimmed = (s: string) => (s ?? "").trim();
@@ -64,7 +66,7 @@ export async function saveCounselingAnswers(params: {
   }
 
   const { buildCounselingResult } = await import("../shared/counseling");
-  const result = buildCounselingResult(a);
+  const result = buildCounselingResult(a, '', params.oneLine ?? '');
 
   const patch: any = {
     counselingResult: JSON.stringify(result),

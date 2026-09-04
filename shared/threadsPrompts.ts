@@ -207,6 +207,14 @@ export interface CounselingLike {
   preferredTypes?: PostType[];
   useThreadsKnowhow?: boolean;
   freeFormSummary?: string;
+  /** はじめの設定の要旨（お客様が確認・修正したもの）。2026-09-04 追加 */
+  brief?: CounselingBriefLike | null;
+}
+
+/** 要旨。counselingBrief.ts の CounselingBrief と同じ形（必要な部分だけ） */
+export interface CounselingBriefLike {
+  concept?: { who?: string; problem?: string; how?: string; future?: string; why?: string };
+  oneLine?: string;
 }
 
 /**
@@ -449,6 +457,8 @@ function buildLiteSystemPrompt(opts: {
   uspSection: string;
   n1Section: string;
   counselingSection: string;
+  /** 要旨（お客様が確認・修正した理解）。ライト版でも同じものに沿わせる */
+  briefSection: string;
   adRegSection: string;
   styleSection: string;
   /** 業種別の勝ち筋・負け筋（実測リサーチ由来）。無い業種は空文字 */
@@ -456,7 +466,7 @@ function buildLiteSystemPrompt(opts: {
   /** 来店型の業種か。false のときは商圏（駅・徒歩分数）のルールを出さない */
   isLocalBusiness: boolean;
 }): string {
-  const { treeCount, tone, uspSection, n1Section, counselingSection, adRegSection, styleSection, industrySection } = opts;
+  const { treeCount, tone, uspSection, n1Section, counselingSection, briefSection, adRegSection, styleSection, industrySection } = opts;
   const isTreePost = treeCount > 0;
   const toneSection = tone && POST_TONES[tone] ? `\n${POST_TONES[tone].promptInstruction}` : '';
 
@@ -470,7 +480,7 @@ function buildLiteSystemPrompt(opts: {
 - 顧客エピソード・体験談は入力にあるものだけ使う。なければ作らない。
 - 「予約パンパン」「キャンセル待ち」「先着〇名」のような検証不能な盛り表現は使わない。
 - 迷ったら捏造より省略を選ぶ。
-${adRegSection}${industrySection}${counselingSection}${styleSection}${uspSection}${n1Section}${toneSection}
+${briefSection}${adRegSection}${industrySection}${counselingSection}${styleSection}${uspSection}${n1Section}${toneSection}
 
 【自然な文章のルール】
 - 人間が普段書くような、飾らない文章にする。
@@ -569,6 +579,25 @@ function buildSystemPrompt(
   // ────────── カウンセリング結果（最優先で参照） ──────────
   // ユーザが事前カウンセリングで明示してくれた「使ってよい弾／使ってはいけない弾」。
   // ここに来た情報は「事実ベース」ルールよりさらに具体的な指示として効く。
+  // ★要旨（お客様が確認・修正した「AIはこう理解しました」）。
+  //   投稿がぶれないよう、カウンセリング結果より前に、いちばん短い形で置く。
+  const briefSection = (() => {
+    const b = counseling?.brief;
+    if (!b) return '';
+    const c = b.concept ?? {};
+    if (!b.oneLine && !c.who && !c.problem && !c.how && !c.future && !c.why) return '';
+    const L: string[] = ['', '【★このお店の要旨（すべての投稿はこれに沿って作る）★】'];
+    if (b.oneLine) L.push(`一言でいうと: ${b.oneLine}`);
+    if (c.who) L.push(`- 誰に: ${c.who}`);
+    if (c.problem) L.push(`- どんな悩みを: ${c.problem}`);
+    if (c.how) L.push(`- どんな方法で: ${c.how}`);
+    if (c.future) L.push(`- どんな未来へ: ${c.future}`);
+    if (c.why) L.push(`- なぜこのお店か: ${c.why}`);
+    L.push('この5点から外れた話題を投稿にしない。ここに無い悩み・効果・未来を足さない。');
+    L.push('1投稿につき「誰に」＋どれか1つに絞る（全部を毎回盛り込まない）。');
+    return L.join('\n');
+  })();
+
   const counselingSection = (() => {
     if (!counseling) return '';
     const lines: string[] = ['', '【★最優先：このユーザーのカウンセリング結果★】', 'これらは事前にユーザー本人が明示してくれた事実・方針です。**全ルールに優先**して参照すること。'];
@@ -688,6 +717,7 @@ function buildSystemPrompt(
   // useThreadsKnowhow=false → ライト版（自然・事実ベース寄り）プロンプトに切り替え
   if (!useThreadsKnowhow) {
     return buildLiteSystemPrompt({
+      briefSection,
       treeCount, postType, usp, n1Customer, purpose, tone,
       uspSection, n1Section, counselingSection,
       adRegSection, styleSection, industrySection,
@@ -820,7 +850,7 @@ Threadsは1行が長いと読み飛ばされます。スマホで読まれるこ
 - ただし「コメントください」「いいねお願いします」のような直接的な依頼はNG。
 - 冒頭1行に数字を置く型（「〜の共通点3つ」「9ヶ月で20.8キロ」）が唯一の実測勝ち型（1.17倍）。
 - 投稿は「情報提供」だけでなく「感情を動かす」ことを意識する。読んだ人が「わかる！」「自分もそう！」と思える内容にする。
-${adRegSection}${industrySection}${counselingSection}${styleSection}${purposeSection}${uspSection}${n1Section}${tone && POST_TONES[tone] ? `\n${POST_TONES[tone].promptInstruction}` : ''}
+${briefSection}${adRegSection}${industrySection}${counselingSection}${styleSection}${purposeSection}${uspSection}${n1Section}${tone && POST_TONES[tone] ? `\n${POST_TONES[tone].promptInstruction}` : ''}
 
 ${isTreePost ? `【ツリー投稿のルール】
 - ツリー数は${treeCount}投稿で構成すること（必ず${treeCount}投稿ぴったり）。

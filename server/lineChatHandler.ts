@@ -11,6 +11,7 @@ import {
   MENU_ITEMS, HELP_TOPICS, helpQuick, settingsQuick, settingsSummary, shouldClearPendingInput,
 } from "./lineChat";
 import { COUNSELING_QUESTIONS } from "../shared/counseling";
+import { buildCounselingBrief, renderBriefText } from "../shared/counselingBrief";
 import { applyIndustryOverrides } from "../shared/industryProfiles";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
@@ -513,6 +514,10 @@ async function accountLabel(userId: number, accountId: number): Promise<string> 
 
 interface CounselingState {
   mode: "store" | "personal";
+  /** 確認画面で書き換えた「一言でいうと」。空なら回答から下書きする */
+  oneLine?: string;
+  /** 「一言でいうと」の書き直しを待っている状態 */
+  awaitingOneLine?: boolean;
   /** どのアカウントの設定かの表示名（複数運用時のみ。質問の見出しに出す） */
   accountName?: string | null;
   step: number;
@@ -645,13 +650,18 @@ function reviewCounseling(st: CounselingState): unknown[] {
     const title = String(q.prompt).split("\n")[0].replace(/[。？]$/, "").slice(0, 22);
     return `${i + 1}. ${title}\n　 ${shown}`;
   });
+  // ★まず「AIはこう理解しました」の要旨をお見せする（2026-09-04 三上様指示）。
+  //   20問の答えをそのまま並べても、何がどう使われるのかが伝わらなかった。
+  const brief = buildCounselingBrief(st.answers as any, st.oneLine);
   return [
+    { type: "text", text: renderBriefText(brief) + "\n\nこの理解で合っていれば、そのまま登録できます。" },
     { type: "text", text: "入力いただいた内容です。ご確認ください。\n\n" + lines.slice(0, 10).join("\n") },
     textWithQuick(
       lines.slice(10).join("\n") +
       "\n\nこの内容でよろしければ「登録する」を押してください。\n直したい項目がある場合は「直す」を押して、番号を送ってください。",
       [
         { label: "この内容で登録する", data: "c=save" },
+        { label: "一言を書き直す", data: "c=oneline" },
         { label: "直す", data: "c=edit" },
       ],
     ),
@@ -715,6 +725,7 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
   await clearCounselingBackup(lineUserId);
   const res = await saveCounselingAnswers({
     userId, projectId: st.projectId, mode: st.mode, answers: st.answers as any,
+    oneLine: st.oneLine ?? "",
   });
   // 指定のアカウントに、いま登録したお店の情報を結びつける（そのアカウントの投稿に使われる）
   if (res.ok && st.accountId) {
@@ -974,7 +985,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       MENU_HINT,
     )];
   }
-  if (q.c === "save" || q.c === "edit" || q.c === "pick") {
+  if (q.c === "save" || q.c === "edit" || q.c === "pick" || q.c === "oneline") {
     const cur = await db.getLineChatState(lineUserId);
     if (cur?.state !== "counseling" || !cur.payload) {
       return [textWithQuick("入力の途中経過が見つかりませんでした。「はじめの設定」からやり直してください。", MENU_HINT)];
@@ -986,6 +997,21 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       return [{
         type: "text",
         text: `直したい項目の番号（1〜${qs.length}）を送ってください。\n例：「3」と送ると3番目の質問をもう一度お聞きします。`,
+      }];
+    }
+    // ★「一言でいうと」だけを書き直す。ここが投稿全体の軸になる。
+    if (q.c === "oneline") {
+      const b = buildCounselingBrief(cs.answers as any, cs.oneLine);
+      cs.editing = null;
+      cs.step = questionsFor(cs.mode, cs.answers).length; // 送信後は確認画面へ戻す
+      await db.setLineChatState(lineUserId, "counseling", JSON.stringify({ ...cs, awaitingOneLine: true }));
+      return [{
+        type: "text",
+        text: "「一言でいうと」を書き直します。\n\n" +
+          (b.oneLine ? `いまの内容：\n${b.oneLine}\n\n` : "") +
+          "お店を一言で言うとどうなるか、そのまま送ってください。\n" +
+          "（例：「倉敷で、子連れでも気兼ねなく入れるランチのお店」）\n\n" +
+          "変えない場合は「戻る」と送ってください。",
       }];
     }
   }
@@ -1698,6 +1724,16 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
         await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
       }
       const qs = questionsFor(cs.mode, cs.answers);
+      // ★「一言でいうと」の書き直しを待っている状態
+      if (cs.awaitingOneLine) {
+        const t = text.trim();
+        cs.awaitingOneLine = false;
+        if (!/^(戻る|もどる|やめる|中止|キャンセル)$/.test(t)) cs.oneLine = t.slice(0, 120);
+        cs.step = qs.length;
+        cs.editing = null;
+        await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
+        return reviewCounseling(cs);
+      }
       // 全問終わって確認画面を出している状態で数字が来たら「その項目を直す」
       const atReview = cs.step >= qs.length && (cs.editing === null || cs.editing === undefined);
       const num = Number(text.trim());

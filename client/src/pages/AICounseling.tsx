@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import ProjectLinksManager from '@/components/ProjectLinksManager';
 import { applyPersonalOverrides } from '@shared/personalBrand';
 import { applyIndustryOverrides } from '@shared/industryProfiles';
+import { buildCounselingBrief } from '@shared/counselingBrief';
 import {
   COUNSELING_QUESTIONS,
   type CounselingAnswers,
@@ -114,6 +115,8 @@ export default function AICounseling() {
     draft ? Math.min(draft.stepIndex ?? 0, COUNSELING_QUESTIONS.length - 1) : 0
   );
   const [answers, setAnswers] = useState<Partial<CounselingAnswers>>(draft?.answers ?? {});
+  // ★確認画面で見せる「一言でいうと」。書き換えるとそのまま保存され、以後の投稿の軸になる。
+  const [oneLine, setOneLine] = useState('');
   // プロジェクトの種別（store=店舗集客 / personal=個人ブランディング）。
   // 新規はモード選択画面で選ぶ。既存プロジェクトは保存済みのmodeを引き継ぐ。
   const [mode, setMode] = useState<'store' | 'personal' | null>((draft as any)?.mode ?? null);
@@ -361,7 +364,7 @@ export default function AICounseling() {
   });
 
   const handleSave = () => {
-    saveMutation.mutate({ projectId, mode: mode ?? 'store', answers: buildAnswersPayload(answers) });
+    saveMutation.mutate({ projectId, mode: mode ?? 'store', answers: buildAnswersPayload(answers), oneLine });
   };
 
   // canProceed は現在のレンダーで描画されるボタンの enable/disable 用。
@@ -502,6 +505,56 @@ export default function AICounseling() {
       {view === 'review' ? (
         /* ───────── 確認・修正画面 ───────── */
         <>
+          {/* ★AIがどう理解したかを先に見せる。ここに沿って毎日の投稿が作られる。 */}
+          {(() => {
+            const b = buildCounselingBrief(answers, oneLine);
+            const c = b.concept;
+            const rows: [string, string][] = [
+              ['誰に', c.who],
+              ['どんな悩みを', c.problem],
+              ['どんな方法で', c.how],
+              ['どんな未来へ', c.future],
+              ['なぜこのお店か', c.why],
+            ];
+            return (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 space-y-3">
+                <div>
+                  <p className="text-sm font-medium text-emerald-900">AIはこう理解しました</p>
+                  <p className="text-xs text-emerald-800/80 mt-0.5">
+                    毎日の投稿は、この内容に沿って作られます。違うところがあれば下の各項目の「修正」から直してください。
+                  </p>
+                </div>
+                <dl className="space-y-1.5">
+                  {rows.map(([label, value]) => (
+                    <div key={label} className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-2 text-xs sm:grid-cols-[8.5rem_minmax(0,1fr)]">
+                      <dt className="text-emerald-900/70">{label}</dt>
+                      <dd className={value ? 'text-emerald-950 break-words' : 'text-emerald-900/40'}>
+                        {value || '（未記入）'}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-emerald-900" htmlFor="one-line">
+                    一言でいうと
+                  </label>
+                  <Textarea
+                    id="one-line"
+                    value={oneLine || b.oneLine}
+                    onChange={(e) => setOneLine(e.target.value)}
+                    rows={2}
+                    maxLength={120}
+                    className="bg-background text-sm"
+                    placeholder="例：倉敷で、子連れでも気兼ねなく入れるランチのお店"
+                  />
+                  <p className="text-[11px] text-emerald-800/70">
+                    ここが投稿全体の軸になります。しっくりこなければ書き換えてください。
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3">
             <p className="text-sm font-medium text-emerald-800">入力内容の確認・修正</p>
             <p className="text-xs text-emerald-700 mt-0.5">

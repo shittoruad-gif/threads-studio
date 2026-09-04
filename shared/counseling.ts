@@ -10,6 +10,11 @@
  */
 
 import type { PostType } from './threadsPrompts';
+import { buildCounselingBrief } from './counselingBrief';
+import { isEmptyAnswer, splitToList } from './answerText';
+
+// 既存の呼び出し元のために、これまでどおりここからも使えるようにしておく
+export { isEmptyAnswer, splitToList };
 import { BUSINESS_TYPE_SUGGESTIONS } from './industryProfiles';
 
 /**
@@ -81,6 +86,11 @@ export interface CounselingResult {
   preferredTypes: PostType[];
   useThreadsKnowhow: boolean;
   freeFormSummary: string;
+  /**
+   * ★答えをまとめた「要旨」（2026-09-04）。お客様が確認・修正したもの。
+   * 生成時はこれを最優先で参照する。古いデータには入っていないので任意。
+   */
+  brief?: import('./counselingBrief').CounselingBrief;
   counseledAt: number;
   rawAnswers: Partial<CounselingAnswers>;
 }
@@ -509,26 +519,11 @@ export const COUNSELING_QUESTION_IDS = COUNSELING_QUESTIONS.map((q) => q.id);
 /**
  * 「なし」「ありません」「無し」などの空回答を判定
  */
-export function isEmptyAnswer(value: string): boolean {
-  if (!value) return true;
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return true;
-  return /^(なし|ありません|無し|無|none|n\/a|na|特になし|思いつかない)$/i.test(trimmed);
-}
 
 /**
  * 自由記入の生回答を、改行/読点で分割してリスト化する。
  * AI抽出が失敗したときのフォールバック整形にも使う。
  */
-export function splitToList(value: string): string[] {
-  if (isEmptyAnswer(value)) return [];
-  return value
-    .split(/\r?\n|、|・|;|；/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
-    .map((s) => s.replace(/^[-・*•\d]+\.?\s*/, ''))
-    .filter((s) => s.length > 0);
-}
 
 /**
  * 生回答 → 構造化結果に変換。
@@ -537,6 +532,8 @@ export function splitToList(value: string): string[] {
 export function buildCounselingResult(
   answers: Partial<CounselingAnswers>,
   freeFormSummary = '',
+  /** お客様が書き換えた一言化。無ければ答えから下書きする */
+  oneLine = '',
 ): CounselingResult {
   const preferredTypesCsv = answers.preferredTypesRaw ?? '';
   const preferredTypes = preferredTypesCsv
@@ -559,6 +556,7 @@ export function buildCounselingResult(
     preferredTypes,
     useThreadsKnowhow: answers.useThreadsKnowhow !== 'off',
     freeFormSummary,
+    brief: buildCounselingBrief(answers, oneLine),
     counseledAt: Date.now(),
     rawAnswers: answers,
   };

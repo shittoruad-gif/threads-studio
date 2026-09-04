@@ -30,14 +30,40 @@ export interface IndustryWords {
   visit: string;
 }
 
+/** 質問IDごとの候補チップ・例文の差し替え */
+export type QuestionOverrides = Record<string, { suggestions?: string[]; examples?: string[] }>;
+
+/**
+ * 業種の「大きなくくり」。言い回し（施術／レッスン等）と、
+ * その くくり 全体で通用する候補・例文を持つ。
+ */
 export interface IndustryProfile {
   key: string;
   label: string;
   /** 業種の回答にこの語が含まれていればこのグループと判定する */
   match: string[];
   words: IndustryWords;
-  /** 質問IDごとの候補チップ・例文の差し替え */
-  q: Record<string, { suggestions?: string[]; examples?: string[] }>;
+  q: QuestionOverrides;
+}
+
+/**
+ * 細かい業種。★2026-09-04 三上様指示で追加。
+ *
+ * 「美容」ひとくくりだと、美容室の方にエステの候補が出てしまう。
+ * ここでは くくり からの**差分だけ**を持ち、書いていない質問は
+ * くくり の内容をそのまま使う（同じ内容を何度も書かないため）。
+ */
+export interface IndustrySubtype {
+  key: string;
+  label: string;
+  /** どの くくり に属するか（言い回しと既定の候補を受け継ぐ） */
+  group: string;
+  /** 業種の回答にこの語が含まれていれば採用（上から順に先勝ち） */
+  match: string[];
+  /** くくり の内容を上書きする質問だけ書く */
+  q?: QuestionOverrides;
+  /** 言い回しだけ変えたいとき（例：動物病院の「飼い主さん」） */
+  words?: Partial<IndustryWords>;
 }
 
 /** 業種を選ぶ前に見せる候補。特定の業種に寄せず、幅を見せる。 */
@@ -427,6 +453,170 @@ const PROFILES: IndustryProfile[] = [
   },
 ];
 
+/**
+ * 細かい業種（くくり からの差分だけ）。上から順に先勝ちで判定する。
+ * 長い語・具体的な語を先に置くこと（「美容室」を「美容」より先に、など）。
+ */
+const SUBTYPES: IndustrySubtype[] = [
+  // ── 治療院 ──
+  { key: 'seikotsu', label: '整骨院・接骨院', group: 'bodywork', match: ['整骨', '接骨', '柔道整復'],
+    q: { menuRaw: { suggestions: ['保険診療', '骨盤矯正', '交通事故のむちうち施術', '産後骨盤矯正', 'スポーツ外傷のケア', '猫背・姿勢改善', 'テーピング'] },
+         faqRaw: { suggestions: ['保険は使えますか？', '交通事故でも診てもらえますか？', '何回くらい通えば良くなりますか？', '痛い施術ですか？', '約は必要ですか？', '子ども連れでも大丈夫ですか？'] } } },
+  // 整体院は既定の文面がそのまま正しいので、上書きを持たない
+  { key: 'seitai', label: '整体院', group: 'bodywork', match: ['整体', 'カイロ'] },
+  { key: 'shinkyu', label: '鍼灸院', group: 'bodywork', match: ['鍼灸', '鍼', 'はり', 'きゅう'],
+    words: { service: '施術' },
+    q: { menuRaw: { suggestions: ['はり施術', 'お灸', '美容鍼', '自律神経のケア', '婦人科系のお悩みへの施術', 'スポーツ鍼灸', '置き鍼'] },
+         faqRaw: { suggestions: ['鍼は痛いですか？', '保険は使えますか？', '何回くらい通いますか？', '刺さない鍼もありますか？', '着替えは必要ですか？', '妊娠中でも受けられますか？'] } } },
+  { key: 'relax', label: 'リラクゼーション・もみほぐし', group: 'bodywork', match: ['もみほぐし', 'リラクゼーション', 'マッサージ', 'リフレ', 'アロマ'],
+    words: { customer: 'お客様' },
+    q: { menuRaw: { suggestions: ['全身もみほぐし（60分／90分）', '足つぼ・リフレクソロジー', 'アロマトリートメント', 'ヘッドスパ', 'ハンドマッサージ', 'ストレッチ'] },
+         faqRaw: { suggestions: ['何分のコースがありますか？', '着替えはありますか？', '当日予約はできますか？', '強さは選べますか？', '男性でも利用できますか？', '駐車場はありますか？'] } } },
+
+  // ── 美容 ──
+  { key: 'hair', label: '美容室・ヘアサロン', group: 'beauty', match: ['美容室', 'ヘアサロン', '理容', '美容院', 'ヘアー'],
+    q: { menuRaw: { suggestions: ['カット', 'カラー', '白髪染め', 'パーマ', '縮毛矯正', 'トリートメント', 'ヘッドスパ', '着付け・セット'] },
+         mainProblemRaw: { suggestions: ['広がる・まとまらない', '白髪が気になり始めた', 'ダメージがひどい', '朝のセットに時間がかかる', '似合う髪型が分からない', '担当がすぐ変わる'] },
+         faqRaw: { suggestions: ['どのくらい時間がかかりますか？', '指名はできますか？', '当日予約はできますか？', '駐車場はありますか？', '子ども連れでも大丈夫ですか？', 'カラーはしみませんか？'] } } },
+  { key: 'nail', label: 'ネイルサロン', group: 'beauty', match: ['ネイル'],
+    q: { menuRaw: { suggestions: ['ジェルネイル（ワンカラー）', 'デザインネイル', 'フットネイル', 'ケア・甘皮処理', 'オフのみ', '付け替え'] },
+         mainProblemRaw: { suggestions: ['すぐ剥がれる', '自爪が薄くなった', '仕事柄、派手にできない', 'デザインが決められない', '通う時間がとれない'] },
+         faqRaw: { suggestions: ['どのくらい持ちますか？', '他店でつけた分のオフはできますか？', '爪が薄くても大丈夫ですか？', '所要時間はどのくらいですか？', 'デザインは相談できますか？'] } } },
+  { key: 'eyelash', label: 'まつげサロン', group: 'beauty', match: ['まつげ', 'まつ毛', 'まつエク', 'アイラッシュ', 'アイブロウ', '眉'],
+    q: { menuRaw: { suggestions: ['まつげエクステ', 'まつげパーマ（ラッシュリフト）', 'まつげ美容液ケア', '眉毛スタイリング', 'ワックス脱毛（眉）', 'オフのみ'] },
+         mainProblemRaw: { suggestions: ['自まつげが少ない・下向き', 'すぐ取れてしまう', 'ビューラーで傷んだ', '朝のメイク時間が長い', '眉の形が決まらない'] },
+         faqRaw: { suggestions: ['どのくらい持ちますか？', '目にしみたりしませんか？', 'コンタクトのままでも大丈夫ですか？', '他店からの付け替えはできますか？', '所要時間はどのくらいですか？'] } } },
+  { key: 'esthe', label: 'エステサロン', group: 'beauty', match: ['エステ', 'フェイシャル', '痩身', '小顔', 'よもぎ', 'ホワイトニング'],
+    q: { menuRaw: { suggestions: ['フェイシャル', '毛穴集中ケア', '痩身・ボディトリートメント', 'リンパドレナージュ', '小顔矯正', 'ブライダルコース'] } } },
+  { key: 'datsumo', label: '脱毛サロン', group: 'beauty', match: ['脱毛'],
+    q: { menuRaw: { suggestions: ['全身脱毛', '部分脱毛（顔・VIOなど）', 'メンズ脱毛', '都度払いプラン', '回数プラン'] },
+         mainProblemRaw: { suggestions: ['自己処理で肌が荒れる', '毎日の処理が面倒', '痛みが不安', '料金が分かりにくい', '通い切れるか不安'] },
+         faqRaw: { suggestions: ['痛みはありますか？', '何回で終わりますか？', '日焼けしていても受けられますか？', '追加料金はかかりますか？', '途中で解約できますか？', '男性も通えますか？'] } } },
+
+  // ── フィットネス ──
+  { key: 'personalgym', label: 'パーソナルジム', group: 'fitness', match: ['パーソナル', 'ジム', 'フィットネス', '加圧'],
+    words: { service: 'トレーニング' },
+    q: { menuRaw: { suggestions: ['パーソナルトレーニング（60分）', '体験トレーニング', '回数券プラン', '食事サポート', 'ペアトレーニング', 'オンライン指導'] },
+         faqRaw: { suggestions: ['運動が苦手でも大丈夫ですか？', '週に何回通えばいいですか？', '食事制限はありますか？', 'ウェアの貸し出しはありますか？', 'シャワーはありますか？', '体験だけでも大丈夫ですか？'] } } },
+  { key: 'pilates', label: 'ヨガ・ピラティス', group: 'fitness', match: ['ピラティス', 'ヨガ'],
+    q: { menuRaw: { suggestions: ['体験レッスン', 'グループレッスン', 'プライベートレッスン', 'マシンピラティス', 'マットピラティス', '産後クラス', 'シニアクラス'] } } },
+  { key: 'kidssports', label: '子どものスポーツ教室', group: 'fitness', match: ['スイミング', '体操', 'サッカー', '野球', 'テニス', 'バスケ', '空手', '柔道', 'キッズ'],
+    words: { customer: '生徒さん', shop: '教室' },
+    q: { targetRaw: { suggestions: ['未就学のお子さんと保護者', '小学生', '中学生', '運動が苦手なお子さん', '選手を目指すお子さん'] },
+         menuRaw: { suggestions: ['体験レッスン', '幼児クラス', '小学生クラス', '選手コース', '個人レッスン', '短期教室'] },
+         mainProblemRaw: { suggestions: ['運動が苦手で自信がない', '続くか分からない', '体力をつけさせたい', '習い事の送り迎えが大変', '人見知りで馴染めるか不安'] },
+         faqRaw: { suggestions: ['何歳から通えますか？', '運動が苦手でも大丈夫ですか？', '見学はできますか？', '振替はできますか？', '必要な道具はありますか？', '送り迎えは必要ですか？'] } } },
+
+  // ── 教室・スクール ──
+  { key: 'juku', label: '学習塾', group: 'school', match: ['塾', '学習', '予備校', '家庭教師', 'そろばん'],
+    q: { menuRaw: { suggestions: ['個別指導', '集団授業', '定期テスト対策', '受験対策コース', '自習室の開放', '春期・夏期・冬期講習'] },
+         mainProblemRaw: { suggestions: ['勉強のやり方が分からない', '家では集中できない', '成績が上がらない', '質問できないまま進む', '受験校が決まらない'] },
+         faqRaw: { suggestions: ['何年生から通えますか？', 'ス費用は月謝以外にかかりますか？', '体験授業はできますか？', '振替はできますか？', '自習室は使えますか？', '成績が悪くても入れますか？'] } } },
+  { key: 'music', label: '音楽教室', group: 'school', match: ['ピアノ', '音楽', 'ギター', 'バイオリン', 'ドラム', 'ボーカル', '声楽', 'リトミック'],
+    q: { menuRaw: { suggestions: ['体験レッスン', '子どものレッスン', '大人のレッスン', '月2回コース', '発表会', 'オンラインレッスン'] },
+         mainProblemRaw: { suggestions: ['家で練習しない', '楽譜が読めない', '続くか不安', '大人になってから始めるのが恥ずかしい', '発表の場がない'] } } },
+  { key: 'language', label: '英会話・語学', group: 'school', match: ['英会話', '英語', '語学', '中国語', '韓国語'],
+    q: { menuRaw: { suggestions: ['体験レッスン', 'マンツーマン', 'グループレッスン', '子ども英会話', 'ビジネス英会話', '試験対策', 'オンラインレッスン'] },
+         mainProblemRaw: { suggestions: ['何年やっても話せない', '間違えるのが恥ずかしい', '続かない', '使う機会がない', '子どもに早くから触れさせたい'] } } },
+  { key: 'pcschool', label: 'プログラミング・PC教室', group: 'school', match: ['プログラミング', 'パソコン', 'PC', 'IT', 'デザイン教室'],
+    q: { menuRaw: { suggestions: ['体験レッスン', '子どもプログラミング', '大人向け講座', '資格対策', 'マンツーマン', 'オンライン受講'] },
+         mainProblemRaw: { suggestions: ['何から始めればいいか分からない', '独学で挫折した', 'パソコンが苦手', '仕事で急に必要になった', '子どもに触れさせたい'] } } },
+  { key: 'culture', label: '書道・料理などの教室', group: 'school', match: ['書道', '絵画', '料理', 'フラワー', '陶芸', '手芸', 'カルチャー', '着付け'],
+    q: { menuRaw: { suggestions: ['体験レッスン', '月謝コース', '単発ワークショップ', '資格取得コース', '出張レッスン'] },
+         mainProblemRaw: { suggestions: ['趣味を見つけたい', '一人で始めるのが不安', '道具を持っていない', '続くか分からない', '自分の時間がない'] } } },
+
+  // ── 飲食 ──
+  { key: 'cafe', label: 'カフェ・喫茶', group: 'food', match: ['カフェ', '喫茶', '珈琲', 'コーヒー'],
+    q: { menuRaw: { suggestions: ['ランチセット', '自家焙煎コーヒー', '手作りスイーツ', 'モーニング', 'テイクアウト', '季節限定メニュー'] } } },
+  { key: 'restaurant', label: 'レストラン・食堂', group: 'food', match: ['レストラン', '食堂', '定食', 'イタリアン', 'フレンチ', '洋食', '中華'],
+    q: { menuRaw: { suggestions: ['ランチセット', 'ディナーコース', '看板メニュー', '季節限定メニュー', 'お子さまメニュー', 'テイクアウト・仕出し'] } } },
+  { key: 'izakaya', label: '居酒屋・バー', group: 'food', match: ['居酒屋', 'バー', 'ダイニング', '酒場', 'スナック'],
+    q: { targetRaw: { suggestions: ['仕事帰りの会社員', '少人数の飲み会', '常連さん', '一人で飲みたい方', '宴会・歓送迎会の幹事'] },
+         menuRaw: { suggestions: ['名物料理', '飲み放題プラン', 'コース料理', '地酒・クラフトビール', 'おつまみ単品', '宴会予約'] },
+         faqRaw: { suggestions: ['予約はできますか？', '何名まで入れますか？', '個室はありますか？', '飲み放題はありますか？', '何時まで営業していますか？', '一人でも入れますか？'] } } },
+  { key: 'ramen', label: 'ラーメン・麺類', group: 'food', match: ['ラーメン', 'うどん', 'そば', '麺'],
+    q: { menuRaw: { suggestions: ['看板の一杯', '限定メニュー', 'つけ麺', 'トッピング', 'セットメニュー', 'テイクアウト・お土産'] } } },
+  { key: 'bakery', label: 'パン・菓子', group: 'food', match: ['パン', 'ベーカリー', 'ケーキ', '菓子', 'スイーツ', '和菓子'],
+    words: { service: '商品' },
+    q: { menuRaw: { suggestions: ['定番の商品', '季節限定', '焼き上がり時間のご案内', 'ホールケーキの予約', 'ギフト・詰め合わせ', 'アレルギー対応品'] },
+         faqRaw: { suggestions: ['何時に焼き上がりますか？', '予約はできますか？', '取り置きはできますか？', 'アレルギー対応はありますか？', '日持ちはどのくらいですか？', '駐車場はありますか？'] } } },
+
+  // ── 医療 ──
+  { key: 'dental', label: '歯科医院', group: 'clinic', match: ['歯科', '歯医者', '矯正歯科'],
+    q: { menuRaw: { suggestions: ['一般診療', '予防・クリーニング', '小児歯科', '矯正', 'ホワイトニング', 'インプラント', '定期健診'] } } },
+  { key: 'vet', label: '動物病院・ペット医療', group: 'clinic', match: ['動物病院', '獣医'],
+    words: { customer: '飼い主さん' },
+    q: { targetRaw: { suggestions: ['犬と暮らすご家庭', '猫と暮らすご家庭', 'シニア期の子と暮らす方', '初めてペットを迎えた方'] },
+         menuRaw: { suggestions: ['一般診療', 'ワクチン・予防', '健康診断', '避妊・去勢手術', '歯のケア', 'トリミング'] },
+         faqRaw: { suggestions: ['予約は必要ですか？', '診療時間は何時までですか？', '猫も診てもらえますか？', '費用はどのくらいですか？', '駐車場はありますか？', '夜間の対応はありますか？'] } } },
+  { key: 'clinic_general', label: 'クリニック・医院', group: 'clinic', match: ['クリニック', '医院', '内科', '皮膚科', '眼科', '耳鼻', '小児科', '婦人科', '整形外科'], q: {} },
+
+  // ── 士業・BtoB ──
+  { key: 'tax', label: '税理士・会計', group: 'pro', match: ['税理士', '会計', '記帳'],
+    q: { menuRaw: { suggestions: ['初回相談', '顧問契約（月次）', '確定申告のみ', '記帳代行', '創業支援', '融資・補助金の相談'] },
+         mainProblemRaw: { suggestions: ['申告のやり方が分からない', '今の税理士と話しづらい', '節税できているか分からない', '数字を見る習慣がない', '融資の相談先がない'] } } },
+  { key: 'legal', label: '行政書士・社労士など', group: 'pro', match: ['行政書士', '社労士', '司法書士', '弁護士', '労務'],
+    q: { menuRaw: { suggestions: ['初回相談', '各種許認可の申請', '就業規則の作成', '相続の手続き', '契約書のチェック', '顧問契約'] },
+         mainProblemRaw: { suggestions: ['手続きが複雑で分からない', '何が必要か分からない', '期限が迫っている', '誰に相談していいか分からない', '費用が読めない'] } } },
+  { key: 'consult', label: 'コンサル・制作・広告', group: 'pro', match: ['コンサル', '広告', '制作', 'デザイン', 'マーケティング', 'ホームページ', '動画'],
+    words: { service: 'ご支援' },
+    q: { targetRaw: { suggestions: ['売上を伸ばしたい店舗オーナー', '担当者が一人しかいない中小企業', '独立したばかりの方', '広告を出したことがない会社'] },
+         menuRaw: { suggestions: ['初回相談', '月額のご支援', '単発のご依頼', '制作一式', '運用代行', '研修・セミナー'] },
+         mainProblemRaw: { suggestions: ['何から手をつければいいか分からない', '前の会社に任せきりで中身が分からない', '成果が出ているか判断できない', '社内に詳しい人がいない', '費用対効果が読めない'] } } },
+  { key: 'realestate', label: '不動産', group: 'pro', match: ['不動産', '賃貸', '売買', '仲介'],
+    words: { service: 'ご案内', shop: '当社' },
+    q: { targetRaw: { suggestions: ['はじめて家を買う方', '住み替えを考えている方', '相続した家をどうするか悩む方', '賃貸を探している学生・単身の方'] },
+         menuRaw: { suggestions: ['売却のご相談', '購入のご相談', '賃貸のご案内', '無料査定', '空き家のご相談', '管理'] },
+         mainProblemRaw: { suggestions: ['相場が分からない', '何から始めればいいか分からない', '急かされるのが不安', 'ローンが通るか不安', '相続した家をどうしていいか分からない'] },
+         faqRaw: { suggestions: ['査定は無料ですか？', 'すぐに売らなくても相談できますか？', '費用はどのくらいかかりますか？', '住みながら売れますか？', 'ローンの相談もできますか？'] } } },
+  { key: 'insurance', label: '保険・FP', group: 'pro', match: ['保険', 'FP', 'ファイナンシャル'],
+    q: { menuRaw: { suggestions: ['無料相談', '保険の見直し', 'ライフプラン作成', '家計の相談', '法人向けのご相談'] },
+         mainProblemRaw: { suggestions: ['今の保険が合っているか分からない', '勧められるまま入った', '毎月の支払いが重い', '何を基準に選べばいいか分からない'] } } },
+
+  // ── 暮らしのサービス ──
+  { key: 'reform', label: 'リフォーム・工務店', group: 'home', match: ['リフォーム', '工務店', '塗装', '建築', '解体', '内装', '外構', '造園'],
+    words: { service: '工事' },
+    q: { targetRaw: { suggestions: ['築20年以上のお住まいの方', '水まわりを直したい方', '相続した家をどうするか悩む方', '店舗の内装を変えたい方'] },
+         menuRaw: { suggestions: ['水まわりのリフォーム', '外壁・屋根の塗装', '内装のリフォーム', '無料現地調査・お見積り', '店舗内装', 'バリアフリー工事'] },
+         mainProblemRaw: { suggestions: ['見積もりが妥当か分からない', '何社も呼ぶのが面倒', 'しつこい営業が不安', '住みながらできるか不安', '費用がいくらか読めない'] },
+         faqRaw: { suggestions: ['見積もりは無料ですか？', '住みながら工事できますか？', '工期はどのくらいですか？', '追加料金はかかりますか？', '対応エリアはどこまでですか？', 'ローンは使えますか？'] } } },
+  { key: 'cleaning', label: 'ハウスクリーニング・清掃', group: 'home', match: ['クリーニング', '清掃', '掃除', '便利屋', '片付け', '整理', '遺品'],
+    q: {} },
+  { key: 'petsalon', label: 'ペットサロン・トリミング', group: 'home', match: ['ペット', 'トリミング', 'ドッグ'],
+    words: { service: 'トリミング', customer: '飼い主さん' },
+    q: { targetRaw: { suggestions: ['小型犬と暮らすご家庭', '猫と暮らすご家庭', 'シニア期の子と暮らす方', 'はじめてトリミングに出す方'] },
+         menuRaw: { suggestions: ['シャンプーコース', 'カットコース', '爪切り・耳掃除のみ', 'シニア対応コース', '猫のトリミング', '送迎'] },
+         mainProblemRaw: { suggestions: ['暴れるので断られた', 'シニアで体力が心配', '前のお店で仕上がりが違った', '予約が取れない', '待ち時間が長い'] },
+         faqRaw: { suggestions: ['何歳まで対応できますか？', '暴れる子でも大丈夫ですか？', 'どのくらい時間がかかりますか？', '送迎はありますか？', 'ワクチン証明は必要ですか？', '猫も対応していますか？'] } } },
+  { key: 'photo', label: 'フォトスタジオ・出張撮影', group: 'home', match: ['フォト', '写真', '撮影'],
+    words: { service: '撮影', shop: 'スタジオ' },
+    q: { targetRaw: { suggestions: ['七五三・入学のご家族', 'マタニティ・ニューボーン', '成人式を迎える方', '会社のプロフィール写真が必要な方'] },
+         menuRaw: { suggestions: ['記念撮影プラン', '出張撮影', '証明写真・プロフィール写真', '七五三・成人式', 'マタニティ・ニューボーン', 'データ渡し・アルバム'] },
+         mainProblemRaw: { suggestions: ['子どもがじっとしていられない', '料金体系が分かりにくい', '衣装をどうするか分からない', '写真写りに自信がない', 'いつ撮ればいいか分からない'] },
+         faqRaw: { suggestions: ['料金にデータは含まれますか？', '衣装のレンタルはありますか？', '何着まで着られますか？', '兄弟も一緒に撮れますか？', '雨の日はどうなりますか？', '納品までどのくらいですか？'] } } },
+  { key: 'bridal', label: '結婚相談所・ブライダル', group: 'home', match: ['結婚相談', 'ブライダル', '婚活'],
+    words: { service: 'サポート' },
+    q: { targetRaw: { suggestions: ['30代で結婚を考えている方', '出会いの場がない方', 'アプリで疲れてしまった方', '再婚を考えている方'] },
+         menuRaw: { suggestions: ['無料相談', '入会プラン', 'お見合いのセッティング', 'プロフィール写真の相談', '成婚までのサポート'] },
+         mainProblemRaw: { suggestions: ['出会いの場がない', 'アプリで疲れた', '何が悪いのか分からない', '相談できる相手がいない', '年齢が気になる'] },
+         faqRaw: { suggestions: ['費用はどのくらいですか？', '成婚料はかかりますか？', 'どのくらいで成婚しますか？', '写真は用意が必要ですか？', '途中で退会できますか？', '年齢制限はありますか？'] } } },
+  { key: 'driving', label: '自動車教習所', group: 'home', match: ['教習'],
+    words: { service: '教習', customer: '教習生', shop: '教習所' },
+    q: { targetRaw: { suggestions: ['高校卒業前の学生', '社会人になってから取る方', 'ペーパードライバーの方', '二輪免許を取りたい方'] },
+         menuRaw: { suggestions: ['普通車コース', '二輪コース', '合宿プラン', 'ペーパードライバー講習', '高齢者講習'] },
+         faqRaw: { suggestions: ['どのくらいの期間で取れますか？', '料金はいくらですか？', '送迎はありますか？', '社会人でも通えますか？', '分割払いはできますか？'] } } },
+
+  // ── 小売 ──
+  { key: 'flower', label: '花屋', group: 'retail', match: ['花', 'フラワー', '生花'],
+    q: { menuRaw: { suggestions: ['花束・ブーケ', 'アレンジメント', 'スタンド花', '観葉植物', '定期便', '配送・お届け'] },
+         faqRaw: { suggestions: ['当日でも作ってもらえますか？', '予算を伝えれば選んでもらえますか？', '配送はできますか？', 'メッセージカードは付けられますか？', '何時まで営業していますか？'] } } },
+  { key: 'ec', label: 'ネットショップ・EC', group: 'retail', match: ['ネットショップ', 'EC', '通販', 'オンラインショップ'],
+    words: { visit: 'ご注文' },
+    q: { menuRaw: { suggestions: ['定番商品', '季節限定商品', 'ギフトセット', '定期便', '送料無料ライン', 'ラッピング'] },
+         faqRaw: { suggestions: ['送料はいくらですか？', 'いつ届きますか？', '返品はできますか？', 'ギフト包装はできますか？', '支払い方法は何がありますか？'] } } },
+  { key: 'apparel', label: 'アパレル・雑貨', group: 'retail', match: ['アパレル', '古着', '洋服', '雑貨', '書店', 'ショップ'], q: {} },
+];
+
 /** どの業種にも当てはまらないときの中立の内容。治療院の内容は使わない。 */
 const GENERAL: IndustryProfile = {
   key: 'general',
@@ -480,12 +670,33 @@ export const INDUSTRY_PROFILES = [...PROFILES, GENERAL];
  * 判定できないときは中立（GENERAL）を返す。治療院を既定にはしない。
  */
 export function detectIndustryProfile(businessTypeRaw: string | null | undefined): IndustryProfile {
+  return detectIndustry(businessTypeRaw).group;
+}
+
+export interface DetectedIndustry {
+  /** 大きなくくり（言い回しと基本の候補を持つ） */
+  group: IndustryProfile;
+  /** 細かい業種。判定できなければ null */
+  subtype: IndustrySubtype | null;
+  /** 画面や資料に出すときの呼び名 */
+  label: string;
+}
+
+/**
+ * 細かい業種 → その くくり の順で判定する。
+ * 細かい業種が当たらなくても、くくり だけ当たればそれを使う。
+ */
+export function detectIndustry(businessTypeRaw: string | null | undefined): DetectedIndustry {
   const t = String(businessTypeRaw || '').trim();
-  if (!t) return GENERAL;
-  for (const p of PROFILES) {
-    if (p.match.some((m) => t.includes(m))) return p;
+  if (!t) return { group: GENERAL, subtype: null, label: GENERAL.label };
+  const sub = SUBTYPES.find((x) => x.match.some((m) => t.includes(m)));
+  if (sub) {
+    const group = PROFILES.find((p) => p.key === sub.group) ?? GENERAL;
+    return { group, subtype: sub, label: sub.label };
   }
-  return GENERAL;
+  const group = PROFILES.find((p) => p.match.some((m) => t.includes(m)));
+  if (group) return { group, subtype: null, label: group.label };
+  return { group: GENERAL, subtype: null, label: GENERAL.label };
 }
 
 /** 既定文（治療院の言い回し）を、その業種の言い方に置き換える。 */
@@ -506,18 +717,25 @@ export function applyIndustryOverrides(
   questions: CounselingQuestion[],
   businessTypeRaw: string | null | undefined,
 ): CounselingQuestion[] {
-  const profile = detectIndustryProfile(businessTypeRaw);
-  // 治療院はもともとの文面がそのまま正しいので、何も変えない
-  if (profile.key === 'bodywork') return questions;
-  const w = profile.words;
+  const { group, subtype } = detectIndustry(businessTypeRaw);
+  const w: IndustryWords = { ...group.words, ...(subtype?.words ?? {}) };
+  const subHasOverrides = Object.keys(subtype?.q ?? {}).length > 0;
+  const unchanged = group.key === 'bodywork'
+    && JSON.stringify(w) === JSON.stringify(group.words)
+    && !subHasOverrides;
+  if (unchanged) return questions; // 整体院はもともとの文面がそのまま正しい
   return questions.map((q) => {
-    const o = profile.q[q.id as string];
+    const id = q.id as string;
+    // 細かい業種 → くくり → 既定文（言い回しだけ差し替え）の順に重ねる。
+    // ★細かい業種が suggestions だけを書いている場合、examples は
+    //   くくり のものを使う（既定文＝治療院の例文に戻さない）。
+    const o = { ...(group.q[id] ?? {}), ...(subtype?.q?.[id] ?? {}) };
     return {
       ...q,
       prompt: reword(q.prompt, w) as string,
       helper: reword(q.helper, w),
-      suggestions: o?.suggestions ?? q.suggestions?.map((s) => reword(s, w) as string),
-      examples: o?.examples ?? q.examples?.map((s) => reword(s, w) as string),
+      suggestions: o.suggestions ?? q.suggestions?.map((x) => reword(x, w) as string),
+      examples: o.examples ?? q.examples?.map((x) => reword(x, w) as string),
     };
   });
 }

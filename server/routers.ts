@@ -1002,6 +1002,8 @@ export const appRouter = router({
           preferredTypesRaw: z.string().default(''),
           useThreadsKnowhow: z.enum(['on', 'off']).default('on'),
         }),
+        /** 確認画面で書き換えた「一言でいうと」。空なら回答から下書きする */
+        oneLine: z.string().max(120).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         // 保存処理は server/counselingSave.ts に集約（LINEチャットでの聞き取りと同じ結果にする）
@@ -1011,6 +1013,7 @@ export const appRouter = router({
           projectId: input.projectId,
           mode: input.mode,
           answers: input.answers as any,
+          oneLine: input.oneLine ?? '',
         });
         if (!saved.ok) {
           throw new TRPCError({
@@ -1019,7 +1022,7 @@ export const appRouter = router({
           });
         }
         const { buildCounselingResult } = await import('../shared/counseling');
-        const result = buildCounselingResult(input.answers);
+        const result = buildCounselingResult(input.answers, '', input.oneLine ?? '');
         return { success: true, result, projectId: input.projectId };
       }),
 
