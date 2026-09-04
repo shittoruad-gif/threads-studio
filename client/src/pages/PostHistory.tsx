@@ -505,9 +505,12 @@ export default function PostHistory() {
                           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-col sm:gap-1 [&_button]:whitespace-nowrap [&>button]:w-full sm:[&>button]:w-auto">
                           {post.status === 'awaiting_approval' && (
                             <>
+                              {/* ★スマホ幅では、半分の列に「承認して投稿」が収まらず
+                                  アイコンと文字の両端が切れていた（2026-09-04 実機390pxで確認）。
+                                  いちばん押すボタンなので、狭い画面では横幅いっぱいに出す。 */}
                               <Button
                                 size="sm"
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                className="col-span-2 sm:col-span-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                                 onClick={() => approvePost.mutate({ postId: post.id })}
                                 disabled={approvePost.isPending}
                               >
