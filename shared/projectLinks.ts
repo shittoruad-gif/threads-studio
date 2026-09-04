@@ -144,3 +144,80 @@ export function normaliseDefaults(links: ProjectLink[]): ProjectLink[] {
     return l;
   });
 }
+
+/**
+ * 固定投稿の「案内先」を決める。
+ *
+ * ★以前は公式LINE（type='line'）だけを見ていたため、公式LINEを登録していない
+ *   お客様や、ホームページ・予約ページへ流したいお客様でも、
+ *   固定投稿の締めが必ず「公式LINEから」になっていた（2026-09-04 三上様指摘）。
+ *   登録されているリンクの種類を読み取り、その行き先に合った言い回しを返す。
+ *
+ * 優先順位: 予約・LINE（申し込みに直結）→ その他 → HP・SNS。
+ * 同じ種類が複数あれば「既定」に印が付いたものを優先する。
+ */
+export interface PinnedDestination {
+  link: ProjectLink;
+  /** コメント欄に添える1行（この下にURLが続く） */
+  commentLead: string;
+  /** 本文の締めに使う言い回し（20字前後） */
+  ctaLine: string;
+  /** プロンプトに渡す誘導先の呼び名 */
+  channelName: string;
+}
+
+const PINNED_WORDING: Record<ProjectLinkType, { comment: string; cta: string; channel: string }> = {
+  line: {
+    comment: 'ご登録・ご相談はこちらから↓',
+    cta: 'ご相談はコメント欄のリンクからどうぞ。',
+    channel: '公式LINE',
+  },
+  reservation: {
+    comment: 'ご予約はこちらから↓',
+    cta: 'ご予約はコメント欄のリンクからどうぞ。',
+    channel: 'Web予約ページ',
+  },
+  website: {
+    comment: 'くわしくはこちらをご覧ください↓',
+    cta: 'くわしくはコメント欄のリンクをご覧ください。',
+    channel: '公式ホームページ',
+  },
+  instagram: {
+    comment: 'ふだんの様子はこちらから↓',
+    cta: 'ふだんの様子はコメント欄のリンクから。',
+    channel: 'Instagram',
+  },
+  youtube: {
+    comment: '動画はこちらから↓',
+    cta: '動画はコメント欄のリンクからご覧ください。',
+    channel: 'YouTubeチャンネル',
+  },
+  other: {
+    comment: 'くわしくはこちらから↓',
+    cta: 'くわしくはコメント欄のリンクからどうぞ。',
+    channel: 'ご案内ページ',
+  },
+};
+
+/** 固定投稿の案内先として使う優先順（申し込みに近い順） */
+const PINNED_PRIORITY: ProjectLinkType[] = ['reservation', 'line', 'other', 'website', 'instagram', 'youtube'];
+
+export function pickPinnedDestination(links: ProjectLink[]): PinnedDestination | undefined {
+  const usable = links.filter((l) => !!l.url);
+  if (usable.length === 0) return undefined;
+  let link: ProjectLink | undefined;
+  for (const t of PINNED_PRIORITY) {
+    const same = usable.filter((l) => l.type === t);
+    if (same.length > 0) { link = same.find((l) => l.isDefault) ?? same[0]; break; }
+  }
+  if (!link) link = usable.find((l) => l.isDefault) ?? usable[0];
+  const w = PINNED_WORDING[link.type] ?? PINNED_WORDING.other;
+  // 「その他」はお客様が付けたラベル（例:「初回ご相談フォーム」）をそのまま活かす
+  const labeled = link.type === 'other' && link.label && link.label.length <= 14;
+  return {
+    link,
+    commentLead: labeled ? `${link.label}はこちらから↓` : w.comment,
+    ctaLine: labeled ? `${link.label}はコメント欄のリンクからどうぞ。` : w.cta,
+    channelName: labeled ? link.label : w.channel,
+  };
+}

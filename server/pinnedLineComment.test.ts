@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /**
- * 固定投稿の公開直後に、公式LINEのURLをコメント欄（1件目の返信）へ
+ * 固定投稿の公開直後に、案内先のURLをコメント欄（1件目の返信）へ
  * 自動添付する処理の確認。実際のThreads APIは呼ばずに、渡る内容だけを見る。
+ *
+ * ★2026-09-04: 以前は公式LINEだけを見ていたため、公式LINEが無いお店では
+ *   コメントが付かず、本文の締めも必ず「公式LINEから」になっていた。
+ *   登録されているリンクの種類に合わせて出し分ける。
  */
 const calls: any[] = [];
 vi.mock("./threadsPost", () => ({
@@ -10,48 +14,75 @@ vi.mock("./threadsPost", () => ({
 }));
 
 const { attachLineUrlComment } = await import("./pinnedPostFlow");
+const { pickPinnedDestination, parseProjectLinks } = await import("../shared/projectLinks");
 
-const LINKS = JSON.stringify([
-  { id: "l1", type: "reservation", label: "Web予約", url: "https://example.com/reserve" },
-  { id: "l2", type: "line", label: "公式LINE", url: "https://lin.ee/abc123" },
-]);
+const attach = (links: unknown) => attachLineUrlComment({
+  accessToken: "tok", threadsUserId: "tuid", rootThreadsPostId: "root_1",
+  project: { links: links as any },
+});
 
 beforeEach(() => { calls.length = 0; });
 
-describe("固定投稿へのLINE URLコメント添付", () => {
-  it("公式LINEが登録されていれば、そのURLを親投稿への返信として投稿する", async () => {
-    const replyId = await attachLineUrlComment({
-      accessToken: "tok",
-      threadsUserId: "tuid",
-      rootThreadsPostId: "root_1",
-      project: { links: LINKS },
-    });
-    expect(replyId).toBe("reply_123");
+describe("固定投稿へのURLコメント添付", () => {
+  it("公式LINEがあれば、LINEのURLとLINE向けの一言を返信する", async () => {
+    const links = JSON.stringify([
+      { id: "l1", type: "website", label: "公式HP", url: "https://example.com" },
+      { id: "l2", type: "line", label: "公式LINE", url: "https://lin.ee/abc123" },
+    ]);
+    expect(await attach(links)).toBe("reply_123");
     expect(calls).toHaveLength(1);
     expect(calls[0].replyToId).toBe("root_1");
     expect(calls[0].text).toContain("https://lin.ee/abc123");
-    expect(calls[0].text).toContain("LINE");
+    expect(calls[0].text).toContain("ご登録・ご相談");
   });
 
-  it("公式LINEが未登録なら何もしない（Web予約だけでは出さない）", async () => {
-    const onlyReserve = JSON.stringify([
+  it("公式LINEが無くても、Web予約があれば予約向けの一言で返信する", async () => {
+    const links = JSON.stringify([
       { id: "l1", type: "reservation", label: "Web予約", url: "https://example.com/reserve" },
     ]);
-    const replyId = await attachLineUrlComment({
-      accessToken: "tok", threadsUserId: "tuid", rootThreadsPostId: "root_1",
-      project: { links: onlyReserve },
-    });
-    expect(replyId).toBeNull();
-    expect(calls).toHaveLength(0);
+    expect(await attach(links)).toBe("reply_123");
+    expect(calls[0].text).toContain("https://example.com/reserve");
+    expect(calls[0].text).toContain("ご予約");
+    expect(calls[0].text).not.toContain("LINE");
   });
 
-  it("linksが空・壊れていても落ちない", async () => {
+  it("ホームページだけでも、HP向けの一言で返信する", async () => {
+    const links = JSON.stringify([
+      { id: "l1", type: "website", label: "公式HP", url: "https://example.com" },
+    ]);
+    expect(await attach(links)).toBe("reply_123");
+    expect(calls[0].text).toContain("https://example.com");
+    expect(calls[0].text).not.toContain("LINE");
+    expect(calls[0].text).not.toContain("ご予約");
+  });
+
+  it("「その他」はお客様が付けたラベルをそのまま使う", async () => {
+    const links = JSON.stringify([
+      { id: "l1", type: "other", label: "無料相談フォーム", url: "https://example.com/form" },
+    ]);
+    expect(await attach(links)).toBe("reply_123");
+    expect(calls[0].text).toContain("無料相談フォーム");
+  });
+
+  it("予約と公式LINEが両方あれば、申し込みに近い予約を優先する", () => {
+    const links = parseProjectLinks(JSON.stringify([
+      { id: "l1", type: "line", label: "公式LINE", url: "https://lin.ee/abc" },
+      { id: "l2", type: "reservation", label: "Web予約", url: "https://example.com/reserve" },
+    ]));
+    expect(pickPinnedDestination(links)?.link.type).toBe("reservation");
+  });
+
+  it("同じ種類が複数あれば「既定」を優先する", () => {
+    const links = parseProjectLinks(JSON.stringify([
+      { id: "l1", type: "line", label: "旧LINE", url: "https://lin.ee/old" },
+      { id: "l2", type: "line", label: "公式LINE", url: "https://lin.ee/new", isDefault: true },
+    ]));
+    expect(pickPinnedDestination(links)?.link.url).toBe("https://lin.ee/new");
+  });
+
+  it("リンクが1つも無ければ何もしない", async () => {
     for (const links of [null, "", "{壊れたJSON", "[]"]) {
-      const replyId = await attachLineUrlComment({
-        accessToken: "tok", threadsUserId: "tuid", rootThreadsPostId: "root_1",
-        project: { links },
-      });
-      expect(replyId).toBeNull();
+      expect(await attach(links)).toBeNull();
     }
     expect(calls).toHaveLength(0);
   });

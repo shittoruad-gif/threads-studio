@@ -280,23 +280,24 @@ export async function executePendingPosts() {
               //   自動でコメントを付けられない。黙ってスキップすると本文が
               //   「コメント欄のリンクから」と案内しているのにリンクが無い投稿になるため、
               //   コピーして貼るだけのコメント文をLINEでお渡しし、手動1回で済むようにする。
-              const { parseProjectLinks } = await import('../shared/projectLinks');
+              const { parseProjectLinks, pickPinnedDestination } = await import('../shared/projectLinks');
               const links = parseProjectLinks((postProject as any)?.links || null);
-              const lineLink = links.find((l) => l.type === 'line' && !!l.url);
-              if (lineLink) {
+              // ★公式LINEに限らず、登録されている案内先（予約ページ・HP等）を使う（2026-09-04）
+              const dest = pickPinnedDestination(links);
+              if (dest) {
                 const { pushMessages } = await import('./lineNotify');
                 const targets = await db.getLineUserIdsForUser(post.userId);
                 for (const to of targets) {
                   await pushMessages(to, [
                     { type: 'text', text:
                       '固定投稿を公開しました。あとひとつだけお願いがあります。\n\n' +
-                      '公式LINEへのリンクを自動でコメントする機能が、現在Meta社の審査の承認待ちです。\n' +
+                      `${dest.channelName}へのリンクを自動でコメントする機能が、現在Meta社の審査の承認待ちです。\n` +
                       'お手数ですが、Threadsアプリで先ほどの固定投稿を開き、下の文をそのままコメントしてください。' },
-                    { type: 'text', text: `LINEのご登録・ご相談はこちらから↓\n${lineLink.url}` },
-                    { type: 'text', text: '上の文を長押しでコピー → 固定投稿の「返信を追加」に貼り付けて送信、で完了です。\nこのコメントが、固定投稿からLINEへつながる入口になります。' },
+                    { type: 'text', text: `${dest.commentLead}\n${dest.link.url}` },
+                    { type: 'text', text: `上の文を長押しでコピー → 固定投稿の「返信を追加」に貼り付けて送信、で完了です。\nこのコメントが、固定投稿から${dest.channelName}へつながる入口になります。` },
                   ]);
                 }
-                console.log(`[Scheduled Post] Pinned LINE comment: manual-guide sent for post ${post.id} (返信権限の承認待ち)`);
+                console.log(`[Scheduled Post] 固定投稿のコメント: 手動用の案内を送付 post=${post.id} 案内先=${dest.link.type} (返信権限の承認待ち)`);
               }
             }
           } catch (e) {

@@ -88,8 +88,11 @@ export async function createPinnedDraft(userId: number, accountId?: number | nul
   //   文字列のまま渡すと、プロンプト組み立ての中で links.find が呼べず
   //   「投稿をうまく作れませんでした」になる（お客様の固定投稿が全部これで失敗していた）。
   //   他の生成経路（自動投稿・予約投稿・アプリ）は、いずれもここで parse している。
-  const { parseProjectLinks } = await import("../shared/projectLinks");
+  const { parseProjectLinks, pickPinnedDestination } = await import("../shared/projectLinks");
   const projectLinks = parseProjectLinks(project.links || null);
+  // ★案内先はお客様が登録したリンクで決まる。公式LINEとは限らない
+  //   （公式LINEが無いお店の固定投稿が全部「公式LINEから」で終わっていた・2026-09-04）
+  const destination = pickPinnedDestination(projectLinks);
 
   // ★アプリの生成経路（project.generatePost）と同じ材料をそろえる。
   //   ここが欠けると、固定投稿のノウハウ（カウンセリング結果・口調の好み・
@@ -131,6 +134,7 @@ export async function createPinnedDraft(userId: number, accountId?: number | nul
       useThreadsKnowhow: project.useThreadsKnowhow !== false,
       stylePreference,
       ngWords,
+      pinnedChannel: destination?.channelName,
     } as any);
 
     // 個人ブランディングモードの店舗は、発信者設定を最優先で上書き（アプリ経路と同じ）
@@ -153,7 +157,7 @@ export async function createPinnedDraft(userId: number, accountId?: number | nul
     const ctaLine = cta.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "";
     const safeCta = ctaLine && Array.from(ctaLine).length <= 60
       ? ctaLine
-      : "LINEのご登録はコメント欄のリンクからどうぞ。";
+      : (destination?.ctaLine ?? "くわしくはコメント欄のリンクからどうぞ。");
     const { trimToBudget } = await import("../shared/postLength");
     content = trimToBudget(main, safeCta, PINNED_CHAR_BUDGET);
   } catch (e) {
@@ -213,15 +217,16 @@ export async function attachLineUrlComment(opts: {
   /** links列（JSON文字列）を持つプロジェクト */
   project: { links?: string | null } | null | undefined;
 }): Promise<string | null> {
-  const { parseProjectLinks } = await import("../shared/projectLinks");
+  const { parseProjectLinks, pickPinnedDestination } = await import("../shared/projectLinks");
   const links = parseProjectLinks(opts.project?.links || null);
-  const lineLink = links.find((l) => l.type === "line" && !!l.url);
-  if (!lineLink) return null;
+  // ★公式LINEに限らず、登録されている案内先（予約ページ・HP等）を使う
+  const dest = pickPinnedDestination(links);
+  if (!dest) return null;
   const { createAndPublishPost } = await import("./threadsPost");
   const reply = await createAndPublishPost({
     accessToken: opts.accessToken,
     threadsUserId: opts.threadsUserId,
-    text: `LINEのご登録・ご相談はこちらから↓\n${lineLink.url}`,
+    text: `${dest.commentLead}\n${dest.link.url}`,
     mediaType: "TEXT",
     replyToId: opts.rootThreadsPostId,
   });

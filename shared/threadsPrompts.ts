@@ -1216,7 +1216,7 @@ ${safe.customerWords ? `- お客さんが実際に使った言葉：${safe.custo
 ${safe.proof ? `- 実績/証拠：${safe.proof}` : ''}
 ${safe.link ? `- 誘導先：登録あり（★本文にURLは貼らず、「プロフィールのリンクから」「固定投稿にまとめています」の間接誘導にすること）` : ''}
 ${safe.trendWord ? `- トレンドワード：${safe.trendWord}` : ''}
-${formatLinksForPrompt(input.links, input.postType, input.preferredLinkType)}
+${formatLinksForPrompt(input.links, input.postType, input.preferredLinkType, (input as any).pinnedChannel)}
 
 【投稿タイプ】
 ${postTypeDescription}${localNote}${trendNote}${seasonalNote}${regionalRefNote}${buzzNote}${ngWordsNote}${styleSamplesNote}
@@ -1272,7 +1272,7 @@ ${treeCount === 0 ? 'ツリーは使わず、本文のみで完結させてく�
  *  - その他: do NOT embed URLs directly. Refer the user to the固定投稿/
  *    プロフィール instead. Mentioning "プロフから△△へ" is fine.
  */
-function formatLinksForPrompt(links: ProjectLinkLite[] | undefined, postType: PostType | undefined, preferredLinkType?: string): string {
+function formatLinksForPrompt(links: ProjectLinkLite[] | undefined, postType: PostType | undefined, preferredLinkType?: string, pinnedChannel?: string): string {
   if (!links || links.length === 0) return '';
   const lines: string[] = ['', '【登録済みの誘導先（チャネル）】'];
   for (const l of links) {
@@ -1308,7 +1308,11 @@ function formatLinksForPrompt(links: ProjectLinkLite[] | undefined, postType: Po
   lines.push(`- 主な誘導先は「${cvChannel}」。誘導は必ず「プロフィールのリンクから${cvChannel}へ」「固定投稿にまとめています」のような間接表現にする。`);
   lines.push(`- CTAには ${cvChannel} に進む"理由"（特典・得られるもの）をセットで書く。ただし特典はカウンセリング/入力にあるものだけ。無ければ「気軽にご相談ください」程度に留める。`);
   if (postType === 'pinned') {
-    lines.push('- 固定投稿でも本文にURLは貼らない。公開時にシステムが公式LINEのURLをコメント欄（1件目の返信）に自動添付するので、本文は「コメント欄のリンクから」へ誘導する。');
+    // ★案内先はお客様が登録したリンクで決まる（公式LINEとは限らない）。
+    //   pinnedChannel が渡っていればその呼び名を使う（2026-09-04）。
+    const pinnedCh = pinnedChannel || cvChannel;
+    lines.push(`- 固定投稿でも本文にURLは貼らない。公開時にシステムが${pinnedCh}のURLをコメント欄（1件目の返信）に自動添付するので、本文は「コメント欄のリンクから」へ誘導する。`);
+    lines.push(`- 締めの誘導は${pinnedCh}に合った言い方にする。登録されていない窓口（例：公式LINEが無いのに「LINEのご登録」）へ誘導しないこと。`);
   }
   lines.push('');
   return lines.join('\n');
@@ -1437,8 +1441,10 @@ export const POST_TYPE_SUPPLEMENTS: Record<PostType, string> = {
    そのうえで「合わないと思えばお断りいただいて構いません」のように、
    断る自由を明示して、読者側のリスクを外す。
 6. **最後にコメント欄へ誘導する1行。**
-   本文に生のURLを書かない。公開時にシステムが公式LINEのURLを
+   本文に生のURLを書かない。公開時にシステムが案内先のURLを
    1件目のコメントとして自動で添付する。
+   案内先は【誘導ルール】に書かれた窓口に必ず合わせる
+   （公式LINEが無いお店に「LINEのご登録」と書かない）。
 
 ■ 書いてはいけないもの（守らないと不合格）
 - 「〜いませんか？」「〜と思いませんか？」「気になりませんか？」等の**同意を求める確認疑問**。
@@ -1450,10 +1456,10 @@ export const POST_TYPE_SUPPLEMENTS: Record<PostType, string> = {
   （人間の投稿32本に0〜2本しか出ない、生成文だけが多用する言葉。
    「実は、〜なんです」と書きたくなったら、その接続詞を消して事実だけを書く）。
 - 悩みを箇条書きで並べて「そんな方をサポートします」と受ける定型構文。
-- LINE登録特典を勝手に作る（入力に特典が無ければ、特典の話は書かない）。
+- 登録特典を勝手に作る（入力に特典が無ければ、特典の話は書かない）。
 - 「〇〇はやめて！」と煽る、他院・他の方法を批判する、恐怖で追い込む。
 - 「必ず治る」「絶対」など効果の断定（景表法・薬機法の観点でも危険）。
-- 住所・営業時間・定休日・支払い方法の羅列（固定投稿は入口。詳細はLINEで）。
+- 住所・営業時間・定休日・支払い方法の羅列（固定投稿は入口。詳細は案内先で）。
 - 「※効果には個人差があります」等の免責・注意書きの列挙。
 - ハッシュタグの羅列。自己紹介だけで終わる。
 - cta に上記を詰め込む（cta はコメント欄への誘導1行だけ。それ以外は書かない）。

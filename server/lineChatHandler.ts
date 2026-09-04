@@ -1191,10 +1191,12 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     if (!q.nourl) {
       const pjsForUrl = ((await db.getUserProjects(user.id)) || []).filter((pj: any) => !String(pj.id).startsWith("demo_"));
       const { parseProjectLinks } = await import("../shared/projectLinks");
-      const hasLine = pjsForUrl.some((pj: any) => parseProjectLinks(pj.links || null).some((l) => l.type === "line" && !!l.url));
+      // ★公式LINEに限らず、案内先のURLが1つでもあればよい（予約ページ・HPなど）
+      const hasLine = pjsForUrl.some((pj: any) => parseProjectLinks(pj.links || null).some((l) => !!l.url));
       if (!hasLine && pjsForUrl.length > 0) {
         return [textWithQuick(
-          "固定投稿を作る前に、公式LINEの友だち追加URLの登録をおすすめします。\n" +
+          "固定投稿を作る前に、お客様のご案内先URLの登録をおすすめします。\n" +
+          "公式LINE・Web予約・ホームページなど、いちばん来てほしい場所を1つで大丈夫です。\n" +
           "固定投稿のコメント欄にこのURLが付き、集客の入口になります。",
           [
             { label: "URLを登録する", data: "c=seturl" },
