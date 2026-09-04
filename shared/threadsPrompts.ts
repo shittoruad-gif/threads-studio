@@ -1063,6 +1063,48 @@ ${isTreePost ? `\ntreePostsは「ちょうど${treeCount}個」の要素にす�
 /**
  * プロンプトテンプレートを生成
  */
+/**
+ * カウンセリング結果・要旨を無害化する。
+ * 中身（お客様が書いた事実）は変えず、プロンプトを乗っ取る書き方だけ潰す。
+ */
+function sanitizeCounseling(c: CounselingLike | null | undefined): CounselingLike | null | undefined {
+  if (!c) return c;
+  const one = (v: string | undefined, n = 500) => (v == null ? v : sanitizeForPrompt(v, n));
+  const list = (v: string[] | undefined, n = 300) =>
+    v == null ? v : v.slice(0, 40).map((x) => sanitizeForPrompt(x, n));
+  const b = c.brief;
+  return {
+    ...c,
+    brandVoice: one(c.brandVoice),
+    originStory: one(c.originStory, 1000),
+    freeFormSummary: one(c.freeFormSummary, 1000),
+    menu: list(c.menu),
+    hoursInfo: list(c.hoursInfo),
+    realProofs: list(c.realProofs),
+    realEpisodes: list(c.realEpisodes, 500),
+    benefitsDaily: list(c.benefitsDaily),
+    ctaAssets: list(c.ctaAssets),
+    faq: list(c.faq),
+    industryMyths: list(c.industryMyths),
+    ngList: list(c.ngList, 200),
+    brief: b
+      ? {
+          ...b,
+          oneLine: one(b.oneLine, 200),
+          concept: b.concept
+            ? {
+                who: one(b.concept.who, 300),
+                problem: one(b.concept.problem, 300),
+                how: one(b.concept.how, 300),
+                future: one(b.concept.future, 300),
+                why: one(b.concept.why, 300),
+              }
+            : b.concept,
+        }
+      : b,
+  };
+}
+
 export function generateThreadsPrompt(input: ThreadsPromptInput): string {
   // ── #14 プロンプトインジェクション対策 ──────────────────────
   // ユーザ入力をプロンプトに直挿しする前に、必ずサニタイザを通す。
@@ -1097,12 +1139,16 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
   // どちらも未指定ならデフォルト true。
   // 来店型の業種か（商圏＝駅・徒歩分数を書くべきか）の判定。プロンプト全体で使う
   const isLocalBusiness = isLocalCatchmentBusiness(safe.businessType);
+  // ★カウンセリング結果と要旨も、他の入力と同じように無害化してから渡す。
+  //   以前はここだけ素通しで、注入対策の対象外だった（2026-09-05 に揃えた）。
+  //   長さの上限は実データが切れない余裕を持たせている。
+  const safeCounseling = sanitizeCounseling(input.counseling);
   const useThreadsKnowhow = input.counseling?.useThreadsKnowhow !== undefined
     ? input.counseling.useThreadsKnowhow
     : (input.useThreadsKnowhow !== undefined ? input.useThreadsKnowhow : true);
   const systemPrompt = buildSystemPrompt(
     treeCount, input.postType, input.usp, input.n1Customer, input.purpose, input.tone,
-    input.counseling, useThreadsKnowhow,
+    safeCounseling, useThreadsKnowhow,
     input.businessType, input.stylePreference,
   );
   
