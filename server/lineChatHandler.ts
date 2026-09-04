@@ -860,7 +860,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       [
         { label: "Threadsアカウントを追加", data: "m=connect" },
         { label: "お店の情報を登録・やり直す", data: "m=setup" },
-        { label: "公式LINEのURLを登録", data: "c=seturl" },
+        { label: "ご案内先URLを登録", data: "c=seturl" },
         { label: "登録内容を見る", data: "m=profile" },
       ],
     )];
@@ -1186,7 +1186,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         )];
       }
     }
-    // ★公式LINEのURLが未登録なら、先に登録を勧める（固定投稿はLINE誘導が本命のため）。
+    // ★ご案内先のURLが未登録なら、先に登録を勧める（コメント欄のリンクが集客の入口のため）。
     //   URLなしでも作れるが、コメント欄のリンクが付かず効果が大きく落ちる。
     if (!q.nourl) {
       const pjsForUrl = ((await db.getUserProjects(user.id)) || []).filter((pj: any) => !String(pj.id).startsWith("demo_"));
@@ -1392,22 +1392,53 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     // 複数店舗なら、どのお店のURLかを選んでもらう
     if (usable.length >= 2 && !q.p) {
       return [textWithQuick(
-        "どのお店の公式LINEのURLを登録しますか？",
+        "どのお店のご案内先URLを登録しますか？",
         usable.slice(0, 10).map((pj: any) => ({ label: String(pj.storeName || pj.title || "お店").slice(0, 16), data: `c=seturl&p=${pj.id}` })),
       )];
     }
     const pj: any = q.p ? usable.find((x: any) => String(x.id) === String(q.p)) : usable[0];
     if (!pj) return [textWithQuick("そのお店の情報が見つかりませんでした。", MENU_HINT)];
-    await db.setLineChatState(lineUserId, "set_line_url", String(pj.id));
-    const { parseProjectLinks } = await import("../shared/projectLinks");
-    const cur = parseProjectLinks(pj.links || null).find((l) => l.type === "line");
+    const { parseProjectLinks, LINK_TYPES } = await import("../shared/projectLinks");
+    const cur = parseProjectLinks(pj.links || null);
+
+    // ★どこへ案内するかを先に選んでもらう。
+    //   公式LINEしか登録できないと、公式LINEを持たないお客様や予約ページへ流したい
+    //   お客様の固定投稿が、必ず「公式LINEから」で終わってしまう（2026-09-04 三上様指摘）。
+    if (!q.k) {
+      const has = (t: string) => cur.some((l) => l.type === t && !!l.url);
+      const listed = cur.filter((l) => !!l.url)
+        .map((l) => `・${(LINK_TYPES as any)[l.type]?.name ?? l.label}：${l.url}`).join("\n");
+      return [textWithQuick(
+        (listed ? `いま登録されているご案内先です。\n${listed}\n\n` : "") +
+        "どこへご案内しますか？　いちばん来てほしい場所を選んでください。\n" +
+        "固定投稿のコメント欄と、毎日の投稿の誘導に使われます。",
+        [
+          { label: has("line") ? "公式LINE（登録済み）" : "公式LINE", data: `c=seturl&p=${pj.id}&k=line` },
+          { label: has("reservation") ? "Web予約（登録済み）" : "Web予約", data: `c=seturl&p=${pj.id}&k=reservation` },
+          { label: has("website") ? "ホームページ（登録済み）" : "ホームページ", data: `c=seturl&p=${pj.id}&k=website` },
+          { label: "その他（フォーム等）", data: `c=seturl&p=${pj.id}&k=other` },
+          { label: "やめる", data: "m=cancel" },
+        ],
+      )];
+    }
+
+    const kind = ["line", "reservation", "website", "other"].includes(String(q.k)) ? String(q.k) : "line";
+    await db.setLineChatState(lineUserId, "set_line_url", JSON.stringify({ p: String(pj.id), k: kind }));
+    const already = cur.find((l) => l.type === kind && !!l.url);
+    const guide: Record<string, string> = {
+      line: "公式LINEの友だち追加URLを、そのまま送ってください。\n（例：https://lin.ee/xxxxx）\n\n" +
+            "LINE公式アカウントの管理画面 →「友だち追加ガイド」→「URLを作成」でコピーできます。",
+      reservation: "Web予約ページのURLを、そのまま送ってください。\n" +
+            "ご自身の予約ページでも、外部の予約サイトのページでも構いません。",
+      website: "ホームページのURLを、そのまま送ってください。\n" +
+            "お店のことがいちばん分かるページをおすすめします。",
+      other: "ご案内したいページのURLを、そのまま送ってください。\n" +
+            "お問い合わせフォーム・地図・ネットショップなどでも構いません。",
+    };
     return [
       { type: "text", text:
-        (cur ? `いま登録されているのは\n${cur.url}\nです。新しいURLに置き換えます。\n\n` : "") +
-        "公式LINEの友だち追加URLを、そのまま送ってください。\n" +
-        "（例：https://lin.ee/xxxxx）\n\n" +
-        "LINE公式アカウントの管理画面 →「友だち追加ガイド」→「URLを作成」でコピーできます。\n" +
-        "やめる場合は「やめる」と送ってください。" },
+        (already ? `いま登録されているのは\n${already.url}\nです。新しいURLに置き換えます。\n\n` : "") +
+        guide[kind] + "\n\nやめる場合は「やめる」と送ってください。" },
     ];
   }
   // ── 一部修正：AIを通さず、ご自身で直した全文にそのまま置き換える ──
@@ -1621,7 +1652,13 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   }
   // ── 公式LINEのURL登録：送られてきたURLを保存する ──
   if (st?.state === "set_line_url" && st.payload) {
-    const projectId = String(st.payload);
+    // payload は {p: projectId, k: 種類}。古い形式（projectIdの文字列だけ）も受ける。
+    let projectId = String(st.payload);
+    let kind = "line";
+    try {
+      const parsed = JSON.parse(String(st.payload));
+      if (parsed && typeof parsed === "object" && parsed.p) { projectId = String(parsed.p); kind = String(parsed.k || "line"); }
+    } catch { /* 旧形式はそのまま */ }
     const raw = text.trim();
     let parsedUrl: URL | null = null;
     try { parsedUrl = new URL(raw); } catch { parsedUrl = null; }
@@ -1631,17 +1668,23 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     await db.clearLineChatState(lineUserId);
     const pj: any = await db.getProjectById(projectId);
     if (!pj || pj.userId !== user.id) return [textWithQuick("お店の情報が見つかりませんでした。", MENU_HINT)];
-    const { parseProjectLinks } = await import("../shared/projectLinks");
+    const { parseProjectLinks, LINK_TYPES, pickPinnedDestination } = await import("../shared/projectLinks");
     const links = parseProjectLinks(pj.links || null);
-    const existing = links.find((l) => l.type === "line");
-    const next = existing
-      ? links.map((l) => (l.type === "line" ? { ...l, url: raw } : l))
-      : [...links, { id: `line_${Date.now().toString(36)}`, type: "line" as const, label: "LINE公式", url: raw, isDefault: true }];
+    const typeName = (LINK_TYPES as any)[kind]?.name ?? "ご案内先";
+    const existing = links.find((l) => l.type === kind);
+    const next: any[] = existing
+      ? links.map((l) => (l.type === kind ? { ...l, url: raw } : l))
+      : [...links, { id: `${kind}_${Date.now().toString(36)}`, type: kind as any, label: typeName, url: raw, isDefault: true }];
     await db.updateProject(projectId, { links: JSON.stringify(next) } as any);
+    // 実際に固定投稿で使われる案内先が別なら、そのことも伝える（思い違いを防ぐ）
+    const dest = pickPinnedDestination(next as any);
+    const destNote = dest && dest.link.type !== kind
+      ? `\n\n※ 固定投稿のコメント欄には、いちばん申し込みに近い「${(LINK_TYPES as any)[dest.link.type]?.name ?? dest.link.label}」が使われます。`
+      : "";
     return [textWithQuick(
-      `公式LINEのURLを登録しました。\n${raw}\n\n` +
-      "毎日の投稿の誘導と、固定投稿のコメント欄のリンクに使われます。",
-      [{ label: "固定投稿を作る", data: "m=makepin" }, ...MENU_HINT],
+      `${typeName}のURLを登録しました。\n${raw}\n\n` +
+      "毎日の投稿の誘導と、固定投稿のコメント欄のリンクに使われます。" + destNote,
+      [{ label: "別の種類も登録する", data: `c=seturl&p=${projectId}` }, { label: "固定投稿を作る", data: "m=makepin" }, ...MENU_HINT],
     )];
   }
   // ── 一部修正：送られてきた全文で、そのまま置き換える ──
