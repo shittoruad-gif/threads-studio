@@ -343,6 +343,22 @@ export const SEMINAR_PRICE_CODES: ReadonlySet<string> = new Set<string>([
   'SASAKI2026',  // 佐々木竜也
 ]);
 
+/**
+ * すべてのキャンペーンコード → 種別のマップ。
+ * 料金ページの ?coupon=CODE URLパラメータでのプレビュー表示に使用。
+ * 新しいモニターコードを追加したときは coupon.ts（DB seed）と共にここも更新する。
+ */
+export const ALL_CAMPAIGN_CODES: ReadonlyMap<string, 'seminar' | 'monitor'> = new Map<string, 'seminar' | 'monitor'>([
+  // セミナー価格コード
+  ['SEMINAR2026', 'seminar'],
+  ['OHKI2026',    'seminar'],
+  ['SASAKI2026',  'seminar'],
+  // モニター価格コード
+  ['SEIKOTSU2026',  'monitor'],
+  ['PARTNER2026',   'monitor'],
+  ['CPMONITOR2026', 'monitor'],
+]);
+
 /** クーポンコード → キャンペーン種別（価格の出し分け） */
 export function campaignTierForCode(code: string): 'seminar' | 'monitor' {
   const upper = (code || '').trim().toUpperCase();

@@ -12,6 +12,7 @@ import {
   getCampaignSlotsRemaining,
   getCampaignCounterpart,
   CAMPAIGN_SLOT_TOTAL,
+  ALL_CAMPAIGN_CODES,
 } from '../../../shared/plans';
 import { PlanChangeDialog } from '@/components/PlanChangeDialog';
 
@@ -121,9 +122,23 @@ export default function Pricing() {
 
   // モニター（キャンペーンクーポン適用済み）のユーザーには
   // キャンペーン価格を自動表示する。コード入力欄は新規登録時のみ。
-  const campaignUnlocked = Boolean(user?.isMonitor);
+  const userIsMonitor = Boolean(user?.isMonitor);
+
+  // URLパラメータ ?coupon=SEMINAR2026 でのプレビュー表示
+  // 未ログインのユーザーもセミナー価格を事前確認できる。
+  const urlCouponRaw = new URLSearchParams(window.location.search).get('coupon') ||
+                       new URLSearchParams(window.location.search).get('code') || '';
+  const urlCouponCode = urlCouponRaw.trim().toUpperCase();
+  const urlCampaignTier = urlCouponCode ? (ALL_CAMPAIGN_CODES.get(urlCouponCode) ?? null) : null;
+
+  // プレビューモード: URLパラメータにコードがあり、かつまだ未適用のユーザー
+  const isCampaignPreview = urlCampaignTier !== null && !userIsMonitor;
+
+  const campaignUnlocked = userIsMonitor || urlCampaignTier !== null;
   // 適用中のキャンペーン種別（セミナー/モニター）。未設定の既存モニターは monitor 扱い。
-  const campaignTier: 'seminar' | 'monitor' = ((user as any)?.campaignTier === 'seminar') ? 'seminar' : 'monitor';
+  const campaignTier: 'seminar' | 'monitor' =
+    ((user as any)?.campaignTier === 'seminar') ? 'seminar' :
+    (urlCampaignTier === 'seminar' ? 'seminar' : 'monitor');
   const slotsRemaining = getCampaignSlotsRemaining();
 
   const { data: currentSubscription, refetch } = trpc.subscription.getStatus.useQuery(
@@ -282,7 +297,7 @@ export default function Pricing() {
         </div>
 
         {/* 限定キャンペーン適用中バナー（クーポン適用済みのモニターユーザーのみ表示） */}
-        {campaignUnlocked && (
+        {userIsMonitor && (
           <div className="max-w-2xl mx-auto mb-10">
             <div className="rounded-xl border-2 border-rose-300 bg-rose-50 p-5 flex items-center gap-4">
               <div className="w-10 h-10 rounded-full bg-rose-500 flex items-center justify-center shrink-0">
@@ -293,6 +308,32 @@ export default function Pricing() {
                 <p className="text-sm text-rose-600">
                   キャンペーン価格は3回分。4回目のお支払いから通常価格に自動で切り替わります（事前にメールでお知らせします）
                 </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* プレビューバナー（URLパラメータにコードがある未適用ユーザー向け） */}
+        {isCampaignPreview && (
+          <div className="max-w-2xl mx-auto mb-10">
+            <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-5">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-full bg-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-amber-800">
+                    紹介コード「{urlCouponCode}」の{campaignTier === 'seminar' ? 'セミナー' : 'キャンペーン'}特別価格をプレビュー中
+                  </p>
+                  <p className="text-sm text-amber-700 mt-1">
+                    下の価格はプレビューです。申し込みには以下の手順でお進みください：
+                  </p>
+                  <ol className="mt-2 text-sm text-amber-700 space-y-1 list-decimal list-inside">
+                    <li>「無料で始める」から無料アカウントを作成</li>
+                    <li>ダッシュボード右上のアカウントメニューから「紹介コード」を入力（<span className="font-mono font-bold">{urlCouponCode}</span>）</li>
+                    <li>この料金ページに戻ってお申し込みボタンを押す</li>
+                  </ol>
+                </div>
               </div>
             </div>
           </div>
