@@ -416,24 +416,57 @@ async function repliesForConnect(userId: number): Promise<unknown[]> {
 /** お店・自分の情報の要約 */
 async function repliesForProfile(userId: number): Promise<unknown[]> {
   try {
-    const projects = await db.getProjectsByUserId(userId);
-    const p: any = projects?.[0];
-    if (!p) {
+    // ★複数店舗を登録していても1件目しか出していなかった（2026-09-04 三上様指摘）。
+    //   登録済みのお店をすべて出し、どのThreadsアカウントに紐づいているかも添える。
+    const projects = ((await db.getProjectsByUserId(userId)) || []).filter(
+      (pj: any) => !String(pj.id).startsWith("demo_"),
+    );
+    if (projects.length === 0) {
       return [textWithQuick(
         "まだお店の情報が登録されていません。\nこのトークで質問にお答えいただくだけで登録できます（10〜15分・全20問）。",
         [{ label: "はじめの設定を始める", data: "m=setup" }, ...MENU_HINT],
       )];
     }
-    const lines = [
-      p.businessType ? `・業種：${p.businessType}` : null,
-      p.area ? `・エリア：${p.area}` : null,
-      p.target ? `・届けたい方：${String(p.target).slice(0, 40)}` : null,
-      p.strength ? `・強み：${String(p.strength).slice(0, 60)}` : null,
-    ].filter(Boolean);
+    const accounts = ((await db.getThreadsAccountsByUserId(userId).catch(() => [])) || [])
+      .filter((a: any) => a.isActive !== false);
+    // お店の情報 → それを使うアカウント名（複数アカウント運用のときだけ表示する）
+    const usedBy = new Map<string, string[]>();
+    for (const a of accounts as any[]) {
+      if (!a.defaultProjectId) continue;
+      const arr = usedBy.get(String(a.defaultProjectId)) || [];
+      arr.push(`@${a.threadsUsername || a.threadsUserId}`);
+      usedBy.set(String(a.defaultProjectId), arr);
+    }
+    const detail = (p: any) => [
+      p.businessType ? `　・業種：${p.businessType}` : null,
+      p.area ? `　・エリア：${p.area}` : null,
+      p.target ? `　・届けたい方：${String(p.target).slice(0, 40)}` : null,
+      p.strength ? `　・強み：${String(p.strength).slice(0, 60)}` : null,
+    ].filter(Boolean).join("\n");
+
+    if (projects.length === 1) {
+      const p: any = projects[0];
+      return [textWithQuick(
+        "登録されている内容です。\n\n" + detail(p).replace(/^　/gm, "") +
+        "\n\n登録し直したいときは「はじめの設定をやり直す」を押してください。",
+        [{ label: "はじめの設定をやり直す", data: "m=setup" }, ...MENU_HINT],
+      )];
+    }
+
+    const blocks = projects.slice(0, 10).map((p: any, i: number) => {
+      const name = String(p.storeName || p.title || `お店${i + 1}`);
+      const acc = usedBy.get(String(p.id));
+      const head = `${i + 1}. ${name}` + (acc?.length ? `（${acc.join("・")} で使用）` : accounts.length > 1 ? "（アカウント未紐づけ）" : "");
+      return head + "\n" + detail(p);
+    });
     return [textWithQuick(
-      "登録されている内容です。\n\n" + lines.join("\n") +
-      "\n\n登録し直したいときは「はじめの設定をやり直す」を押してください。",
-      [{ label: "はじめの設定をやり直す", data: "m=setup" }, ...MENU_HINT],
+      `登録されているお店の情報は${projects.length}件です。\n\n` + blocks.join("\n\n") +
+      "\n\n内容を直すときは「はじめの設定をやり直す」を押して、直したいアカウントを選んでください。",
+      [
+        { label: "はじめの設定をやり直す", data: "m=setup" },
+        { label: "アカウント連携", data: "m=connect" },
+        ...MENU_HINT,
+      ],
     )];
   } catch {
     return [textWithQuick("お店の情報を読み込めませんでした。", MENU_HINT)];
@@ -1471,13 +1504,35 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     )];
   }
   if (q.s === "ng") {
-    await db.setLineChatState(lineUserId, "ngword");
-    // ★「やめる」を必ず出す。これが無いと、気が変わって別のことを打った言葉が
-    //   そのままNGワードとして登録されてしまう。
-    return [textWithQuick(
-      "投稿で使ってほしくない言葉を送ってください（いくつかある場合は、読点や改行で区切ってください）。",
-      [{ label: "やめる", data: "m=cancel" }],
-    )];
+    // ★NGワードはお店の情報ごとに保持している。複数店舗なら、どのお店に登録するかを先に選ぶ
+    //   （以前は必ず1件目に登録され、別の店舗の投稿では避けられていなかった。2026-09-04）
+    {
+      const usable = ((await db.getUserProjects(user.id)) || []).filter(
+        (pj: any) => !String(pj.id).startsWith("demo_") && pj.businessType,
+      );
+      if (usable.length === 0) {
+        return [textWithQuick("先に「はじめの設定」でお店の情報をご登録ください。", [{ label: "はじめの設定", data: "m=setup" }, ...MENU_HINT])];
+      }
+      if (usable.length >= 2 && !q.p) {
+        return [textWithQuick(
+          "どのお店の投稿で使わない言葉ですか？",
+          usable.slice(0, 10).map((pj: any) => ({
+            label: String(pj.storeName || pj.title || "お店").slice(0, 16),
+            data: `s=ng&p=${pj.id}`,
+          })),
+        )];
+      }
+      const pj: any = q.p ? usable.find((x: any) => String(x.id) === String(q.p)) : usable[0];
+      if (!pj) return [textWithQuick("そのお店の情報が見つかりませんでした。", MENU_HINT)];
+      await db.setLineChatState(lineUserId, "ngword", String(pj.id));
+      const who = usable.length >= 2 ? `「${String(pj.storeName || pj.title || "お店")}」で` : "";
+      // ★「やめる」を必ず出す。これが無いと、気が変わって別のことを打った言葉が
+      //   そのままNGワードとして登録されてしまう。
+      return [textWithQuick(
+        `${who}投稿で使ってほしくない言葉を送ってください（いくつかある場合は、読点や改行で区切ってください）。`,
+        [{ label: "やめる", data: "m=cancel" }],
+      )];
+    }
   }
 
   // ── ヘルプ ──
@@ -1630,14 +1685,18 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     const words = text.split(/[、,\n]/).map((w) => w.trim()).filter(Boolean).slice(0, 20);
     if (words.length === 0) return [textWithQuick("言葉を読み取れませんでした。", MENU_HINT)];
     try {
-      // NGワードはプロジェクト（お店の情報）側に保持している
-      const projects = await db.getProjectsByUserId(user.id);
-      const project: any = projects?.[0];
+      // NGワードはプロジェクト（お店の情報）側に保持している。
+      // どのお店かは、入力をお願いしたときに payload へ入れてある（複数店舗対応）。
+      const projects = ((await db.getProjectsByUserId(user.id)) || []).filter((pj: any) => !String(pj.id).startsWith("demo_"));
+      const project: any = st.payload
+        ? projects.find((pj: any) => String(pj.id) === String(st.payload))
+        : projects[0];
       if (!project) return [textWithQuick("先にお店の情報の登録が必要です。", MENU_HINT)];
       const cur = String(project.ngWords || "").split(/[、,\n]/).map((w: string) => w.trim()).filter(Boolean);
       const merged = Array.from(new Set([...cur, ...words]));
       await db.updateProject(project.id, { ngWords: merged.join("、") } as any);
-      return [textWithQuick(`「${words.join("」「")}」を、使わない言葉として登録しました。以後の投稿では避けます。`, MENU_HINT)];
+      const who = projects.length >= 2 ? `「${String(project.storeName || project.title || "お店")}」の投稿では、` : "";
+      return [textWithQuick(`「${words.join("」「")}」を、使わない言葉として登録しました。${who}以後の投稿では避けます。`, MENU_HINT)];
     } catch {
       return [textWithQuick("登録に失敗しました。時間をおいてお試しください。", MENU_HINT)];
     }
