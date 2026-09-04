@@ -16,7 +16,7 @@
  * 誘導先が無いのに誘導するより、CTAが無いほうが害が小さい。
  */
 
-import { parseProjectLinks, type ProjectLink } from './projectLinks';
+import { parseProjectLinks, getPrimaryLink, type ProjectLink } from './projectLinks';
 import { isLocalCatchmentBusiness } from './businessScope';
 
 export interface CtaSourceProject {
@@ -42,7 +42,10 @@ export function buildCtaText(project: CtaSourceProject): string | null {
   const links: ProjectLink[] = parseProjectLinks(project.links);
   const personal = project.mode === 'personal';
   const isLocal = !personal && isLocalCatchmentBusiness(project.businessType);
-  const has = (t: string) => links.some((l) => l.type === t && !!l.url);
+  // ★お客様が「いちばん来てほしい先」を選ばれている場合は、それに従う。
+  //   固定投稿と毎日の投稿で誘導先がバラバラになるのを防ぐ。
+  const primary = getPrimaryLink(links);
+  const has = (t: string) => (primary ? primary.type === t : links.some((l) => l.type === t && !!l.url));
 
   // 1. 公式LINE がある場合だけ、LINEへ案内する
   if (has('line')) {

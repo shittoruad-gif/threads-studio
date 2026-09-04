@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Trash2, Star, Link as LinkIcon, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, Star, Link as LinkIcon, ExternalLink, Megaphone } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
 import {
@@ -14,6 +14,9 @@ import {
   LINK_TYPES_LIST,
   parseProjectLinks,
   normaliseDefaults,
+  setPrimaryLink,
+  getPrimaryLink,
+  autoPinnedLink,
 } from '@shared/projectLinks';
 
 interface ProjectLinksManagerProps {
@@ -106,6 +109,19 @@ export default function ProjectLinksManager({
     setDirty(true);
   };
 
+  // ★固定投稿のコメント欄と毎日の投稿の誘導に、どのURLを使うか。
+  //   お客様が選ばなければ自動判定（予約 > LINE > その他 > HP）だが、
+  //   「LINEに集めたいのに予約が選ばれる」ことがあるため選べるようにした。
+  const setPrimary = (id: string) => {
+    setLinks(prev => setPrimaryLink(prev, getPrimaryLink(prev)?.id === id ? null : id));
+    setDirty(true);
+  };
+
+  const filled = links.filter(l => l.url.trim().length > 0);
+  const chosen = getPrimaryLink(filled);
+  const autoPick = autoPinnedLink(filled);
+  const destinationId = chosen?.id ?? autoPick?.id;
+
   const handleSave = () => {
     // Drop any links that are missing a URL — they're effectively empty rows
     const sanitized = links.filter(l => l.url.trim().length > 0);
@@ -121,10 +137,25 @@ export default function ProjectLinksManager({
         </CardTitle>
         <CardDescription>
           {t("LINE公式・Web予約・公式HPなどのURLを1度登録しておくと、")}
-          {t("固定投稿や自動投稿のCTAで自動的に最適なURLが使われます。")}
+          {t("固定投稿や自動投稿のCTAで使われます。2つ以上ある場合は、どこへご案内するかをお選びいただけます。")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* いま、どこへ案内しているか。2本以上あるときだけ意味を持つ */}
+        {filled.length >= 2 && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-900 space-y-1">
+            <p className="flex items-center gap-1.5 font-medium">
+              <Megaphone className="w-3.5 h-3.5 shrink-0" />
+              {t("いまのご案内先")}：{t(LINK_TYPES[(chosen ?? autoPick)!.type].name)}
+            </p>
+            <p className="leading-relaxed">
+              {chosen
+                ? t("固定投稿のコメント欄と、毎日の投稿の誘導にこのURLが使われます。")
+                : t("お選びいただいていないので、申し込みに近い順で自動的に決めています。下の「ここへ案内する」で変えられます。")}
+            </p>
+          </div>
+        )}
+
         {/* Existing links */}
         {links.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
@@ -164,6 +195,28 @@ export default function ProjectLinksManager({
                       >
                         {t("既定にする")}
                       </button>
+                    )}
+
+                    {/* 案内先の選択。URL未入力の行では選べない */}
+                    {filled.length >= 2 && link.url.trim() && (
+                      link.id === destinationId ? (
+                        <span
+                          className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-600 text-white"
+                          title={t("固定投稿と毎日の投稿の誘導に使われます")}
+                        >
+                          <Megaphone className="w-3 h-3" />
+                          {chosen ? t("ご案内先") : t("ご案内先（自動）")}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setPrimary(link.id)}
+                          className="text-xs text-emerald-700 hover:text-emerald-900 underline-offset-2 hover:underline"
+                          title={t("ここを固定投稿と毎日の投稿の誘導先にする")}
+                        >
+                          {t("ここへ案内する")}
+                        </button>
+                      )
                     )}
 
                     <div className="flex-1" />

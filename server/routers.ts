@@ -890,6 +890,7 @@ export const appRouter = router({
           label: z.string().min(1).max(40),
           url: z.string().url('有効なURLを入力してください'),
           isDefault: z.boolean().optional(),
+          isPrimary: z.boolean().optional(),
         })).max(20),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -897,8 +898,11 @@ export const appRouter = router({
         if (!project || project.userId !== ctx.user.id) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
         }
-        const { normaliseDefaults } = await import('../shared/projectLinks');
-        const normalised = normaliseDefaults(input.links);
+        const { normaliseDefaults, setPrimaryLink } = await import('../shared/projectLinks');
+        let normalised = normaliseDefaults(input.links);
+        // 案内先の指定は全体で1つだけ（複数付いていたら先頭を採用）
+        const primary = normalised.find((l) => l.isPrimary);
+        if (primary) normalised = setPrimaryLink(normalised, primary.id);
         await db.updateProject(input.projectId, {
           links: JSON.stringify(normalised),
         });

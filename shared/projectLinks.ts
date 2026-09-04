@@ -28,6 +28,17 @@ export interface ProjectLink {
    * can be default at once (enforced by helpers below).
    */
   isDefault?: boolean;
+  /**
+   * お客様ご自身が選んだ「いちばん来てほしい案内先」。
+   *
+   * ★これが付いているリンクが、固定投稿のコメント欄と毎日の投稿のCTAに
+   *   使われる。付いていないときだけ、下の PINNED_PRIORITY で自動判定する。
+   *   自動判定だと、公式LINEに集めたいお客様でも予約ページが選ばれてしまう
+   *   ことがあり、お客様に選んでいただく形にした（2026-09-04 三上様指示）。
+   *
+   * 全リンクを通して1つだけ（setPrimaryLink で担保）。
+   */
+  isPrimary?: boolean;
 }
 
 export interface ProjectLinkTypeConfig {
@@ -202,15 +213,39 @@ const PINNED_WORDING: Record<ProjectLinkType, { comment: string; cta: string; ch
 /** 固定投稿の案内先として使う優先順（申し込みに近い順） */
 const PINNED_PRIORITY: ProjectLinkType[] = ['reservation', 'line', 'other', 'website', 'instagram', 'youtube'];
 
+/**
+ * お客様が明示的に選んだ案内先を返す。選ばれていなければ undefined。
+ * 「自動で決まっている」のか「ご自身で選ばれた」のかを画面で出し分けるため、
+ * 自動判定へのフォールバックはここでは行わない。
+ */
+export function getPrimaryLink(links: ProjectLink[]): ProjectLink | undefined {
+  return links.find((l) => l.isPrimary && !!l.url);
+}
+
+/**
+ * 案内先を1つだけ選び直す。指定IDが無ければ全解除（＝自動判定に戻す）。
+ */
+export function setPrimaryLink(links: ProjectLink[], id: string | null): ProjectLink[] {
+  return links.map((l) => ({ ...l, isPrimary: id !== null && l.id === id }));
+}
+
+/** 自動判定だとどれが選ばれるか（お客様の明示選択は見ない） */
+export function autoPinnedLink(links: ProjectLink[]): ProjectLink | undefined {
+  const usable = links.filter((l) => !!l.url);
+  if (usable.length === 0) return undefined;
+  for (const t of PINNED_PRIORITY) {
+    const same = usable.filter((l) => l.type === t);
+    if (same.length > 0) return same.find((l) => l.isDefault) ?? same[0];
+  }
+  return usable.find((l) => l.isDefault) ?? usable[0];
+}
+
 export function pickPinnedDestination(links: ProjectLink[]): PinnedDestination | undefined {
   const usable = links.filter((l) => !!l.url);
   if (usable.length === 0) return undefined;
-  let link: ProjectLink | undefined;
-  for (const t of PINNED_PRIORITY) {
-    const same = usable.filter((l) => l.type === t);
-    if (same.length > 0) { link = same.find((l) => l.isDefault) ?? same[0]; break; }
-  }
-  if (!link) link = usable.find((l) => l.isDefault) ?? usable[0];
+  // ★お客様がお選びになった先を最優先。無いときだけ自動判定。
+  const link: ProjectLink | undefined = getPrimaryLink(usable) ?? autoPinnedLink(usable);
+  if (!link) return undefined;
   const w = PINNED_WORDING[link.type] ?? PINNED_WORDING.other;
   // 「その他」はお客様が付けたラベル（例:「初回ご相談フォーム」）をそのまま活かす
   const labeled = link.type === 'other' && link.label && link.label.length <= 14;

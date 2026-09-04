@@ -437,11 +437,24 @@ async function repliesForProfile(userId: number): Promise<unknown[]> {
       arr.push(`@${a.threadsUsername || a.threadsUserId}`);
       usedBy.set(String(a.defaultProjectId), arr);
     }
+    const { parseProjectLinks, LINK_TYPES, getPrimaryLink, pickPinnedDestination } =
+      await import("../shared/projectLinks");
+    // どこへご案内しているか。お客様が選ばれていなければ「自動」と明記する。
+    const destLine = (p: any): string | null => {
+      const links = parseProjectLinks(p.links || null);
+      if (links.filter((l) => !!l.url).length === 0) return "　・ご案内先：未登録";
+      const dest = pickPinnedDestination(links);
+      if (!dest) return "　・ご案内先：未登録";
+      const nm = (LINK_TYPES as any)[dest.link.type]?.name ?? dest.link.label;
+      const auto = getPrimaryLink(links) ? "" : "（自動）";
+      return `　・ご案内先：${nm}${auto}　${dest.link.url}`;
+    };
     const detail = (p: any) => [
       p.businessType ? `　・業種：${p.businessType}` : null,
       p.area ? `　・エリア：${p.area}` : null,
       p.target ? `　・届けたい方：${String(p.target).slice(0, 40)}` : null,
       p.strength ? `　・強み：${String(p.strength).slice(0, 60)}` : null,
+      destLine(p),
     ].filter(Boolean).join("\n");
 
     if (projects.length === 1) {
@@ -449,7 +462,7 @@ async function repliesForProfile(userId: number): Promise<unknown[]> {
       return [textWithQuick(
         "登録されている内容です。\n\n" + detail(p).replace(/^　/gm, "") +
         "\n\n登録し直したいときは「はじめの設定をやり直す」を押してください。",
-        [{ label: "はじめの設定をやり直す", data: "m=setup" }, ...MENU_HINT],
+        [{ label: "はじめの設定をやり直す", data: "m=setup" }, { label: "ご案内先を選ぶ", data: "c=pintgt" }, ...MENU_HINT],
       )];
     }
 
@@ -464,6 +477,7 @@ async function repliesForProfile(userId: number): Promise<unknown[]> {
       "\n\n内容を直すときは「はじめの設定をやり直す」を押して、直したいアカウントを選んでください。",
       [
         { label: "はじめの設定をやり直す", data: "m=setup" },
+        { label: "ご案内先を選ぶ", data: "c=pintgt" },
         { label: "アカウント連携", data: "m=connect" },
         ...MENU_HINT,
       ],
@@ -861,6 +875,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         { label: "Threadsアカウントを追加", data: "m=connect" },
         { label: "お店の情報を登録・やり直す", data: "m=setup" },
         { label: "ご案内先URLを登録", data: "c=seturl" },
+        { label: "ご案内先を選ぶ", data: "c=pintgt" },
         { label: "登録内容を見る", data: "m=profile" },
       ],
     )];
@@ -1382,6 +1397,72 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   // ── 公式LINEのURL登録：LINEトークの中だけで誘導先を持てるようにする ──
   //   カウンセリング全20問にURLの質問が無く、LINE完結のお客様は誘導先を
   //   一度も登録できなかった（固定投稿のコメントにも入れられない）。
+  // ── ご案内先を選ぶ（固定投稿のコメント欄・毎日の投稿の誘導に使うURL）──
+  //   自動判定（予約 > LINE > その他 > HP）はあくまで初期値。
+  //   どこに集めたいかはお客様ごとに違うため、ご自身で選べるようにする。
+  if (q.c === "pintgt") {
+    const usable = ((await db.getUserProjects(user.id)) || []).filter((pj: any) =>
+      !String(pj.id).startsWith("demo_") && pj.businessType,
+    );
+    if (usable.length >= 2 && !q.p) {
+      return [textWithQuick(
+        "どのお店のご案内先を変えますか？",
+        usable.slice(0, 10).map((pj: any) => ({ label: String(pj.storeName || pj.title || "お店").slice(0, 16), data: `c=pintgt&p=${pj.id}` })),
+      )];
+    }
+    const pj: any = q.p ? usable.find((x: any) => String(x.id) === String(q.p)) : usable[0];
+    if (!pj) return [textWithQuick("そのお店の情報が見つかりませんでした。", MENU_HINT)];
+    const { parseProjectLinks, LINK_TYPES, getPrimaryLink, setPrimaryLink, pickPinnedDestination } =
+      await import("../shared/projectLinks");
+    const links = parseProjectLinks(pj.links || null);
+    const filled = links.filter((l) => !!l.url);
+    const nm = (l: any) => (LINK_TYPES as any)[l.type]?.name ?? l.label;
+    if (filled.length === 0) {
+      return [textWithQuick(
+        "まだご案内先のURLが登録されていません。先に登録してください。",
+        [{ label: "ご案内先URLを登録", data: `c=seturl&p=${pj.id}` }, ...MENU_HINT],
+      )];
+    }
+    if (filled.length === 1) {
+      return [textWithQuick(
+        `ご案内先は「${nm(filled[0])}」の1つだけです。\n${filled[0].url}\n\n` +
+        "2つ以上ご登録いただくと、どこへご案内するかをお選びいただけます。",
+        [{ label: "ご案内先URLを登録", data: `c=seturl&p=${pj.id}` }, ...MENU_HINT],
+      )];
+    }
+    // 選択を保存する
+    if (q.l) {
+      const target = filled.find((l) => String(l.id) === String(q.l));
+      if (!target) return [textWithQuick("そのご案内先が見つかりませんでした。", [{ label: "選び直す", data: `c=pintgt&p=${pj.id}` }, ...MENU_HINT])];
+      await db.updateProject(String(pj.id), { links: JSON.stringify(setPrimaryLink(links, target.id)) } as any);
+      return [textWithQuick(
+        `ご案内先を「${nm(target)}」にしました。\n${target.url}\n\n` +
+        "これから作る固定投稿のコメント欄と、毎日の投稿の誘導に使われます。\n" +
+        "※ すでに投稿ずみの固定投稿の文章は変わりません。作り直すと新しいご案内先になります。",
+        [{ label: "固定投稿を作り直す", data: "m=makepin" }, { label: "選び直す", data: `c=pintgt&p=${pj.id}` }, ...MENU_HINT],
+      )];
+    }
+    // 一覧を出して選んでもらう
+    const chosen = getPrimaryLink(filled);
+    const dest = pickPinnedDestination(links);
+    const listed = filled.map((l) => `${l.id === (chosen?.id ?? dest?.link.id) ? "▶" : "・"}${nm(l)}：${l.url}`).join("\n");
+    return [textWithQuick(
+      `${String(pj.storeName || pj.title || "お店")}のご案内先です。\n${listed}\n\n` +
+      (chosen
+        ? "▶が、いまお選びいただいているご案内先です。"
+        : "▶は自動で選ばれているご案内先です。ご自身でお選びいただけます。") +
+      "\n固定投稿のコメント欄と、毎日の投稿の誘導に使われます。",
+      [
+        ...filled.slice(0, 5).map((l: any) => ({
+          label: `${nm(l)}へ`.slice(0, 20),
+          data: `c=pintgt&p=${pj.id}&l=${encodeURIComponent(l.id)}`,
+        })),
+        { label: "URLを追加する", data: `c=seturl&p=${pj.id}` },
+        { label: "やめる", data: "m=cancel" },
+      ],
+    )];
+  }
+
   if (q.c === "seturl") {
     const usable = ((await db.getUserProjects(user.id)) || []).filter((pj: any) =>
       !String(pj.id).startsWith("demo_") && pj.businessType,
@@ -1676,14 +1757,30 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
       ? links.map((l) => (l.type === kind ? { ...l, url: raw } : l))
       : [...links, { id: `${kind}_${Date.now().toString(36)}`, type: kind as any, label: typeName, url: raw, isDefault: true }];
     await db.updateProject(projectId, { links: JSON.stringify(next) } as any);
-    // 実際に固定投稿で使われる案内先が別なら、そのことも伝える（思い違いを防ぐ）
-    const dest = pickPinnedDestination(next as any);
-    const destNote = dest && dest.link.type !== kind
-      ? `\n\n※ 固定投稿のコメント欄には、いちばん申し込みに近い「${(LINK_TYPES as any)[dest.link.type]?.name ?? dest.link.label}」が使われます。`
-      : "";
+    // ★2本以上あるときは、どこへご案内するかをお選びいただく。
+    //   自動判定だけだと「LINEに集めたいのに予約が選ばれる」ことがある。
+    const filled = (next as any[]).filter((l) => !!l.url);
+    if (filled.length >= 2) {
+      const dest = pickPinnedDestination(next as any);
+      const nm = (l: any) => (LINK_TYPES as any)[l.type]?.name ?? l.label;
+      return [textWithQuick(
+        `${typeName}のURLを登録しました。\n${raw}\n\n` +
+        `ご案内先が${filled.length}つになりました。どこへご案内しますか？\n` +
+        "固定投稿のコメント欄と、毎日の投稿の誘導に使われます。" +
+        (dest ? `\n（いまは自動で「${nm(dest.link)}」が選ばれています）` : ""),
+        [
+          ...filled.slice(0, 5).map((l: any) => ({
+            label: `${nm(l)}へ`.slice(0, 20),
+            data: `c=pintgt&p=${projectId}&l=${encodeURIComponent(l.id)}`,
+          })),
+          { label: "別の種類も登録する", data: `c=seturl&p=${projectId}` },
+          { label: "あとで決める", data: "m=cancel" },
+        ],
+      )];
+    }
     return [textWithQuick(
       `${typeName}のURLを登録しました。\n${raw}\n\n` +
-      "毎日の投稿の誘導と、固定投稿のコメント欄のリンクに使われます。" + destNote,
+      "毎日の投稿の誘導と、固定投稿のコメント欄のリンクに使われます。",
       [{ label: "別の種類も登録する", data: `c=seturl&p=${projectId}` }, { label: "固定投稿を作る", data: "m=makepin" }, ...MENU_HINT],
     )];
   }
