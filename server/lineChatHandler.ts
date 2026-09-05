@@ -623,7 +623,19 @@ function askQuestion(st: CounselingState): unknown[] {
     ? `【${who}${st.step + 1}問目を直します】\n${q.prompt}`
     : `【${who}${st.step + 1}／${total}】\n${q.prompt}`;
   const hint = q.helper ? `\n\n${q.helper}` : "";
-  const skip = q.required ? "" : "\n\n（なければ下の「スキップ」を押してください）";
+  // ★例文を必ず出す。アプリ側には出ていたがLINEでは出ておらず、
+  //   「どう答えたらいいか分からない」と手が止まる原因になっていた（2026-09-06 津の国や様）。
+  const example = Array.isArray(q.examples) && q.examples[0] ? `\n\n${q.examples[0]}` : "";
+  // 選択式は、ボタンの名前だけでは違いが分からないので説明も添える
+  const choiceDesc = Array.isArray(q.choices)
+    ? (() => {
+        const lines = q.choices.filter((c: any) => c.description).map((c: any) => `${c.label}：${c.description}`);
+        return lines.length ? `\n\n${lines.join("\n")}` : "";
+      })()
+    : "";
+  // 「なし」で進める質問（任意、または必須でも allowEmptyShortcut）には、スキップの案内とボタンを出す
+  const canSkip = !q.required || !!q.allowEmptyShortcut;
+  const skip = canSkip ? "\n\n（なければ下の「スキップ」を押してください）" : "";
   const back = editing
     ? "\n\n（直すのをやめる場合は下の「戻る」を押してください）"
     : st.step > 0
@@ -632,9 +644,9 @@ function askQuestion(st: CounselingState): unknown[] {
   const choices: string[] = [];
   if (Array.isArray(q.choices)) for (const c of q.choices) choices.push(c.label);
   else if (Array.isArray(q.suggestions)) choices.push(...q.suggestions);
-  if (!q.required) choices.push("スキップ");
+  if (canSkip) choices.push("スキップ");
   if (editing || st.step > 0) choices.push("戻る");
-  return [textWithChoices(head + hint + skip + back, choices)];
+  return [textWithChoices(head + hint + example + choiceDesc + skip + back, choices)];
 }
 
 /**
@@ -695,7 +707,10 @@ async function advanceCounseling(userId: number, lineUserId: string, st: Counsel
     return askQuestion(st);
   }
   const skipped = /^(スキップ|なし|特になし)$/.test(a);
-  if (q.required && skipped) {
+  // ★「無ければ『なし』でOK」と案内している質問（allowEmptyShortcut）は、必須でも「なし」を受け取る。
+  //   受け取らないと、特典が無いお店の方が「なし」→「必要な項目です」の堂々巡りから出られない
+  //   （2026-09-06 に通しで確認して発覚。アプリ側はもともと「なし」で進めていた）。
+  if (q.required && skipped && !q.allowEmptyShortcut) {
     return [{ type: "text", text: "こちらは必要な項目です。おおよそで構いませんので、お答えください。" }, ...askQuestion(st)];
   }
   let stored = skipped ? "" : a.slice(0, 500);

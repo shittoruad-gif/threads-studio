@@ -20,6 +20,8 @@ export function splitToList(value: string): string[] {
     .split(/\r?\n|、|・|;|；/)
     .map((s) => s.trim())
     .filter((s) => s.length > 0)
-    .map((s) => s.replace(/^[-・*•\d]+\.?\s*/, ''))
+    // 先頭の箸書き記号と「1.」「2)」のような番号だけを落とす。
+    // ★数字そのものは落とさない：「4代目」→「代目」「12年営業」→「年営業」になっていた（2026-09-06）。
+    .map((s) => s.replace(/^(?:[-・*•]+|\d+[.)）:：]|[(（]\d+[)）])\s*/, ''))
     .filter((s) => s.length > 0);
 }

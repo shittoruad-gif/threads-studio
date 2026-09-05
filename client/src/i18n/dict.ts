@@ -420,7 +420,7 @@ export const dict: Record<string, string> = {
   "コピーできませんでした。手動で選択してコピーしてください": "Copy failed. Please select the text and copy manually.",
   "ダッシュボードに戻る": "Back to dashboard",
   "AIが「事実だけ」で書けるように、最初にカウンセリングを受けませんか？": "Answer a few questions first so AI writes using facts only",
-  "使ってよい数字・実例・メニュー・よくある質問・原体験・NG項目を最初に教えると、AIが勝手な数字や架空エピソードを作らず、全ジャンルのネタを正確に量産できます。全13問・約5分（「なし」ワンタップでスキップ可）。": "Tell us the numbers, real examples, menu, FAQs, personal stories and words to avoid. Then AI won't invent figures or fake stories, and can produce accurate posts on any topic. 13 questions, about 5 minutes (tap \"none\" to skip any).",
+  "使ってよい数字・実例・メニュー・よくある質問・原体験・NG項目を最初に教えると、AIが勝手な数字や架空エピソードを作らず、全ジャンルのネタを正確に量産できます。全20問・10〜15分（「なし」ワンタップでスキップ可）。": "Tell us the numbers, real examples, menu, FAQs, personal stories and words to avoid. Then AI won't invent figures or fake stories, and can produce accurate posts on any topic. 20 questions, 10–15 minutes (tap \"none\" to skip any).",
   "カウンセリングを始める": "Start the questions",
   "カウンセリング済み — 入力内容はいつでも修正できます": "Completed — you can edit your answers anytime",
   "確認・修正する": "Review / edit",

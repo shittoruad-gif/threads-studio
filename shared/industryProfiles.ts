@@ -31,7 +31,13 @@ export interface IndustryWords {
 }
 
 /** 質問IDごとの候補チップ・例文の差し替え */
-export type QuestionOverrides = Record<string, { suggestions?: string[]; examples?: string[] }>;
+export type QuestionOverrides = Record<string, {
+  suggestions?: string[];
+  examples?: string[];
+  /** 質問文そのものを差し替えたいとき（「施術のあと」が業種に合わない場合など） */
+  prompt?: string;
+  helper?: string;
+}>;
 
 /**
  * 業種の「大きなくくり」。言い回し（施術／レッスン等）と、
@@ -81,7 +87,36 @@ const PROFILES: IndustryProfile[] = [
     label: '治療院・整体',
     match: ['整体', '整骨', '接骨', '鍼灸', 'はり', 'きゅう', 'カイロ', '治療院', 'マッサージ', 'もみほぐし', 'リラクゼーション', '柔道整復'],
     words: { service: '施術', customer: '患者さん', shop: '自院', visit: '来店' },
-    q: {},
+    // ★業種を問わない質問（実績・特典・きっかけ・NG・口調）の既定文は中立にしたので、
+    //   治療院向けの候補はここに置く（呉服店に「薬機法」「Jリーガー担当歴」が出ないように）。
+    q: {
+      brandVoiceRaw: {
+        examples: [
+          '例：「○○さん、最近肩はどうですか？前より動かしやすくなったって聞いて嬉しかったです」',
+          '例：「正直、湿布貼ってるだけじゃ良くならんよ。原因はそこじゃないから」',
+        ],
+      },
+      hoursInfoRaw: {
+        suggestions: ['平日 9:00〜20:00', '土日祝も営業', '定休日：日曜', '定休日：不定休', '完全予約制', '当日予約OK', 'LINEで予約できます', '電話・Webから予約できます', '駐車場あり'],
+        examples: ['例：「平日9時〜20時／土曜は17時まで」「定休日：日曜・祝日」「LINEか電話で予約（当日OK）」'],
+      },
+      realProofsRaw: {
+        suggestions: ['営業〇年', 'のべ担当〇〇〇〇名', 'Google口コミ★4.〇', 'リピート率〇%', 'メディア掲載：〇〇', '資格：〇〇認定', 'スポーツ選手担当歴あり', '受賞歴：〇〇賞'],
+        examples: ['例：「12年営業」「のべ4000名担当」「Google口コミ4.8」', '例：「某Jリーガー担当歴あり」「テレビ〇〇局で紹介」'],
+      },
+      ctaAssetsRaw: {
+        suggestions: ['LINE登録で〇〇を無料配布（PDF/動画）', '初回〇〇分カウンセリング無料', 'セルフケア動画〇本プレゼント', 'チェックリストPDF配布', '初回限定割引', 'お試し体験〇〇円'],
+        examples: ['例：「LINE登録で姿勢セルフチェック動画3本」', '例：「初回30分カウンセリング無料」'],
+      },
+      originStoryRaw: {
+        suggestions: ['自分や家族のケガ・不調がきっかけ', '前職（病院/サロン等）で「もっとこうしたい」と感じた', '恩師・師匠との出会い', 'お客さんの「人生が変わった」の一言が忘れられない', '地元に貢献したい気持ちから', 'スポーツでの経験を活かしたい'],
+        examples: ['例：「自分が腰を痛めて何院も回って治らず、最後に救われた経験から、同じ人を助けたくて開業しました」'],
+      },
+      ngListRaw: {
+        suggestions: ['「治る」「効く」など断定表現は使わない（薬機法/あはき法）', '「先着〇名」のような捏造はしない', '「予約パンパン」「キャンセル待ち」など事実でない盛り表現はしない', 'お客様の顔写真は載せない方針', '業界批判・他店批判はしない', '〇〇円という具体的な料金は載せない', '個人名は出さない（仮名のみ）', '医療行為を暗示する表現は使わない'],
+        examples: ['例：「治る・改善するは薬機法でNG」「他店をディスらない」'],
+      },
+    },
   },
 
   // ───────── 美容 ─────────
@@ -410,9 +445,15 @@ const PROFILES: IndustryProfile[] = [
   {
     key: 'retail',
     label: '小売・ネットショップ',
-    match: ['小売', '物販', '雑貨', 'ショップ', 'ネットショップ', 'EC', '花屋', 'フラワー', '書店', '販売', 'アパレル', '古着'],
+    match: ['小売', '物販', '雑貨', 'ショップ', 'ネットショップ', 'EC', '花屋', 'フラワー', '書店', '販売', 'アパレル', '古着',
+      '呉服', '着物', 'きもの', '和装', '和服', '宝石', 'ジュエリー', '時計', '眼鏡', 'メガネ', '家具', '酒屋', '酒店', '米屋', '茶舗', '専門店'],
     words: { service: '商品', customer: 'お客様', shop: 'お店', visit: '来店' },
     q: {
+      benefitsDailyRaw: {
+        prompt: 'お客さんが「買ってよかった」と感じるのは、どんなときですか？',
+        suggestions: ['贈り物選びで迷わなくなる', '部屋の雰囲気が変わる', '気分が上がる', '相談できる店ができる'],
+        examples: ['例：「贈り物のたびに悩まなくなった、と言っていただけます」'],
+      },
       targetRaw: {
         suggestions: ['贈り物を探している方', '自分へのご褒美を探す方', '同じ趣味を持つ方', '子育て中の家庭', '地元のお客様'],
         examples: ['例：「大切な人への贈り物を、量販店以外で探している30〜40代」'],
@@ -436,10 +477,6 @@ const PROFILES: IndustryProfile[] = [
       realEpisodesRaw: {
         suggestions: ['贈り物を探していた方／相手に喜ばれた', '遠方の方／写真で選んで満足してくれた', '毎年同じ時期に来てくれる方'],
         examples: ['例：「毎年、奥様の誕生日に来てくださる方がいます」'],
-      },
-      benefitsDailyRaw: {
-        suggestions: ['贈り物選びで迷わなくなる', '部屋の雰囲気が変わる', '気分が上がる', '相談できる店ができる'],
-        examples: ['例：「贈り物のたびに悩まなくなった、と言っていただけます」'],
       },
       faqRaw: {
         suggestions: ['取り置きはできますか？', '配送はできますか？', 'ラッピングはできますか？', '当日でも間に合いますか？', '予算を伝えれば選んでもらえますか？', '駐車場はありますか？'],
@@ -615,6 +652,51 @@ const SUBTYPES: IndustrySubtype[] = [
     q: { menuRaw: { suggestions: ['定番商品', '季節限定商品', 'ギフトセット', '定期便', '送料無料ライン', 'ラッピング'] },
          faqRaw: { suggestions: ['送料はいくらですか？', 'いつ届きますか？', '返品はできますか？', 'ギフト包装はできますか？', '支払い方法は何がありますか？'] } } },
   { key: 'apparel', label: 'アパレル・雑貨', group: 'retail', match: ['アパレル', '古着', '洋服', '雑貨', '書店', 'ショップ'], q: {} },
+  // ★呉服店（津の国や様・2026-09-06）。実際に答えていただいた内容に沿って候補を用意した。
+  //   「敷居が高い」「お茶・お琴・踊りのお稽古」「正絹」「誂え」「創業130年」。
+  { key: 'kimono', label: '呉服店・着物', group: 'retail', match: ['呉服', '着物', 'きもの', '和装', '和服'],
+    words: { visit: 'ご来店' },
+    q: {
+      targetRaw: {
+        // ★LINEのボタンは20文字で切れるので、候補は20文字以内にする
+        suggestions: ['お茶・お琴・舞踊のお稽古の方', 'お茶会・発表会に着物で出る方', '成人式・結婚式を控えたご家族', '親の着物を受け継いだ方', '着物を日常で楽しみたい方', '本物の素材にこだわる方'],
+        examples: ['例：「お茶やお琴のお稽古で、年に数回は着物を着る50〜70代の女性」'],
+      },
+      mainProblemRaw: {
+        suggestions: ['敷居が高くて入りづらい', '何を選べばいいか分からない', '寸法が合うか不安', 'お手入れ・保管のしかたが分からない', '値段が分からず不安', '親の着物を着られるか知りたい'],
+        examples: ['例：「呉服屋さんは敷居が高そうで、入る勇気が出ない」'],
+      },
+      strengthRaw: {
+        suggestions: ['本物の正絹を扱っている', '着る場面に合わせて誂えられる', '見るだけ・相談だけでも歓迎', 'お手入れ・お直しまで相談できる', '地元で長く続いている', '無理に勧めない'],
+        examples: ['例：「見るだけ・ご相談だけでも大歓迎。創業130年、4代にわたって地元で続けています」'],
+      },
+      uspRaw: {
+        suggestions: ['創業〇年の信頼', 'お稽古ごとの装いに強い', '誂え（オーダー）ができる', 'お直し・お手入れまで一貫', '無理に勧めない接客', '品ぞろえのこだわり（正絹など）'],
+        examples: ['例：「お茶会・発表会の装いを、着る場面から一緒に選べる呉服店は少ないです」'],
+      },
+      menuRaw: {
+        suggestions: ['誂え（オーダーの着物）', '訪問着・付け下げ', '小紋・紬', '帯・帯締めなどの小物', '浴衣', 'お直し・お手入れ・丸洗い', '着付け', 'レンタル'],
+        examples: ['例：「お茶会向けの訪問着」「帯のお直し」「浴衣の仕立て」'],
+      },
+      realEpisodesRaw: {
+        suggestions: ['お稽古を始めた方／初めての一枚を選んだ', 'お母様の着物／直して娘さんが着た', '発表会前／一式そろえて喜ばれた'],
+        examples: ['例：「お母様の着物を寸法直しして、娘さんが発表会で着てくださった」'],
+      },
+      benefitsDailyRaw: {
+        prompt: 'お客さんが「着物を持っていて良かった」と感じるのは、どんなときですか？',
+        suggestions: ['お茶会や発表会に自信を持って出られる', '季節の行事が楽しみになる', '親の着物をまた着られる', '着物で出かける機会が増える', '相談できるお店ができて安心'],
+        examples: ['例：「お稽古のたびに着るのが楽しみになった、と言っていただけます」'],
+      },
+      faqRaw: {
+        suggestions: ['見るだけでも大丈夫ですか？', '予算はどのくらいから？', '親の着物は着られますか？', '仕立てにどのくらいかかりますか？', 'お手入れはどうすれば？', '着付けもお願いできますか？', '駐車場はありますか？'],
+        examples: ['例：「見るだけでもいい？」「予算はどのくらい？」「母の着物は着られる？」'],
+      },
+      industryMythsRaw: {
+        suggestions: ['敷居が高いお店にはしたくない', '高いものを勧めるだけの売り方は違うと思う', '着物は特別な日だけのものではない', '昔は品数で勝負しようとしていた'],
+        examples: ['例：「着物は特別な日だけのもの、という思い込みをなくしたい」'],
+      },
+    },
+  },
 ];
 
 /** どの業種にも当てはまらないときの中立の内容。治療院の内容は使わない。 */
@@ -720,10 +802,12 @@ export function applyIndustryOverrides(
   const { group, subtype } = detectIndustry(businessTypeRaw);
   const w: IndustryWords = { ...group.words, ...(subtype?.words ?? {}) };
   const subHasOverrides = Object.keys(subtype?.q ?? {}).length > 0;
+  const groupHasOverrides = Object.keys(group.q ?? {}).length > 0;
   const unchanged = group.key === 'bodywork'
     && JSON.stringify(w) === JSON.stringify(group.words)
-    && !subHasOverrides;
-  if (unchanged) return questions; // 整体院はもともとの文面がそのまま正しい
+    && !subHasOverrides
+    && !groupHasOverrides;
+  if (unchanged) return questions; // 差し替えるものが何も無ければ、そのまま
   return questions.map((q) => {
     const id = q.id as string;
     // 細かい業種 → くくり → 既定文（言い回しだけ差し替え）の順に重ねる。
@@ -732,8 +816,8 @@ export function applyIndustryOverrides(
     const o = { ...(group.q[id] ?? {}), ...(subtype?.q?.[id] ?? {}) };
     return {
       ...q,
-      prompt: reword(q.prompt, w) as string,
-      helper: reword(q.helper, w),
+      prompt: o.prompt ?? (reword(q.prompt, w) as string),
+      helper: o.helper ?? reword(q.helper, w),
       suggestions: o.suggestions ?? q.suggestions?.map((x) => reword(x, w) as string),
       examples: o.examples ?? q.examples?.map((x) => reword(x, w) as string),
     };

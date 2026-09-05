@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { COUNSELING_QUESTIONS } from "../shared/counseling";
-import { applyIndustryOverrides, detectIndustryProfile } from "../shared/industryProfiles";
+import { applyIndustryOverrides, detectIndustry, detectIndustryProfile } from "../shared/industryProfiles";
 
 const q = (qs: any[], id: string) => qs.find((x) => x.id === id)!;
 const all = (qs: any[]) => JSON.stringify(qs);
@@ -34,8 +34,46 @@ describe("業種の判定", () => {
 });
 
 describe("業種に合わせた出し分け", () => {
-  it("治療院はこれまでの文面のまま変わらない", () => {
-    expect(applyIndustryOverrides(COUNSELING_QUESTIONS, "整体院")).toEqual(COUNSELING_QUESTIONS);
+  it("治療院には治療院向けの候補が出る（質問文・並びは変わらない）", () => {
+    const qs = applyIndustryOverrides(COUNSELING_QUESTIONS, "整体院");
+    expect(qs.map((x) => x.prompt)).toEqual(COUNSELING_QUESTIONS.map((x) => x.prompt));
+    expect(q(qs, "menuRaw").suggestions).toContain("骨盤矯正");
+    expect(q(qs, "ngListRaw").suggestions?.join("\n")).toContain("薬機法");
+    expect(q(qs, "realProofsRaw").suggestions).toContain("スポーツ選手担当歴あり");
+  });
+
+  it("呉服店には着物の候補が出て、整体・薬機法の話は出ない", () => {
+    for (const t of ["呉服店", "呉服小売店", "着物屋", "きもの専門店"]) {
+      const qs = applyIndustryOverrides(COUNSELING_QUESTIONS, t);
+      expect(detectIndustry(t).subtype?.key, t).toBe("kimono");
+      expect(q(qs, "mainProblemRaw").suggestions, t).toContain("敷居が高くて入りづらい");
+      expect(q(qs, "benefitsDailyRaw").prompt, t).toContain("着物を持っていて良かった");
+      const text = all(qs);
+      for (const ng of ["骨盤矯正", "薬機法", "Jリーガー", "施術", "患者さん", "冷え・むくみ"]) {
+        expect(text, `${t}/${ng}`).not.toContain(ng);
+      }
+    }
+  });
+
+  it("業種を問わない質問の既定文に、治療院だけの話が残っていない", () => {
+    // 呉服店やカフェの方に「薬機法」「Jリーガー」「セルフケア動画」が出ていた（2026-09-06 津の国や様）
+    const qs = applyIndustryOverrides(COUNSELING_QUESTIONS, "なにか別の仕事");
+    const text = all(qs);
+    for (const ng of ["薬機法", "あはき法", "Jリーガー", "セルフケア動画", "ケガ・不調", "医療行為", "湿布"]) {
+      expect(text, ng).not.toContain(ng);
+    }
+  });
+
+  it("質問文に内部の言葉（型の名前・CTAなど）が出ない", () => {
+    // お客様が読む文なので、社内の呼び名は使わない（答えるのに迷う原因になっていた）
+    const internal = ["常識を覆す型", "仮想敵型", "Why me", "CTA", "心理トリガー", "ベネフィット", "Q&A型", "ストーリー型", "煽り表現"];
+    for (const t of ["整体院", "呉服店", "カフェ", "なにか別の仕事"]) {
+      for (const question of applyIndustryOverrides(COUNSELING_QUESTIONS, t)) {
+        if (question.ui === "choice" || question.ui === "multi-choice") continue; // 選択肢の名前は別
+        const text = `${question.prompt}\n${question.helper ?? ""}`;
+        for (const ng of internal) expect(text, `${t}/${question.id}/${ng}`).not.toContain(ng);
+      }
+    }
   });
 
   it("カフェには治療院の候補も言い回しも出さない", () => {
