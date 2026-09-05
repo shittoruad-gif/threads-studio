@@ -120,10 +120,63 @@ export interface MetaAiCallSource {
   storeName?: string | null;
   businessType?: string | null;
   area?: string | null;
+  /** 最寄り駅など（はじめの設定の地域補足）。「新倉敷駅から車で7分」のような行 */
+  localTerms?: string | null;
   target?: string | null;
   mainProblem?: string | null;
   /** 主なメニュー（先頭を使う） */
   menu?: string[] | null;
+}
+
+
+/**
+ * 呼びかけ投稿に入れる地域の呼び名。★市より細かくする（2026-09-06 三上様指示「倉敷だと広すぎる」）。
+ *   「岡山県倉敷市玉島」＋「JR新倉敷駅から車で約7分」 → 「新倉敷・玉島」
+ *   「浅口市金光町占見新田283-1」＋「金光駅…鴨方駅…」   → 「金光町・鴨方」
+ *   「埼玉県川口市戸塚安行駅、東川口駅」                 → 「戸塚安行・東川口」
+ *   町名も駅も無ければ市区町村（「倉敷市」）、それも無ければ都道府県。
+ */
+export function callAreaLabel(area: string | null | undefined, localTerms?: string | null): string {
+  const raw = String(area || '').trim();
+  const pref = raw.match(/^(.+?[都道府県])/)?.[1] ?? '';
+  const rest = raw.replace(/^(.+?[都道府県])/, '');
+  // 市区町村。「廿日市市」「市川市」のように名前に「市」を含む市に対応（2文字以上＋市、直後が市でない）
+  const cityM = rest.match(/^(.{1,}?[市郡])(?![市])((?:[^\s]{1,4}?区)?)/);
+  const city = cityM ? cityM[1] + (cityM[2] || '') : (rest.match(/^(.+?[区町村])/)?.[1] ?? '');
+  let town = city ? rest.slice(city.length) : rest;
+  // 地域欄に駅が列挙されていれば駅として扱う
+  const stationsFromArea: string[] = [];
+  const reA = /([^\s、,・／/]+?)駅/g;
+  let ma: RegExpExecArray | null;
+  while ((ma = reA.exec(town)) !== null) stationsFromArea.push(ma[1]);
+  if (stationsFromArea.length > 0) town = '';
+  // 丁目・番地・数字・建物名を落とす
+  town = town.replace(/[0-9０-９]+.*$/, '').replace(/(丁目|番地|番|号).*$/, '').replace(/[\s、,・／/].*$/, '').trim();
+  // 「金光町占見新田」のような二段の町名は先頭の町だけ
+  const tm = town.match(/^(.+?[町村])(.*)$/);
+  if (tm && tm[1].length >= 2 && tm[1].length <= 5) town = tm[1];
+  if (town.length > 6) town = town.slice(0, 6);
+  // 最寄り駅（地域補足から）
+  const stations: string[] = [];
+  const reS = /(?:JR|ＪＲ)?\s*([^\s、,・／/（(]+?)駅/g;
+  const lt = String(localTerms || '');
+  let ms: RegExpExecArray | null;
+  while ((ms = reS.exec(lt)) !== null) {
+    const name = ms[1].replace(/^(JR|ＪＲ)/, '').trim();
+    if (name && name.length <= 6 && !stations.includes(name)) stations.push(name);
+  }
+  for (const sname of stationsFromArea) if (!stations.includes(sname)) stations.push(sname);
+  const townCore = town.replace(/[町村]$/, '');
+  const useStations = stations
+    .filter((st) => !(town && (town.includes(st) || (townCore && st.includes(townCore)))))
+    .slice(0, town ? 1 : 2);
+  const bad = (x: string) => /[。、．]|です|ます|修正|回答/.test(x) || x.length > 10;
+  if (useStations.length > 0) { const lbl = [...useStations, ...(town ? [town] : [])].join('・'); return bad(lbl) ? '' : lbl; }
+  // 駅が無いときは、短い町名だけだと分かりにくいので市区名を前に付ける（倉敷市玉島／倉敷市中央）
+  if (town) { const lbl = town.length <= 3 && city ? `${city}${town}` : town; return bad(lbl) ? '' : lbl; }
+  if (city) return bad(city) ? '' : city;
+  const pf = pref.replace(/[都道府県]$/, '');
+  return pf && !bad(pf) ? pf : '';
 }
 
 /** 「30〜50代の女性」「デスクワークの会社員」のような短い呼び名に整える */
@@ -141,25 +194,25 @@ function shortTarget(t: string | null | undefined): string {
 function shortProblem(p: string | null | undefined): string {
   const s = String(p || '').replace(/[。．]/g, '').trim();
   if (!s) return '';
-  const head = s.split(/[、,・／/]/)[0].trim();
+  const head = s.split(/[、,・／/\r\n]/)[0].trim();
   if (head.length > 20) return '';
   if (/(ない|たい|らない|れない|くる|する|なる|える|ある|いる|う|く|す|つ|む|る)$/.test(head)) return '';
   return head;
 }
 
 /**
- * 業種名を「マシンピラティス」「整体」「カフェ」のような呼び名に。
- * 括弧書きを落とし、「スタジオ」「院」など場所を表す語尾を外す（「整体院ができるところ」を防ぐ）。
- * メニュー名は使わない（登録のばらつきが大きく、「予約制」のような語が混ざるため）。
+ * 業種名を「マシンピラティススタジオ」「整体院」「カフェ」のように。括弧書きを落とし、
+ * 「整骨院・接骨院」のような列挙は先頭だけ。メニュー名は使わない（「予約制」のような語が混ざるため）。
  */
 function serviceWord(src: MetaAiCallSource): string {
   let bt = String(src.businessType || '').replace(/[（(][^）)]*[）)]/g, '').trim();
-  bt = bt.replace(/(スタジオ|教室|サロン|院|店|事務所)$/, '').trim() || bt;
+  bt = bt.split(/[・／/、,]/)[0].trim();
+  if (/[。．]|です|ます/.test(bt)) return '';
   return bt.length > 0 && bt.length <= 14 ? bt : '';
 }
 
 export function buildMetaAiCallPost(src: MetaAiCallSource, dayIndex: number): string | null {
-  const area = shortAreaName(src.area);
+  const area = callAreaLabel(src.area, src.localTerms);
   const store = String(src.storeName || '').trim();
   const storeOk = store.length > 0 && store.length <= 16;
   const target = shortTarget(src.target);

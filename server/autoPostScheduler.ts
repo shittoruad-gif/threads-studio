@@ -951,6 +951,7 @@ async function scheduleMetaAiCallPost(
   } catch { menu = null; }
   const text = buildMetaAiCallPost({
     storeName: (project as any).storeName, businessType: project.businessType, area: project.area,
+    localTerms: (project as any).localTerms,
     target: project.target, mainProblem: project.mainProblem, menu,
   }, dayIndex);
   if (!text) { console.log(`[AutoPost] Meta AI呼びかけ投稿: 材料不足のため見送り project=${project.id}`); return false; }

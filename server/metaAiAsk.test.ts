@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateMetaAiAsk, META_AI_ASK_ANGLES, buildMetaAiAskPrompt, shortAreaName, buildMetaAiCallPost } from "../shared/metaAiAsk";
+import { validateMetaAiAsk, META_AI_ASK_ANGLES, buildMetaAiAskPrompt, shortAreaName, buildMetaAiCallPost, callAreaLabel } from "../shared/metaAiAsk";
 
 describe("Meta AIに聞く返信：質問の検査", () => {
   it("正しい形はそのまま通る", () => {
@@ -76,12 +76,43 @@ describe("Meta AI 呼びかけ投稿（本文が @meta.ai ＋依頼文）", () =
     expect(t2).not.toContain("戻らないに悩む");
     expect(t2).toContain("デスクワークの30〜50代に");
   });
-  it("業種の括弧書きと「スタジオ」「院」は落とす", () => {
+  it("業種の括弧書きは落とし、「・」の列挙は先頭だけ", () => {
     const t = buildMetaAiCallPost({ businessType: "マシンピラティススタジオ（整体・美容鍼併設）", area: "岡山県倉敷市玉島" }, 1)!;
-    expect(t).toBe("@meta.ai 倉敷市でマシンピラティスのおすすめを教えて");
-    expect(buildMetaAiCallPost({ businessType: "整体院", area: "倉敷市" }, 1)).toBe("@meta.ai 倉敷市で整体のおすすめを教えて");
+    expect(t).toBe("@meta.ai 倉敷市玉島でマシンピラティススタジオのおすすめを教えて");
+    expect(buildMetaAiCallPost({ businessType: "整骨院・接骨院", area: "倉敷市" }, 1)).toBe("@meta.ai 倉敷市で整骨院のおすすめを教えて");
   });
   it("材料が無くても「強みを伝えて」型は作れる", () => {
     expect(buildMetaAiCallPost({}, 0)).toBe("@meta.ai うちのお店の強みを、来店されたことのない人に伝えて");
+  });
+});
+
+describe("呼びかけ投稿の地域名は市より細かく（三上様指示 2026-09-06）", () => {
+  it("町名＋最寄り駅", () => {
+    expect(callAreaLabel("岡山県倉敷市玉島", "玉島中央町\nJR新倉敷駅から車で約7分")).toBe("新倉敷・玉島");
+    expect(callAreaLabel("浅口市金光町占見新田283-1", "金光駅から徒歩約6分\n金光町占見新田\n鴨方駅\n笠岡駅")).toBe("鴨方・金光町");
+    expect(callAreaLabel("岡山県倉敷市玉島乙島", "玉島乙島\n新倉敷駅から車で約12分")).toBe("新倉敷・玉島乙島");
+  });
+  it("地域欄に駅が書かれていれば駅名を使う", () => {
+    expect(callAreaLabel("埼玉県川口市戸塚安行駅、東川口駅", null)).toBe("戸塚安行・東川口");
+  });
+  it("番地・丁目は落とす。町名だけのときは町名", () => {
+    expect(callAreaLabel("広島県廿日市市天神4-10", "")).toBe("廿日市市天神");
+    expect(callAreaLabel("茨城県土浦市神立中央1丁目", null)).toBe("神立中央");
+    expect(callAreaLabel("岡山市北区京橋町", null)).toBe("岡山市北区京橋町");
+    expect(callAreaLabel("岡山県倉敷市中央", null)).toBe("倉敷市中央");
+  });
+  it("町名も駅も無ければ市、それも無ければ都道府県。文章が入った登録は使わない", () => {
+    expect(callAreaLabel("倉敷市", null)).toBe("倉敷市");
+    expect(callAreaLabel("神奈川県", null)).toBe("神奈川");
+    expect(callAreaLabel("岡山市北区の整体院です。腰痛が得意です。", null)).toBe("");
+  });
+  it("悩みが改行区切りなら先頭だけ", () => {
+    const t = buildMetaAiCallPost({ businessType: "整骨院", area: "倉敷市玉島", mainProblem: "繰り返す腰痛\n猫背" }, 2)!;
+    expect(t).toContain("繰り返す腰痛に悩む人");
+    expect(t).not.toContain("猫背");
+  });
+  it("投稿文に細かい地域名が入る", () => {
+    const t = buildMetaAiCallPost({ businessType: "マシンピラティススタジオ", area: "岡山県倉敷市玉島", localTerms: "JR新倉敷駅から車で約7分", storeName: "Moveact玉島店" }, 0)!;
+    expect(t).toBe("@meta.ai 新倉敷・玉島周辺の人に、うちのお店（Moveact玉島店）を届けて");
   });
 });
