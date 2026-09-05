@@ -245,9 +245,36 @@ export default function AdminUsers() {
                     <span className={`px-2 py-1 text-xs font-semibold rounded-full whitespace-nowrap ${sb.cls}`}>{sb.label}</span>
                   </TableCell>
                   <TableCell className="text-center">
-                    {u.threadsAccountCount > 0
-                      ? <span className="font-medium">{u.threadsAccountCount}</span>
-                      : <span className="text-muted-foreground/50">0</span>}
+                    {/* ★数だけでなく、どのアカウントかを表示（2026-09-05 三上様指示） */}
+                    {u.threadsAccountCount > 0 ? (
+                      <div className="space-y-0.5">
+                        {(u.threadsAccounts ?? []).map((a: any) => {
+                          const exp = a.tokenExpiresAt ? new Date(a.tokenExpiresAt) : null;
+                          const daysLeft = exp ? Math.floor((exp.getTime() - Date.now()) / 86400000) : null;
+                          const warn = daysLeft !== null && daysLeft <= 14;
+                          return (
+                            <div key={a.id} className="text-xs whitespace-nowrap">
+                              <a
+                                href={`https://www.threads.com/@${a.username}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-medium text-blue-700 hover:underline"
+                              >
+                                @{a.username}
+                              </a>
+                              {a.storeName && <span className="text-muted-foreground">（{a.storeName}）</span>}
+                              {warn && (
+                                <span className="ml-1 text-amber-700" title={`連携の有効期限 ${exp!.toLocaleDateString('ja-JP')}`}>
+                                  期限{daysLeft! < 0 ? '切れ' : `残${daysLeft}日`}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground/50">未連携</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {/* ★このボタンは「押すと反転」する。以前は ON のときに「モニター」とだけ出ていたため、

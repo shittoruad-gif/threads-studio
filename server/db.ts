@@ -2100,22 +2100,43 @@ export async function getAllUsers() {
     }
   }
 
-  // 連携中（有効）Threadsアカウント数
+  // 連携中（有効）Threadsアカウント。★数だけでなく、どのアカウントかを管理画面で見られるようにする
+  //   （2026-09-05 三上様指示：誰がどのアカウントをつないでいるかをこちらから確認したい）。
   const acctRows = await db.select({
+    id: threadsAccounts.id,
     userId: threadsAccounts.userId,
-    count: sql<number>`count(*)`,
-  }).from(threadsAccounts).where(eq(threadsAccounts.isActive, true)).groupBy(threadsAccounts.userId);
-  const acctByUser = new Map<number, number>();
-  for (const a of acctRows) acctByUser.set(a.userId, Number(a.count));
+    username: threadsAccounts.threadsUsername,
+    threadsUserId: threadsAccounts.threadsUserId,
+    tokenExpiresAt: threadsAccounts.tokenExpiresAt,
+    defaultProjectId: threadsAccounts.defaultProjectId,
+    createdAt: threadsAccounts.createdAt,
+  }).from(threadsAccounts).where(eq(threadsAccounts.isActive, true)).orderBy(threadsAccounts.createdAt);
+  const projectRows = await db.select({ id: projects.id, storeName: projects.storeName, title: projects.title }).from(projects);
+  const storeById = new Map<string, string>();
+  for (const p of projectRows) storeById.set(String(p.id), String(p.storeName || p.title || ''));
+  const acctsByUser = new Map<number, Array<{ id: number; username: string; storeName: string | null; tokenExpiresAt: Date | null; connectedAt: Date | null }>>();
+  for (const a of acctRows) {
+    const arr = acctsByUser.get(a.userId) || [];
+    arr.push({
+      id: a.id,
+      username: String(a.username || a.threadsUserId || ''),
+      storeName: a.defaultProjectId ? (storeById.get(String(a.defaultProjectId)) || null) : null,
+      tokenExpiresAt: a.tokenExpiresAt ?? null,
+      connectedAt: a.createdAt ?? null,
+    });
+    acctsByUser.set(a.userId, arr);
+  }
 
   return userRows.map((u) => {
     const sub = subByUser.get(u.id);
+    const accts = acctsByUser.get(u.id) ?? [];
     return {
       ...u,
       planId: sub?.planId ?? null,
       subscriptionStatus: sub?.status ?? null,
       trialEndsAt: sub?.trialEndsAt ?? null,
-      threadsAccountCount: acctByUser.get(u.id) ?? 0,
+      threadsAccountCount: accts.length,
+      threadsAccounts: accts,
     };
   });
 }
