@@ -28,7 +28,20 @@ const db = await import("../../server/db");
 const d = await db.getDb();
 if (!d) { console.error("DBに接続できません"); process.exit(1); }
 const { sql } = await import("drizzle-orm");
-const rows: any = await d.execute(sql`SELECT id, name, email FROM users WHERE email IS NOT NULL AND email <> '' AND emailVerified = 1 AND COALESCE(emailOptOut,0) = 0 AND email NOT LIKE '%example.%' AND email NOT LIKE '%@test.%' AND email NOT LIKE '%@threads-studio.com' AND email <> 'shittoru.ad@gmail.com' ORDER BY id`);
+// 宛先：配信停止でない実在のお客様。メール未認証でも「有料契約あり／公式LINE連携あり／紹介コード適用あり」なら送る
+//（セミナー参加で登録した方は未認証のままが多い）。誰とも接点の無い未認証アカウントは送らない。
+const rows: any = await d.execute(sql`
+  SELECT u.id, u.name, u.email FROM users u
+  WHERE u.email IS NOT NULL AND u.email <> '' AND COALESCE(u.emailOptOut,0) = 0
+    AND u.email NOT LIKE '%example.%' AND u.email NOT LIKE '%@test.%'
+    AND u.email NOT LIKE '%@threads-studio.com' AND u.email NOT IN ('shittoru.ad@gmail.com','shittoru@s-toru.com')
+    AND (
+      u.emailVerified = 1
+      OR EXISTS (SELECT 1 FROM subscriptions s WHERE s.userId = u.id AND s.planId <> 'free' AND s.status IN ('active','trialing'))
+      OR EXISTS (SELECT 1 FROM userLineLinks l WHERE l.userId = u.id)
+      OR EXISTS (SELECT 1 FROM userCoupons c WHERE c.userId = u.id)
+    )
+  ORDER BY u.id`);
 const list: Array<{ id: number; name: string; email: string }> = ((rows as any)[0] ?? []).map((r: any) => ({ id: Number(r.id), name: String(r.name ?? ""), email: String(r.email) }));
 console.log(`件名: ${subject}\n宛先 ${list.length} 名`);
 for (const u of list) console.log(`  ${u.id}\t${u.name}\t${u.email}`);
