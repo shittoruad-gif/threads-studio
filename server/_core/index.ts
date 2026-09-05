@@ -521,6 +521,13 @@ async function startServer() {
           }
         }
         if (!user) {
+          // ★UnivaPayストアは他事業（交通事故コンサル・LP制作・Keiro等）と共用。
+          //   Threads Studioのプラン金額に一致しない決済は他事業のもの＝記録だけして終わる。
+          //   （2026-09-04: 交通事故対応ルームの支払いを「未登録メール」と誤って追いかけた）
+          if (!matchedPlanId) {
+            console.log(`[Univapay Webhook] 他事業の決済のため無視: email=${email} amount=${amount} link=${data?.metadata?.['univapay-link-id'] ?? '-'}`);
+            return res.json({ received: true, note: 'not a threads-studio plan' });
+          }
           console.warn(`[Univapay Webhook] 未登録メール: ${email}（決済したがアプリ未登録の可能性）`);
           // ★UnivaPayストアは他事業（LP制作・Keiro等）と共用のため、Threads Studioの
           //   プラン金額に一致しない決済は他事業のもの＝通知しない（ノイズ防止）。

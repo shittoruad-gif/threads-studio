@@ -1617,6 +1617,21 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       [{ label: "元に戻す", data: `s=auto&v=${q.v === "on" ? "off" : "on"}${a}` }, ...MENU_HINT],
     )];
   }
+  // ── 「Meta AIに聞く」返信の ON/OFF（shared/metaAiAsk.ts）──
+  if (q.s === "metaai") {
+    const on = q.v === "on";
+    await db.updateAutoPostSettings(user.id, { metaAiAskEnabled: on });
+    return [textWithQuick(
+      (on
+        ? "「Meta AIに聞く」返信をONにしました。\n\n" +
+          "豆知識・よくある誤解などの投稿を公開した直後に、その話題の一般的な質問を @meta.ai 宛てに1件返信します。" +
+          "Meta AIが公開で答えるので、投稿の下にすぐ会話ができます。\n" +
+          "お店や施術のことは聞きません。1日1回までです。"
+        : "「Meta AIに聞く」返信を止めました。") +
+      "\n\n間違えた場合は「元に戻す」を押してください。",
+      [{ label: "元に戻す", data: `s=metaai&v=${on ? "off" : "on"}` }, ...MENU_HINT],
+    )];
+  }
   if (q.s === "appr") {
     const target = await ownedAccountOrNull(user.id, q.a);
     if (q.a && !target) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
@@ -1931,6 +1946,13 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   //   自動で答えられなかったときだけ、下のキーワード案内にまわす。
   // ★投稿文の貼り付けは、ご質問として自動応答に回さない（的外れな返事・担当者への誤通知を防ぐ）
   if (isPastedContent(t)) return replyToRequest("pasted");
+
+  // ★Meta AI（@meta.ai）のご質問は、決まった案内をそのまま出す（2026-09-05）。
+  //   「Meta AIの返信」と送るだけで非表示の手順が出る、と配信で案内している。
+  if (/meta\s*ai|メタ\s*ai|メタエーアイ|@meta\.ai/i.test(t) && Array.from(t).length <= 60) {
+    const wantsToUse = /(使|活用|目立|投稿に|聞く返信|ON|オン)/i.test(t) && !/(返信が|付いた|ついた|消|非表示|ブロック|ミュート)/.test(t);
+    return handlePostback(lineUserId, wantsToUse ? "h=metaai_ask" : "h=metaai_reply");
+  }
 
   if (looksLikeQuestion(t)) {
     const answered = await autoAnswer(user.id, lineUserId, t);

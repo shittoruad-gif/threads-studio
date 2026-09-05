@@ -776,6 +776,22 @@ export async function countAccountScheduledPosts(threadsAccountId: number): Prom
  * このアカウントで「今日（日本時間）」に予約済み・承認待ち・公開済みの本数。
  * お申し込み直後の当日補充で、足りない分だけ作るために使う。
  */
+/** 今日（JST）このアカウントで「Meta AIに聞く」返信を持つ投稿の数（1日1回の上限判定） */
+export async function countMetaAiAskToday(accountId: number): Promise<number> {
+  const database = await getDb();
+  if (!database) return 0;
+  const rows = await database
+    .select({ n: sql<number>`count(*)` })
+    .from(scheduledPosts)
+    .where(and(
+      eq(scheduledPosts.threadsAccountId, accountId),
+      sql`${scheduledPosts.metaAiAskText} IS NOT NULL`,
+      sql`DATE(CONVERT_TZ(${scheduledPosts.scheduledAt}, '+00:00', '+09:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '+09:00'))`,
+      sql`${scheduledPosts.status} IN ('pending','awaiting_approval','processing','posted')`,
+    ));
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function countAccountPostsScheduledToday(accountId: number): Promise<number> {
   const database = await getDb();
   if (!database) return 0;
@@ -2566,6 +2582,7 @@ export async function getAutoPostSettings(userId: number) {
       autoPostRequireApproval: users.autoPostRequireApproval,
       autoTopicTag: users.autoTopicTag,
       autoFollowUpEnabled: users.autoFollowUpEnabled,
+      metaAiAskEnabled: users.metaAiAskEnabled,
       showcaseOptOut: users.showcaseOptOut,
       postLength: users.postLength,
     })
@@ -2579,7 +2596,7 @@ export async function getAutoPostSettings(userId: number) {
 /**
  * Update user's auto-post settings
  */
-export async function updateAutoPostSettings(userId: number, settings: { autoPostEnabled?: boolean; autoPostFrequency?: "daily" | "twice_daily" | "three_daily"; autoPostRequireApproval?: boolean; autoTopicTag?: boolean; autoFollowUpEnabled?: boolean; showcaseOptOut?: boolean; postLength?: string }) {
+export async function updateAutoPostSettings(userId: number, settings: { autoPostEnabled?: boolean; autoPostFrequency?: "daily" | "twice_daily" | "three_daily"; autoPostRequireApproval?: boolean; autoTopicTag?: boolean; autoFollowUpEnabled?: boolean; metaAiAskEnabled?: boolean; showcaseOptOut?: boolean; postLength?: string }) {
   const database = await getDb();
   if (!database) return;
 

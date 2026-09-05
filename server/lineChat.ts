@@ -218,6 +218,22 @@ export const HELP_TOPICS: Array<{ key: string; cat: string; q: string; a: string
   { key: "auto", cat: "settings", q: "確認なしで全部おまかせにしたい",
     a: "公開前の確認をOFFにすると、確認なしで毎日自動で公開されます。あとから戻すこともできます。\n下のボタンで、いますぐ切り替えられます。",
     action: { label: "確認なしにする", data: "s=appr&v=off" } },
+  { key: "metaai_reply", cat: "daily", q: "投稿に @meta.ai の返信が付いた",
+    a: "2026年9月から、Threadsでは誰でも投稿の返信欄で @meta.ai を呼べるようになりました。お店の投稿にMeta AIの返信が付くことがあります。\n\n" +
+      "気になるときは、次の3つで対応できます（@meta.ai はブロックできません）。\n" +
+      "1. 自分の投稿に付いた返信を非表示にする：返信を長押し →「非表示」\n" +
+      "2. @meta.ai をミュートする：@meta.ai のプロフィール → 右上の「…」→「ミュート」\n" +
+      "3. 「興味がない」を選ぶ：返信の「…」→「興味がない」\n\n" +
+      "Threads Studioの投稿は、はじめの設定で教えていただいた事実だけで作っているので、AIに確かめられても食い違いは出ません。" },
+  { key: "metaai_ask", cat: "settings", q: "Meta AIを使って投稿を目立たせたい",
+    a: "「Meta AIに聞く返信」をONにすると、豆知識・よくある誤解などの投稿を公開した直後に、その話題の一般的な質問を @meta.ai 宛てに1件返信します。Meta AIが公開で答えるので、投稿の下にすぐ会話ができます。\n\n" +
+      "お店や施術のことは聞きません（Meta AIの回答はこちらで制御できないため）。1日1回まで。下のボタンでいますぐONにできます。",
+    action: { label: "Meta AIに聞く返信をON", data: "s=metaai&v=on" } },
+  { key: "manual", cat: "account", q: "Threadsのアカウント作成から連携までのやり方",
+    a: "Instagramのアカウント作成 → Threadsの開設 → Threads Studioとの連携までを、はじめての方向けに1ページにまとめています。\n" +
+      "https://shittoruad-gif.github.io/shittoru-service-docs/threads-setup-manual.html\n\n" +
+      "Threadsの連携だけは、パソコンのブラウザから行うのが確実です。",
+    action: { label: "アカウント連携", data: "m=connect" } },
   { key: "ng", cat: "settings", q: "使ってほしくない言葉がある",
     a: "使ってほしくない言葉を登録すると、以後の投稿では自動的に避けます。\n下のボタンを押して、そのまま言葉をお送りください。",
     action: { label: "NGワードを追加", data: "s=ng" } },
@@ -420,7 +436,7 @@ export function helpCategoryQuick(cat: string): QuickItem[] {
  *   フリープランは自動投稿そのものが無い（maxPerDay=0）。
  */
 export function settingsQuick(
-  s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; postLength?: string | null },
+  s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; postLength?: string | null; metaAiAskEnabled?: boolean | null },
   maxPerDay = 3,
   nextActionNotify = true,
 ): QuickItem[] {
@@ -441,13 +457,14 @@ export function settingsQuick(
     { label: s.autoPostRequireApproval ? "確認なしにする" : "公開前に確認する", data: `s=appr&v=${s.autoPostRequireApproval ? "off" : "on"}` },
     { label: "短め にする", data: "s=len&v=short" },
     { label: "長め にする", data: "s=len&v=long" },
+    { label: s.metaAiAskEnabled ? "Meta AIに聞く返信を止める" : "Meta AIに聞く返信をON", data: `s=metaai&v=${s.metaAiAskEnabled ? "off" : "on"}` },
     { label: "NGワードを追加", data: "s=ng" },
     notifyToggle,
   ];
 }
 
 export function settingsSummary(
-  s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; postLength?: string | null; autoPostFrequency?: string | null },
+  s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; postLength?: string | null; autoPostFrequency?: string | null; metaAiAskEnabled?: boolean | null },
   opts: { maxPerDay?: number; planName?: string; nextActionNotify?: boolean } = {},
 ): string {
   const notify = opts.nextActionNotify === false
@@ -474,6 +491,7 @@ export function settingsSummary(
     (want > maxPerDay ? `　※ ご利用中のプランの上限は1日${maxPerDay}回です\n` : "") +
     `・公開前の確認：${s.autoPostRequireApproval ? "する" : "しない"}\n` +
     `・投稿の長さ：${len}\n` +
+    `・Meta AIに聞く返信：${s.metaAiAskEnabled ? "ON（1日1回）" : "OFF"}\n` +
     notify + "\n" +
     "変えたいものを選んでください。"
   );

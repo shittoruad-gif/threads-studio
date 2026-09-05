@@ -600,6 +600,20 @@ export default function ThreadsConnect() {
           </div>
         ))}
 
+        {/* ★開設マニュアルへの導線は、連携済みの方にも見える位置に置く（2026-09-05） */}
+        <p className="text-xs text-muted-foreground mb-4">
+          {t('Threadsのアカウント作成から連携までの手順は')}
+          <a
+            href="https://shittoruad-gif.github.io/shittoru-service-docs/threads-setup-manual.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-emerald-700 underline underline-offset-2 mx-1"
+          >
+            {t('開設マニュアル')}
+          </a>
+          {t('にまとめています。連携はパソコンからが確実です。')}
+        </p>
+
         {accounts?.length === 0 && (
           <div className="bg-background border border-border border-dashed rounded-xl p-10 text-center">
             <Link2 className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />

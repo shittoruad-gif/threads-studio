@@ -631,6 +631,32 @@ async function generateAutoPost(
     // Schedule the post
     const scheduledAt = fixedScheduledAt ?? getNextPostingTime(postingTimeIndex, bestHours);
 
+    // ★「Meta AIに聞く」返信（shared/metaAiAsk.ts・既定OFF）。
+    //   知識系の切り口のときだけ、本文の話題に関する一般的な質問を1つ作って持たせる。
+    //   公開直後に @meta.ai 宛てで返信し、Meta AIの公開回答でスレッドに会話を作る。
+    //   お店の固有語が混ざったら付けない。1日1アカウント1回まで。
+    let metaAiAskText: string | null = null;
+    try {
+      const { META_AI_ASK_ANGLES, buildMetaAiAskPrompt, validateMetaAiAsk } = await import('../shared/metaAiAsk');
+      const userRow: any = await db.getUserById(userId);
+      if (userRow?.metaAiAskEnabled && angle?.id && META_AI_ASK_ANGLES.has(angle.id)) {
+        const usedToday = await db.countMetaAiAskToday(threadsAccountId);
+        if (usedToday === 0) {
+          const q = await invokeLLM({
+            messages: [{ role: 'user', content: buildMetaAiAskPrompt(fullContent, project.businessType) }],
+          });
+          const raw = q.choices[0]?.message?.content;
+          const check = validateMetaAiAsk(typeof raw === 'string' ? raw : '', [
+            (project as any).storeName, project.area, (project as any).localTerms,
+          ]);
+          if (check.ok) metaAiAskText = check.text;
+          else console.log(`[AutoPost] Meta AIに聞く返信を見送り（${check.reason}） userId=${userId}`);
+        }
+      }
+    } catch (e) {
+      console.warn('[AutoPost] Meta AIに聞く返信の生成に失敗（本文はそのまま）:', (e as Error).message);
+    }
+
     await db.createScheduledPost({
       userId,
       projectId: project.id,
@@ -644,6 +670,7 @@ async function generateAutoPost(
       angle: angle?.id ?? null,
       // 使った長さ条件を記録（A/Bテストの集計に使う。設定は後から変わるため投稿側に残す）
       postLength: effectiveLength,
+      metaAiAskText,
     } as any);
 
     // ★#3 自動投稿は手動AI生成の月間枠(maxAiGenerations)を消費しない。

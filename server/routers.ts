@@ -4916,7 +4916,7 @@ ${CONCEPT_DESIGN_PROMPT}`;
   autoPost: router({
     getSettings: protectedProcedure.query(async ({ ctx }) => {
       const settings = await db.getAutoPostSettings(ctx.user.id);
-      return settings || { autoPostEnabled: true, autoPostFrequency: 'daily', autoPostRequireApproval: false, autoTopicTag: true, autoFollowUpEnabled: true, showcaseOptOut: false, postLength: 'short' };
+      return settings || { autoPostEnabled: true, autoPostFrequency: 'daily', autoPostRequireApproval: false, autoTopicTag: true, autoFollowUpEnabled: true, metaAiAskEnabled: false, showcaseOptOut: false, postLength: 'short' };
     }),
 
     updateSettings: protectedProcedure
@@ -4926,6 +4926,8 @@ ${CONCEPT_DESIGN_PROMPT}`;
         autoPostRequireApproval: z.boolean().optional(),
         autoTopicTag: z.boolean().optional(),
         autoFollowUpEnabled: z.boolean().optional(),
+        // 「Meta AIに聞く」返信（shared/metaAiAsk.ts）。既定OFF
+        metaAiAskEnabled: z.boolean().optional(),
         // 実例ショーケース（/tour）への匿名掲載を止める。利用規約 第11条第3項
         showcaseOptOut: z.boolean().optional(),
         // 投稿の長さ（shared/postLength.ts）

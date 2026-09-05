@@ -258,6 +258,29 @@ export async function executePendingPosts() {
         executed++;
         console.log(`[Scheduled Post] Successfully published post ${post.id} to Threads (${result.id})`);
 
+        // ★「Meta AIに聞く」返信（shared/metaAiAsk.ts）：本文の公開直後に、
+        //   自分の投稿へ「@meta.ai ＋一般的な質問」を1件返信する。
+        //   Meta AIが公開で答え、スレッドに会話ができる。付加機能なので失敗しても本体は成功扱い。
+        if ((post as any).metaAiAskText && !(post as any).replyToThreadsId) {
+          if (canReply) {
+            try {
+              const { createAndPublishPost } = await import('./threadsPost');
+              const ask = await createAndPublishPost({
+                accessToken,
+                threadsUserId: account.threadsUserId,
+                text: String((post as any).metaAiAskText).slice(0, 480),
+                mediaType: 'TEXT',
+                replyToId: result.id,
+              });
+              console.log(`[Scheduled Post] Meta AIに聞く返信を投稿 post=${post.id} (reply=${ask.id})`);
+            } catch (e) {
+              console.error(`[Scheduled Post] Meta AIに聞く返信に失敗 post=${post.id}:`, e);
+            }
+          } else {
+            console.log(`[Scheduled Post] Meta AIに聞く返信をスキップ post=${post.id}（返信権限の承認待ち）`);
+          }
+        }
+
         // ★固定投稿のLINE URLコメント：固定投稿（angle='pinned'）の公開直後に、
         //   自分の投稿へ1件だけ返信し、公式LINEのURLを添付する。
         //   本文にURLを貼るとThreadsで到達が落ちるため、本文は「コメント欄から」へ誘導し、
