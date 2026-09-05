@@ -28,7 +28,7 @@ const db = await import("../../server/db");
 const d = await db.getDb();
 if (!d) { console.error("DBに接続できません"); process.exit(1); }
 const { sql } = await import("drizzle-orm");
-const rows: any = await d.execute(sql`SELECT id, name, email FROM users WHERE email IS NOT NULL AND email <> '' AND emailVerified = 1 AND COALESCE(emailOptOut,0) = 0 AND email NOT LIKE '%example.%' AND email NOT LIKE '%@test.%' ORDER BY id`);
+const rows: any = await d.execute(sql`SELECT id, name, email FROM users WHERE email IS NOT NULL AND email <> '' AND emailVerified = 1 AND COALESCE(emailOptOut,0) = 0 AND email NOT LIKE '%example.%' AND email NOT LIKE '%@test.%' AND email NOT LIKE '%@threads-studio.com' AND email <> 'shittoru.ad@gmail.com' ORDER BY id`);
 const list: Array<{ id: number; name: string; email: string }> = ((rows as any)[0] ?? []).map((r: any) => ({ id: Number(r.id), name: String(r.name ?? ""), email: String(r.email) }));
 console.log(`件名: ${subject}\n宛先 ${list.length} 名`);
 for (const u of list) console.log(`  ${u.id}\t${u.name}\t${u.email}`);
