@@ -250,14 +250,27 @@ export default function AdminUsers() {
                       : <span className="text-muted-foreground/50">0</span>}
                   </TableCell>
                   <TableCell>
+                    {/* ★このボタンは「押すと反転」する。以前は ON のときに「モニター」とだけ出ていたため、
+                        「モニターにする」ボタンだと思って押すと OFF になった。
+                        2026-09-04 10:55 に14名分が9秒間で OFF になり、セミナー価格が出なくなった経緯がある。
+                        OFF にする方向だけ確認を挟み、ラベルも動作が分かる言い方にする。 */}
                     <Button
                       variant={u.isMonitor ? 'default' : 'outline'}
                       size="sm"
                       className={u.isMonitor ? 'bg-amber-500 hover:bg-amber-600 text-white h-7 text-xs' : 'h-7 text-xs'}
                       disabled={setMonitorMutation.isPending}
-                      onClick={() => setMonitorMutation.mutate({ userId: user.id, isMonitor: !u.isMonitor })}
+                      title={u.isMonitor ? '押すとモニターを解除します（セミナー/キャンペーン価格が出なくなります）' : '押すとモニターにします'}
+                      onClick={() => {
+                        if (u.isMonitor) {
+                          const ok = window.confirm(
+                            `${user.name || user.email} のモニターを解除しますか？\n解除すると、料金ページにセミナー/キャンペーン価格が出なくなります。`,
+                          );
+                          if (!ok) return;
+                        }
+                        setMonitorMutation.mutate({ userId: user.id, isMonitor: !u.isMonitor });
+                      }}
                     >
-                      {u.isMonitor ? 'モニター' : 'OFF'}
+                      {u.isMonitor ? 'モニター中（押すと解除）' : 'モニターにする'}
                     </Button>
                   </TableCell>
                   <TableCell className="text-xs whitespace-nowrap">
