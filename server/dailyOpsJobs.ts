@@ -227,6 +227,10 @@ export async function runCommentWatchJob(): Promise<void> {
           for (const c of comments) {
             // 自分の返信・確認済み分は除外
             if (c.username && c.username === account.threadsUsername) continue;
+            // ★Meta AI（@meta.ai）の公開返信は通知しない（2026-09-06 三上様指示）。
+            //   「Meta AIに聞く返信」で自分から呼んだ回答や、第三者が呼んだ回答が
+            //   毎回「コメントが届きました」になるのを防ぐ。
+            if (c.username && /^meta\.ai$/i.test(String(c.username))) continue;
             if (!c.timestamp || new Date(c.timestamp) <= since) continue;
             newComments.push({
               text: c.text,
