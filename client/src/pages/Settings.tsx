@@ -409,23 +409,36 @@ export default function Settings() {
                 />
               </div>
 
-              {/* 「Meta AIに聞く」返信（2026-09-05） */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-sm font-medium text-foreground">{t("1日1件、Meta AIへの呼びかけ投稿を追加する（おすすめ）")}</Label>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {t("毎日の投稿とは別に、「@meta.ai 〇〇市で肩こりに悩む人に、整体に通うメリットを伝えて」のような投稿を1日1件、朝〜昼に出します。")}
-                    {t("Meta AIがお店の名前を出してコメントで答えるので、投稿の下に会話ができ、より多くの人に届きやすくなります。")}<br className="hidden sm:inline" />
-                    {t("依頼文は、はじめの設定で教えていただいた地域・お客様像・店名から決まった型で作ります。")}<br className="hidden sm:inline" />
-                    {t("@meta.ai はThreadsの仕様で段階的に提供されており、まだ使えないアカウントではMeta AIの返事が付きません（投稿自体は出ます）。")}
-                  </p>
-                </div>
-                <Switch
-                  checked={(autoPostSettings as any)?.metaAiAskEnabled ?? true}
-                  onCheckedChange={(v) => updateAutoPost.mutate({ metaAiAskEnabled: v } as any)}
-                  disabled={updateAutoPost.isPending}
-                />
-              </div>
+              {/* Meta AI呼びかけ投稿（2026-09-05〜）。プロ・ビジネスで利用可。ライトにはプラン変更の案内を出す */}
+              {(() => {
+                const maxPerDay = (subscription as any)?.plan?.features?.maxAutoPostsPerDay ?? 0;
+                const available = maxPerDay >= 2;
+                return (
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <Label className="text-sm font-medium text-foreground">{t("1日の投稿のうち1件をMeta AIへの呼びかけ投稿にする（おすすめ）")}</Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {t("「@meta.ai 新倉敷・玉島で肩こりに悩む人に、整体院に通うメリットを伝えて」のような投稿を朝〜昼に1件出します。")}
+                        {t("Meta AIがお店の名前を出してコメントで答えるので、投稿の下に会話ができ、より多くの人に届きやすくなります。")}<br className="hidden sm:inline" />
+                        {t("依頼文は、はじめの設定で教えていただいた地域（最寄り駅・町名）・お客様像・店名から決まった型で作ります。")}
+                        {t("@meta.ai はThreadsの仕様で段階的に提供されており、まだ使えないアカウントではMeta AIの返事が付きません（投稿自体は出ます）。")}
+                        {!available && (
+                          <>
+                            <br />
+                            <span className="text-amber-700">{t("この機能はプロプラン・ビジネスプランでご利用いただけます。")}</span>
+                            <a href="/pricing" className="text-emerald-700 underline underline-offset-2 ml-1">{t("プランを見る")}</a>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={available && ((autoPostSettings as any)?.metaAiAskEnabled ?? true)}
+                      onCheckedChange={(v) => updateAutoPost.mutate({ metaAiAskEnabled: v } as any)}
+                      disabled={!available || updateAutoPost.isPending}
+                    />
+                  </div>
+                );
+              })()}
 
               {/* Frequency selection */}
               <div>

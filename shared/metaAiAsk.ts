@@ -233,3 +233,15 @@ export function buildMetaAiCallPost(src: MetaAiCallSource, dayIndex: number): st
   const text = list[Math.abs(dayIndex) % list.length];
   return Array.from(text).length <= 120 ? text : null;
 }
+
+/**
+ * 1日の投稿枠の分け方（2026-09-06 三上様指示）。
+ *   呼びかけ投稿は「追加」ではなく、契約本数のうちの1件にする。
+ *   1日1件のプラン（ライト）では通常投稿だけ（呼びかけ投稿は出さない）。
+ *   例：3件 → 呼びかけ1件＋通常2件、2件 → 呼びかけ1件＋通常1件、1件 → 通常1件
+ */
+export function splitDailyQuota(postCount: number, metaAiEnabled: boolean): { regular: number; call: number } {
+  const n = Math.max(0, Math.floor(postCount));
+  if (!metaAiEnabled || n < 2) return { regular: n, call: 0 };
+  return { regular: n - 1, call: 1 };
+}

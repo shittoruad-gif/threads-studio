@@ -818,7 +818,23 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             if (todayCount === 0) continue;
           }
 
-          for (let i = 0; i < todayCount; i++) {
+          // ★Meta AI 呼びかけ投稿は「追加」ではなく契約本数のうちの1件（2026-09-06 三上様指示）。
+          //   1日1件のプランでは出さない。当日補充のときは不足分の中で1件を充てる。
+          let regularCount = todayCount;
+          try {
+            const { splitDailyQuota } = await import('../shared/metaAiAsk');
+            const already = await db.countMetaAiAskToday(account.id).catch(() => 0);
+            const q = splitDailyQuota(postCount, (user as any).metaAiAskEnabled !== false);
+            if (q.call > 0 && already === 0 && todayCount > 0) {
+              const project = pinnedProject || eligibleProjects[dayOffset % eligibleProjects.length];
+              const made = await scheduleMetaAiCallPost(user.id, project, account.id, eff.autoPostRequireApproval, dayOffset);
+              if (made) regularCount = todayCount - 1;
+            }
+          } catch (e) {
+            console.error(`[AutoPost] Meta AI呼びかけ投稿の作成に失敗 user=${user.id} account=${account.id}:`, e);
+          }
+
+          for (let i = 0; i < regularCount; i++) {
             const project = pinnedProject || eligibleProjects[(dayOffset + i) % eligibleProjects.length];
 
             const success = await generateAutoPost(
@@ -846,15 +862,6 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             await new Promise(r => setTimeout(r, 2000));
           }
 
-          // ★Meta AI 呼びかけ投稿（1日1件・通常の投稿とは別）。shared/metaAiAsk.ts 参照
-          try {
-            if ((user as any).metaAiAskEnabled !== false) {
-              const project = pinnedProject || eligibleProjects[dayOffset % eligibleProjects.length];
-              await scheduleMetaAiCallPost(user.id, project, account.id, eff.autoPostRequireApproval, dayOffset);
-            }
-          } catch (e) {
-            console.error(`[AutoPost] Meta AI呼びかけ投稿の作成に失敗 user=${user.id} account=${account.id}:`, e);
-          }
         }
 
         // Update rotation indices

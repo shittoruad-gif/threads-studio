@@ -1632,11 +1632,24 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   // ── Meta AI 呼びかけ投稿の ON/OFF（shared/metaAiAsk.ts）──
   if (q.s === "metaai") {
     const on = q.v === "on";
+    // ★プロ・ビジネスで利用可。ライトにはプラン変更の案内（三上様指示 2026-09-06）
+    {
+      const { plan } = await planOf(user.id);
+      if ((plan?.features.maxAutoPostsPerDay ?? 0) < 2) {
+        const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+        return [textWithQuick(
+          "Meta AI呼びかけ投稿は、プロプラン・ビジネスプランでご利用いただけます。\n" +
+          "1日の投稿のうち1件を「@meta.ai 〇〇で…に通うメリットを伝えて」のような投稿にして、Meta AIの回答で届く人を増やす仕組みです。\n\n" +
+          `プランを変更すると、その日からお使いいただけます。\n${base}/pricing?openExternalBrowser=1`,
+          [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT],
+        )];
+      }
+    }
     await db.updateAutoPostSettings(user.id, { metaAiAskEnabled: on });
     return [textWithQuick(
       (on
         ? "Meta AI呼びかけ投稿をONにしました。\n\n" +
-          "毎日の投稿とは別に、「@meta.ai 〇〇市で…に通うメリットを伝えて」のような投稿を1日1件、朝〜昼に出します。" +
+          "1日の投稿のうち1件として、「@meta.ai 〇〇市で…に通うメリットを伝えて」のような投稿を1日1件、朝〜昼に出します。" +
           "Meta AIがお店の名前を出してコメントで答えるので、投稿の下に会話ができ、届く人が増えます。\n" +
           "※ @meta.ai はThreadsの仕様で段階的に提供されており、まだ使えないアカウントではMeta AIの返事が付きません（投稿自体は出ます）。"
         : "Meta AI呼びかけ投稿を止めました。") +

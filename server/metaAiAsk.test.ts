@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateMetaAiAsk, META_AI_ASK_ANGLES, buildMetaAiAskPrompt, shortAreaName, buildMetaAiCallPost, callAreaLabel } from "../shared/metaAiAsk";
+import { validateMetaAiAsk, META_AI_ASK_ANGLES, buildMetaAiAskPrompt, shortAreaName, buildMetaAiCallPost, callAreaLabel, splitDailyQuota } from "../shared/metaAiAsk";
 
 describe("Meta AIに聞く返信：質問の検査", () => {
   it("正しい形はそのまま通る", () => {
@@ -114,5 +114,16 @@ describe("呼びかけ投稿の地域名は市より細かく（三上様指示 
   it("投稿文に細かい地域名が入る", () => {
     const t = buildMetaAiCallPost({ businessType: "マシンピラティススタジオ", area: "岡山県倉敷市玉島", localTerms: "JR新倉敷駅から車で約7分", storeName: "Moveact玉島店" }, 0)!;
     expect(t).toBe("@meta.ai 新倉敷・玉島周辺の人に、うちのお店（Moveact玉島店）を届けて");
+  });
+});
+
+describe("1日の枠の分け方（呼びかけ投稿は契約本数のうちの1件）", () => {
+  it("3件→呼びかけ1＋通常2、2件→1＋1、1件（ライト）→通常のみ", () => {
+    expect(splitDailyQuota(3, true)).toEqual({ regular: 2, call: 1 });
+    expect(splitDailyQuota(2, true)).toEqual({ regular: 1, call: 1 });
+    expect(splitDailyQuota(1, true)).toEqual({ regular: 1, call: 0 });
+  });
+  it("OFFなら全部通常", () => {
+    expect(splitDailyQuota(3, false)).toEqual({ regular: 3, call: 0 });
   });
 });
