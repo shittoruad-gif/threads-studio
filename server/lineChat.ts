@@ -226,9 +226,9 @@ export const HELP_TOPICS: Array<{ key: string; cat: string; q: string; a: string
       "3. 「興味がない」を選ぶ：返信の「…」→「興味がない」\n\n" +
       "Threads Studioの投稿は、はじめの設定で教えていただいた事実だけで作っているので、AIに確かめられても食い違いは出ません。" },
   { key: "metaai_ask", cat: "settings", q: "Meta AIを使って投稿を目立たせたい",
-    a: "「Meta AIに聞く返信」をONにすると、豆知識・よくある誤解などの投稿を公開した直後に、その話題の一般的な質問を @meta.ai 宛てに1件返信します。Meta AIが公開で答えるので、投稿の下にすぐ会話ができます。\n\n" +
-      "お店や施術のことは聞きません（Meta AIの回答はこちらで制御できないため）。1日1回まで。下のボタンでいますぐONにできます。",
-    action: { label: "Meta AIに聞く返信をON", data: "s=metaai&v=on" } },
+    a: "豆知識などの投稿を公開した直後に、その話題の質問を @meta.ai 宛てにコメントし、Meta AIの答えで投稿の下に会話を作る仕組みが入っています（はじめからON）。会話が付いた投稿は、より多くの人に届きやすくなります。\n\n" +
+      "お店や施術のことは聞きません（Meta AIの回答はこちらで制御できないため）。1日1回まで。止めたいときは「設定」からOFFにできます。",
+    action: { label: "設定を見る", data: "m=settings" } },
   { key: "manual", cat: "account", q: "Threadsのアカウント作成から連携までのやり方",
     a: "Instagramのアカウント作成 → Threadsの開設 → Threads Studioとの連携までを、はじめての方向けに1ページにまとめています。\n" +
       "https://shittoruad-gif.github.io/shittoru-service-docs/threads-setup-manual.html\n\n" +

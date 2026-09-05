@@ -38,8 +38,8 @@ export const users = mysqlTable("users", {
   // 追い投稿：自動投稿の約6時間後に、自分の投稿へひとこと返信して再浮上させる
   autoFollowUpEnabled: boolean("autoFollowUpEnabled").default(true).notNull(),
   // 「Meta AIに聞く」返信（2026-09-05）。公開直後に自分の投稿へ「@meta.ai ＋質問」を1件返信し、
-  // Meta AIの公開回答でスレッドに会話を作る。既定OFF（お客様が選んでON）。
-  metaAiAskEnabled: boolean("metaAiAskEnabled").default(false).notNull(),
+  // Meta AIの公開回答でスレッドに会話を作る。既定ON（2026-09-06〜。止めたい方はOFF）。
+  metaAiAskEnabled: boolean("metaAiAskEnabled").default(true).notNull(),
   // コメント即応通知：最後に新着コメントを確認した時刻（通知の重複防止）
   lastCommentCheckAt: timestamp("lastCommentCheckAt"),
   // Last auto-post type index (for rotation)

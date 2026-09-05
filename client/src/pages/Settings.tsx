@@ -412,15 +412,15 @@ export default function Settings() {
               {/* 「Meta AIに聞く」返信（2026-09-05） */}
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-sm font-medium text-foreground">{t("投稿の直後に「Meta AIに聞く」返信を付ける")}</Label>
+                  <Label className="text-sm font-medium text-foreground">{t("投稿の直後にMeta AIを呼んで、コメント欄に会話を作る（おすすめ）")}</Label>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {t("豆知識・よくある誤解などの投稿を公開した直後に、その話題についての一般的な質問を「@meta.ai」宛てに1件返信します。")}
-                    {t("Meta AIが公開で答えるので、投稿の下にすぐ会話ができ、表示されやすくなります。")}<br className="hidden sm:inline" />
+                    {t("豆知識などの投稿を公開した直後に、その話題の質問を「@meta.ai」宛てにコメントします。")}
+                    {t("Meta AIがコメントで答えるので、投稿の下にすぐ会話ができ、より多くの人に届きやすくなります。")}<br className="hidden sm:inline" />
                     {t("お店や施術のことは聞きません（Meta AIの回答内容はこちらで制御できないため）。1日1回まで。")}
                   </p>
                 </div>
                 <Switch
-                  checked={(autoPostSettings as any)?.metaAiAskEnabled ?? false}
+                  checked={(autoPostSettings as any)?.metaAiAskEnabled ?? true}
                   onCheckedChange={(v) => updateAutoPost.mutate({ metaAiAskEnabled: v } as any)}
                   disabled={updateAutoPost.isPending}
                 />
