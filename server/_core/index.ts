@@ -1516,17 +1516,34 @@ async function startServer() {
 
           const filePath = path.join(drizzleDir, file);
           const content = fs.readFileSync(filePath, "utf-8");
-          const statements = content.split("--> statement-breakpoint").filter((s: string) => s.trim());
+          // ★区切りは `--> statement-breakpoint`。それが無くても `;` 行末で分ける
+          //   （2026-09-05: `;` 区切りの2文を1文として実行→失敗→適用済み扱いになり、
+          //   本番の users に列が無いままログイン不能になった事故の再発防止）。
+          const statements = content
+            .split("--> statement-breakpoint")
+            .flatMap((chunk: string) => chunk.split(/;\s*(?:\r?\n|$)/))
+            .map((s: string) => s.replace(/^\s*--[^\n]*\n?/gm, "").trim())
+            .filter((s: string) => s.length > 0);
 
+          let hardFailure: string | null = null;
           for (const stmt of statements) {
-            const trimmed = stmt.trim();
-            if (!trimmed) continue;
             try {
-              await database.execute(sql.raw(trimmed));
+              await database.execute(sql.raw(stmt));
             } catch (e: any) {
+              // 既にある（1050=table / 1060=column / 1061=index）は適用済みとして進める
               if (e.errno === 1050 || e.errno === 1060 || e.errno === 1061) continue;
-              console.warn(`[DB] Warning in ${file}:`, e.message?.substring(0, 100));
+              hardFailure = e.message?.substring(0, 200) ?? String(e);
+              console.error(`[DB] ★マイグレーション失敗 ${file}: ${hardFailure}\n  文: ${stmt.slice(0, 160)}`);
+              break;
             }
+          }
+          if (hardFailure) {
+            // 適用済みとして記録しない（次回起動でもう一度試みる）。運営に知らせる。
+            try {
+              const { notifyOwner } = await import("./notification");
+              await notifyOwner({ title: `本番マイグレーション失敗: ${file}`, content: hardFailure });
+            } catch { /* 通知失敗で起動を止めない */ }
+            continue;
           }
 
           await database.execute(sql.raw(
