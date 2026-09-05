@@ -12,7 +12,8 @@
  * 守ること（AIの回答は制御できないので、質問の側で事故を防ぐ）:
  *   - お店のこと・実績・効果を聞かない（Meta AIが店の事実を勝手に語る形にしない）
  *   - 「治る」「効く」など効能の断定を求めない。一般論の「なぜ」「仕組み」「目安」を聞く
- *   - 固有名詞（店名・人名・URL・電話）を入れない
+ *   - 店名・人名・URL・電話は入れない。★地域名（市区町村）は入れる
+ *     （2026-09-06 三上様指示。地域名＋話題の型は地元の人に届きやすい）
  *   - 1日1アカウント1回まで。固定投稿・追い投稿・イベント告知には付けない
  *   - 既定ON（2026-09-06〜）。止めたい方は設定でOFF
  */
@@ -25,8 +26,17 @@ export const META_AI_ASK_ANGLES: ReadonlySet<string> = new Set([
 export const META_AI_HANDLE = '@meta.ai';
 export const META_AI_ASK_MAX_CHARS = 60;
 
+/** 「岡山県倉敷市中央」→「倉敷市」。質問に入れる地域名は市区町村までにする */
+export function shortAreaName(area: string | null | undefined): string {
+  const a = String(area || '').trim();
+  if (!a) return '';
+  const m = a.match(/([^\s都道府県]+?[市区町村])/);
+  return m ? m[1] : a.slice(0, 8);
+}
+
 /** 生成プロンプト（本文を渡して、質問1つを返してもらう） */
-export function buildMetaAiAskPrompt(postText: string, businessType: string | null | undefined): string {
+export function buildMetaAiAskPrompt(postText: string, businessType: string | null | undefined, area?: string | null): string {
+  const areaName = shortAreaName(area);
   return [
     'あなたはThreadsの投稿の運用担当です。次の投稿の「返信欄」に、Meta AI（@meta.ai）へ聞く質問を1つ作ってください。',
     'Meta AIはこの質問に公開で答えます。読者がその答えを読んで「なるほど」と思える、一般的な知識の質問にしてください。',
@@ -35,13 +45,17 @@ export function buildMetaAiAskPrompt(postText: string, businessType: string | nu
     postText,
     '',
     `【業種】${businessType || '不明'}`,
+    `【地域】${areaName || '不明'}`,
     '',
     '【条件・厳守】',
     `- 先頭は必ず「${META_AI_HANDLE} 」（半角スペース1つ）。その後に質問文。全体で${META_AI_ASK_MAX_CHARS}文字以内`,
     '- 本文の話題に関する「一般的な仕組み・理由・目安」を聞く（例：「ふくらはぎがつりやすいのはなぜ？」「コーヒーの焙煎で味が変わる理由は？」）',
+    ...(areaName
+      ? [`- 質問の中に地域名「${areaName}」を自然に入れる（例：「${areaName}で秋に肩こりが増えるのはなぜ？」「${areaName}のパン屋で朝が混むのはなぜ？」）。地域の気候・生活・通勤などに絡めると自然`]
+      : []),
     '- お店・施術・商品・実績・効果については聞かない。「このお店は」「うちの」などの語を使わない',
     '- 「治る」「効く」「痩せる」など効能の断定を求める聞き方をしない',
-    '- 固有名詞（店名・人名・地名・URL・電話番号）を入れない',
+    '- 店名・人名・URL・電話番号を入れない（地域名は入れる）',
     '- 絵文字・ハッシュタグ・記号の装飾を入れない。文末は「？」',
     '- 出力は質問文だけ。前置き・説明・引用符は不要',
   ].join('\n');
@@ -55,9 +69,14 @@ export interface MetaAiAskCheck {
 
 /**
  * 生成された質問を機械的に検査する。通らなければ返信しない（無理に直さない）。
- * @param forbidden お店固有の語（店名・地域名など）。含まれていたら不合格
+ * @param forbidden お店固有の語（店名など）。含まれていたら不合格
+ * @param requiredArea 地域名（市区町村）。指定があれば、含まれていないと不合格
  */
-export function validateMetaAiAsk(raw: string, forbidden: Array<string | null | undefined> = []): MetaAiAskCheck {
+export function validateMetaAiAsk(
+  raw: string,
+  forbidden: Array<string | null | undefined> = [],
+  requiredArea?: string | null,
+): MetaAiAskCheck {
   let t = String(raw || '').trim().replace(/^["「『]|["」』]$/g, '').trim();
   if (!t) return { ok: false, text: '', reason: 'empty' };
   if (!t.startsWith(META_AI_HANDLE + ' ')) {
@@ -76,5 +95,7 @@ export function validateMetaAiAsk(raw: string, forbidden: Array<string | null | 
     const w = String(f || '').trim();
     if (w.length >= 2 && body.includes(w)) return { ok: false, text: t, reason: `forbidden:${w}` };
   }
+  const area = shortAreaName(requiredArea);
+  if (area && !body.includes(area)) return { ok: false, text: t, reason: 'missing_area' };
   return { ok: true, text: t };
 }

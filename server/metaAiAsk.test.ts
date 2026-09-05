@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateMetaAiAsk, META_AI_ASK_ANGLES, buildMetaAiAskPrompt } from "../shared/metaAiAsk";
+import { validateMetaAiAsk, META_AI_ASK_ANGLES, buildMetaAiAskPrompt, shortAreaName } from "../shared/metaAiAsk";
 
 describe("Meta AIに聞く返信：質問の検査", () => {
   it("正しい形はそのまま通る", () => {
@@ -23,10 +23,21 @@ describe("Meta AIに聞く返信：質問の検査", () => {
     expect(validateMetaAiAsk("@meta.ai 腰痛は整体で治る？").reason).toBe("efficacy_claim");
     expect(validateMetaAiAsk("@meta.ai なぜ😊？").reason).toBe("emoji");
   });
-  it("店名・地域名が混ざったら不合格", () => {
-    const r = validateMetaAiAsk("@meta.ai 倉敷市で肩こりが多いのはなぜ？", ["テストカフェ", "倉敷市"]);
+  it("店名が混ざったら不合格", () => {
+    const r = validateMetaAiAsk("@meta.ai テストカフェのコーヒーは何が違う？", ["テストカフェ"]);
     expect(r.ok).toBe(false);
-    expect(r.reason).toBe("forbidden:倉敷市");
+    expect(r.reason).toBe("forbidden:テストカフェ");
+  });
+  it("地域名は入れる。無ければ不合格（三上様指示 2026-09-06）", () => {
+    expect(validateMetaAiAsk("@meta.ai 倉敷市で秋に肩こりが増えるのはなぜ？", [], "岡山県倉敷市中央").ok).toBe(true);
+    const r = validateMetaAiAsk("@meta.ai 秋に肩こりが増えるのはなぜ？", [], "岡山県倉敷市中央");
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe("missing_area");
+  });
+  it("地域名は市区町村まで（都道府県と町名は落とす）", () => {
+    expect(shortAreaName("岡山県倉敷市中央")).toBe("倉敷市");
+    expect(shortAreaName("東京都渋谷区道玄坂")).toBe("渋谷区");
+    expect(shortAreaName("")).toBe("");
   });
   it("知識系の切り口だけが対象", () => {
     expect(META_AI_ASK_ANGLES.has("pro_tip")).toBe(true);
@@ -34,8 +45,9 @@ describe("Meta AIに聞く返信：質問の検査", () => {
     expect(META_AI_ASK_ANGLES.has("customer_voice")).toBe(false);
   });
   it("プロンプトに本文と禁止事項が入る", () => {
-    const p = buildMetaAiAskPrompt("湿布を貼っても肩こりが戻るのは…", "整体院");
+    const p = buildMetaAiAskPrompt("湿布を貼っても肩こりが戻るのは…", "整体院", "岡山県倉敷市中央");
     expect(p).toContain("湿布を貼っても");
+    expect(p).toContain("地域名「倉敷市」を自然に入れる");
     expect(p).toContain("お店・施術・商品・実績・効果については聞かない");
     expect(p).toContain("60文字以内");
   });

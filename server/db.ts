@@ -780,21 +780,21 @@ export async function countAccountScheduledPosts(threadsAccountId: number): Prom
  * 今日（JST）のアカウント別の投稿結果。日次の「本日の公開数」通知に使う（2026-09-05 三上様指示）。
  * posted=公開済 / awaiting=承認待ち / canceled=取り消し / failed=失敗（いずれも自動投稿のみ）
  */
-export async function getTodayAutoPostStatsByAccount(): Promise<Array<{
+export async function getYesterdayAutoPostStatsByAccount(): Promise<Array<{
   userId: number; accountId: number; username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number;
 }>> {
   const database = await getDb();
   if (!database) return [];
   const rows = await database.execute(sql`
     SELECT t.userId AS userId, t.id AS accountId, COALESCE(t.threadsUsername, t.threadsUserId) AS username,
-      SUM(CASE WHEN p.status='posted' AND DATE(CONVERT_TZ(p.postedAt,'+00:00','+09:00'))=DATE(CONVERT_TZ(NOW(),'+00:00','+09:00')) THEN 1 ELSE 0 END) AS posted,
-      SUM(CASE WHEN p.status='awaiting_approval' AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(CONVERT_TZ(NOW(),'+00:00','+09:00')) THEN 1 ELSE 0 END) AS awaiting,
-      SUM(CASE WHEN p.status='canceled' AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(CONVERT_TZ(NOW(),'+00:00','+09:00')) THEN 1 ELSE 0 END) AS canceled,
-      SUM(CASE WHEN p.status='failed' AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(CONVERT_TZ(NOW(),'+00:00','+09:00')) THEN 1 ELSE 0 END) AS failed,
-      SUM(CASE WHEN p.status IN ('pending','processing') AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(CONVERT_TZ(NOW(),'+00:00','+09:00')) THEN 1 ELSE 0 END) AS pending
+      SUM(CASE WHEN p.status='posted' AND DATE(CONVERT_TZ(p.postedAt,'+00:00','+09:00'))=DATE(DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+09:00'), INTERVAL 1 DAY)) THEN 1 ELSE 0 END) AS posted,
+      SUM(CASE WHEN p.status='awaiting_approval' AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+09:00'), INTERVAL 1 DAY)) THEN 1 ELSE 0 END) AS awaiting,
+      SUM(CASE WHEN p.status='canceled' AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+09:00'), INTERVAL 1 DAY)) THEN 1 ELSE 0 END) AS canceled,
+      SUM(CASE WHEN p.status='failed' AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+09:00'), INTERVAL 1 DAY)) THEN 1 ELSE 0 END) AS failed,
+      SUM(CASE WHEN p.status IN ('pending','processing') AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+09:00'), INTERVAL 1 DAY)) THEN 1 ELSE 0 END) AS pending
     FROM threadsAccounts t
     LEFT JOIN scheduledPosts p ON p.threadsAccountId = t.id AND p.source = 'auto'
-      AND p.scheduledAt >= DATE_SUB(NOW(), INTERVAL 2 DAY)
+      AND p.scheduledAt >= DATE_SUB(NOW(), INTERVAL 3 DAY)
     WHERE t.isActive = 1
     GROUP BY t.userId, t.id, username
   `);

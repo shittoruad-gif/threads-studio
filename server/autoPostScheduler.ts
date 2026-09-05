@@ -643,12 +643,13 @@ async function generateAutoPost(
         const usedToday = await db.countMetaAiAskToday(threadsAccountId);
         if (usedToday === 0) {
           const q = await invokeLLM({
-            messages: [{ role: 'user', content: buildMetaAiAskPrompt(fullContent, project.businessType) }],
+            messages: [{ role: 'user', content: buildMetaAiAskPrompt(fullContent, project.businessType, project.area) }],
           });
           const raw = q.choices[0]?.message?.content;
+          // ★地域名は入れる（三上様指示 2026-09-06）。店名だけを禁止語にする
           const check = validateMetaAiAsk(typeof raw === 'string' ? raw : '', [
-            (project as any).storeName, project.area, (project as any).localTerms,
-          ]);
+            (project as any).storeName,
+          ], project.area);
           if (check.ok) metaAiAskText = check.text;
           else console.log(`[AutoPost] Meta AIに聞く返信を見送り（${check.reason}） userId=${userId}`);
         }

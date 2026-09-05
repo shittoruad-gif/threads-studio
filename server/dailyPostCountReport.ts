@@ -1,5 +1,5 @@
 /**
- * 本日の公開数の通知（毎日 23:35 JST）。2026-09-05 三上様指示。
+ * 昨日の公開数の通知（毎朝 7:40 JST）。2026-09-05 三上様指示・翌日朝に変更（夜中の通知は迷惑）。
  *
  * 「1件も公開されなかった時点で『公開されていません』とクライアントに分かるように、
  *  数値をきちんと送る」。契約どおりの本数が出たかを、アカウントごとに数字で伝える。
@@ -18,7 +18,7 @@ export function buildDailyPostCountMessage(
   dateLabel: string,
   rows: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number }>,
 ): string {
-  const lines: string[] = [`本日の投稿結果（${dateLabel}）`];
+  const lines: string[] = [`昨日の投稿結果（${dateLabel}）`];
   let anyZero = false;
   for (const r of rows) {
     const head = `・@${r.username}：公開 ${r.posted}件（ご契約 1日${r.entitled}件）`;
@@ -29,7 +29,7 @@ export function buildDailyPostCountMessage(
       if (r.canceled > 0) why.push(`取り消し ${r.canceled}件`);
       if (r.failed > 0) why.push(`失敗 ${r.failed}件`);
       if (r.pending > 0) why.push(`未公開 ${r.pending}件`);
-      lines.push(`${head}\n　★本日は1件も公開されていません${why.length ? `（${why.join("・")}）` : ""}`);
+      lines.push(`${head}\n　★昨日は1件も公開されていません${why.length ? `（${why.join("・")}）` : ""}`);
     } else if (r.posted < r.entitled) {
       const why: string[] = [];
       if (r.awaiting > 0) why.push(`承認待ち ${r.awaiting}件`);
@@ -43,21 +43,21 @@ export function buildDailyPostCountMessage(
   lines.push("");
   if (anyZero) {
     lines.push("承認待ちの投稿は「今日の投稿」から、そのまま公開できます。");
-    lines.push("取り消した投稿は復活しません。明日の投稿は、いつもどおり朝に作られます。");
+    lines.push("取り消した投稿は復活しません。今日の投稿は、いつもどおり朝に作られています。");
   } else {
-    lines.push("明日も同じ時間帯に投稿します。");
+    lines.push("今日も同じ時間帯に投稿します。");
   }
   return lines.join("\n");
 }
 
 export async function runDailyPostCountReportJob(): Promise<void> {
-  const stats = await db.getTodayAutoPostStatsByAccount();
+  const stats = await db.getYesterdayAutoPostStatsByAccount();
   if (stats.length === 0) { console.log("[DailyPostCount] 対象なし"); return; }
 
   const byUser = new Map<number, typeof stats>();
   for (const r of stats) { const a = byUser.get(r.userId) ?? []; a.push(r); byUser.set(r.userId, a); }
 
-  const jst = new Date(Date.now() + 9 * 3600 * 1000);
+  const jst = new Date(Date.now() + 9 * 3600 * 1000 - 24 * 3600 * 1000); // 昨日（JST）
   const dateLabel = `${jst.getUTCMonth() + 1}月${jst.getUTCDate()}日`;
   let sent = 0;
 
