@@ -122,7 +122,12 @@ export default function Pricing() {
 
   // モニター（キャンペーンクーポン適用済み）のユーザーには
   // キャンペーン価格を自動表示する。コード入力欄は新規登録時のみ。
-  const userIsMonitor = Boolean(user?.isMonitor);
+  // ★セミナー/モニター価格の解放判定。
+  //   isMonitor だけを見ていると、フラグが何かの拍子に落ちた瞬間に
+  //   セミナー参加者に通常価格しか出なくなる（2026-09-04〜05 に実際に発生。
+  //   SEMINAR2026 適用済みの14名全員が 8,800円ではなく 9,800円の画面を見ていた）。
+  //   クーポン適用時に一緒に保存される campaignTier も解放の根拠にする。
+  const userIsMonitor = Boolean(user?.isMonitor) || Boolean((user as any)?.campaignTier);
 
   // URLパラメータ ?coupon=SEMINAR2026 でのプレビュー表示
   // 未ログインのユーザーもセミナー価格を事前確認できる。
