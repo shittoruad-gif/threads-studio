@@ -776,6 +776,36 @@ export async function countAccountScheduledPosts(threadsAccountId: number): Prom
  * このアカウントで「今日（日本時間）」に予約済み・承認待ち・公開済みの本数。
  * お申し込み直後の当日補充で、足りない分だけ作るために使う。
  */
+/**
+ * 今日（JST）のアカウント別の投稿結果。日次の「本日の公開数」通知に使う（2026-09-05 三上様指示）。
+ * posted=公開済 / awaiting=承認待ち / canceled=取り消し / failed=失敗（いずれも自動投稿のみ）
+ */
+export async function getTodayAutoPostStatsByAccount(): Promise<Array<{
+  userId: number; accountId: number; username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number;
+}>> {
+  const database = await getDb();
+  if (!database) return [];
+  const rows = await database.execute(sql`
+    SELECT t.userId AS userId, t.id AS accountId, COALESCE(t.threadsUsername, t.threadsUserId) AS username,
+      SUM(CASE WHEN p.status='posted' AND DATE(CONVERT_TZ(p.postedAt,'+00:00','+09:00'))=DATE(CONVERT_TZ(NOW(),'+00:00','+09:00')) THEN 1 ELSE 0 END) AS posted,
+      SUM(CASE WHEN p.status='awaiting_approval' AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(CONVERT_TZ(NOW(),'+00:00','+09:00')) THEN 1 ELSE 0 END) AS awaiting,
+      SUM(CASE WHEN p.status='canceled' AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(CONVERT_TZ(NOW(),'+00:00','+09:00')) THEN 1 ELSE 0 END) AS canceled,
+      SUM(CASE WHEN p.status='failed' AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(CONVERT_TZ(NOW(),'+00:00','+09:00')) THEN 1 ELSE 0 END) AS failed,
+      SUM(CASE WHEN p.status IN ('pending','processing') AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(CONVERT_TZ(NOW(),'+00:00','+09:00')) THEN 1 ELSE 0 END) AS pending
+    FROM threadsAccounts t
+    LEFT JOIN scheduledPosts p ON p.threadsAccountId = t.id AND p.source = 'auto'
+      AND p.scheduledAt >= DATE_SUB(NOW(), INTERVAL 2 DAY)
+    WHERE t.isActive = 1
+    GROUP BY t.userId, t.id, username
+  `);
+  const list = ((rows as any)[0] ?? []) as any[];
+  return list.map((r) => ({
+    userId: Number(r.userId), accountId: Number(r.accountId), username: String(r.username ?? ''),
+    posted: Number(r.posted ?? 0), awaiting: Number(r.awaiting ?? 0), canceled: Number(r.canceled ?? 0),
+    failed: Number(r.failed ?? 0), pending: Number(r.pending ?? 0),
+  }));
+}
+
 /** 今日（JST）このアカウントで「Meta AIに聞く」返信を持つ投稿の数（1日1回の上限判定） */
 export async function countMetaAiAskToday(accountId: number): Promise<number> {
   const database = await getDb();

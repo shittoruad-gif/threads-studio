@@ -360,6 +360,12 @@ export function initDailyOpsSchedulers(): void {
     const { runLineFollowerNudgeJob } = await import("./lineFollowerNudgeJob");
     await runTrackedJob("line_follower_nudge", runLineFollowerNudgeJob);
   });
+  // 23:35 JST = 14:35 UTC — 本日の公開数をアカウントごとに数字でお知らせ（0件は理由つき）
+  cron.schedule("35 14 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runDailyPostCountReportJob } = await import("./dailyPostCountReport");
+    await runTrackedJob("daily_post_count", runDailyPostCountReportJob);
+  });
   // 9:30 JST = 0:30 UTC — しっとる社内への朝の報告（お客様には送らない）
   cron.schedule("30 0 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");
