@@ -1625,7 +1625,8 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       (on
         ? "Meta AI呼びかけ投稿をONにしました。\n\n" +
           "毎日の投稿とは別に、「@meta.ai 〇〇市で…に通うメリットを伝えて」のような投稿を1日1件、朝〜昼に出します。" +
-          "Meta AIがお店の名前を出してコメントで答えるので、投稿の下に会話ができ、届く人が増えます。"
+          "Meta AIがお店の名前を出してコメントで答えるので、投稿の下に会話ができ、届く人が増えます。\n" +
+          "※ @meta.ai はThreadsの仕様で段階的に提供されており、まだ使えないアカウントではMeta AIの返事が付きません（投稿自体は出ます）。"
         : "Meta AI呼びかけ投稿を止めました。") +
       "\n\n間違えた場合は「元に戻す」を押してください。",
       [{ label: "元に戻す", data: `s=metaai&v=${on ? "off" : "on"}` }, ...MENU_HINT],

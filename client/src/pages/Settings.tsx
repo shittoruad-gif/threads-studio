@@ -416,7 +416,8 @@ export default function Settings() {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {t("毎日の投稿とは別に、「@meta.ai 〇〇市で肩こりに悩む人に、整体に通うメリットを伝えて」のような投稿を1日1件、朝〜昼に出します。")}
                     {t("Meta AIがお店の名前を出してコメントで答えるので、投稿の下に会話ができ、より多くの人に届きやすくなります。")}<br className="hidden sm:inline" />
-                    {t("依頼文は、はじめの設定で教えていただいた地域・お客様像・メニュー・店名から決まった型で作ります。")}
+                    {t("依頼文は、はじめの設定で教えていただいた地域・お客様像・店名から決まった型で作ります。")}<br className="hidden sm:inline" />
+                    {t("@meta.ai はThreadsの仕様で段階的に提供されており、まだ使えないアカウントではMeta AIの返事が付きません（投稿自体は出ます）。")}
                   </p>
                 </div>
                 <Switch
