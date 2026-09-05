@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateMetaAiAsk, META_AI_ASK_ANGLES, buildMetaAiAskPrompt, shortAreaName } from "../shared/metaAiAsk";
+import { validateMetaAiAsk, META_AI_ASK_ANGLES, buildMetaAiAskPrompt, shortAreaName, buildMetaAiCallPost } from "../shared/metaAiAsk";
 
 describe("Meta AIに聞く返信：質問の検査", () => {
   it("正しい形はそのまま通る", () => {
@@ -50,5 +50,38 @@ describe("Meta AIに聞く返信：質問の検査", () => {
     expect(p).toContain("地域名「倉敷市」を自然に入れる");
     expect(p).toContain("お店・施術・商品・実績・効果については聞かない");
     expect(p).toContain("60文字以内");
+  });
+});
+
+describe("Meta AI 呼びかけ投稿（本文が @meta.ai ＋依頼文）", () => {
+  const src = { storeName: "テスト整体院", businessType: "整体院", area: "岡山県倉敷市中央", target: "デスクワークの30〜50代", mainProblem: "慢性的な肩こり、朝の腰の痛み", menu: ["骨盤矯正", "猫背改善"] };
+  it("先頭は @meta.ai、地域名が入り、絵文字なし", () => {
+    for (let d = 0; d < 5; d++) {
+      const t = buildMetaAiCallPost(src, d)!;
+      expect(t.startsWith("@meta.ai ")).toBe(true);
+      expect(/[\uD83C-\uD83E][\uDC00-\uDFFF]/.test(t)).toBe(false);
+    }
+    expect(buildMetaAiCallPost(src, 0)).toContain("倉敷市");
+  });
+  it("日替わりで型が変わり、店名を使う型がある", () => {
+    const all = new Set([0, 1, 2, 3, 4].map((d) => buildMetaAiCallPost(src, d)));
+    expect(all.size).toBeGreaterThanOrEqual(4);
+    expect([...all].some((t) => t!.includes("テスト整体院"))).toBe(true);
+  });
+  it("悩みは先頭の句だけ使い、動詞で終わる悩みは使わない（届けたい方に切り替える）", () => {
+    const t = buildMetaAiCallPost(src, 2)!;
+    expect(t).toContain("慢性的な肩こりに悩む人");
+    expect(t).not.toContain("朝の腰の痛み");
+    const t2 = buildMetaAiCallPost({ ...src, mainProblem: "体型が戻らない" }, 2)!;
+    expect(t2).not.toContain("戻らないに悩む");
+    expect(t2).toContain("デスクワークの30〜50代に");
+  });
+  it("業種の括弧書きと「スタジオ」「院」は落とす", () => {
+    const t = buildMetaAiCallPost({ businessType: "マシンピラティススタジオ（整体・美容鍼併設）", area: "岡山県倉敷市玉島" }, 1)!;
+    expect(t).toBe("@meta.ai 倉敷市でマシンピラティスのおすすめを教えて");
+    expect(buildMetaAiCallPost({ businessType: "整体院", area: "倉敷市" }, 1)).toBe("@meta.ai 倉敷市で整体のおすすめを教えて");
+  });
+  it("材料が無くても「強みを伝えて」型は作れる", () => {
+    expect(buildMetaAiCallPost({}, 0)).toBe("@meta.ai うちのお店の強みを、来店されたことのない人に伝えて");
   });
 });

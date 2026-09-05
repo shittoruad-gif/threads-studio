@@ -99,3 +99,84 @@ export function validateMetaAiAsk(
   if (area && !body.includes(area)) return { ok: false, text: t, reason: 'missing_area' };
   return { ok: true, text: t };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ★「Meta AI 呼びかけ投稿」（2026-09-06 三上様指示・実データに合わせて方式変更）
+//
+//   三上様が 9/5 に Moveact の2アカウントで手動で試した結果：
+//     通常の投稿           …  1〜161 回表示
+//     @meta.ai への呼びかけ投稿 … 333〜2,037 回表示（最大は「浅口市金光、鴨方周辺の人に届けて」）
+//   本文が「@meta.ai ＋ 依頼文」だけの投稿を出すと、Meta AI がお店の名前を出して
+//   長い回答をコメントに書き、地元の人の反応も付いた。
+//
+//   そこで「本文に @meta.ai を書いた投稿」を 1日1件、通常の投稿とは別に追加する。
+//   依頼文は お店の登録内容（地域・届けたい方・悩み・サービス・店名）から
+//   決まった型で組み立てる（AIに書かせない＝事実が混ざらない）。
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const META_AI_CALL_ANGLE = 'meta_ai_call';
+
+export interface MetaAiCallSource {
+  storeName?: string | null;
+  businessType?: string | null;
+  area?: string | null;
+  target?: string | null;
+  mainProblem?: string | null;
+  /** 主なメニュー（先頭を使う） */
+  menu?: string[] | null;
+}
+
+/** 「30〜50代の女性」「デスクワークの会社員」のような短い呼び名に整える */
+function shortTarget(t: string | null | undefined): string {
+  const s = String(t || '').replace(/[。．]/g, '').trim();
+  if (!s) return '';
+  return s.length <= 22 ? s : '';
+}
+
+/**
+ * 「慢性的な肩こり」のような名詞で終わる短い悩みだけ使う。
+ * 「体型が戻らない」「痩せたい」のように動詞・形容詞で終わるものは
+ * 「〜に悩む人」につなぐと日本語が壊れるので使わない（その場合は届けたい方を使う）。
+ */
+function shortProblem(p: string | null | undefined): string {
+  const s = String(p || '').replace(/[。．]/g, '').trim();
+  if (!s) return '';
+  const head = s.split(/[、,・／/]/)[0].trim();
+  if (head.length > 20) return '';
+  if (/(ない|たい|らない|れない|くる|する|なる|える|ある|いる|う|く|す|つ|む|る)$/.test(head)) return '';
+  return head;
+}
+
+/**
+ * 業種名を「マシンピラティス」「整体」「カフェ」のような呼び名に。
+ * 括弧書きを落とし、「スタジオ」「院」など場所を表す語尾を外す（「整体院ができるところ」を防ぐ）。
+ * メニュー名は使わない（登録のばらつきが大きく、「予約制」のような語が混ざるため）。
+ */
+function serviceWord(src: MetaAiCallSource): string {
+  let bt = String(src.businessType || '').replace(/[（(][^）)]*[）)]/g, '').trim();
+  bt = bt.replace(/(スタジオ|教室|サロン|院|店|事務所)$/, '').trim() || bt;
+  return bt.length > 0 && bt.length <= 14 ? bt : '';
+}
+
+export function buildMetaAiCallPost(src: MetaAiCallSource, dayIndex: number): string | null {
+  const area = shortAreaName(src.area);
+  const store = String(src.storeName || '').trim();
+  const storeOk = store.length > 0 && store.length <= 16;
+  const target = shortTarget(src.target);
+  const problem = shortProblem(src.mainProblem);
+  const service = serviceWord(src);
+  const who = problem ? `${problem}に悩む人` : target;
+
+  // 実測で表示が多かった順に近い並び。要素が無い型は候補から外す。
+  const candidates: Array<string | null> = [
+    area ? `${META_AI_HANDLE} ${area}周辺の人に、うちの${storeOk ? `お店（${store}）` : 'お店'}を届けて` : null,
+    area && service ? `${META_AI_HANDLE} ${area}で${service}のおすすめを教えて` : null,
+    area && who && service ? `${META_AI_HANDLE} ${area}で${who}に、${service}に通うメリットを伝えて` : null,
+    `${META_AI_HANDLE} うちのお店${storeOk ? `（${store}）` : ''}の強みを、来店されたことのない人に伝えて`,
+    storeOk && service ? `${META_AI_HANDLE} ${store}の${service}は、他のお店と何が違う？` : null,
+  ];
+  const list = candidates.filter((c): c is string => !!c);
+  if (list.length === 0) return null;
+  const text = list[Math.abs(dayIndex) % list.length];
+  return Array.from(text).length <= 120 ? text : null;
+}

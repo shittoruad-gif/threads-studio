@@ -412,11 +412,11 @@ export default function Settings() {
               {/* 「Meta AIに聞く」返信（2026-09-05） */}
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-sm font-medium text-foreground">{t("投稿の直後にMeta AIを呼んで、コメント欄に会話を作る（おすすめ）")}</Label>
+                  <Label className="text-sm font-medium text-foreground">{t("1日1件、Meta AIへの呼びかけ投稿を追加する（おすすめ）")}</Label>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {t("豆知識などの投稿を公開した直後に、その話題の質問を「@meta.ai」宛てにコメントします。")}
-                    {t("Meta AIがコメントで答えるので、投稿の下にすぐ会話ができ、より多くの人に届きやすくなります。")}<br className="hidden sm:inline" />
-                    {t("お店や施術のことは聞きません（Meta AIの回答内容はこちらで制御できないため）。1日1回まで。")}
+                    {t("毎日の投稿とは別に、「@meta.ai 〇〇市で肩こりに悩む人に、整体に通うメリットを伝えて」のような投稿を1日1件、朝〜昼に出します。")}
+                    {t("Meta AIがお店の名前を出してコメントで答えるので、投稿の下に会話ができ、より多くの人に届きやすくなります。")}<br className="hidden sm:inline" />
+                    {t("依頼文は、はじめの設定で教えていただいた地域・お客様像・メニュー・店名から決まった型で作ります。")}
                   </p>
                 </div>
                 <Switch

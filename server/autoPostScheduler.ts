@@ -631,32 +631,8 @@ async function generateAutoPost(
     // Schedule the post
     const scheduledAt = fixedScheduledAt ?? getNextPostingTime(postingTimeIndex, bestHours);
 
-    // ★「Meta AIに聞く」返信（shared/metaAiAsk.ts・既定OFF）。
-    //   知識系の切り口のときだけ、本文の話題に関する一般的な質問を1つ作って持たせる。
-    //   公開直後に @meta.ai 宛てで返信し、Meta AIの公開回答でスレッドに会話を作る。
-    //   お店の固有語が混ざったら付けない。1日1アカウント1回まで。
-    let metaAiAskText: string | null = null;
-    try {
-      const { META_AI_ASK_ANGLES, buildMetaAiAskPrompt, validateMetaAiAsk } = await import('../shared/metaAiAsk');
-      const userRow: any = await db.getUserById(userId);
-      if (userRow?.metaAiAskEnabled && angle?.id && META_AI_ASK_ANGLES.has(angle.id)) {
-        const usedToday = await db.countMetaAiAskToday(threadsAccountId);
-        if (usedToday === 0) {
-          const q = await invokeLLM({
-            messages: [{ role: 'user', content: buildMetaAiAskPrompt(fullContent, project.businessType, project.area) }],
-          });
-          const raw = q.choices[0]?.message?.content;
-          // ★地域名は入れる（三上様指示 2026-09-06）。店名だけを禁止語にする
-          const check = validateMetaAiAsk(typeof raw === 'string' ? raw : '', [
-            (project as any).storeName,
-          ], project.area);
-          if (check.ok) metaAiAskText = check.text;
-          else console.log(`[AutoPost] Meta AIに聞く返信を見送り（${check.reason}） userId=${userId}`);
-        }
-      }
-    } catch (e) {
-      console.warn('[AutoPost] Meta AIに聞く返信の生成に失敗（本文はそのまま）:', (e as Error).message);
-    }
+    // （「Meta AIに聞く」セルフ返信は 2026-09-06 に「呼びかけ投稿」方式へ変更。下の scheduleMetaAiCallPost）
+    const metaAiAskText: string | null = null;
 
     await db.createScheduledPost({
       userId,
@@ -869,6 +845,16 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             // Small delay between generations to avoid API rate limits
             await new Promise(r => setTimeout(r, 2000));
           }
+
+          // ★Meta AI 呼びかけ投稿（1日1件・通常の投稿とは別）。shared/metaAiAsk.ts 参照
+          try {
+            if ((user as any).metaAiAskEnabled !== false) {
+              const project = pinnedProject || eligibleProjects[dayOffset % eligibleProjects.length];
+              await scheduleMetaAiCallPost(user.id, project, account.id, eff.autoPostRequireApproval, dayOffset);
+            }
+          } catch (e) {
+            console.error(`[AutoPost] Meta AI呼びかけ投稿の作成に失敗 user=${user.id} account=${account.id}:`, e);
+          }
         }
 
         // Update rotation indices
@@ -943,6 +929,52 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
  * 条件がそろっていなければ何もしない（getAutoPostEligibleUsers が0件を返す）。
  * 本体の処理を待たせないよう、呼び出し側は await せず投げっぱなしにしてよい。
  */
+/**
+ * ★Meta AI 呼びかけ投稿を1日1件つくる（shared/metaAiAsk.ts の buildMetaAiCallPost）。
+ *   本文は「@meta.ai ＋ 依頼文」だけ。10:00〜11:00 JST に出す（実測で朝〜昼の投稿が伸びた）。
+ *   その日すでにあれば作らない。当日補充で時間を過ぎていれば、いまから30分後（21時まで）。
+ */
+async function scheduleMetaAiCallPost(
+  userId: number,
+  project: any,
+  threadsAccountId: number,
+  requireApproval: boolean,
+  dayIndex: number,
+): Promise<boolean> {
+  const already = await db.countMetaAiAskToday(threadsAccountId).catch(() => 0);
+  if (already > 0) return false;
+  const { buildMetaAiCallPost, META_AI_CALL_ANGLE } = await import('../shared/metaAiAsk');
+  let menu: string[] | null = null;
+  try {
+    const cr = (project as any).counselingResult ? JSON.parse((project as any).counselingResult) : null;
+    menu = Array.isArray(cr?.menu) ? cr.menu : null;
+  } catch { menu = null; }
+  const text = buildMetaAiCallPost({
+    storeName: (project as any).storeName, businessType: project.businessType, area: project.area,
+    target: project.target, mainProblem: project.mainProblem, menu,
+  }, dayIndex);
+  if (!text) { console.log(`[AutoPost] Meta AI呼びかけ投稿: 材料不足のため見送り project=${project.id}`); return false; }
+  // 10:00〜11:00 JST のどこか
+  const nowJst = new Date(Date.now() + JST_OFFSET_MS);
+  const slot = new Date(Date.UTC(nowJst.getUTCFullYear(), nowJst.getUTCMonth(), nowJst.getUTCDate(), 10, 0) - JST_OFFSET_MS + Math.floor(Math.random() * 60) * 60 * 1000);
+  let scheduledAt = slot;
+  if (scheduledAt.getTime() < Date.now() + 5 * 60 * 1000) {
+    const later = new Date(Date.now() + 30 * 60 * 1000);
+    const limit = new Date(Date.UTC(nowJst.getUTCFullYear(), nowJst.getUTCMonth(), nowJst.getUTCDate(), 21, 0) - JST_OFFSET_MS);
+    if (later.getTime() > limit.getTime()) { console.log('[AutoPost] Meta AI呼びかけ投稿: 本日は時間切れ'); return false; }
+    scheduledAt = later;
+  }
+  await db.createScheduledPost({
+    userId, projectId: project.id, threadsAccountId, scheduledAt,
+    postContent: text,
+    status: requireApproval ? 'awaiting_approval' : 'pending',
+    source: 'auto',
+    angle: META_AI_CALL_ANGLE,
+  } as any);
+  console.log(`[AutoPost] Meta AI呼びかけ投稿を予約 user=${userId} account=${threadsAccountId} at=${new Date(scheduledAt.getTime() + JST_OFFSET_MS).toISOString().slice(11, 16)}JST 「${text}」`);
+  return true;
+}
+
 export async function runAutoPostCatchUpForUser(userId: number, reason: string): Promise<void> {
   try {
     const r = await processAutoPostGeneration({ onlyUserId: userId, fillToday: true });

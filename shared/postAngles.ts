@@ -156,7 +156,11 @@ export const PERSONAL_EXTRA_ANGLES: PostAngle[] = [
   },
 ];
 
-const ANGLE_BY_ID = new Map([...POST_ANGLES, ...PERSONAL_EXTRA_ANGLES].map((a) => [a.id, a]));
+/** 表示用だけの切り口（自動の選択には使わない） */
+const LABEL_ONLY_ANGLES: PostAngle[] = [
+  { id: 'meta_ai_call', label: 'Meta AI呼びかけ', hint: '' },
+];
+const ANGLE_BY_ID = new Map([...POST_ANGLES, ...PERSONAL_EXTRA_ANGLES, ...LABEL_ONLY_ANGLES].map((a) => [a.id, a]));
 
 export function getAngle(id: string | null | undefined): PostAngle | undefined {
   if (!id) return undefined;

@@ -1617,17 +1617,16 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       [{ label: "元に戻す", data: `s=auto&v=${q.v === "on" ? "off" : "on"}${a}` }, ...MENU_HINT],
     )];
   }
-  // ── 「Meta AIに聞く」返信の ON/OFF（shared/metaAiAsk.ts）──
+  // ── Meta AI 呼びかけ投稿の ON/OFF（shared/metaAiAsk.ts）──
   if (q.s === "metaai") {
     const on = q.v === "on";
     await db.updateAutoPostSettings(user.id, { metaAiAskEnabled: on });
     return [textWithQuick(
       (on
-        ? "「Meta AIに聞く」返信をONにしました。\n\n" +
-          "豆知識・よくある誤解などの投稿を公開した直後に、その話題の一般的な質問を @meta.ai 宛てに1件返信します。" +
-          "Meta AIが公開で答えるので、投稿の下にすぐ会話ができます。\n" +
-          "お店や施術のことは聞きません。1日1回までです。"
-        : "「Meta AIに聞く」返信を止めました。") +
+        ? "Meta AI呼びかけ投稿をONにしました。\n\n" +
+          "毎日の投稿とは別に、「@meta.ai 〇〇市で…に通うメリットを伝えて」のような投稿を1日1件、朝〜昼に出します。" +
+          "Meta AIがお店の名前を出してコメントで答えるので、投稿の下に会話ができ、届く人が増えます。"
+        : "Meta AI呼びかけ投稿を止めました。") +
       "\n\n間違えた場合は「元に戻す」を押してください。",
       [{ label: "元に戻す", data: `s=metaai&v=${on ? "off" : "on"}` }, ...MENU_HINT],
     )];

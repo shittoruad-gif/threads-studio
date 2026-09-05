@@ -815,7 +815,7 @@ export async function countMetaAiAskToday(accountId: number): Promise<number> {
     .from(scheduledPosts)
     .where(and(
       eq(scheduledPosts.threadsAccountId, accountId),
-      sql`${scheduledPosts.metaAiAskText} IS NOT NULL`,
+      sql`(${scheduledPosts.metaAiAskText} IS NOT NULL OR ${scheduledPosts.angle} = 'meta_ai_call')`,
       sql`DATE(CONVERT_TZ(${scheduledPosts.scheduledAt}, '+00:00', '+09:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '+09:00'))`,
       sql`${scheduledPosts.status} IN ('pending','awaiting_approval','processing','posted')`,
     ));

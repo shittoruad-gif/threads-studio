@@ -335,7 +335,9 @@ export async function executePendingPosts() {
         //     同日の3投稿は連番IDのため必ず別の言葉になり、「言葉×日付」で
         //     どの投稿から何人来たかをLINE受信箱から判別できる。
         //   - 各キーワードにはLINE側（Keiro）の部分一致自動応答を用意しておくこと。
-        if (post.source === 'auto' && !(post as any).replyToThreadsId) {
+        if (post.source === 'auto' && !(post as any).replyToThreadsId &&
+          (post as any).angle !== 'meta_ai_call' // ★Meta AI呼びかけ投稿には計測コメントを付けない
+        ) {
           try {
             const { inquiryCommentText } = await import('../shared/inquiryKeywords');
             const { parseProjectLinks } = await import('../shared/projectLinks');
@@ -378,6 +380,7 @@ export async function executePendingPosts() {
         if (
           post.source === 'auto' &&
           !(post as any).replyToThreadsId &&
+          (post as any).angle !== 'meta_ai_call' && // ★Meta AI呼びかけ投稿には追い投稿を付けない
           postUser?.autoFollowUpEnabled !== false &&
           canReply
         ) {

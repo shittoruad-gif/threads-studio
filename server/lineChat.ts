@@ -226,8 +226,9 @@ export const HELP_TOPICS: Array<{ key: string; cat: string; q: string; a: string
       "3. 「興味がない」を選ぶ：返信の「…」→「興味がない」\n\n" +
       "Threads Studioの投稿は、はじめの設定で教えていただいた事実だけで作っているので、AIに確かめられても食い違いは出ません。" },
   { key: "metaai_ask", cat: "settings", q: "Meta AIを使って投稿を目立たせたい",
-    a: "豆知識などの投稿を公開した直後に、その話題の質問を @meta.ai 宛てにコメントし、Meta AIの答えで投稿の下に会話を作る仕組みが入っています（はじめからON）。会話が付いた投稿は、より多くの人に届きやすくなります。\n\n" +
-      "お店や施術のことは聞きません（Meta AIの回答はこちらで制御できないため）。1日1回まで。止めたいときは「設定」からOFFにできます。",
+    a: "毎日の投稿とは別に、「@meta.ai 〇〇市で肩こりに悩む人に、整体に通うメリットを伝えて」のような呼びかけ投稿を1日1件、朝〜昼に出しています（はじめからON）。\n" +
+      "Meta AIがお店の名前を出してコメントで答えるので、投稿の下に会話ができ、届く人が増えます。実際に、通常の投稿の数倍〜十数倍の表示になった例があります。\n\n" +
+      "依頼文は、はじめの設定で教えていただいた地域・お客様像・メニュー・店名から決まった型で作ります。止めたいときは「設定」からOFFにできます。",
     action: { label: "設定を見る", data: "m=settings" } },
   { key: "manual", cat: "account", q: "Threadsのアカウント作成から連携までのやり方",
     a: "Instagramのアカウント作成 → Threadsの開設 → Threads Studioとの連携までを、はじめての方向けに1ページにまとめています。\n" +
@@ -457,7 +458,7 @@ export function settingsQuick(
     { label: s.autoPostRequireApproval ? "確認なしにする" : "公開前に確認する", data: `s=appr&v=${s.autoPostRequireApproval ? "off" : "on"}` },
     { label: "短め にする", data: "s=len&v=short" },
     { label: "長め にする", data: "s=len&v=long" },
-    { label: s.metaAiAskEnabled ? "Meta AIに聞く返信を止める" : "Meta AIに聞く返信をON", data: `s=metaai&v=${s.metaAiAskEnabled ? "off" : "on"}` },
+    { label: s.metaAiAskEnabled ? "Meta AI呼びかけ投稿を止める" : "Meta AI呼びかけ投稿をON", data: `s=metaai&v=${s.metaAiAskEnabled ? "off" : "on"}` },
     { label: "NGワードを追加", data: "s=ng" },
     notifyToggle,
   ];
@@ -491,7 +492,7 @@ export function settingsSummary(
     (want > maxPerDay ? `　※ ご利用中のプランの上限は1日${maxPerDay}回です\n` : "") +
     `・公開前の確認：${s.autoPostRequireApproval ? "する" : "しない"}\n` +
     `・投稿の長さ：${len}\n` +
-    `・Meta AIに聞く返信：${s.metaAiAskEnabled ? "ON（1日1回）" : "OFF"}\n` +
+    `・Meta AI呼びかけ投稿：${s.metaAiAskEnabled ? "ON（1日1件・朝〜昼）" : "OFF"}\n` +
     notify + "\n" +
     "変えたいものを選んでください。"
   );
