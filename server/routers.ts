@@ -1121,6 +1121,8 @@ export const appRouter = router({
         angle: z.string().max(50).optional(),
         // 固定投稿ウィザードでユーザーが選んだ優先チャネル種別（line / reservation / website 等）
         preferredLinkType: z.string().max(20).optional(),
+        // 返信誘発フレーズを投稿末尾に付加する（true = 付加する）
+        withReplyHook: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         // Check AI generation feature
@@ -1242,13 +1244,18 @@ export const appRouter = router({
           }
         }
 
+        // 返信誘発フレーズ（withReplyHook=true のとき末尾に追加）
+        const replyHookNote = input.withReplyHook
+          ? '\n\n【返信誘発フレーズ（必須）】\n投稿の最後に、読者が一言で答えられる具体的な問いかけを1文だけ追加すること。二択・体験質問・Yes/No形式など、答えやすいものを選ぶこと。「〜だと思いませんか？」「いかがでしょうか？」などのぼんやりした質問は禁止。例：「あなたはAとB、どちら派ですか？」「最後に行ったのはいつですか？」「コメント欄で教えてください！」'
+          : '';
+
         // Call LLM（個人ブランディングモードなら発信者設定を最優先で上書き）
         const { invokeLLM } = await import('./_core/llm');
         const { isPersonalMode, personalModePromptOverride } = await import('../shared/personalBrand');
         const personalOverride = isPersonalMode((project as any).mode) ? personalModePromptOverride() : '';
         const response = await invokeLLM({
           messages: [
-            { role: 'user', content: prompt + angleNote + personalOverride },
+            { role: 'user', content: prompt + angleNote + replyHookNote + personalOverride },
           ],
           response_format: {
             type: 'json_schema',
@@ -1413,6 +1420,95 @@ ${optionsText}`;
           return { evaluations: evals, recommendedIndex: rec };
         } catch (e) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '評価の取得に失敗しました。少し時間をおいてお試しください。' });
+        }
+      }),
+
+    // ── @meta.ai メンション投稿ジェネレーター ─────────────────────────
+    // ユーザーの業種・ターゲット・強みをもとに、@meta.ai に質問する形式の
+    // 投稿を指定本数生成する。Meta AI が返信することでエンゲージメントが上がる。
+    // AI生成カウントは消費しない（補助機能）。
+    generateMetaAiPosts: protectedProcedure
+      .input(z.object({
+        projectId: z.string(),
+        count: z.number().min(3).max(5).optional().default(5),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const project = await db.getProjectById(input.projectId);
+        if (!project || project.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+        }
+        if (!project.businessType || !project.target || !project.mainProblem) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'プロジェクトの業種、ターゲット、主な悩みを設定してから使用してください。',
+          });
+        }
+
+        const storeName = (project as any).storeName || project.businessType;
+        const prompt = `あなたはThreadsのエンゲージメント戦略の専門家です。
+以下のお店の情報をもとに、「@meta.ai」をメンションして質問する形式のThreads投稿を${input.count}本生成してください。
+
+【お店の情報】
+業種: ${project.businessType}
+店舗名: ${storeName}
+地域: ${project.area || '未設定'}
+ターゲット: ${project.target}
+お客様の主な悩み: ${project.mainProblem}
+強み: ${project.strength || '未設定'}
+
+【ルール】
+- 各投稿は必ず「@meta.ai 」から始めること
+- Meta AIに対して、お店のビジネスや顧客の悩みに関連した具体的な質問をすること
+- 質問は店舗集客・マーケティング・健康・美容・地域情報など業種に合わせた実用的なものにすること
+- 投稿本文は150文字以内のシンプルな質問文1つだけ（ツリー不要）
+- 読んだ人も「気になる」と思える質問にすること（Meta AIの回答がタイムラインに流れてくるので、フォロワー以外にもリーチする）
+- ハッシュタグ不要
+- 各投稿は独立した内容にすること（同じ質問の言い換えは禁止）
+
+【良い例（整骨院の場合）】
+@meta.ai 肩こりを根本から改善するには、ストレッチと整体どちらが効果的ですか？毎日デスクワークで悩んでいる方に、最新の研究結果を踏まえて教えてください。
+
+【返答形式】
+JSON配列で返してください: { "posts": ["投稿1", "投稿2", ...] }`;
+
+        try {
+          const { invokeLLM } = await import('./_core/llm');
+          const res = await invokeLLM({
+            temperature: 0.8,
+            messages: [{ role: 'user', content: prompt }],
+            response_format: {
+              type: 'json_schema',
+              json_schema: {
+                name: 'meta_ai_posts',
+                strict: true,
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    posts: {
+                      type: 'array',
+                      items: { type: 'string' },
+                    },
+                  },
+                  required: ['posts'],
+                },
+              },
+            },
+          });
+          const content = res?.choices?.[0]?.message?.content;
+          const parsed = JSON.parse(typeof content === 'string' ? content : '{}');
+          const posts: string[] = Array.isArray(parsed.posts)
+            ? parsed.posts.filter((p: unknown) => typeof p === 'string' && p.trim().startsWith('@meta.ai'))
+            : [];
+          if (posts.length === 0) {
+            throw new Error('生成結果が空でした');
+          }
+          return { posts };
+        } catch (e) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Meta AI投稿の生成に失敗しました。時間をおいてお試しください。',
+          });
         }
       }),
 

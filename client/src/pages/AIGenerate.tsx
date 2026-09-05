@@ -500,6 +500,31 @@ export default function AIGenerate() {
   // 3案を並列生成するため、副作用は handleGenerate 側で一括管理する（バインドは素のまま）
   const generateMutation = trpc.project.generatePost.useMutation();
 
+  // ── 返信誘発フレーズ（デフォルトON）──
+  const [withReplyHook, setWithReplyHook] = useState(true);
+
+  // ── @meta.ai 質問投稿ジェネレーター ──
+  const [metaAiDialogOpen, setMetaAiDialogOpen] = useState(false);
+  const [metaAiPosts, setMetaAiPosts] = useState<string[]>([]);
+  const [metaAiCopied, setMetaAiCopied] = useState<number | null>(null);
+  const [isGeneratingMetaAi, setIsGeneratingMetaAi] = useState(false);
+  const generateMetaAiMutation = trpc.project.generateMetaAiPosts.useMutation();
+
+  const handleGenerateMetaAi = async () => {
+    if (!projectId || isGeneratingMetaAi) return;
+    setIsGeneratingMetaAi(true);
+    setMetaAiPosts([]);
+    try {
+      const data = await generateMetaAiMutation.mutateAsync({ projectId, count: 5 });
+      setMetaAiPosts(data.posts);
+      setMetaAiDialogOpen(true);
+    } catch (e: any) {
+      toast.error(e?.message || 'Meta AI投稿の生成に失敗しました');
+    } finally {
+      setIsGeneratingMetaAi(false);
+    }
+  };
+
   const handleSaveAsTemplate = () => {
     if (!templateName.trim()) {
       toast.error(t("テンプレート名を入力してください"));
@@ -565,6 +590,7 @@ export default function AIGenerate() {
         tone: tone || undefined,
         // ホームの「いま伸びている型」から来た場合はその切り口で書かせる
         angle: recommendedAngle || undefined,
+        withReplyHook: withReplyHook || undefined,
       });
       setGeneratedPost(data as GeneratedPost);
       setEditedPost(data as GeneratedPost);
@@ -605,6 +631,7 @@ export default function AIGenerate() {
               regionalRefIds: regionalRefIds.length > 0 ? regionalRefIds : undefined,
               purpose: purpose || undefined,
               tone: tone || undefined,
+              withReplyHook: withReplyHook || undefined,
             })
             .then((d) => ({ ...(d as GeneratedPost), _postType: pt }))
             .catch(() => null),
@@ -1354,6 +1381,22 @@ export default function AIGenerate() {
                   </div>
                 )}
 
+                {/* 返信誘発フレーズ トグル */}
+                <button
+                  type="button"
+                  onClick={() => setWithReplyHook(!withReplyHook)}
+                  className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-colors ${withReplyHook ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/30'} hover:bg-muted/50`}
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <span className="text-base">💬</span>
+                    {t("返信を誘う問いかけを末尾に付加")}
+                    <HelpTooltip content="投稿の最後に「あなたはどっち派ですか？」など返信しやすい1問を自動追加します。返信数がアルゴリズムの評価指標なので、リーチが大幅に伸びやすくなります" />
+                  </span>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${withReplyHook ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                    {withReplyHook ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+
                 {(() => {
                   const quotaReached = aiUsage?.limit !== null && aiUsage?.limit !== undefined && aiUsage?.limit !== -1 && (aiUsage?.count ?? 0) >= aiUsage.limit;
                   const busy = isGeneratingSingle || isGeneratingOptions;
@@ -1385,6 +1428,25 @@ export default function AIGenerate() {
                       <p className="text-xs text-muted-foreground text-center">
                         {t("まず1案だけ作ります。いろいろ見比べたいときは「3案から選んで作る」を押してください。")}
                       </p>
+
+                      {/* Meta AI @メンション投稿 */}
+                      <div className="border-t border-border pt-3 mt-1">
+                        <Button
+                          variant="outline"
+                          onClick={handleGenerateMetaAi}
+                          disabled={isGeneratingMetaAi || busy}
+                          className="w-full h-11 border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-300 dark:hover:bg-purple-950"
+                        >
+                          {isGeneratingMetaAi ? (
+                            <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Meta AI投稿を生成中…</>
+                          ) : (
+                            <>✨ @meta.ai メンション投稿を作る</>
+                          )}
+                        </Button>
+                        <p className="text-xs text-muted-foreground text-center mt-1">
+                          Meta AIが返信 → リーチが爆発的に伸びる投稿を5本生成（AI枠消費なし）
+                        </p>
+                      </div>
                     </>
                   );
                 })()}
@@ -2778,6 +2840,59 @@ export default function AIGenerate() {
               {updatePresetMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {t("更新")}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── @meta.ai 質問投稿ダイアログ ── */}
+      <Dialog open={metaAiDialogOpen} onOpenChange={setMetaAiDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>✨ @meta.ai メンション投稿</DialogTitle>
+            <DialogDescription>
+              Meta AIが返信することで、フォロワー以外にもリーチが広がります。投稿をコピーしてThreadsに貼り付けてください。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {metaAiPosts.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">投稿を生成中です…</p>
+            )}
+            {metaAiPosts.map((post, i) => (
+              <div key={i} className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                <p className="text-sm whitespace-pre-wrap leading-relaxed">{post}</p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 h-8 text-xs"
+                    onClick={() => {
+                      navigator.clipboard.writeText(post).catch(() => {});
+                      setMetaAiCopied(i);
+                      setTimeout(() => setMetaAiCopied(null), 2000);
+                    }}
+                  >
+                    {metaAiCopied === i ? <><Check className="h-3 w-3 mr-1" />コピー済み</> : <><Copy className="h-3 w-3 mr-1" />コピー</>}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 h-8 text-xs"
+                    onClick={() => {
+                      if (!projectId) return;
+                      setGeneratedPost({ title: '@meta.ai投稿', mainPost: post, treePosts: [], cta: '', hashtags: [], goal: 'Meta AIメンションでリーチ拡大', improvement: '', expectedEffect: 'Meta AIが返信することでフィードに露出', timingCandidate: '', weeklyImprovementPoint: '' });
+                      setEditedPost({ title: '@meta.ai投稿', mainPost: post, treePosts: [], cta: '', hashtags: [], goal: 'Meta AIメンションでリーチ拡大', improvement: '', expectedEffect: 'Meta AIが返信することでフィードに露出', timingCandidate: '', weeklyImprovementPoint: '' });
+                      setMetaAiDialogOpen(false);
+                      toast.success('編集エリアに反映しました。スケジュール設定できます');
+                    }}
+                  >
+                    <Calendar className="h-3 w-3 mr-1" />スケジュール
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMetaAiDialogOpen(false)} className="w-full">閉じる</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
