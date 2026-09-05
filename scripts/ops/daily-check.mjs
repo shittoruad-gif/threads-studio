@@ -67,6 +67,19 @@ async function main() {
   }
   if (stuck.length === 0) console.log('  なし（全員、設定が整っています）');
 
+  // ── 1.5 業種と登録内容のズレ（呉服店に整体の選択肢が入っていた・2026-09-06 三上様指示）
+  try {
+    const mm = await get('admin.listIndustryMismatches');
+    console.log(`\n■ 業種と登録内容のズレ: ${mm.length}件`);
+    for (const m of mm.slice(0, 10)) {
+      console.log(`  ${String(m.name || '').padEnd(12)} ${String(m.email || '').padEnd(32)} ${m.storeName || ''}（${m.businessType || '業種不明'}）`);
+      console.log(`    ${m.summary}`);
+    }
+    if (mm.length === 0) console.log('  なし');
+  } catch (e) {
+    console.log(`\n■ 業種と登録内容のズレ: 取得できませんでした（${String(e).slice(0, 80)}）`);
+  }
+
   // ── 2. 担当者の返信待ち
   const q = await get('admin.listQuestions', { needsHumanOnly: true });
   const waiting = (q?.questions || []).filter(x => !x.repliedAt);

@@ -99,6 +99,29 @@ export async function saveCounselingAnswers(params: {
   }
 
   await db.updateProject(params.projectId, patch);
+  // ★業種と答えがずれていたら運営に知らせる（呉服店に整体の選択肢が入っていた・2026-09-06）。
+  //   保存は止めない。通知が失敗しても保存には影響させない。
+  try {
+    const { detectIndustryMismatch } = await import("../shared/industryMismatch");
+    const check = detectIndustryMismatch(a.businessTypeRaw, a);
+    if (check.mismatch) {
+      console.warn(`[Counseling] 業種と答えのズレ user=${params.userId} project=${params.projectId}: ${check.summary}`);
+      const user: any = await db.getUserById(params.userId).catch(() => null);
+      import("./supportNotify")
+        .then(({ notifyStaffOfIndustryMismatch }) => notifyStaffOfIndustryMismatch({
+          userId: params.userId,
+          userName: user?.name ?? null,
+          userEmail: user?.email ?? null,
+          storeName: storeName || null,
+          projectId: params.projectId,
+          summary: check.summary,
+          hits: check.hits,
+        }))
+        .catch((e) => console.error("[Counseling] 業種ズレの通知に失敗:", e));
+    }
+  } catch (e) {
+    console.error("[Counseling] 業種ズレの判定に失敗:", e);
+  }
   // お店の情報がそろった瞬間に、今日の分の投稿を作る（朝6時を待たない）。
   // 条件が足りなければ中で何もしない。保存の応答は待たせない。
   import("./autoPostScheduler")

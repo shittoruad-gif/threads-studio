@@ -3731,6 +3731,31 @@ ${input.commentText}
       }),
 
     /** どのお客様が、どの段階で止まっているかの一覧（設定の取りこぼしを見つける） */
+    // ★業種と「はじめの設定」の答えがずれているお店の情報（呉服店に整体の選択肢・2026-09-06）。
+    //   朝の点検（scripts/ops/daily-check.mjs）が読む。保存時の通知とは別に、既存分を拾う。
+    listIndustryMismatches: adminProcedure.query(async () => {
+      const { detectProjectIndustryMismatch } = await import('../shared/industryMismatch');
+      const users = await db.getAllUsers();
+      const out: any[] = [];
+      for (const u of users as any[]) {
+        let projects: any[] = [];
+        try { projects = (await db.getProjectsByUserId(u.id)) || []; } catch { continue; }
+        for (const p of projects) {
+          if (String(p.id).startsWith('demo_')) continue;
+          const r = detectProjectIndustryMismatch(p);
+          if (!r.mismatch) continue;
+          out.push({
+            userId: u.id, name: u.name, email: u.email,
+            projectId: p.id, storeName: p.storeName ?? null, businessType: p.businessType ?? null,
+            summary: r.summary,
+            hits: r.hits.map((h) => ({ field: h.fieldLabel, term: h.term, group: h.groupLabel })),
+            updatedAt: p.updatedAt ?? null,
+          });
+        }
+      }
+      return out;
+    }),
+
     listStuckUsers: adminProcedure.query(async () => {
       const { detectNextAction } = await import('./nextAction');
       const users = await db.getAllUsers();

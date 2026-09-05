@@ -13,6 +13,7 @@ import {
 import { COUNSELING_QUESTIONS } from "../shared/counseling";
 import { buildCounselingBrief, renderBriefText } from "../shared/counselingBrief";
 import { applyIndustryOverrides } from "../shared/industryProfiles";
+import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 
@@ -528,6 +529,15 @@ interface CounselingState {
   /** どのThreadsアカウントの設定か（複数運用時。1つだけなら未設定） */
   accountId?: number | null;
   /**
+   * 連携アカウントのプロフィールから先に読み取った答え（質問ID → 答え）。
+   * 質問のときに「こう読み取りました」と出し、「これでOK」でそのまま採用する。
+   */
+  prefill?: Record<string, string>;
+  /** 何から読み取ったか（例：「@name のプロフィール」「いまの登録内容」） */
+  prefillSource?: string;
+  /** saved＝前回の登録内容、profile＝連携アカウントのプロフィール */
+  prefillKind?: "saved" | "profile";
+  /**
    * 時間が空いたあとに送られてきた文章。
    * 「続きから再開する」を選ばれたら、いま出している質問への回答として使う。
    * （再開の確認をしている間、お客様が書いた文章を捨てないため）
@@ -641,12 +651,26 @@ function askQuestion(st: CounselingState): unknown[] {
     : st.step > 0
       ? "\n\n（1つ前の質問に戻る場合は下の「戻る」を押してください）"
       : "";
+  // ★プロフィールから先に読み取った答えがあれば、それを見せて「これでOK」で進めるようにする
+  const proposed = st.prefill?.[q.id as string];
+  const showProposal = !!proposed && !(q.id in st.answers);
+  // 選択式は保存値（on／local,proof）ではなく、ボタンの名前で見せる
+  const shownValue = showProposal && Array.isArray(q.choices)
+    ? String(proposed).split(",").map((v) => {
+        const c = q.choices.find((x: any) => x.value === v.trim() || x.label === v.trim());
+        return c ? c.label : v.trim();
+      }).filter(Boolean).join("、")
+    : proposed;
+  const proposal = showProposal
+    ? `\n\n${prefillProposalText(shownValue!, st.prefillSource || "連携アカウントのプロフィール", st.prefillKind || "profile")}`
+    : "";
   const choices: string[] = [];
+  if (showProposal) choices.push("これでOK");
   if (Array.isArray(q.choices)) for (const c of q.choices) choices.push(c.label);
   else if (Array.isArray(q.suggestions)) choices.push(...q.suggestions);
   if (canSkip) choices.push("スキップ");
   if (editing || st.step > 0) choices.push("戻る");
-  return [textWithChoices(head + hint + example + choiceDesc + skip + back, choices)];
+  return [textWithChoices(head + hint + example + choiceDesc + proposal + skip + back, choices)];
 }
 
 /**
@@ -705,6 +729,14 @@ async function advanceCounseling(userId: number, lineUserId: string, st: Counsel
     st.step -= 1;
     await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
     return askQuestion(st);
+  }
+  // ★「これでOK」＝プロフィールから先に読み取った答えをそのまま採用する
+  if (/^これでOK$/i.test(a)) {
+    const proposed = st.prefill?.[q.id as string];
+    if (!proposed) {
+      return [{ type: "text", text: "この質問には先に入れておいた内容がありません。答えをそのまま送ってください。" }, ...askQuestion(st)];
+    }
+    return advanceCounseling(userId, lineUserId, st, proposed);
   }
   const skipped = /^(スキップ|なし|特になし)$/.test(a);
   // ★「無ければ『なし』でOK」と案内している質問（allowEmptyShortcut）は、必須でも「なし」を受け取る。
@@ -1095,10 +1127,40 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       const lbl = await accountLabel(user.id, accountId);
       accountName = lbl ? lbl.replace(/ の$/, "") : null;
     }
-    const st: CounselingState = { mode: q.mode, step: 0, answers: {}, projectId, accountId, accountName };
+    // ★連携ずみのアカウントがあれば、アカウント名・プロフィール文から答えを先に読み取っておく。
+    //   質問のときに「こう読み取りました」と出し、合っていれば「これでOK」で進める
+    //   （2026-09-06 三上様指示：直したいところだけ直して進めるのが理想）。
+    // ★すでに登録ずみのお店の情報があれば、前回の答えを先に入れる（もう一度すべて入力させない）。
+    let prefill: Record<string, string> = {};
+    let prefillSource = "";
+    let prefillKind: "saved" | "profile" = "profile";
+    try {
+      const { buildPrefillFromSavedProject, buildPrefillFromThreadsAccount } = await import("./counselingPrefill");
+      // 新規のときは projectId がまだ無いので undefined → プロフィールからの読み取りへ
+      const existing = await db.getProjectById(projectId).catch(() => undefined);
+      const saved = existing && existing.userId === user.id ? buildPrefillFromSavedProject(existing as any) : {};
+      if (Object.keys(saved).length >= 3) {
+        prefill = saved;
+        prefillSource = "いまの登録内容";
+        prefillKind = "saved";
+      } else {
+        const pf = await buildPrefillFromThreadsAccount(user.id, accountId);
+        prefill = pf.answers as Record<string, string>;
+        prefillSource = pf.source;
+      }
+    } catch (e) {
+      console.error("[LineChat] 先埋めに失敗（ふつうに質問します）:", e);
+    }
+    const prefillCount = Object.keys(prefill).length;
+    const st: CounselingState = {
+      mode: q.mode, step: 0, answers: {}, projectId, accountId, accountName,
+      ...(prefillCount > 0 ? { prefill, prefillSource, prefillKind } : {}),
+    };
     await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
+    const { prefillIntroText } = await import("./counselingPrefill");
     return [
       { type: "text", text: (accountName ? `${accountName} の設定として、` : "") + (q.mode === "personal" ? "「個人にファンをつける」で進めます。" : "「お店の集客」で進めます。") },
+      ...(prefillCount > 0 ? [{ type: "text", text: prefillIntroText(prefillSource, prefillCount, prefillKind) }] : []),
       ...askQuestion(st),
     ];
   }
