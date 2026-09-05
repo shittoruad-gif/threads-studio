@@ -26,22 +26,76 @@ export type PinnedDraft = {
   accountId: number;
 };
 
-const JSON_SCHEMA = {
-  type: "json_schema",
-  json_schema: {
-    name: "pinned_post",
-    schema: {
-      type: "object",
-      properties: {
-        mainPost: { type: "string", description: "固定投稿の本文（400〜470文字。住所・営業時間・免責の羅列は書かない）" },
-        cta: { type: "string", description: "コメント欄のリンクへ誘導する一言だけ（20文字前後・1行。住所や注意書きは書かない）" },
+/**
+ * 締めの一言の指示。
+ * ★ご案内先URLが未登録のときに「コメント欄のリンクから」と書かせてはいけない。
+ *   公開後にURLを添えるのは attachPinnedComment だけで、URLが無ければ何も付かない。
+ *   それでも本文だけが「コメント欄をご覧ください」と言うと、読んだ方が
+ *   存在しないリンクを探すことになる（お店の信用を落とす）。
+ */
+function pinnedJsonSchema(hasDestination: boolean) {
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: "pinned_post",
+      schema: {
+        type: "object",
+        properties: {
+          mainPost: { type: "string", description: "固定投稿の本文（400〜470文字。住所・営業時間・免責の羅列は書かない）" },
+          cta: {
+            type: "string",
+            description: hasDestination
+              ? "コメント欄のリンクへ誘導する一言だけ（20文字前後・1行。住所や注意書きは書かない）"
+              : "ご相談を促す一言だけ（20文字前後・1行）。リンク・コメント欄・プロフィールなど、行き先の案内は書かない。住所や注意書きも書かない",
+          },
+        },
+        required: ["mainPost", "cta"],
+        additionalProperties: false,
       },
-      required: ["mainPost", "cta"],
-      additionalProperties: false,
+      strict: true,
     },
-    strict: true,
-  },
-} as const;
+  } as const;
+}
+
+/** 締めの一言を作れなかったときの控え */
+const FALLBACK_CTA_WITH_LINK = "くわしくはコメント欄のリンクからどうぞ。";
+const FALLBACK_CTA_NO_LINK = "気になることがあれば、お気軽にご相談ください。";
+
+/** 行き先の案内が入っているか（ご案内先URLが無いときに落とす目印） */
+const LINK_MENTION = /コメント欄|プロフィール(のリンク|欄)?|リンク|ＵＲＬ|URL|下記のリンク/;
+
+/**
+ * ご案内先URLが未登録のときに、プロンプトへ足す注意書き。
+ * 誘導先が1つも登録されていないと、プロンプトの「誘導ルール」自体が出ないため、
+ * 何も言わないとAIが自前で「コメント欄のリンクから」と書いてしまう。
+ */
+const NO_DESTINATION_OVERRIDE = `
+
+【重要・この投稿には案内先のリンクがありません】
+- このお店はご案内先URLをまだ登録していません。公開後にコメント欄へ付くリンクはありません。
+- 本文・締めの一言のどこにも「コメント欄のリンク」「プロフィールのリンク」「詳しくはこちら」などの
+  リンクへの誘導を書かないこと。読んだ方が存在しないリンクを探すことになります。
+- 締めは「気軽にご相談ください」「お気軽にお声がけください」のように、リンクに触れない言い方にすること。
+`;
+
+/**
+ * ご案内先URLが無いのに、本文にリンクへの誘導が残ってしまった場合に落とす。
+ * 段落（改行区切り）単位で見て、行き先の案内を含む行を取り除く。
+ *
+ * ★落とした結果が短すぎるときは、元の本文を返さずに空を返す。
+ *   元に戻すと「付かないリンクへの誘導」が復活してしまい、
+ *   本来ふせぎたかったことがそのまま起きるため。空のときは作り直しになる。
+ */
+export function stripLinkMentions(mainPost: string): string {
+  const kept = mainPost.split("\n").filter((line) => {
+    const t = line.trim();
+    if (!t) return true;              // 空行は段落の区切りとして残す
+    return !LINK_MENTION.test(t);
+  });
+  const joined = kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  // 本文の半分以上が「リンクの話」だった＝AIの出力が壊れている。作り直したほうが早い。
+  return Array.from(joined).length >= Math.floor(Array.from(mainPost).length * 0.5) ? joined : "";
+}
 
 /**
  * Threadsの1投稿上限（500文字）への収め方。
@@ -142,8 +196,8 @@ export async function createPinnedDraft(userId: number, accountId?: number | nul
     const personalOverride = isPersonalMode(project.mode) ? personalModePromptOverride() : "";
 
     const res: any = await invokeLLM({
-      messages: [{ role: "user", content: prompt + personalOverride }],
-      response_format: JSON_SCHEMA as any,
+      messages: [{ role: "user", content: prompt + personalOverride + (destination ? "" : NO_DESTINATION_OVERRIDE) }],
+      response_format: pinnedJsonSchema(!!destination) as any,
     });
     const raw = res?.choices?.[0]?.message?.content;
     if (typeof raw !== "string" || !raw.trim()) throw new Error("AI応答が空です");
@@ -155,11 +209,19 @@ export async function createPinnedDraft(userId: number, accountId?: number | nul
     //   （氷見様データで528字のctaが出た・2026-09-02）。1行目だけを使い、
     //   長すぎる場合は既定の誘導文に差し替える。
     const ctaLine = cta.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "";
-    const safeCta = ctaLine && Array.from(ctaLine).length <= 60
+    const fallbackCta = destination
+      ? (destination.ctaLine ?? FALLBACK_CTA_WITH_LINK)
+      : FALLBACK_CTA_NO_LINK;
+    // ★ご案内先が無いのに「コメント欄／プロフィールのリンク」と書かれていたら、
+    //   その一言は使わない（付かないリンクへ誘導しないため）。
+    const safeCta = ctaLine && Array.from(ctaLine).length <= 60 && (destination || !LINK_MENTION.test(ctaLine))
       ? ctaLine
-      : (destination?.ctaLine ?? "くわしくはコメント欄のリンクからどうぞ。");
+      : fallbackCta;
+    // 案内先が無いときは、本文に残ったリンクへの誘導も落とす（指示だけでは残ることがある）
+    const safeMain = destination ? main : stripLinkMentions(main);
+    if (!safeMain) throw new Error("案内先が無いのに、本文がリンクへの誘導ばかりでした");
     const { trimToBudget } = await import("../shared/postLength");
-    content = trimToBudget(main, safeCta, PINNED_CHAR_BUDGET);
+    content = trimToBudget(safeMain, safeCta, PINNED_CHAR_BUDGET);
   } catch (e) {
     console.error("[PinnedFlow] 固定投稿の生成に失敗:", e);
     return { error: "投稿をうまく作れませんでした。少し時間をおいて、もう一度お試しください。" };

@@ -81,10 +81,22 @@ export async function saveCounselingAnswers(params: {
   const storeName = trimmed(a.storeNameRaw);
   if (storeName && !/^(なし|無し|特になし)$/i.test(storeName)) patch.storeName = storeName;
   if (!project.title || project.title === "マイプロジェクト") patch.title = deriveTitle();
-  if (!project.usp && trimmed(a.uspRaw)) patch.usp = trimmed(a.uspRaw);
-  if (!project.n1Customer && result.realEpisodes.length > 0) patch.n1Customer = result.realEpisodes.join("\n");
-  if (!project.proof && result.realProofs.length > 0) patch.proof = result.realProofs.join("\n");
-  if (!(project as any).belief && result.industryMyths.length > 0) patch.belief = result.industryMyths.join("\n");
+  // ★お客様は確認画面でこの内容を見たうえで「登録する」を押している。
+  //   空のときだけ書く作りだと、実績や強みを直したくて設定をやり直しても
+  //   画面には新しい内容が出たまま保存されず、案内と中身が食い違う。
+  //   いただいた答えが空でなければ、そのまま反映する。
+  if (trimmed(a.uspRaw)) patch.usp = trimmed(a.uspRaw);
+  if (result.realEpisodes.length > 0) patch.n1Customer = result.realEpisodes.join("\n");
+  if (result.realProofs.length > 0) patch.proof = result.realProofs.join("\n");
+  if (result.industryMyths.length > 0) patch.belief = result.industryMyths.join("\n");
+  // ★「絶対に書きたくないこと」（Q18）は projects.ngWords に入れないと効かない。
+  //   投稿を機械的に検査する enforceNgWords がこの列だけを見ているため、
+  //   ここに入れ忘れると「絶対に入れません」という案内が実際には守られない。
+  //   トークで後から足した言葉を消さないよう、既存とあわせて残す。
+  if (result.ngList.length > 0) {
+    const cur = String((project as any).ngWords || "").split(/[、,\n]/).map((w) => w.trim()).filter(Boolean);
+    patch.ngWords = Array.from(new Set([...cur, ...result.ngList])).join("、");
+  }
 
   await db.updateProject(params.projectId, patch);
   // お店の情報がそろった瞬間に、今日の分の投稿を作る（朝6時を待たない）。

@@ -728,9 +728,16 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
     oneLine: st.oneLine ?? "",
   });
   // 指定のアカウントに、いま登録したお店の情報を結びつける（そのアカウントの投稿に使われる）
+  // ★書き込む前に、そのアカウントがご本人のものかを必ず確かめる。
+  //   古いボタンを押されたときに、他の方のアカウントの参照先を書き換えてしまわないため。
   if (res.ok && st.accountId) {
     try {
-      await db.updateThreadsAccount(st.accountId, { defaultProjectId: st.projectId } as any);
+      const acct: any = await db.getThreadsAccountById(st.accountId);
+      if (!acct || acct.userId !== userId) {
+        console.error("[LineChat] 他人のアカウントへの紐づけを防ぎました:", st.accountId, userId);
+      } else {
+        await db.updateThreadsAccount(st.accountId, { defaultProjectId: st.projectId } as any);
+      }
     } catch (e) {
       console.error("[LineChat] アカウントと店舗情報の紐づけに失敗:", e);
     }
@@ -916,6 +923,9 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     return startCounseling(lineUserId, accounts[0]?.id ?? null);
   }
   if (q.c === "acct" && q.a) {
+    // 古いボタンを押されたときのために、ご本人のアカウントかを先に確かめる（s=acct と同じ扱い）
+    const own: any = await db.getThreadsAccountById(Number(q.a));
+    if (!own || own.userId !== user.id) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
     // ★すでに登録済みのお店の情報があるなら、「それを使う」を先に出す。
     //   紐づけたいだけなのに20問やり直させるのは、無駄な手間になる。
     const usable = (await db.getUserProjects(user.id) || []).filter((pj: any) =>
@@ -936,6 +946,8 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     return startCounseling(lineUserId, Number(q.a));
   }
   if (q.c === "newpj" && q.a) {
+    const own: any = await db.getThreadsAccountById(Number(q.a));
+    if (!own || own.userId !== user.id) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
     return startCounseling(lineUserId, Number(q.a));
   }
   // はじめの設定の最後で「自動投稿を始めますか？」にお答えいただいたとき。
