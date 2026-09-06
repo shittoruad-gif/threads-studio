@@ -822,7 +822,8 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           //   1日1件のプランでは出さない。当日補充のときは不足分の中で1件を充てる。
           let regularCount = todayCount;
           try {
-            const { splitDailyQuota } = await import('../shared/metaAiAsk');
+            const { splitDailyQuota, META_AI_CALL_AUTO_PUBLISH } = await import('../shared/metaAiAsk');
+            if (!META_AI_CALL_AUTO_PUBLISH) throw new Error('__skip__'); // ★呼びかけ投稿はAPIで公開しない（下の catch で静かに抜ける）
             const already = await db.countMetaAiAskToday(account.id).catch(() => 0);
             const q = splitDailyQuota(postCount, (user as any).metaAiAskEnabled !== false);
             if (q.call > 0 && already === 0 && todayCount > 0) {
@@ -831,7 +832,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
               if (made) regularCount = todayCount - 1;
             }
           } catch (e) {
-            console.error(`[AutoPost] Meta AI呼びかけ投稿の作成に失敗 user=${user.id} account=${account.id}:`, e);
+            if (!(e instanceof Error && e.message === '__skip__')) console.error(`[AutoPost] Meta AI呼びかけ投稿の作成に失敗 user=${user.id} account=${account.id}:`, e);
           }
 
           for (let i = 0; i < regularCount; i++) {

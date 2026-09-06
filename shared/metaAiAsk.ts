@@ -115,6 +115,12 @@ export function validateMetaAiAsk(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const META_AI_CALL_ANGLE = 'meta_ai_call';
+/**
+ * ★呼びかけ投稿をAPIで自動公開するか。2026-09-06 実測で「APIからの投稿は @meta.ai がメンションにならず
+ *   Meta AIが返事しない」と分かったため false。代わりに毎朝10時、LINEで「Threadsアプリで投稿する」
+ *   ボタン（投稿インテント）を届ける（server/metaAiCallPrompt.ts）。
+ */
+export const META_AI_CALL_AUTO_PUBLISH = false;
 
 export interface MetaAiCallSource {
   storeName?: string | null;
