@@ -587,6 +587,21 @@ async function generateAutoPost(
       naturalMain = (guarded as any).mainPost || naturalMain;
     } catch { /* ガード失敗時はリライト文をそのまま使う（生成時ガードは通過済み） */ }
 
+    // ★健康系の断定・治療結果の体験談・価格連呼のガード（shared/healthClaimGuard.ts）。
+    //   2026-09-06 停止されたアカウントの投稿に「杖なしで歩ける」「痛みなく」「初回1980円」が並んでいた。
+    //   言い換え表で機械的に和らげ、価格は1文ごと落とす。空になったら公開しない。
+    try {
+      const { checkHealthClaims, isHealthBusiness } = await import('../shared/healthClaimGuard');
+      if (isHealthBusiness(project.businessType)) {
+        const v = checkHealthClaims(naturalMain, { allowPrice: false });
+        if (!v.ok) {
+          console.warn(`[AutoPost] healthClaimGuard: ${v.hits.join('・')} を和らげた userId=${userId} projectId=${project.id}`);
+          if (Array.from(v.text).length < 30) { console.warn('[AutoPost] healthClaimGuard: 本文が短くなりすぎたため公開しない'); return false; }
+          naturalMain = v.text;
+        }
+      }
+    } catch { /* ガード失敗時はそのまま */ }
+
     // 「。」の直後に絵文字が続く形（「〜しますね。✨」）は人間の投稿に無い機械の癖。
     // 誤爆しない決定的な整形なので、どちらの経路（リライト採用/差し戻し）にも適用する。
     const mainText = polishPunctuation(naturalMain);
@@ -806,7 +821,14 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           }
           if (eff.autoPostRequireApproval) anyApproval = true;
           // 1日の回数（アカウント別の設定をプラン上限で頭打ち）
-          const postCount = Math.min(getPostCount(eff.autoPostFrequency), maxPerDay);
+          let postCount = Math.min(getPostCount(eff.autoPostFrequency), maxPerDay);
+          // ★新しいアカウントの慣らし運転（shared/accountRamp.ts）。連携7日未満は1件、14日未満は2件。
+          //   2026-09-06 連携4日目・フォロワー0のアカウントが本人確認→停止になった再発防止。
+          {
+            const { rampCap, rampNote } = await import('../shared/accountRamp');
+            const r = rampCap(postCount, (account as any).createdAt);
+            if (r.capped) { console.log(`[AutoPost] account ${account.id} 慣らし運転: ${rampNote(r.days)}（契約${postCount}→${r.count}）`); postCount = r.count; }
+          }
 
           // ★当日補充: 今日すでにある分を引いて、残り時間に入る本数だけ作る
           let todayCount = postCount;

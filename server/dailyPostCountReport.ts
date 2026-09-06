@@ -78,7 +78,9 @@ export async function runDailyPostCountReportJob(): Promise<void> {
         const acct: any = (accounts || []).find((a: any) => Number(a.id) === r.accountId);
         const eff = effectiveAccountSettings(common as any, acct);
         if (!eff.autoPostEnabled) continue; // 自動投稿OFFのアカウントは数えない
-        const entitled = Math.min(FREQ_COUNT[eff.autoPostFrequency] ?? 1, maxPerDay);
+        let entitled = Math.min(FREQ_COUNT[eff.autoPostFrequency] ?? 1, maxPerDay);
+        // 新しいアカウントは慣らし運転中の本数で数える（「ご契約より少ない」と出さない）
+        try { const { rampCap } = await import("../shared/accountRamp"); entitled = rampCap(entitled, acct?.createdAt).count; } catch { /* そのまま */ }
         lines.push({ ...r, entitled });
       }
       if (lines.length === 0) continue;
