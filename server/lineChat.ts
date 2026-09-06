@@ -241,9 +241,11 @@ export const HELP_TOPICS: Array<{ key: string; cat: string; q: string; a: string
       "3. 「興味がない」を選ぶ：返信の「…」→「興味がない」\n\n" +
       "Threads Studioの投稿は、はじめの設定で教えていただいた事実だけで作っているので、AIに確かめられても食い違いは出ません。" },
   { key: "metaai_ask", cat: "settings", q: "Meta AIを使って投稿を目立たせたい",
-    a: "1日の投稿のうち1件として、「@meta.ai 〇〇市で肩こりに悩む人に、整体に通うメリットを伝えて」のような呼びかけ投稿を1日1件、朝〜昼に出しています（はじめからON）。\n" +
+    a: "毎朝10時に「@meta.ai 〇〇で整体院のおすすめを教えて」のような呼びかけ文をこのLINEにお届けしています（はじめからON）。\n" +
+      "「Threadsアプリで投稿する」を押すと文章が入った投稿画面が開くので、投稿したいアカウントでログインしていることを確認して「投稿」を押すだけです。\n" +
       "Meta AIがお店の名前を出してコメントで答えるので、投稿の下に会話ができ、届く人が増えます。実際に、通常の投稿の数倍〜十数倍の表示になった例があります。\n\n" +
-      "依頼文は、はじめの設定で教えていただいた地域（最寄り駅・町名）・お客様像・店名から決まった型で作ります。止めたいときは「設定」からOFFにできます。\n\n" +
+      "※ 自動投稿（API）から出した投稿は、Threadsの仕様で@meta.aiがメンションにならず返事が付きません。この1件だけはアプリから投稿してください。\n" +
+      "同じお店でメニュー別にアカウントがある場合は「設定」→「呼びかけの得意分野」で、「ダイエットに強い整体院」のようにアカウントごとに変えられます。止めたいときは「設定」からOFFにできます。\n\n" +
       "この機能はプロプラン・ビジネスプランでご利用いただけます。ライトプランの方は、プランを変更するとその日からお使いいただけます。\n\n" +
       "※ @meta.ai はThreadsの仕様で段階的に提供されており、まだ使えないアカウントもあります。その場合はMeta AIの返事が付きません（投稿自体はそのまま出ます）。使えるようになった時点で、そのまま効き始めます。",
     action: { label: "設定を見る", data: "m=settings" } },
@@ -477,7 +479,10 @@ export function settingsQuick(
     { label: "短め にする", data: "s=len&v=short" },
     { label: "長め にする", data: "s=len&v=long" },
     ...(maxPerDay >= 2
-      ? [{ label: s.metaAiAskEnabled ? "Meta AI呼びかけ投稿を止める" : "Meta AI呼びかけ投稿をON", data: `s=metaai&v=${s.metaAiAskEnabled ? "off" : "on"}` }]
+      ? [
+          { label: s.metaAiAskEnabled ? "Meta AI呼びかけ投稿を止める" : "Meta AI呼びかけ投稿をON", data: `s=metaai&v=${s.metaAiAskEnabled ? "off" : "on"}` },
+          { label: "呼びかけの得意分野", data: "c=focus" },
+        ]
       : [{ label: "プランを見る", data: "s=plan" }]),
     { label: "NGワードを追加", data: "s=ng" },
     notifyToggle,
@@ -512,7 +517,7 @@ export function settingsSummary(
     (want > maxPerDay ? `　※ ご利用中のプランの上限は1日${maxPerDay}回です\n` : "") +
     `・公開前の確認：${s.autoPostRequireApproval ? "する" : "しない"}\n` +
     `・投稿の長さ：${len}\n` +
-    `・Meta AI呼びかけ投稿：${maxPerDay < 2 ? "プロ・ビジネスプランで使えます（プランを変更するとその日から）" : s.metaAiAskEnabled ? "ON（1日の投稿のうち1件・朝〜昼）" : "OFF"}\n` +
+    `・Meta AI呼びかけ投稿：${maxPerDay < 2 ? "プロ・ビジネスプランで使えます（プランを変更するとその日から）" : s.metaAiAskEnabled ? "ON（毎朝10時にLINEで呼びかけ文が届き、ボタンでThreadsアプリから投稿）" : "OFF"}\n` +
     notify + "\n" +
     "変えたいものを選んでください。"
   );

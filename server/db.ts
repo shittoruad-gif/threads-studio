@@ -2175,6 +2175,11 @@ export async function getAllUsers() {
     acctsByUser.set(a.userId, arr);
   }
 
+  // 公式LINEとの連携（誰がLINEから操作できる状態か。2026-09-06 三上様指示で管理画面に表示）
+  const lineRows = await db.select({ userId: userLineLinks.userId }).from(userLineLinks);
+  const lineCount = new Map<number, number>();
+  for (const l of lineRows) lineCount.set(l.userId, (lineCount.get(l.userId) ?? 0) + 1);
+
   return userRows.map((u) => {
     const sub = subByUser.get(u.id);
     const accts = acctsByUser.get(u.id) ?? [];
@@ -2185,6 +2190,7 @@ export async function getAllUsers() {
       trialEndsAt: sub?.trialEndsAt ?? null,
       threadsAccountCount: accts.length,
       threadsAccounts: accts,
+      lineLinkCount: lineCount.get(u.id) ?? 0,
     };
   });
 }

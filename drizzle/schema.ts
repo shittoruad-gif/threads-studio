@@ -352,6 +352,9 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   autoPostRequireApproval: boolean("autoPostRequireApproval"),
   autoPostFrequency: varchar("autoPostFrequency", { length: 20 }),
   postLength: varchar("postLength", { length: 20 }),
+  // Meta AI呼びかけ文で強調する得意分野（例：ダイエット・産後骨盤矯正）。同じお店で
+  // メニュー別にアカウントを分けている場合に、アカウントごとに変える（2026-09-06 三上様指示）
+  callFocus: varchar("callFocus", { length: 60 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

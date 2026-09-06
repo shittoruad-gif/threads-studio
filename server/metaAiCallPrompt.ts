@@ -114,7 +114,7 @@ export async function buildTodayCallsForUser(userId: number, dayIndex: number): 
     if (!eff.autoPostEnabled) continue;
     const pinned = acct.defaultProjectId ? projects.find((p) => p.id === acct.defaultProjectId) : null;
     const project = pinned || projects[dayIndex % projects.length];
-    const text = buildMetaAiCallPost(callSourceOf(project), dayIndex);
+    const text = buildMetaAiCallPost({ ...callSourceOf(project), focus: acct.callFocus ?? null }, dayIndex);
     if (!text) continue;
     out.push({ accountId: Number(acct.id), username: String(acct.threadsUsername), storeName: project.storeName ?? null, text });
   }
@@ -159,7 +159,7 @@ export async function runMetaAiCallPromptJob(): Promise<void> {
  * 今日の呼びかけ投稿（angle=meta_ai_call）の本文が「@meta.ai」で始まっていればそれを、
  * 書き直されて消えていれば同じ材料から作り直した文を使う。
  */
-export async function buildRedoForUsernames(usernames: string[]): Promise<Array<{ userId: number; username: string; storeName: string | null; text: string; targets: string[] }>> {
+export async function buildRedoForUsernames(usernames: string[], focusOverride: Record<string, string> = {}): Promise<Array<{ userId: number; username: string; storeName: string | null; text: string; targets: string[] }>> {
   const d = await db.getDb();
   if (!d) return [];
   const { sql } = await import("drizzle-orm");
@@ -167,6 +167,7 @@ export async function buildRedoForUsernames(usernames: string[]): Promise<Array<
   const out: Array<{ userId: number; username: string; storeName: string | null; text: string; targets: string[] }> = [];
   for (const username of usernames) {
     const ar: any = await d.execute(sql`SELECT id, userId, defaultProjectId FROM threadsAccounts WHERE threadsUsername = ${username} AND isActive = 1 LIMIT 1`);
+    const focus = focusOverride[username] ?? null; // 列が本番に入る前でも、得意分野を手で指定できる
     const acct = ((ar as any)[0] ?? [])[0];
     if (!acct) { console.log(`@${username}: アカウントが見つかりません`); continue; }
     const pr: any = await d.execute(sql`SELECT postContent FROM scheduledPosts WHERE threadsAccountId = ${acct.id} AND angle = 'meta_ai_call' AND DATE(CONVERT_TZ(scheduledAt,'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00')) ORDER BY id LIMIT 1`);
@@ -174,8 +175,8 @@ export async function buildRedoForUsernames(usernames: string[]): Promise<Array<
     const projects = eligibleProjectsOf(await db.getProjectsByUserId(Number(acct.userId)));
     const pinned = acct.defaultProjectId ? projects.find((p) => p.id === acct.defaultProjectId) : null;
     const project = pinned || projects[0];
-    let text = today && today.trim().startsWith("@meta.ai") ? today.trim() : null;
-    if (!text && project) text = buildMetaAiCallPost(callSourceOf(project), dayIndex);
+    let text = !focus && today && today.trim().startsWith("@meta.ai") ? today.trim() : null;
+    if (!text && project) text = buildMetaAiCallPost({ ...callSourceOf(project), focus }, dayIndex);
     if (!text) { console.log(`@${username}: 呼びかけ文を作れません（材料不足）`); continue; }
     const targets = await db.getLineUserIdsForUser(Number(acct.userId));
     out.push({ userId: Number(acct.userId), username, storeName: project?.storeName ?? null, text, targets });

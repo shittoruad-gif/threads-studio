@@ -132,6 +132,8 @@ export interface MetaAiCallSource {
   mainProblem?: string | null;
   /** 主なメニュー（先頭を使う） */
   menu?: string[] | null;
+  /** アカウント別の得意分野（threadsAccounts.callFocus）。例：ダイエット → 「ダイエットに強い整体院」 */
+  focus?: string | null;
 }
 
 
@@ -225,14 +227,19 @@ export function buildMetaAiCallPost(src: MetaAiCallSource, dayIndex: number): st
   const problem = shortProblem(src.mainProblem);
   const service = serviceWord(src);
   const who = problem ? `${problem}に悩む人` : target;
+  // ★得意分野（アカウント別）。「ダイエットに強い整体院」のように業種の前に付ける
+  //   （2026-09-06 三上様指示：同じお店でメニュー別にアカウントがある場合に変える）
+  const focus = String(src.focus || '').replace(/[。．\s]/g, '').trim();
+  const f = focus.length > 0 && focus.length <= 12 ? focus : '';
+  const svc = f && service ? `${f}に強い${service}` : service;
 
   // 実測で表示が多かった順に近い並び。要素が無い型は候補から外す。
   const candidates: Array<string | null> = [
-    area ? `${META_AI_HANDLE} ${area}周辺の人に、うちの${storeOk ? `お店（${store}）` : 'お店'}を届けて` : null,
-    area && service ? `${META_AI_HANDLE} ${area}で${service}のおすすめを教えて` : null,
-    area && who && service ? `${META_AI_HANDLE} ${area}で${who}に、${service}に通うメリットを伝えて` : null,
-    `${META_AI_HANDLE} うちのお店${storeOk ? `（${store}）` : ''}の強みを、来店されたことのない人に伝えて`,
-    storeOk && service ? `${META_AI_HANDLE} ${store}の${service}は、他のお店と何が違う？` : null,
+    area ? `${META_AI_HANDLE} ${area}周辺${f ? `で${f}に興味がある人` : 'の人'}に、うちの${storeOk ? `お店（${store}）` : 'お店'}を届けて` : null,
+    area && svc ? `${META_AI_HANDLE} ${area}で${svc}のおすすめを教えて` : null,
+    area && who && svc ? `${META_AI_HANDLE} ${area}で${who}に、${svc}に通うメリットを伝えて` : null,
+    `${META_AI_HANDLE} うちのお店${storeOk ? `（${store}）` : ''}の${f ? `${f}の` : ''}強みを、来店されたことのない人に伝えて`,
+    storeOk && (f || service) ? `${META_AI_HANDLE} ${store}の${f || service}は、他のお店と何が違う？` : null,
   ];
   const list = candidates.filter((c): c is string => !!c);
   if (list.length === 0) return null;

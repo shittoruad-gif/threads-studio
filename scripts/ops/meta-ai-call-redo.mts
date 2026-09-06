@@ -7,10 +7,13 @@
  */
 const args = process.argv.slice(2);
 const send = args.includes("--send");
-const names = args.filter((a) => !a.startsWith("--"));
+const focus: Record<string, string> = {};
+const names = args.filter((a) => !a.startsWith("--")).filter((a) => {
+  const m = a.match(/^([^=]+)=(.+)$/); if (m) { focus[m[1]] = m[2]; return true; } return true;
+}).map((a) => a.split("=")[0]);
 if (names.length === 0) { console.error("Threadsのユーザー名を指定してください"); process.exit(1); }
 const { buildRedoForUsernames, buildMetaAiCallMessages } = await import("../../server/metaAiCallPrompt");
-const rows = await buildRedoForUsernames(names);
+const rows = await buildRedoForUsernames(names, focus);
 for (const r of rows) {
   const msgs: any = buildMetaAiCallMessages({ username: r.username, storeName: r.storeName, text: r.text, redo: true });
   console.log(`\n===== @${r.username}（user ${r.userId}・LINE ${r.targets.length}件）=====\n${msgs[0].text}\n[ボタン] ${msgs[1].contents.footer.contents[0].action.uri}`);

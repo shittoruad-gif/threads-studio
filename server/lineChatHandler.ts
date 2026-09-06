@@ -1641,6 +1641,27 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         guide[kind] + "\n\nやめる場合は「やめる」と送ってください。" },
     ];
   }
+  // ── Meta AI呼びかけ文の得意分野（アカウント別）。「ダイエットに強い整体院」のように入る ──
+  //   （2026-09-06 三上様指示：同じお店でメニュー別にアカウントを分けている場合に変えたい）
+  if (q.c === "focus") {
+    const accts: any[] = await db.getActiveThreadsAccounts(user.id);
+    if (accts.length === 0) return [textWithQuick("先にThreadsアカウントを連携してください。", MENU_HINT)];
+    if (accts.length >= 2 && !q.a) {
+      return [textWithQuick(
+        "どのアカウントの得意分野を登録しますか？",
+        accts.slice(0, 10).map((a: any) => ({ label: `@${a.threadsUsername}${a.callFocus ? `（${a.callFocus}）` : ""}`.slice(0, 20), data: `c=focus&a=${a.id}` })),
+      )];
+    }
+    const acct: any = q.a ? accts.find((a: any) => String(a.id) === String(q.a)) : accts[0];
+    if (!acct) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    await db.setLineChatState(lineUserId, "set_call_focus", JSON.stringify({ a: Number(acct.id) }));
+    return [{ type: "text", text:
+      `@${acct.threadsUsername} の得意分野を、短い言葉で1つ送ってください。\n` +
+      "（例：ダイエット、産後骨盤矯正、美容鍼、着物のお手入れ）\n\n" +
+      "毎朝10時の呼びかけ文が「〇〇でダイエットに強い整体院のおすすめを教えて」のようになります。\n" +
+      (acct.callFocus ? `いまは「${acct.callFocus}」です。消す場合は「なし」と送ってください。\n` : "") +
+      "やめる場合は「やめる」と送ってください。" }];
+  }
   // ── 一部修正：AIを通さず、ご自身で直した全文にそのまま置き換える ──
   //   「作り直す」(AI再生成)・「書き直す」(AIに指示)との違いは、
   //   ご本人の言葉がそのまま最終文になること。微調整したいだけの方向け。
@@ -1729,7 +1750,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         const base = process.env.APP_BASE_URL || "https://threads-studio.com";
         return [textWithQuick(
           "Meta AI呼びかけ投稿は、プロプラン・ビジネスプランでご利用いただけます。\n" +
-          "1日の投稿のうち1件を「@meta.ai 〇〇で…に通うメリットを伝えて」のような投稿にして、Meta AIの回答で届く人を増やす仕組みです。\n\n" +
+          "毎朝10時に「@meta.ai 〇〇で…のおすすめを教えて」という呼びかけ文をLINEでお届けし、ボタン1つでThreadsアプリから投稿できます。Meta AIがお店の名前を出して答えるので、届く人が増えます。\n\n" +
           `プランを変更すると、その日からお使いいただけます。\n${base}/pricing?openExternalBrowser=1`,
           [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT],
         )];
@@ -1739,9 +1760,11 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     return [textWithQuick(
       (on
         ? "Meta AI呼びかけ投稿をONにしました。\n\n" +
-          "1日の投稿のうち1件として、「@meta.ai 〇〇市で…に通うメリットを伝えて」のような投稿を1日1件、朝〜昼に出します。" +
+          "毎朝10時に「@meta.ai 〇〇で…のおすすめを教えて」のような呼びかけ文を、このLINEにお届けします。" +
+          "「Threadsアプリで投稿する」を押すと文章が入った投稿画面が開くので、「投稿」を押すだけです。" +
           "Meta AIがお店の名前を出してコメントで答えるので、投稿の下に会話ができ、届く人が増えます。\n" +
-          "※ @meta.ai はThreadsの仕様で段階的に提供されており、まだ使えないアカウントではMeta AIの返事が付きません（投稿自体は出ます）。"
+          "※ 自動投稿（API）からだと@meta.aiがメンションにならないため、この1件だけはアプリから投稿していただきます。\n" +
+          "※ @meta.ai はThreadsの仕様で段階的に提供されており、まだ使えないアカウントではMeta AIの返事が付きません。"
         : "Meta AI呼びかけ投稿を止めました。") +
       "\n\n間違えた場合は「元に戻す」を押してください。",
       [{ label: "元に戻す", data: `s=metaai&v=${on ? "off" : "on"}` }, ...MENU_HINT],
@@ -1920,7 +1943,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   // ★入力待ちの途中で「やめる」と打たれたら、その言葉を内容として使わずに抜ける。
   //   （NGワード待ち・書き直し待ちでこれが無く、「やめる」がそのまま
   //     NGワードや書き直し指示として使われてしまっていた）
-  if ((st?.state === "ngword" || st?.state === "rewrite_free" || st?.state === "self_edit" || st?.state === "set_line_url") &&
+  if ((st?.state === "ngword" || st?.state === "rewrite_free" || st?.state === "self_edit" || st?.state === "set_line_url" || st?.state === "set_call_focus") &&
       /^(やめる|中止|キャンセル|戻る|終わり|終了)$/.test(text.trim())) {
     await db.clearLineChatState(lineUserId);
     return [textWithQuick("わかりました。中止しました。", MENU_HINT)];
@@ -1976,6 +1999,33 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
       `${typeName}のURLを登録しました。\n${raw}\n\n` +
       "毎日の投稿の誘導と、固定投稿のコメント欄のリンクに使われます。",
       [{ label: "別の種類も登録する", data: `c=seturl&p=${projectId}` }, { label: "固定投稿を作る", data: "m=makepin" }, ...MENU_HINT],
+    )];
+  }
+  // ── 得意分野の登録：送られてきた言葉をアカウントに保存する ──
+  if (st?.state === "set_call_focus" && st.payload) {
+    let accountId = 0;
+    try { accountId = Number(JSON.parse(String(st.payload)).a); } catch { accountId = 0; }
+    const accts: any[] = await db.getActiveThreadsAccounts(user.id);
+    const acct: any = accts.find((a: any) => Number(a.id) === accountId);
+    if (!acct) { await db.clearLineChatState(lineUserId); return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)]; }
+    const raw = text.trim().replace(/[。．]$/, "");
+    const clear = /^(なし|無し|消す|削除)$/.test(raw);
+    if (!clear && (raw.length === 0 || raw.length > 12 || /https?:|\n/.test(raw))) {
+      return [{ type: "text", text: "12文字以内の短い言葉で送ってください（例：ダイエット）。\nやめる場合は「やめる」と送ってください。" }];
+    }
+    await db.clearLineChatState(lineUserId);
+    await db.updateThreadsAccount(accountId, { callFocus: clear ? null : raw } as any);
+    let sample = "";
+    try {
+      const { buildMetaAiCallPost } = await import("../shared/metaAiAsk");
+      const pjs: any[] = ((await db.getUserProjects(user.id)) || []).filter((pj: any) => !String(pj.id).startsWith("demo_") && pj.businessType && pj.area);
+      const pj: any = (acct.defaultProjectId && pjs.find((x: any) => String(x.id) === String(acct.defaultProjectId))) || pjs[0];
+      if (pj) sample = buildMetaAiCallPost({ storeName: pj.storeName, businessType: pj.businessType, area: pj.area, localTerms: pj.localTerms, target: pj.target, mainProblem: pj.mainProblem, focus: clear ? null : raw }, 1) || "";
+    } catch { sample = ""; }
+    return [textWithQuick(
+      (clear ? `@${acct.threadsUsername} の得意分野を消しました。` : `@${acct.threadsUsername} の得意分野を「${raw}」にしました。`) +
+      "\n明日の朝10時の呼びかけ文から反映されます。" + (sample ? `\n\n例：${sample}` : ""),
+      [{ label: "別のアカウントも登録", data: "c=focus" }, ...MENU_HINT],
     )];
   }
   // ── 一部修正：送られてきた全文で、そのまま置き換える ──

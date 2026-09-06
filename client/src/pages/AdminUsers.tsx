@@ -275,6 +275,14 @@ export default function AdminUsers() {
                     ) : (
                       <span className="text-muted-foreground/50">未連携</span>
                     )}
+                    {/* ★公式LINEとの連携（2026-09-06 三上様指示）。LINEから承認・設定ができる状態か */}
+                    <div className="mt-1 text-[11px] whitespace-nowrap">
+                      {Number(u.lineLinkCount ?? 0) > 0 ? (
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">LINE連携済み{Number(u.lineLinkCount) > 1 ? `（${u.lineLinkCount}人）` : ''}</span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">LINE未連携</span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {/* ★このボタンは「押すと反転」する。以前は ON のときに「モニター」とだけ出ていたため、
