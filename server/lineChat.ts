@@ -171,6 +171,9 @@ const PENDING_TEXT_INPUT: Record<string, (q: Record<string, string>) => boolean>
   self_edit: (q) => q.a === "selfedit",
   rewrite_free: (q) => q.a === "rw",
   staff_message: (q) => q.m === "staff",
+  // URLだけ送ってこられたときの預かり。種類を選ぶボタン以外を押されたら捨てる
+  // （別の操作に移られたのに、古いURLが残っていると取り違えるため）
+  pending_url: (q) => q.c === "urlk",
 };
 
 /**

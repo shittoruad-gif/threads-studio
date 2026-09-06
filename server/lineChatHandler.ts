@@ -1647,6 +1647,27 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     )];
   }
 
+  // ── URLだけ送ってこられた分を、選んでいただいた種類で保存する ──
+  //   （打ち直していただかなくて済むよう、URLは pending_url に預けてある）
+  if (q.c === "urlk") {
+    const st0 = await db.getLineChatState(lineUserId);
+    let url = ""; let projectId = "";
+    if (st0?.state === "pending_url" && st0.payload) {
+      try {
+        const parsed = JSON.parse(String(st0.payload));
+        url = String(parsed.url || ""); projectId = String(parsed.p || "");
+      } catch { /* 壊れていたら下で案内する */ }
+    }
+    if (!url || !projectId) {
+      return [textWithQuick(
+        "お預かりしていたURLが見つかりませんでした。お手数ですが、もう一度URLをお送りください。",
+        [{ label: "ご案内先URLを登録", data: "c=seturl" }, ...MENU_HINT],
+      )];
+    }
+    await db.clearLineChatState(lineUserId);
+    const kind = ["line", "reservation", "website", "other"].includes(String(q.k)) ? String(q.k) : "line";
+    return await saveProjectLink(user.id, projectId, kind, url);
+  }
   if (q.c === "seturl") {
     const usable = ((await db.getUserProjects(user.id)) || []).filter((pj: any) =>
       !String(pj.id).startsWith("demo_") && pj.businessType,
@@ -2029,42 +2050,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
       return [{ type: "text", text: "URLの形になっていないようです。https:// から始まるURLをそのまま送ってください。\nやめる場合は「やめる」と送ってください。" }];
     }
     await db.clearLineChatState(lineUserId);
-    const pj: any = await db.getProjectById(projectId);
-    if (!pj || pj.userId !== user.id) return [textWithQuick("お店の情報が見つかりませんでした。", MENU_HINT)];
-    const { parseProjectLinks, LINK_TYPES, pickPinnedDestination } = await import("../shared/projectLinks");
-    const links = parseProjectLinks(pj.links || null);
-    const typeName = (LINK_TYPES as any)[kind]?.name ?? "ご案内先";
-    const existing = links.find((l) => l.type === kind);
-    const next: any[] = existing
-      ? links.map((l) => (l.type === kind ? { ...l, url: raw } : l))
-      : [...links, { id: `${kind}_${Date.now().toString(36)}`, type: kind as any, label: typeName, url: raw, isDefault: true }];
-    await db.updateProject(projectId, { links: JSON.stringify(next) } as any);
-    // ★2本以上あるときは、どこへご案内するかをお選びいただく。
-    //   自動判定だけだと「LINEに集めたいのに予約が選ばれる」ことがある。
-    const filled = (next as any[]).filter((l) => !!l.url);
-    if (filled.length >= 2) {
-      const dest = pickPinnedDestination(next as any);
-      const nm = (l: any) => (LINK_TYPES as any)[l.type]?.name ?? l.label;
-      return [textWithQuick(
-        `${typeName}のURLを登録しました。\n${raw}\n\n` +
-        `ご案内先が${filled.length}つになりました。どこへご案内しますか？\n` +
-        "固定投稿のコメント欄と、毎日の投稿の誘導に使われます。" +
-        (dest ? `\n（いまは自動で「${nm(dest.link)}」が選ばれています）` : ""),
-        [
-          ...filled.slice(0, 5).map((l: any) => ({
-            label: `${nm(l)}へ`.slice(0, 20),
-            data: `c=pintgt&p=${projectId}&l=${encodeURIComponent(l.id)}`,
-          })),
-          { label: "別の種類も登録する", data: `c=seturl&p=${projectId}` },
-          { label: "あとで決める", data: "m=cancel" },
-        ],
-      )];
-    }
-    return [textWithQuick(
-      `${typeName}のURLを登録しました。\n${raw}\n\n` +
-      "毎日の投稿の誘導と、固定投稿のコメント欄のリンクに使われます。",
-      [{ label: "別の種類も登録する", data: `c=seturl&p=${projectId}` }, { label: "固定投稿を作る", data: "m=makepin" }, ...MENU_HINT],
-    )];
+    return await saveProjectLink(user.id, projectId, kind, raw);
   }
   // ── 得意分野の登録：送られてきた言葉をアカウントに保存する ──
   if (st?.state === "set_call_focus" && st.payload) {
@@ -2184,6 +2170,55 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     return handlePostback(lineUserId, wantsToUse ? "h=metaai_ask" : "h=metaai_reply");
   }
 
+  // ★URLだけを送ってこられたとき。
+  //   「ご案内先URLを登録してください」とお伝えしたあと、メニューを通さずに
+  //   URLをそのまま貼られることがある。以前は「お答えできないご質問でした」と
+  //   返していて、せっかく送っていただいたURLが失われていた
+  //   （2026-09-06 比嘉様が公式LINEのURLを送ってこられた）。
+  {
+    const only = t.trim();
+    let u: URL | null = null;
+    try { u = new URL(only); } catch { u = null; }
+    if (u && /^https?:$/.test(u.protocol) && !/\s/.test(only)) {
+      const usable = ((await db.getUserProjects(user.id)) || []).filter((pj: any) =>
+        !String(pj.id).startsWith("demo_") && pj.businessType,
+      );
+      if (usable.length === 0) {
+        return [textWithQuick(
+          "URLをお送りいただき、ありがとうございます。\n" +
+          "ご案内先として登録するには、先に「はじめの設定」でお店の情報のご登録をお願いします。",
+          [{ label: "はじめの設定", data: "m=setup" }, ...MENU_HINT],
+        )];
+      }
+      // 送っていただいたURLは、種類を選んでいただいたら保存できるよう預かっておく
+      const pj: any = usable[0];
+      await db.setLineChatState(lineUserId, "pending_url", JSON.stringify({ p: String(pj.id), url: only }));
+      const host = u.hostname.replace(/^www\./, "");
+      const guess = /lin\.ee|line\.me/.test(host) ? "line" : null;
+      return [textWithQuick(
+        `URLをお送りいただき、ありがとうございます。\n${only}\n\n` +
+        "これを「ご案内先」として登録できます。どの種類か選んでください。\n" +
+        "（毎日の投稿の誘導と、固定投稿のコメント欄のリンクに使われます）" +
+        (guess ? "\n\n公式LINEのURLのようです。" : ""),
+        [
+          { label: guess === "line" ? "公式LINE（これ）" : "公式LINE", data: "c=urlk&k=line" },
+          { label: "Web予約", data: "c=urlk&k=reservation" },
+          { label: "ホームページ", data: "c=urlk&k=website" },
+          { label: "その他", data: "c=urlk&k=other" },
+          { label: "登録しない", data: "m=cancel" },
+        ],
+      )];
+    }
+  }
+
+  // ★ご自身の請求についてのお尋ねは、AIより先にご契約データからお答えする。
+  //   AIに任せると「ホーム画面でご確認いただけます」のような案内で終わり、
+  //   肝心の金額と請求日が出ない（2026-09-06「来月の私の請求額を教えてください」）。
+  //   「支払い方法は？」のような一般のご質問まで奪わないよう、言葉は絞っている。
+  if (/(請求|引き落と)/.test(t) || /(次回|来月|今月|毎月).{0,6}(支払|お支払)/.test(t)) {
+    return handlePostback(lineUserId, "s=plan");
+  }
+
   if (looksLikeQuestion(t)) {
     const answered = await autoAnswer(user.id, lineUserId, t);
     if (answered) return answered;
@@ -2299,6 +2334,52 @@ function replyToRequest(req: "post" | "material" | "pasted", questionId?: number
 }
 
 /**
+ * ご案内先URLを、お店の情報に保存してお返事を作る。
+ *
+ * ★トークに送っていただいたURLを保存する経路（set_line_url）と、
+ *   URLだけを送ってこられたときにボタンで種類を選んで保存する経路（c=urlk）の
+ *   両方から使う。同じ処理を2か所に書かないため切り出している。
+ */
+async function saveProjectLink(userId: number, projectId: string, kind: string, raw: string): Promise<unknown[]> {
+  const pj: any = await db.getProjectById(projectId);
+  if (!pj || pj.userId !== userId) return [textWithQuick("お店の情報が見つかりませんでした。", MENU_HINT)];
+  const { parseProjectLinks, LINK_TYPES, pickPinnedDestination } = await import("../shared/projectLinks");
+  const links = parseProjectLinks(pj.links || null);
+  const typeName = (LINK_TYPES as any)[kind]?.name ?? "ご案内先";
+  const existing = links.find((l) => l.type === kind);
+  const next: any[] = existing
+    ? links.map((l) => (l.type === kind ? { ...l, url: raw } : l))
+    : [...links, { id: `${kind}_${Date.now().toString(36)}`, type: kind as any, label: typeName, url: raw, isDefault: true }];
+  await db.updateProject(projectId, { links: JSON.stringify(next) } as any);
+  // ★2本以上あるときは、どこへご案内するかをお選びいただく。
+  //   自動判定だけだと「LINEに集めたいのに予約が選ばれる」ことがある。
+  const filled = (next as any[]).filter((l) => !!l.url);
+  if (filled.length >= 2) {
+    const dest = pickPinnedDestination(next as any);
+    const nm = (l: any) => (LINK_TYPES as any)[l.type]?.name ?? l.label;
+    return [textWithQuick(
+      `${typeName}のURLを登録しました。\n${raw}\n\n` +
+      `ご案内先が${filled.length}つになりました。どこへご案内しますか？\n` +
+      "固定投稿のコメント欄と、毎日の投稿の誘導に使われます。" +
+      (dest ? `\n（いまは自動で「${nm(dest.link)}」が選ばれています）` : ""),
+      [
+        ...filled.slice(0, 5).map((l: any) => ({
+          label: `${nm(l)}へ`.slice(0, 20),
+          data: `c=pintgt&p=${projectId}&l=${encodeURIComponent(l.id)}`,
+        })),
+        { label: "別の種類も登録する", data: `c=seturl&p=${projectId}` },
+        { label: "あとで決める", data: "m=cancel" },
+      ],
+    )];
+  }
+  return [textWithQuick(
+    `${typeName}のURLを登録しました。\n${raw}\n\n` +
+    "毎日の投稿の誘導と、固定投稿のコメント欄のリンクに使われます。",
+    [{ label: "別の種類も登録する", data: `c=seturl&p=${projectId}` }, { label: "固定投稿を作る", data: "m=makepin" }, ...MENU_HINT],
+  )];
+}
+
+/**
  * AIがお答えできなかったご質問を、お客様の操作を待たずに担当者へお知らせする。
  * 「返信待ち」にも載せたいので needsHuman も立てる。
  * 通知に失敗しても、お客様への応答は止めない（false を返して従来の案内に戻す）。
@@ -2357,6 +2438,14 @@ async function autoAnswer(userId: number, lineUserId: string, question: string):
     // 内容もそのまま失われる。何がどこに反映されるのかをお伝えする。
     const req = requestKind(question);
     if (req) return replyToRequest(req, res.questionId);
+
+    // ★ご自身のご契約についてのお尋ねは、AIには答えようがない（知識にはご契約の中身が無い）。
+    //   担当者にまわす前に、ご契約データからお答えする。
+    //   （このAI応答が先に動くため、下のキーワード案内までは届いていなかった。
+    //    2026-09-06「来月の私の請求額を教えてください」が担当者送りのままだった原因）
+    if (/(請求|支払|お支払|引き落と|課金|契約|いくら|料金|プラン)/.test(question)) {
+      return handlePostback(lineUserId, "s=plan");
+    }
 
     // ★以前は「下の『担当者に聞く』を押してください」とお願いするだけで、
     //   押していただけなかったご質問は誰にも届いていなかった

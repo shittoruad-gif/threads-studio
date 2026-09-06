@@ -46,3 +46,21 @@ describe("担当者へ通知するか（実際に届いたご質問で確認）"
     expect(isPastedContent(q)).toBe(false);
   });
 });
+
+describe("短い投稿文の断片も、ご質問として扱わない", () => {
+  it("絵文字つき・3行以上・60字以上は貼り付け扱い（#7 氷見様）", () => {
+    const t =
+      "富山市から10代から慢性肩こりの20代👩\n" +
+      "“こんなに軽くなったことない〜！！”\n" +
+      "全身ユルユルになって、ルンルン🎶で帰られました🥺\n" +
+      "📍滑川市の一回で効果を実感できる整体院";
+    expect(isPastedContent(t)).toBe(true);
+    expect(classifyRequestKind(t)).toBe("pasted");
+  });
+
+  it("短い困りごとは、貼り付けに巻き込まない", () => {
+    expect(isPastedContent("投稿が来ません")).toBe(false);
+    expect(isPastedContent("ログインできない\n助けてください")).toBe(false);
+    expect(classifyRequestKind("投稿が来ません")).toBe(null);
+  });
+});

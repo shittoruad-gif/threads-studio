@@ -19,7 +19,12 @@ export function isPastedContent(t: string): boolean {
   const lines = t.split(/\r?\n/).filter((l) => l.trim()).length;
   // 絵文字（サロゲートペア）・記号・ハッシュタグ（サーバーのビルド対象がES5のため u フラグは使わない）
   const decorated = /[#＃]|[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|‼|⁉/.test(t);
-  return (t.length >= 150 && lines >= 3) || (t.length >= 120 && decorated);
+  // ★3つ目の条件は、短めの投稿文が「ご質問」に紛れていたため足した。
+  //   例：「富山市から10代から慢性肩こりの20代👩／“こんなに軽くなったことない〜！！”／
+  //   全身ユルユルに…🥺／📍滑川市の…」＝約85字・4行・絵文字つき。
+  //   これを質問として扱うと的外れな返事になり、担当者にも「質問」として上がる。
+  //   疑問符があれば上で false を返しているので、ご質問を巻き込む心配はない。
+  return (t.length >= 150 && lines >= 3) || (t.length >= 120 && decorated) || (t.length >= 60 && lines >= 3 && decorated);
 }
 
 /**
