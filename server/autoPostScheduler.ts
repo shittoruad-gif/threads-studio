@@ -540,7 +540,14 @@ async function generateAutoPost(
     // ★CTAは投稿タイプで出し分ける：オファー系・地域CV系の投稿だけに連結し、
     //   共感・会話系の投稿は問いかけで終わらせる。全投稿にCTAを付けると
     //   アカウント全体が「広告の羅列」になり、Threadsの評価も読者の反応も落ちる。
-    const includeCta = CTA_POST_TYPES.has(postType);
+    let includeCta = CTA_POST_TYPES.has(postType);
+    // ★慣らし運転中（連携14日未満）は投稿にリンク（CTA）を付けない。
+    //   新規アカウントで毎回リンク付き投稿＝スパム判定の典型（入口はプロフィールのリンクと固定投稿）。
+    try {
+      const { rampCap } = await import('../shared/accountRamp');
+      const acc: any = await db.getThreadsAccountById(threadsAccountId);
+      if (acc && rampCap(99, acc.createdAt).capped) includeCta = false;
+    } catch { /* 取れなければ従来どおり */ }
 
     // ★人間化リライト（2パス目）：factGuard通過後の本文を口語に書き直す。
     //   事実の追加は禁止プロンプトで担保（削るのみ可）。CTAは定型で良いので対象外。

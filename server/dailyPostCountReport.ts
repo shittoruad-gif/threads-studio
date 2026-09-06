@@ -73,7 +73,7 @@ export async function runDailyPostCountReportJob(): Promise<void> {
       if (maxPerDay <= 0) continue; // 自動投稿の無いプラン
       const common = await db.getAutoPostSettings(userId);
       const accounts = await db.getThreadsAccountsByUserId(userId);
-      const lines: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number }> = [];
+      const lines: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number; note?: string }> = [];
       for (const r of rows) {
         const acct: any = (accounts || []).find((a: any) => Number(a.id) === r.accountId);
         const eff = effectiveAccountSettings(common as any, acct);
