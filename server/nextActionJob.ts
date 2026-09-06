@@ -12,7 +12,7 @@ import { detectNextAction } from "./nextAction";
 import { textWithQuick, MENU_ITEMS } from "./lineChat";
 
 /** 同じ案内を送り直すまでの間隔 */
-const RESEND_AFTER_DAYS = 3;
+const RESEND_AFTER_DAYS = 1; // ★2026-09-06 三上様指示：進んでいない方には毎朝お知らせする（「この案内は不要」で止められる）
 
 export async function runNextActionNotifyJob(): Promise<void> {
   const targets = await db.listUsersForNextActionNotify();

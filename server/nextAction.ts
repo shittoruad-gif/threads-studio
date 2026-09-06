@@ -113,6 +113,16 @@ async function accountSteps(userId: number, accounts: any[], usable: any[]): Pro
   return out;
 }
 
+/** ご案内先URL（公式LINE・予約・HPのどれか）が登録されているか */
+function hasAnyLink(p: any): boolean {
+  if (!p) return false;
+  if (String(p.ctaLink || "").trim()) return true;
+  try {
+    const arr = JSON.parse(String(p.links || "[]"));
+    return Array.isArray(arr) && arr.some((l: any) => l && String(l.url || "").trim());
+  } catch { return false; }
+}
+
 /** お店の情報として「使える」状態か（自動投稿の対象条件と同じ） */
 function isUsableProject(p: any): boolean {
   return (
@@ -161,6 +171,26 @@ export async function getSetupSteps(userId: number): Promise<SetupStep[]> {
       actionLabel: "連携する",
     },
   ];
+  // ★ご案内先URL（毎日の投稿の誘導と固定投稿のコメント欄に使う）。2026-09-06 三上様指示で工程に追加
+  if (usable.length > 0) {
+    steps.push({
+      id: "no_link",
+      label: "ご案内先URLを登録（公式LINE・予約・HPのどれか）",
+      done: usable.some(hasAnyLink),
+      path: "/ai-counseling",
+      actionLabel: "登録する",
+    });
+  }
+  // ★Threadsの自己紹介が空だと、投稿を見た人がプロフィールに来ても「どこの何屋か」が分からない
+  if (active.length > 0) {
+    steps.push({
+      id: "profile_bio",
+      label: "Threadsのプロフィール（自己紹介）を整える",
+      done: active.every((a: any) => String(a.biography || "").trim().length >= 40),
+      path: "/threads-connect",
+      actionLabel: "提案を見る",
+    });
+  }
 
   // ★複数アカウントを運用しているときは、紐づけ・固定投稿・公開・ピン留めを
   //   アカウントごとに出す（どのアカウントの工程かが必ず分かるようにする）。
@@ -391,6 +421,34 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
         "下の「はじめの設定」からアカウントを選ぶと、そのアカウント専用の内容で投稿されるようになります。",
       buttons: [{ label: "はじめの設定", data: "m=setup" }],
     };
+  }
+
+  // ④' ご案内先URLが未登録。毎日の投稿の誘導先と固定投稿のコメント欄が空になる。
+  if (!usable.some(hasAnyLink)) {
+    return {
+      key: "no_link",
+      text:
+        "次にやることが1つあります。\n\n" +
+        "「ご案内先URL」がまだ登録されていません。毎日の投稿の誘導と、固定投稿のコメント欄に使う、お客様に来てほしい場所です。\n" +
+        "下の「ご案内先URLを登録」から、公式LINE・Web予約・ホームページのどれかのURLを送ってください（1分）。",
+      buttons: [{ label: "ご案内先URLを登録", data: "c=seturl" }],
+    };
+  }
+
+  // ④'' Threadsの自己紹介が空。投稿を見た人がプロフィールに来ても何のお店か分からない。
+  {
+    const bare = activeAccounts.find((a: any) => String(a.biography || "").trim().length < 40);
+    if (bare) {
+      return {
+        key: `profile_bio:${Number(bare.id)}`,
+        text:
+          "次にやることが1つあります。\n\n" +
+          `@${bare.threadsUsername} のThreadsプロフィール（自己紹介）が空、または短いままです。\n` +
+          "投稿を見た人が次に見る場所なので、ここが空だと来店につながりません。\n" +
+          "下の「プロフィールの提案」を押すと、名前と自己紹介の文章を貼るだけの形でお送りします（5分）。",
+        buttons: [{ label: "プロフィールの提案", data: `c=proadv&a=${Number(bare.id)}` }],
+      };
+    }
   }
 
   // ⑤ 固定投稿がまだ。プロフィールに固定しておく投稿は集客の入口になるので、

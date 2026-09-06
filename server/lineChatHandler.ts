@@ -969,6 +969,26 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       : [{ label: "ご案内先URLを登録", data: "c=seturl" }, { label: "別のアカウントを点検", data: "c=proadv" }, ...MENU_HINT]);
     return msgs.slice(0, 5);
   }
+  // ── 次にやること：工程の一覧（○／未）と、最初に止まっている工程のボタン（2026-09-06 三上様指示）──
+  if (q.m === "next") {
+    const { getSetupSteps, detectNextAction } = await import("./nextAction");
+    const steps = await getSetupSteps(user.id);
+    const action = await detectNextAction(user.id);
+    const doneN = steps.filter((s) => s.done).length;
+    const list = steps.map((s) => `${s.done ? "○" : "□"} ${s.label}`).join("\n");
+    const { plan } = await planOf(user.id);
+    const maxPerDay = Number(plan?.features.maxAutoPostsPerDay ?? 0);
+    const head = `設定の進み具合（${doneN}／${steps.length}）\n${list}\n\n`;
+    if (!action) {
+      return [textWithQuick(
+        head + "設定はすべて整っています。あとは毎日届く投稿を確認するだけです。\n" +
+        (maxPerDay >= 2 ? "毎朝10時には「Meta AI呼びかけ文」も届きます。「Threadsアプリで投稿する」を押して、アプリから投稿してください。\n" : "") +
+        "毎朝7時40分に、前日の公開数をお知らせします。",
+        MENU_ITEMS,
+      )];
+    }
+    return [textWithQuick(head + action.text.replace(/^次にやることが1つあります。\n\n/, "▶ 次にやること\n"), [...action.buttons, ...MENU_ITEMS])];
+  }
   if (q.m === "help") return [textWithQuick("よくあるご質問です。知りたいことの分類をお選びください。", helpQuick())];
   // 分類を選んだとき＝その分類の質問一覧を出す
   if (q.hc) {
