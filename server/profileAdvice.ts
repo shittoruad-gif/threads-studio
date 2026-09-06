@@ -87,7 +87,15 @@ export async function nudgeAfterConnect(userId: number, username: string): Promi
     const r = await buildProfileAdviceForAccount(userId, Number(acct.id));
     if (!r) return;
     const { pushMessages } = await import("./lineNotify");
-    const msgs = [{ type: "text", text: `Threads（@${r.username}）がつながりました。\nプロフィールを点検したところ、整えると見つけてもらいやすくなる点がありましたので、貼るだけの文章と一緒にお送りします。` }, ...buildProfileAdviceMessages(r)];
+    const msgs = [
+      { type: "text", text:
+        `Threads（@${r.username}）がつながりました。\n\n` +
+        "■ 最初の2週間は「慣らし運転」です\n" +
+        "新しいアカウントで最初から多く投稿すると、Meta側の自動判定で本人確認や停止が起きやすいため、自動投稿は連携から7日間は1日1件、14日間は1日2件までに抑えます（その後ご契約の本数に）。\n" +
+        "この期間は、ご自身の手動投稿も1日1〜2件までがおすすめです。価格や「治る・歩けるようになった」などの結果の表現は入れません。\n\n" +
+        "プロフィールを点検したところ、整えると見つけてもらいやすくなる点がありましたので、貼るだけの文章と一緒にお送りします。" },
+      ...buildProfileAdviceMessages(r),
+    ];
     for (const to of targets) await pushMessages(to, msgs.slice(0, 5));
     console.log(`[ProfileAdvice] 連携直後の提案を送信 user=${userId} @${r.username}`);
   } catch (e) {

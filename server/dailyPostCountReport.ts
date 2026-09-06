@@ -16,12 +16,12 @@ const FREQ_COUNT: Record<string, number> = { daily: 1, twice_daily: 2, three_dai
 
 export function buildDailyPostCountMessage(
   dateLabel: string,
-  rows: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number }>,
+  rows: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number; note?: string }>,
 ): string {
   const lines: string[] = [`昨日の投稿結果（${dateLabel}）`];
   let anyZero = false;
   for (const r of rows) {
-    const head = `・@${r.username}：公開 ${r.posted}件（ご契約 1日${r.entitled}件）`;
+    const head = `・@${r.username}：公開 ${r.posted}件（${r.note ? r.note : `ご契約 1日${r.entitled}件`}）`;
     if (r.posted === 0) {
       anyZero = true;
       const why: string[] = [];
@@ -79,9 +79,14 @@ export async function runDailyPostCountReportJob(): Promise<void> {
         const eff = effectiveAccountSettings(common as any, acct);
         if (!eff.autoPostEnabled) continue; // 自動投稿OFFのアカウントは数えない
         let entitled = Math.min(FREQ_COUNT[eff.autoPostFrequency] ?? 1, maxPerDay);
+        let note: string | undefined;
         // 新しいアカウントは慣らし運転中の本数で数える（「ご契約より少ない」と出さない）
-        try { const { rampCap } = await import("../shared/accountRamp"); entitled = rampCap(entitled, acct?.createdAt).count; } catch { /* そのまま */ }
-        lines.push({ ...r, entitled });
+        try {
+          const { rampCap, rampNote } = await import("../shared/accountRamp");
+          const rc = rampCap(entitled, acct?.createdAt);
+          if (rc.capped) { entitled = rc.count; note = `慣らし運転中：${rampNote(rc.days)}`; }
+        } catch { /* そのまま */ }
+        lines.push({ ...r, entitled, note });
       }
       if (lines.length === 0) continue;
       const text = buildDailyPostCountMessage(dateLabel, lines);

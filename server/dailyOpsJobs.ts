@@ -325,6 +325,12 @@ export async function runTakeoverExpiryJob(): Promise<void> {
 
 /** スケジューラ初期化（_core/index.tsから呼ぶ） */
 export function initDailyOpsSchedulers(): void {
+  // 6:40 JST = 21:40 UTC — アカウント健全性（制限・停止の兆候／公開した投稿の消失）を自動投稿の前に点検
+  cron.schedule("40 21 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runAccountHealthJob } = await import("./accountHealthJob");
+    await runTrackedJob("account_health", runAccountHealthJob);
+  });
   // 7:00 JST = 22:00 UTC
   cron.schedule("0 22 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");

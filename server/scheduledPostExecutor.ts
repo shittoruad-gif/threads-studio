@@ -205,6 +205,32 @@ export async function executePendingPosts() {
         // 新規連携のトークンには権限が無いため、返信を伴う処理は出し分ける）
         const canReply = (account as any).hasReplyScope !== false;
 
+        // ★慣らし運転中（連携14日未満）は、ご本人の手動投稿も含めた「今日の合計」で上限を見る。
+        //   2026-09-06 自動3件＋手動2〜3件＝1日5〜6件で新規アカウントが停止された再発防止。
+        //   上限に達していれば、この投稿は公開せず取り消す（翌日の生成で改めて作られる）。
+        if (post.source === 'auto' && !(post as any).replyToThreadsId) {
+          try {
+            const { rampCap } = await import('../shared/accountRamp');
+            const rc = rampCap(99, (account as any).createdAt);
+            if (rc.capped) {
+              const { getThreadsUserPosts } = await import('./threadsApi');
+              const recent = await getThreadsUserPosts(accessToken, account.threadsUserId, 25);
+              const todayJst = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+              const todayCount = (recent || []).filter((p: any) => new Date(new Date(p.timestamp).getTime() + 9 * 3600e3).toISOString().slice(0, 10) === todayJst).length;
+              if (todayCount >= rc.count) {
+                await db.updateScheduledPost(post.id, { status: 'canceled', errorMessage: `慣らし運転中の上限（1日${rc.count}件・ご自身の投稿を含む）に達したため見送り` } as any);
+                console.log(`[Scheduled Post] ramp cap: account ${account.id} today=${todayCount} cap=${rc.count} → post ${post.id} canceled`);
+                try {
+                  const targets = await db.getLineUserIdsForUser(post.userId);
+                  const { pushMessages } = await import('./lineNotify');
+                  for (const to of targets) await pushMessages(to, [{ type: 'text', text: `@${account.threadsUsername} は連携から${rc.days}日目の「慣らし運転」中です。今日はご自身の投稿を含めて${todayCount}件になったため、自動投稿1件を見送りました（上限は1日${rc.count}件）。新しいアカウントで多く投稿すると停止されやすいための安全策です。` }]);
+                } catch { /* 通知失敗は無視 */ }
+                continue;
+              }
+            }
+          } catch (e) { console.warn(`[Scheduled Post] ramp cap check skipped: ${(e as Error)?.message}`); }
+        }
+
         let result: { id: string };
         if ((post as any).replyToThreadsId) {
           if (!canReply) {
@@ -442,6 +468,23 @@ export async function executePendingPosts() {
         });
 
         failed++;
+
+        // ★Meta側の制限・停止らしいエラーなら、そのアカウントの自動投稿を止めて本人と運営に知らせる
+        //   （止まらずに投稿し続けると判定が悪化する。2026-09-06 梅原様の停止を受けて）
+        try {
+          const { classifyThreadsError, restrictionNoticeForUser } = await import('../shared/accountRestriction');
+          if (classifyThreadsError(errMsg) === 'restricted') {
+            const acc: any = await db.getThreadsAccountById(post.threadsAccountId);
+            if (acc) {
+              await db.updateThreadsAccount(acc.id, { autoPostEnabled: false } as any);
+              const targets = await db.getLineUserIdsForUser(post.userId);
+              const { pushMessages } = await import('./lineNotify');
+              for (const to of targets) await pushMessages(to, [{ type: 'text', text: restrictionNoticeForUser(String(acc.threadsUsername)) }]);
+              await notifyOwner({ title: 'Threadsアカウントに制限の兆候（自動投稿を停止）', content: `@${acc.threadsUsername}（user ${post.userId}）投稿ID ${post.id}\n${errMsg.slice(0, 300)}` });
+              continue;
+            }
+          }
+        } catch { /* 分類失敗は通常の失敗通知へ */ }
 
         // Notify owner about failed post
         await notifyOwner({
