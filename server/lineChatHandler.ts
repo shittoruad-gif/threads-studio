@@ -17,6 +17,7 @@ import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 import { contractSummary, type ContractInfo } from "../shared/contractSummary";
+import { classifyRequestKind as requestKind, isPastedContent } from "../shared/requestKind";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
 
@@ -2257,39 +2258,6 @@ function looksLikeQuestion(t: string): boolean {
 }
 
 /**
- * 「ご質問」ではなく「ご依頼」のとき、その種類を返す。
- *
- * ★お客様が投稿の材料（実績・お客様のエピソード）を送ってこられたり、
- *   「こう投稿してほしい」と書かれることがある。これは質問ではないので、
- *   「お答えできないご質問でした」と返すと的外れになる。
- *   （2026-09-02、お客様が症例を3件送られたのに担当者送りになっていた）
- */
-/**
- * 投稿用の文章をそのまま貼られたか。
- * ★長文・改行あり・疑問符なし（＋絵文字やハッシュタグが混じる）は、ご質問ではなく
- *   「投稿文の貼り付け」であることがほとんど。ご質問扱いにすると自動応答が的外れな
- *   返事をし、担当者にも「質問」として上がってくる（2026-09-03 に2件発生）。
- */
-function isPastedContent(t: string): boolean {
-  if (/[?？]/.test(t)) return false;
-  const lines = t.split(/\r?\n/).filter((l) => l.trim()).length;
-  // 絵文字（サロゲートペア）・記号・ハッシュタグ（サーバーのビルド対象がES5のため u フラグは使わない）
-  const decorated = /[#＃]|[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|‼|⁉/.test(t);
-  return (t.length >= 150 && lines >= 3) || (t.length >= 120 && decorated);
-}
-
-function requestKind(t: string): "post" | "material" | "pasted" | null {
-  if (isPastedContent(t)) return "pasted";
-  // 「投稿してほしい」「告知したい」「ネタを作ってほしい」など
-  if (/(投稿|告知|発信|ポスト|ネタ)[^。！？\n]{0,12}(したい|して|作|つくっ|つくり|書い|書き|出し|載せ|上げ|流し)/.test(t)
-      || /(作っ|つくっ|書い|流し|載せ)[^。！？\n]{0,6}(ほしい|欲しい|ください|下さい|たい)/.test(t) && /(投稿|告知|発信|ポスト|ネタ)/.test(t)) return "post";
-  // 実績・症例・お客様のエピソードらしい文章（体験の記述で、依頼の形をしていない）
-  if (t.length >= 25 && /(来院|来店|患者|お客様|お客さん|施術|症状|改善|回復|復帰|卒業|通われ|いらっしゃ)/.test(t)
-      && !/[?？]$/.test(t)) return "material";
-  return null;
-}
-
-/**
  * 「ご質問」ではなく「ご依頼」だったときの返し方。
  *
  * ★自動応答が動いたときも、動かなかったとき（短い一言のご依頼）も、
@@ -2331,6 +2299,38 @@ function replyToRequest(req: "post" | "material" | "pasted", questionId?: number
 }
 
 /**
+ * AIがお答えできなかったご質問を、お客様の操作を待たずに担当者へお知らせする。
+ * 「返信待ち」にも載せたいので needsHuman も立てる。
+ * 通知に失敗しても、お客様への応答は止めない（false を返して従来の案内に戻す）。
+ */
+async function escalateUnanswered(
+  userId: number,
+  lineUserId: string,
+  question: string,
+  questionId?: number | null,
+): Promise<boolean> {
+  try {
+    if (questionId) {
+      try { await db.markSupportQuestionNeedsHuman(questionId); }
+      catch { /* 記録に失敗しても通知は試みる */ }
+    }
+    let user: any = null;
+    try { user = await db.getUserById(userId); } catch { user = null; }
+    const { notifyStaffOfQuestion } = await import("./supportNotify");
+    return await notifyStaffOfQuestion({
+      questionId: questionId ?? undefined,
+      userName: user?.name ?? null,
+      userEmail: user?.email ?? null,
+      lineUserId,
+      message: question,
+    });
+  } catch (e) {
+    console.error("[LineChat] お答えできなかったご質問の通知に失敗:", e);
+    return false;
+  }
+}
+
+/**
  * ご質問に自動でお答えする。
  * 答えられた場合も「担当者に聞く」を必ず添えて、行き止まりにしない。
  */
@@ -2357,9 +2357,20 @@ async function autoAnswer(userId: number, lineUserId: string, question: string):
     // 内容もそのまま失われる。何がどこに反映されるのかをお伝えする。
     const req = requestKind(question);
     if (req) return replyToRequest(req, res.questionId);
+
+    // ★以前は「下の『担当者に聞く』を押してください」とお願いするだけで、
+    //   押していただけなかったご質問は誰にも届いていなかった
+    //   （2026-09-06 時点で7件。「連携したようですが、LINEに戻りません」が4日間そのまま）。
+    //   お答えできなかった時点で、お客様の操作を待たずに担当者へお知らせする。
+    //   投稿の材料・ご依頼（上の requestKind）は対象外なので、通知が埋もれることはない。
+    const notified = await escalateUnanswered(userId, lineUserId, question, res.questionId);
     return [textWithQuick(
-      "申し訳ありません、こちらではお答えできないご質問でした。\n" +
-      "担当者にお伝えしますので、下の「担当者に聞く」を押してください。",
+      notified
+        ? "申し訳ありません、こちらではお答えできないご質問でした。\n" +
+          "担当者にお伝えしましたので、確認のうえ、このトークにお返事します。\n" +
+          "（営業時間の都合で、お返事までお時間をいただく場合があります）"
+        : "申し訳ありません、こちらではお答えできないご質問でした。\n" +
+          "担当者にお伝えしますので、下の「担当者に聞く」を押してください。",
       [
         { label: "担当者に聞く", data: `m=staff${res.questionId ? `&q=${res.questionId}` : ""}` },
         ...MENU_HINT,

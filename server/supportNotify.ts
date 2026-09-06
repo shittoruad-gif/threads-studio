@@ -22,6 +22,12 @@ export async function notifyStaffOfQuestion(params: {
   lineUserId?: string | null;
   message: string;
 }): Promise<boolean> {
+  // ★動作確認のときに、運営あてのメール・LINEを実際に飛ばさない。
+  //   （業種ズレの通知と同じ扱い。夜間整備でこの経路を通すため追加）
+  if (process.env.QA_SAFE_MODE === "1") {
+    console.log("[SupportNotify] QA_SAFE_MODE のため担当者への通知は送りません:", params.message.slice(0, 40));
+    return false;
+  }
   const base = process.env.APP_BASE_URL || "https://threads-studio.com";
   const who = [params.userName, params.userEmail].filter(Boolean).join(" / ") || "（お名前不明）";
   const link = `${base}/admin/questions${params.questionId ? `?id=${params.questionId}` : ""}`;
