@@ -204,6 +204,8 @@ function shortProblem(p: string | null | undefined): string {
   if (!s) return '';
   const head = s.split(/[、,・／/\r\n]/)[0].trim();
   if (head.length > 20) return '';
+  // 疑問文・かぎ括弧・文らしいもの（「敷居が高いと思われている？」）は名詞扱いしない
+  if (/[？?！!「」『』]/.test(head) || /(ている|れている|です|ます)$/.test(head)) return '';
   if (/(ない|たい|らない|れない|くる|する|なる|える|ある|いる|う|く|す|つ|む|る)$/.test(head)) return '';
   return head;
 }
@@ -237,7 +239,8 @@ export function buildMetaAiCallPost(src: MetaAiCallSource, dayIndex: number): st
   const candidates: Array<string | null> = [
     area ? `${META_AI_HANDLE} ${area}周辺${f ? `で${f}に興味がある人` : 'の人'}に、うちの${storeOk ? `お店（${store}）` : 'お店'}を届けて` : null,
     area && svc ? `${META_AI_HANDLE} ${area}で${svc}のおすすめを教えて` : null,
-    area && who && svc ? `${META_AI_HANDLE} ${area}で${who}に、${svc}に通うメリットを伝えて` : null,
+    // 「通う」が自然な業種（院・サロン・スタジオ・ジム・教室）以外は「利用する」（呉服店に通う、は不自然）
+    area && who && svc ? `${META_AI_HANDLE} ${area}で${who}に、${svc}${/(院|サロン|スタジオ|ジム|教室|クリニック|整体|整骨|接骨|鍼灸|ピラティス|ヨガ|塾)/.test(svc) ? 'に通う' : 'を利用する'}メリットを伝えて` : null,
     `${META_AI_HANDLE} うちのお店${storeOk ? `（${store}）` : ''}の${f ? `${f}の` : ''}強みを、来店されたことのない人に伝えて`,
     storeOk && (f || service) ? `${META_AI_HANDLE} ${store}の${f || service}は、他のお店と何が違う？` : null,
   ];
