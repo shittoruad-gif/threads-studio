@@ -31,50 +31,54 @@ export interface MetaAiCallMessageInput {
   redo?: boolean;
 }
 
-/** LINEに送る2通（説明の文章＋「Threadsアプリで投稿する」ボタン） */
+/** 手順の絵（GitHub Pages・https必須）。①LINEの緑のボタン → ②Threadsで「投稿」 */
+export const META_AI_CALL_HOWTO_IMAGE = "https://shittoruad-gif.github.io/shittoru-service-docs/img/metaai-call-howto.png";
+
+/**
+ * LINEに送る2通。★2026-09-06 氷見様「このやり方がよくわかりません」を受けて全面的に短くした。
+ *   1通目＝絵つきカード（やることは「ボタンを押す→投稿を押す」の2つだけ、と絵で示す）
+ *   2通目＝一言（何のための投稿か・アカウントの確認）。長い手順文は出さない。
+ */
 export function buildMetaAiCallMessages(p: MetaAiCallMessageInput): unknown[] {
   const store = String(p.storeName ?? "").replace(/\s*[\r\n]+\s*/g, "／").trim(); // 店名の改行は「／」に
   const acct = `@${p.username}${store ? `（${store}）` : ""}`;
   const url = buildThreadsIntentUrl(p.text);
-  const head = p.redo
-    ? "【Meta AI呼びかけ投稿の、やり直しのお願い】\n" +
-      "今朝の自動投稿「@meta.ai …」は、Threadsの仕様で自動投稿（API）からだと@meta.aiがメンションにならず、Meta AIの返事が付きませんでした。申し訳ありません。\n" +
-      "お手数ですが、下の手順で1回だけ投稿してください。今朝の投稿は消さなくて大丈夫です。"
-    : "【今日のMeta AI呼びかけ投稿】\n" +
-      "Threadsアプリから投稿すると、Meta AIが店名入りで返事をくれて、届く人が増えます。ボタン1つで投稿画面が開きます。";
-  const text =
-    `${head}\n\n` +
-    `■ 投稿するアカウント\n${acct}\n\n` +
-    `■ 投稿する文章\n${p.text}\n\n` +
-    `手順\n` +
-    `1. Threadsアプリで ${acct} にログインしていることを確認する\n` +
-    `2. 下の「Threadsアプリで投稿する」を押す（文章が入った投稿画面が開きます）\n` +
-    `3. 「@meta.ai」が青いメンションになっているのを確認して「投稿」を押す\n\n` +
-    `※ 別のアカウントでログイン中だと、そちらに投稿されてしまいます。\n` +
-    `※ Meta AIの返事が付くかは、Threads側の段階提供によります。`;
+  const title = p.redo ? "今朝の分を、アプリからもう一度" : "今日のMeta AI呼びかけ投稿";
   const flex = {
     type: "flex",
-    altText: `Threadsアプリで投稿する：${acct}`,
+    altText: `${title}：下のボタンを押して「投稿」を押すだけです`,
     contents: {
       type: "bubble",
-      size: "kilo",
+      size: "mega",
+      hero: { type: "image", url: META_AI_CALL_HOWTO_IMAGE, size: "full", aspectRatio: "1040:680", aspectMode: "cover" },
       body: {
-        type: "box", layout: "vertical", spacing: "sm",
+        type: "box", layout: "vertical", spacing: "md",
         contents: [
-          { type: "text", text: acct, size: "xs", color: "#0E8388", weight: "bold", wrap: true },
-          { type: "text", text: p.text.slice(0, 300), size: "sm", color: "#13343B", wrap: true },
+          { type: "text", text: title, weight: "bold", size: "md", color: "#13343B", wrap: true },
+          { type: "text", text: "やることは2つだけです。", size: "sm", color: "#13343B", wrap: true },
+          { type: "text", text: "1. 下の緑のボタンを押す（Threadsが開き、文章はもう入っています）\n2. 画面右下の「投稿」を押す", size: "sm", color: "#13343B", wrap: true },
+          { type: "separator" },
+          { type: "text", text: `投稿するアカウント：${acct}`, size: "xs", color: "#0E8388", weight: "bold", wrap: true },
+          { type: "text", text: p.text.slice(0, 300), size: "xs", color: "#6B7A78", wrap: true },
         ],
       },
       footer: {
         type: "box", layout: "vertical",
         contents: [
-          { type: "button", style: "primary", color: "#0E8388", height: "sm",
+          { type: "button", style: "primary", color: "#0E8388", height: "md",
             action: { type: "uri", label: "Threadsアプリで投稿する", uri: url } },
         ],
       },
     },
   };
-  return [{ type: "text", text }, flex];
+  const note =
+    (p.redo
+      ? "今朝の自動投稿は、Threadsの決まりでMeta AIに届きませんでした（自動投稿からだと@meta.aiが効かないため）。すみません。上のボタンからアプリで出し直すと届きます。今朝の投稿は消さなくて大丈夫です。\n\n"
+      : "") +
+    "これは、Meta AI（Threadsの中のAI）に「うちのお店を紹介して」と頼む投稿です。Meta AIがお店の名前を出してコメントで答えてくれるので、見る人が増えます。\n\n" +
+    `開いた画面の上に出る名前が ${acct} なら、そのまま「投稿」で大丈夫です。別の名前なら、Threadsアプリでお店のアカウントに切り替えてから、もう一度ボタンを押してください。\n\n` +
+    "分からなければ、このままここに送ってください。";
+  return [flex, { type: "text", text: note }];
 }
 
 function eligibleProjectsOf(projects: any[]): any[] {

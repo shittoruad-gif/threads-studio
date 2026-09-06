@@ -16,7 +16,7 @@ const { buildRedoForUsernames, buildMetaAiCallMessages } = await import("../../s
 const rows = await buildRedoForUsernames(names, focus);
 for (const r of rows) {
   const msgs: any = buildMetaAiCallMessages({ username: r.username, storeName: r.storeName, text: r.text, redo: true });
-  console.log(`\n===== @${r.username}（user ${r.userId}・LINE ${r.targets.length}件）=====\n${msgs[0].text}\n[ボタン] ${msgs[1].contents.footer.contents[0].action.uri}`);
+  console.log(`\n===== @${r.username}（user ${r.userId}・LINE ${r.targets.length}件）=====\n[カード] ${msgs[0].altText}\n[ボタン] ${msgs[0].contents.footer.contents[0].action.uri}\n${msgs[1].text}`);
 }
 if (!send) { console.log(`\n--- dry run（送信しません）対象 ${rows.length} アカウント ---`); process.exit(0); }
 const { pushMessages } = await import("../../server/lineNotify");
