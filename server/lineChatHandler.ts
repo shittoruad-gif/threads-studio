@@ -1647,6 +1647,56 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     )];
   }
 
+  // ── 送っていただいた文章を、お店の情報の「実績」に足す ──
+  //   ★これが無いと、実績を1つ足すのに「はじめの設定」20問のやり直しが必要で、
+  //     同じ内容を何度も送っていただくことになっていた（2026-09-06 香取様・氷見様）。
+  if (q.c === "addproof") {
+    const st0 = await db.getLineChatState(lineUserId);
+    let material = "";
+    if (st0?.state === "pending_material" && st0.payload) {
+      try { material = String(JSON.parse(String(st0.payload)).text || ""); } catch { material = ""; }
+    }
+    if (!material) {
+      return [textWithQuick(
+        "お預かりしていた文章が見つかりませんでした。お手数ですが、もう一度お送りください。",
+        MENU_HINT,
+      )];
+    }
+    const usable = ((await db.getUserProjects(user.id)) || []).filter((pj: any) =>
+      !String(pj.id).startsWith("demo_") && pj.businessType,
+    );
+    if (usable.length === 0) {
+      await db.clearLineChatState(lineUserId);
+      return [textWithQuick("先に「はじめの設定」でお店の情報のご登録をお願いします。", [{ label: "はじめの設定", data: "m=setup" }, ...MENU_HINT])];
+    }
+    // お店が複数あるときは、どのお店の実績かを選んでいただく（取り違え防止）
+    if (usable.length >= 2 && !q.p) {
+      return [textWithQuick(
+        "どのお店の実績として登録しますか？",
+        usable.slice(0, 10).map((pj: any) => ({ label: String(pj.storeName || pj.title || "お店").slice(0, 16), data: `c=addproof&p=${pj.id}` })),
+      )];
+    }
+    const pj: any = q.p ? usable.find((x: any) => String(x.id) === String(q.p)) : usable[0];
+    if (!pj) return [textWithQuick("そのお店の情報が見つかりませんでした。", MENU_HINT)];
+    const cur = String(pj.proof || "").trim();
+    if (cur.includes(material.trim())) {
+      await db.clearLineChatState(lineUserId);
+      return [textWithQuick("その内容は、すでに実績として登録されています。", [{ label: "登録内容を見る", data: "m=profile" }, ...MENU_HINT])];
+    }
+    // ★際限なく増えると投稿づくりの材料が薄まるので、上限を決めて古い方から落とす。
+    const MAX = 2000;
+    let next = cur ? `${cur}\n${material.trim()}` : material.trim();
+    if (next.length > MAX) next = next.slice(next.length - MAX).replace(/^[^\n]*\n/, "");
+    await db.updateProject(String(pj.id), { proof: next } as any);
+    await db.clearLineChatState(lineUserId);
+    return [textWithQuick(
+      `実績として登録しました。\n（${String(pj.storeName || pj.title || "お店")}）\n\n` +
+      "これから作る投稿で、この内容を使えるようになります。\n" +
+      "※ 健康に関わる言い切りは、安全運用ルールに沿って言い換わることがあります。",
+      [{ label: "登録内容を見る", data: "m=profile" }, { label: "今日の投稿", data: "m=posts" }, ...MENU_HINT],
+    )];
+  }
+
   // ── URLだけ送ってこられた分を、選んでいただいた種類で保存する ──
   //   （打ち直していただかなくて済むよう、URLは pending_url に預けてある）
   if (q.c === "urlk") {
@@ -2161,7 +2211,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   //     「プロプランは何アカウントまで？」のような具体的なご質問に答えられていなかった）
   //   自動で答えられなかったときだけ、下のキーワード案内にまわす。
   // ★投稿文の貼り付けは、ご質問として自動応答に回さない（的外れな返事・担当者への誤通知を防ぐ）
-  if (isPastedContent(t)) return replyToRequest("pasted");
+  if (isPastedContent(t)) return replyToRequest("pasted", null, await stashMaterial(lineUserId, user.id, t));
 
   // ★Meta AI（@meta.ai）のご質問は、決まった案内をそのまま出す（2026-09-05）。
   //   「Meta AIの返信」と送るだけで非表示の手順が出る、と配信で案内している。
@@ -2232,7 +2282,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   //   ご依頼だと分かるものは、自動応答が動いたときと同じ内容をお返しする。
   {
     const req = requestKind(t);
-    if (req) return replyToRequest(req);
+    if (req) return replyToRequest(req, null, req !== "post" && await stashMaterial(lineUserId, user.id, t));
   }
 
   // 短い言葉での操作指示・自動応答で答えられなかったときの受け皿。
@@ -2298,25 +2348,51 @@ function looksLikeQuestion(t: string): boolean {
  * ★自動応答が動いたときも、動かなかったとき（短い一言のご依頼）も、
  *   同じ内容をお返しするために切り出している。
  */
-function replyToRequest(req: "post" | "material" | "pasted", questionId?: number | string | null): unknown[] {
+/**
+ * 送っていただいた文章を「実績として登録」ボタン用に預かる。
+ * お店の情報がまだ無い方には出しても意味がないので、その場合は false を返す。
+ */
+async function stashMaterial(lineUserId: string, userId: number, text: string): Promise<boolean> {
+  try {
+    const usable = ((await db.getUserProjects(userId)) || []).filter((pj: any) =>
+      !String(pj.id).startsWith("demo_") && pj.businessType,
+    );
+    if (usable.length === 0) return false;
+    await db.setLineChatState(lineUserId, "pending_material", JSON.stringify({ text: text.slice(0, 1000) }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function replyToRequest(req: "post" | "material" | "pasted", questionId?: number | string | null, canSave = false): unknown[] {
   const staff = { label: "担当者に聞く", data: `m=staff${questionId ? `&q=${questionId}` : ""}` };
+  // ★送っていただいた文章を、その場で「お店の情報（実績）」に足せるようにする。
+  //   これが無いと、実績を1つ足すのに「はじめの設定」20問のやり直しが要り、
+  //   同じ内容を何度も送っていただくことになっていた（14件中5件がこの形）。
+  const save = canSave ? [{ label: "実績として登録", data: "c=addproof" }] : [];
   if (req === "pasted") {
     return [textWithQuick(
       "文章をお送りいただき、ありがとうございます。\n" +
       "このトークは、毎日の投稿の確認・承認と設定の操作にお使いいただけます（お送りいただいた文章がそのまま投稿されることはありません）。\n\n" +
+      (canSave
+        ? "実績やお客様の声として今後の投稿に使う場合は、下の「実績として登録」を押してください。この文章をお店の情報に足します。\n\n"
+        : "") +
       "・この文章をThreadsに投稿したい場合：アプリの「AI投稿を作る」で本文をこの文章に書き換えて投稿できます\n" +
-      "・実績やお客様の声として今後の投稿に使いたい場合：「お店の情報」に登録してください\n" +
       "・担当者に伝えたい場合：「担当者に聞く」を押してください",
-      [{ label: "お店の情報", data: "m=profile" }, staff, ...MENU_HINT],
+      [...save, { label: "お店の情報", data: "m=profile" }, staff, ...MENU_HINT],
     )];
   }
   if (req === "material") {
     return [textWithQuick(
       "ありがとうございます。実績やお客様のエピソードは、「お店の情報」に登録されたものだけをAIが投稿に使います" +
-      "（登録されていない話を作ることはありません）。\n" +
-      "いただいた内容を投稿で使えるようにするには、「お店の情報」に登録してください。\n\n" +
+      "（登録されていない話を作ることはありません）。\n\n" +
+      (canSave
+        ? "下の「実績として登録」を押していただければ、いまの文章をそのままお店の情報に足します。\n" +
+          "「はじめの設定」をやり直す必要はありません。\n\n"
+        : "いただいた内容を投稿で使えるようにするには、「お店の情報」に登録してください。\n\n") +
       "担当者に伝えたい場合は「担当者に聞く」を押してください。",
-      [{ label: "お店の情報", data: "m=profile" }, staff, ...MENU_HINT],
+      [...save, { label: "お店の情報", data: "m=profile" }, staff, ...MENU_HINT],
     )];
   }
   return [textWithQuick(
@@ -2437,7 +2513,7 @@ async function autoAnswer(userId: number, lineUserId: string, question: string):
     // それに「お答えできないご質問でした」と返すのは的外れで、書いてくださった
     // 内容もそのまま失われる。何がどこに反映されるのかをお伝えする。
     const req = requestKind(question);
-    if (req) return replyToRequest(req, res.questionId);
+    if (req) return replyToRequest(req, res.questionId, req !== "post" && await stashMaterial(lineUserId, userId, question));
 
     // ★ご自身のご契約についてのお尋ねは、AIには答えようがない（知識にはご契約の中身が無い）。
     //   担当者にまわす前に、ご契約データからお答えする。

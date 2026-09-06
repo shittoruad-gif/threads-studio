@@ -135,6 +135,9 @@ describe("文章の入力待ちの途中で別のボタンを押されたとき"
     expect(on("self_edit", "m=settings")).toBe(true);
     expect(on("rewrite_free", "m=menu")).toBe(true);
     expect(on("staff_message", "m=posts")).toBe(true);
+    // URL・実績の預かりも、別の操作に移られたら捨てる（取り違え防止）
+    expect(on("pending_url", "m=posts")).toBe(true);
+    expect(on("pending_material", "m=menu")).toBe(true);
   });
 
   it("同じ待ち状態を作り直すボタンでは、やめない", () => {
@@ -143,6 +146,10 @@ describe("文章の入力待ちの途中で別のボタンを押されたとき"
     expect(on("self_edit", "a=selfedit&i=7")).toBe(false);
     expect(on("rewrite_free", "a=rw&i=7")).toBe(false);
     expect(on("staff_message", "m=staff&q=3")).toBe(false);
+    // 預かった内容を使うボタンでは消さない（消すと登録できなくなる）
+    expect(on("pending_url", "c=urlk&k=line")).toBe(false);
+    expect(on("pending_material", "c=addproof")).toBe(false);
+    expect(on("pending_material", "c=addproof&p=abc")).toBe(false);
   });
 
   it("はじめの設定と連携の途中は、ボタン操作も流れの一部なので消さない", () => {
