@@ -159,3 +159,19 @@ describe("文章の入力待ちの途中で別のボタンを押されたとき"
     expect(shouldClearPendingInput(undefined, parsePostback("m=menu"))).toBe(false);
   });
 });
+
+describe("Meta AI呼びかけ投稿のカード", () => {
+  it("正体を示し、AIの「書き直す」ボタンを出さない", () => {
+    const json = JSON.stringify(buildPostCards([{ id: 9, postContent: "@meta.ai 新倉敷・玉島周辺の人に、うちのお店（例）を届けて", scheduledAt: null, angle: "meta_ai_call" }]));
+    expect(json).toContain("Meta AI呼びかけ投稿");
+    expect(json).toContain("このまま公開するのがおすすめ");
+    expect(json).not.toContain("a=rw&i=9");
+    expect(json).toContain("a=ok&i=9");
+    expect(json).toContain("a=selfedit&i=9");
+  });
+  it("通常投稿には出さない", () => {
+    const json = JSON.stringify(buildPostCards([{ id: 10, postContent: "本文", scheduledAt: null, angle: "qa" }]));
+    expect(json).not.toContain("Meta AI呼びかけ投稿");
+    expect(json).toContain("a=rw&i=10");
+  });
+});

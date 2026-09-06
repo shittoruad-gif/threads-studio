@@ -817,7 +817,9 @@ export async function countMetaAiAskToday(accountId: number): Promise<number> {
       eq(scheduledPosts.threadsAccountId, accountId),
       sql`(${scheduledPosts.metaAiAskText} IS NOT NULL OR ${scheduledPosts.angle} = 'meta_ai_call')`,
       sql`DATE(CONVERT_TZ(${scheduledPosts.scheduledAt}, '+00:00', '+09:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '+09:00'))`,
-      sql`${scheduledPosts.status} IN ('pending','awaiting_approval','processing','posted')`,
+      // ★取り消し（canceled）も数える：お客様が見送った日に、当日補充でもう一度作らない
+      //   （2026-09-06 岩根さんに同じ呼びかけ投稿が2回届いた）
+      sql`${scheduledPosts.status} IN ('pending','awaiting_approval','processing','posted','canceled')`,
     ));
   return Number(rows[0]?.n ?? 0);
 }

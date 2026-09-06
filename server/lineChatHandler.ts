@@ -1665,6 +1665,19 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     if (post.status !== "awaiting_approval") {
       return [textWithQuick("この投稿はすでに確認が終わっています。", MENU_HINT)];
     }
+    // ★Meta AI呼びかけ投稿はAIで書き直さない（普通の宣伝文に変わり、@meta.ai が消える）。
+    //   古いカードから押された場合の受け皿。直したい人は「文章をコピーして自分で直す」へ。
+    if ((post as any).angle === "meta_ai_call") {
+      return [textWithQuick(
+        "この投稿はMeta AIへの呼びかけ投稿です。「@meta.ai」を残したまま、このまま公開するのがおすすめです。\n" +
+        "文言を少し変えたいときは「文章をコピーして自分で直す」を押して、@meta.ai を残して送り返してください。",
+        [
+          { label: "これで投稿する", data: `a=ok&i=${q.i}${q.o ? "&o=1" : ""}` },
+          { label: "文章をコピーして自分で直す", data: `a=selfedit&i=${q.i}${q.o ? "&o=1" : ""}` },
+          { label: "見送る", data: `a=skip&i=${q.i}${q.o ? "&o=1" : ""}` },
+        ],
+      )];
+    }
     const items = Object.entries(REWRITE_KINDS).map(([k, v]) => ({ label: v.label, data: `a=rw2&i=${q.i}&k=${k}${q.o ? "&o=1" : ""}` }));
     await db.setLineChatState(lineUserId, "rewrite_free", JSON.stringify({ i: q.i, o: q.o ? 1 : 0 }));
     return [textWithQuick(

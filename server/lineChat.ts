@@ -68,11 +68,16 @@ export function fmtJst(v: Date | string | null): string {
  * 本文は全文を載せる（見に行かせない）。1カード=1投稿・最大5件。
  */
 export function buildPostCards(
-  posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null; accountName?: string | null }>,
+  posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null; accountName?: string | null; angle?: string | null }>,
   opts: { one?: boolean; bulk?: boolean } = {},
 ): unknown {
   const suffix = opts.one ? "&o=1" : "";
-  const bubbles = posts.slice(0, 5).map((p) => ({
+  const bubbles = posts.slice(0, 5).map((p) => {
+  // ★Meta AI呼びかけ投稿（angle=meta_ai_call）は、本文の「@meta.ai」が命。
+  //   2026-09-06 朝、氷見様・梅原様が「書き直す」を押して普通の宣伝文に変わり、
+  //   呼びかけとして公開されなかった。カードで正体を示し、AI書き直しは出さない。
+  const isCall = p.angle === "meta_ai_call";
+  return ({
     type: "bubble",
     size: "mega",
     body: {
@@ -83,10 +88,14 @@ export function buildPostCards(
         {
           type: "text",
           // ★複数アカウントを運用していても「どのアカウントの投稿か」が必ず分かるようにする
-          text: (p.accountName ? `@${p.accountName}　` : "") + `${fmtJst(p.scheduledAt)} 公開予定`,
+          text: (p.accountName ? `@${p.accountName}　` : "") + `${fmtJst(p.scheduledAt)} 公開予定` + (isCall ? "・Meta AI呼びかけ投稿" : ""),
           size: "xs", color: "#0E8388", weight: "bold", wrap: true,
         },
         { type: "text", text: (p.postContent || "（本文なし）").slice(0, 900), wrap: true, size: "sm", color: "#13343B" },
+        ...(isCall ? [{
+          type: "text", wrap: true, size: "xs", color: "#8A6D3B",
+          text: "Meta AIに呼びかけて、その返事でお店を広めてもらう投稿です。「@meta.ai」を残したまま、このまま公開するのがおすすめです。返事が付くかはThreads側の段階提供によります。",
+        }] : []),
       ],
     },
     footer: {
@@ -97,8 +106,9 @@ export function buildPostCards(
         { type: "button", style: "primary", color: "#0E8388", height: "sm",
           action: { type: "postback", label: "これで投稿する", data: `a=ok&i=${p.id}${suffix}`, displayText: "これで投稿する" } },
         { type: "box", layout: "horizontal", spacing: "sm", contents: [
-          { type: "button", style: "secondary", height: "sm",
-            action: { type: "postback", label: "書き直す", data: `a=rw&i=${p.id}${suffix}`, displayText: "書き直す" } },
+          // 呼びかけ投稿にはAIの「書き直す」を出さない（普通の宣伝文に変わってしまう）
+          ...(isCall ? [] : [{ type: "button", style: "secondary", height: "sm",
+            action: { type: "postback", label: "書き直す", data: `a=rw&i=${p.id}${suffix}`, displayText: "書き直す" } }]),
           { type: "button", style: "secondary", height: "sm",
             action: { type: "postback", label: "見送る", data: `a=skip&i=${p.id}${suffix}`, displayText: "見送る" } },
         ] },
@@ -109,7 +119,7 @@ export function buildPostCards(
           action: { type: "postback", label: "文章をコピーして自分で直す", data: `a=selfedit&i=${p.id}${suffix}`, displayText: "文章をコピーして自分で直す" } },
       ],
     },
-  }));
+  }); });
   const msg: any = {
     type: "flex",
     altText: `承認待ちの投稿が${posts.length}件あります`,
