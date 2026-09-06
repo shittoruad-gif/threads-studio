@@ -249,6 +249,11 @@ export const HELP_TOPICS: Array<{ key: string; cat: string; q: string; a: string
       "この機能はプロプラン・ビジネスプランでご利用いただけます。ライトプランの方は、プランを変更するとその日からお使いいただけます。\n\n" +
       "※ @meta.ai はThreadsの仕様で段階的に提供されており、まだ使えないアカウントもあります。その場合はMeta AIの返事が付きません（投稿自体はそのまま出ます）。使えるようになった時点で、そのまま効き始めます。",
     action: { label: "設定を見る", data: "m=settings" } },
+  { key: "proadv", cat: "account", q: "プロフィール（名前・自己紹介・アイコン）に何を入れればいい？",
+    a: "「お店・アカウント」→「プロフィールの提案」を押すと、いまのプロフィールを点検して、名前と自己紹介の文章を貼るだけの形でお送りします（はじめの設定の内容から作るので、事実と違うことは入りません）。\n\n" +
+      "目安：名前は「店名｜地域の業種」、自己紹介は150字以内で「地域・業種／強み／誰向け／ご予約はリンクから」の4点、アイコンはお店の外観・ロゴ・施術者の顔のどれか、リンクはいちばん来てほしい場所を1つ。\n" +
+      "ユーザー名に数字の並びがある場合は、店名＋業種の形に変えるのがおすすめです（Threadsアプリ→プロフィールを編集→ユーザー名。Instagramと共通）。",
+    action: { label: "プロフィールの提案", data: "c=proadv" } },
   { key: "manual", cat: "account", q: "Threadsのアカウント作成から連携までのやり方",
     a: "Instagramのアカウント作成 → Threadsの開設 → Threads Studioとの連携までを、はじめての方向けに1ページにまとめています。\n" +
       "https://shittoruad-gif.github.io/shittoru-service-docs/threads-setup-manual.html\n\n" +

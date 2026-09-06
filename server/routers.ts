@@ -2081,6 +2081,9 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           hasReplyScope: process.env.THREADS_MANAGE_REPLIES_APPROVED === "true",
         } as any);
 
+        // ★連携直後：自己紹介が空のままなら、貼るだけの提案を公式LINEへ（2026-09-06 三上様指示）
+        void import('./profileAdvice').then((m) => m.nudgeAfterConnect(ctx.user.id, String(profile.username))).catch(() => undefined);
+
         // ★Threadsがつながった時点で、デモモードは自動で終了する。
         //   以前は「本番モードに切り替える」を別途押す必要があり、連携済みなのに
         //   「体験版として利用中」の帯が出続ける方がいた（2026-09-03 三上様指示）。
@@ -2321,6 +2324,15 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
       }),
 
     // Sync profile from Threads
+    // プロフィールの点検と提案（2026-09-06）。アプリの「Threads連携」画面のカードから
+    profileAdvice: protectedProcedure
+      .input(z.object({ accountId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { buildProfileAdviceForAccount } = await import("./profileAdvice");
+        const r = await buildProfileAdviceForAccount(ctx.user.id, input.accountId);
+        if (!r) throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found' });
+        return r;
+      }),
     syncProfile: protectedProcedure
       .input(z.object({ accountId: z.number() }))
       .mutation(async ({ ctx, input }) => {

@@ -945,9 +945,29 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         { label: "お店の情報を登録・やり直す", data: "m=setup" },
         { label: "ご案内先URLを登録", data: "c=seturl" },
         { label: "ご案内先を選ぶ", data: "c=pintgt" },
+        { label: "プロフィールの提案", data: "c=proadv" },
         { label: "登録内容を見る", data: "m=profile" },
       ],
     )];
+  }
+  // ── Threadsプロフィールの点検と提案（2026-09-06 三上様指示：作ったばかりのアカウント向け）──
+  if (q.c === "proadv") {
+    const accts: any[] = await db.getActiveThreadsAccounts(user.id);
+    if (accts.length === 0) return [textWithQuick("先にThreadsアカウントを連携してください。", [{ label: "Threadsアカウントを追加", data: "m=connect" }, ...MENU_HINT])];
+    if (accts.length >= 2 && !q.a) {
+      return [textWithQuick("どのアカウントを点検しますか？", accts.slice(0, 10).map((a: any) => ({ label: `@${a.threadsUsername}`.slice(0, 20), data: `c=proadv&a=${a.id}` })))];
+    }
+    const acct: any = q.a ? accts.find((a: any) => String(a.id) === String(q.a)) : accts[0];
+    if (!acct) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    const { buildProfileAdviceForAccount, buildProfileAdviceMessages } = await import("./profileAdvice");
+    const r = await buildProfileAdviceForAccount(user.id, Number(acct.id));
+    if (!r) return [textWithQuick("プロフィールを読み取れませんでした。少し時間をおいてお試しください。", MENU_HINT)];
+    const msgs = buildProfileAdviceMessages(r) as any[];
+    const last = msgs[msgs.length - 1];
+    msgs[msgs.length - 1] = textWithQuick(last.text, r.needsSetup
+      ? [{ label: "はじめの設定", data: "m=setup" }, ...MENU_HINT]
+      : [{ label: "ご案内先URLを登録", data: "c=seturl" }, { label: "別のアカウントを点検", data: "c=proadv" }, ...MENU_HINT]);
+    return msgs.slice(0, 5);
   }
   if (q.m === "help") return [textWithQuick("よくあるご質問です。知りたいことの分類をお選びください。", helpQuick())];
   // 分類を選んだとき＝その分類の質問一覧を出す

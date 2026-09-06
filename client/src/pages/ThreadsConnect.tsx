@@ -540,6 +540,9 @@ export default function ThreadsConnect() {
               </div>
             )}
 
+            {/* プロフィールの点検と提案（2026-09-06）。作ったばかりのアカウント向けに、貼るだけの文章を出す */}
+            <ProfileAdviceCard accountId={account.id} />
+
             {/* Token Status */}
             {account.tokenExpiresAt && (() => {
               const expiresAt = new Date(account.tokenExpiresAt);
@@ -843,6 +846,71 @@ export default function ThreadsConnect() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+
+/** プロフィールの点検と提案。名前・自己紹介はコピーしてThreadsアプリの「プロフィールを編集」に貼る */
+function ProfileAdviceCard({ accountId }: { accountId: number }) {
+  const { t, lang } = useLang();
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const q = trpc.threads.profileAdvice.useQuery({ accountId }, { enabled: open, staleTime: 60_000 });
+  const copy = async (key: string, text: string) => {
+    try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied(null), 1500); } catch { /* 古いブラウザ */ }
+  };
+  return (
+    <div className="mb-4 p-3 rounded-lg border border-border bg-background">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium text-foreground">{t("プロフィールの点検と提案")}</p>
+          <p className="text-xs text-muted-foreground">{t("名前・自己紹介・アイコン・リンクを点検し、貼るだけの文章を作ります")}</p>
+        </div>
+        <Button size="sm" variant={open ? "ghost" : "outline"} onClick={() => setOpen((v) => !v)}>{open ? t("閉じる") : t("点検する")}</Button>
+      </div>
+      {open && (
+        <div className="mt-3 space-y-3 text-sm">
+          {q.isLoading && <p className="text-muted-foreground">{t("読み取り中…")}</p>}
+          {q.error && <p className="text-red-600">{t("読み取れませんでした。少し時間をおいてお試しください。")}</p>}
+          {q.data && (
+            <>
+              <ul className="space-y-1">
+                {q.data.advice.checks.map((c) => (
+                  <li key={c.key} className="flex gap-2">
+                    <span className={c.mark === "○" ? "text-emerald-600" : c.mark === "△" ? "text-amber-600" : "text-red-600"}>{c.mark}</span>
+                    <span><b>{c.label}</b>：<span className="text-foreground/80 break-words">{c.note}</span></span>
+                  </li>
+                ))}
+              </ul>
+              {q.data.needsSetup ? (
+                <p className="text-amber-700">{t("お店の情報が未登録のため、貼るだけの提案文は作れません。先に「はじめの設定」を済ませてください。")}</p>
+              ) : (
+                <>
+                  {q.data.advice.nameSuggestion && (
+                    <div className="p-2 rounded bg-muted/50">
+                      <div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">{t("名前（表示名）")}</span>
+                        <Button size="sm" variant="ghost" onClick={() => copy("name", q.data!.advice.nameSuggestion)}>{copied === "name" ? t("コピーしました") : t("コピー")}</Button></div>
+                      <p className="whitespace-pre-wrap break-words">{q.data.advice.nameSuggestion}</p>
+                    </div>
+                  )}
+                  {q.data.advice.bioSuggestion && (
+                    <div className="p-2 rounded bg-muted/50">
+                      <div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">{t("自己紹介（150字以内）")}</span>
+                        <Button size="sm" variant="ghost" onClick={() => copy("bio", q.data!.advice.bioSuggestion)}>{copied === "bio" ? t("コピーしました") : t("コピー")}</Button></div>
+                      <p className="whitespace-pre-wrap break-words">{q.data.advice.bioSuggestion}</p>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{t("入れ方：Threadsアプリ → 右下の人型アイコン →「プロフィールを編集」→ 名前／自己紹介／リンクに貼って「完了」")}</p>
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{q.data.advice.pictureAdvice}</p>
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap break-all">{q.data.advice.linkAdvice}</p>
+                  {q.data.advice.usernameAdvice && <p className="text-xs text-muted-foreground whitespace-pre-wrap">{q.data.advice.usernameAdvice}</p>}
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
