@@ -102,6 +102,11 @@ export function buildPostCards(
           { type: "button", style: "secondary", height: "sm",
             action: { type: "postback", label: "見送る", data: `a=skip&i=${p.id}${suffix}`, displayText: "見送る" } },
         ] },
+        // ★本文をコピーして自分で直す（2026-09-06 氷見様ご要望）。
+        //   このカードはFlexなので長押しコピーができず、スクショ→写真アプリで文字を拾って
+        //   直されていた。押すと本文が普通のメッセージで届き、長押しでコピーできる。
+        { type: "button", style: "link", height: "sm",
+          action: { type: "postback", label: "文章をコピーして自分で直す", data: `a=selfedit&i=${p.id}${suffix}`, displayText: "文章をコピーして自分で直す" } },
       ],
     },
   }));
@@ -295,7 +300,7 @@ export const HELP_TOPICS: Array<{ key: string; cat: string; q: string; a: string
       "下のボタンで、いまの設定をご確認いただけます。それでも来ない場合は「担当者に聞く」からお知らせください。",
     action: { label: "設定", data: "m=settings" } },
   { key: "rewrite", cat: "daily", q: "届いた投稿の内容を直したい",
-    a: "届いた投稿の「書き直す」を押すと、直し方を選べます（やわらかく・短く・具体的に など）。\n" +
+    a: "届いた投稿の「書き直す」を押すと、直し方を選べます（やわらかく・短く・具体的に など）。\n" +\n      "ご自身の手で直したいときは「文章をコピーして自分で直す」を押してください。本文が普通のメッセージで届くので、長押し→コピーして、直した全文を送り返すだけです（全文を打ち直す必要はありません）。\n" +
       "ご希望を文章でそのまま送っていただいても直せます（例：「料金の話は入れないで」）。\n" +
       "ご自身で文章を打ち直したいときは「一部修正」を押してください。\n" +
       "今回は出したくない、というときは「見送る」を押すと公開されません。",

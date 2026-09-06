@@ -1652,7 +1652,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     }
     await db.setLineChatState(lineUserId, "self_edit", JSON.stringify({ i: Number(q.i), o: q.o ? 1 : 0 }));
     return [
-      { type: "text", text: "下の全文を長押しでコピーし、直したい箇所を変えて、そのまま送り返してください。届いた文にまるごと置き換えます。" },
+      { type: "text", text: "下の全文を長押し→「コピー」して、直したい箇所を変えて、そのまま送り返してください。届いた文にまるごと置き換えます（全文を打ち直す必要はありません）。" },
       { type: "text", text: post.postContent || "" },
       textWithQuick("やめる場合は「やめる」と送ってください。", [{ label: "やめる", data: "m=cancel" }]),
     ];
