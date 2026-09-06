@@ -398,9 +398,9 @@ export const HELP_TOPICS: Array<{ key: string; cat: string; q: string; a: string
 
   // ── お支払い・プラン ──
   { key: "nextbill", cat: "billing", q: "次回の請求日と金額を知りたい",
-    a: "アプリのホーム画面に、ご契約中のプラン・金額・次回のご請求日が表示されます。\n" +
-      "下のボタンで、いまのご契約内容をお送りします。",
-    action: { label: "プランを見る", data: "s=plan" } },
+    a: "下のボタンを押していただくと、ご契約中のプラン・月額・次回のご請求日を、このトークにお送りします。\n" +
+      "アプリのホーム画面でもご確認いただけます。",
+    action: { label: "ご契約内容を見る", data: "s=plan" } },
   { key: "changeplan", cat: "billing", q: "プランを変えたい",
     a: "アプリの「料金プラン」画面から、いつでもお手続きいただけます。\n" +
       "上位プランに変えると、Threadsアカウントの連携数・1日の投稿回数・操作できる人数が増えます。\n" +

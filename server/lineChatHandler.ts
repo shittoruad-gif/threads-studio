@@ -16,6 +16,7 @@ import { applyIndustryOverrides } from "../shared/industryProfiles";
 import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
+import { contractSummary, type ContractInfo } from "../shared/contractSummary";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
 
@@ -269,6 +270,27 @@ async function planOf(userId: number) {
     return { plan: getPlan(resolveEffectivePlanId(sub?.planId, sub?.status)) };
   } catch {
     return { plan: undefined as any };
+  }
+}
+
+/** ご契約内容（プラン・金額・次回の請求日）。LINEで「請求額は？」に answering するため */
+async function contractOf(userId: number): Promise<ContractInfo | null> {
+  try {
+    const sub = await db.getSubscriptionByUserId(userId);
+    const { getPlan, resolveEffectivePlanId } = await import("@shared/plans");
+    const plan = getPlan(resolveEffectivePlanId(sub?.planId, sub?.status));
+    if (!plan) return null;
+    return {
+      planName: plan.name,
+      priceMonthly: plan.priceMonthly,
+      status: sub?.status ?? null,
+      trialEndsAt: sub?.trialEndsAt ?? null,
+      currentPeriodEnd: sub?.currentPeriodEnd ?? null,
+      cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? null,
+      isCampaign: Boolean(plan.isCampaign),
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -1289,10 +1311,12 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   }
   if (q.s === "plan") {
     const base = process.env.APP_BASE_URL || "https://threads-studio.com";
-    return [textWithQuick(
-      `プランのご確認・ご変更はこちらから行えます。\n${base}/pricing?openExternalBrowser=1`,
-      MENU_HINT,
-    )];
+    // ★ここは以前、料金ページのURLを返すだけだった。
+    //   ヘルプの「次回の請求日と金額を知りたい」は『いまのご契約内容をお送りします』と
+    //   案内しているのに、実際には誰にでも同じリンクが届くだけで、
+    //   ご自分の金額も次回の請求日も分からなかった。
+    //   （2026-09-06「来月の私の請求額を教えてください」にお答えできず担当者へ回っていた）
+    return [textWithQuick(`${contractSummary(await contractOf(user.id))}\n\nプランのご変更はこちらから行えます。\n${base}/pricing?openExternalBrowser=1`, MENU_HINT)];
   }
   // ── 「次にやること」の案内のON/OFF ──
   if (q.n === "off") {
