@@ -176,7 +176,8 @@ export async function buildRedoForUsernames(usernames: string[], focusOverride: 
     const pinned = acct.defaultProjectId ? projects.find((p) => p.id === acct.defaultProjectId) : null;
     const project = pinned || projects[0];
     let text = !focus && today && today.trim().startsWith("@meta.ai") ? today.trim() : null;
-    if (!text && project) text = buildMetaAiCallPost({ ...callSourceOf(project), focus }, dayIndex);
+    // 得意分野を指定したやり直しは②型（「〇〇でダイエットに強い整体院のおすすめを教えて」）に固定
+    if (!text && project) text = buildMetaAiCallPost({ ...callSourceOf(project), focus }, focus ? 1 : dayIndex);
     if (!text) { console.log(`@${username}: 呼びかけ文を作れません（材料不足）`); continue; }
     const targets = await db.getLineUserIdsForUser(Number(acct.userId));
     out.push({ userId: Number(acct.userId), username, storeName: project?.storeName ?? null, text, targets });
