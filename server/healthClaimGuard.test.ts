@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { checkHealthClaims, isHealthBusiness } from "../shared/healthClaimGuard";
-import { rampCap } from "../shared/accountRamp";
+import { rampCap, compensationCount } from "../shared/accountRamp";
 
 describe("健康系の断定ガード", () => {
   it("杖なしで歩ける・痛みなく・ぐっすり・初回1980円を検出して和らげる", () => {
@@ -22,12 +22,24 @@ describe("健康系の断定ガード", () => {
   });
 });
 describe("新しいアカウントの慣らし", () => {
-  it("7日未満は1件、14日未満は2件、以降は契約どおり", () => {
+  it("5日未満は1件、10日未満は2件、以降は契約どおり", () => {
     const now = Date.parse("2026-09-06T00:00:00Z");
     expect(rampCap(3, "2026-09-02T00:00:00Z", now).count).toBe(1);
-    expect(rampCap(3, "2026-08-25T00:00:00Z", now).count).toBe(2);
+    expect(rampCap(3, "2026-08-30T00:00:00Z", now).count).toBe(2);
     expect(rampCap(3, "2026-08-01T00:00:00Z", now).count).toBe(3);
-    expect(rampCap(1, "2026-08-25T00:00:00Z", now).capped).toBe(false);
+    expect(rampCap(1, "2026-08-30T00:00:00Z", now).capped).toBe(false);
+  });
+  it("慣らしで減った分は1日＋1件で補い、30日で契約×30に届く", () => {
+    // 5日×1件＋5日×2件＝15件のあと、11日目から4件/日
+    let posted = 15; let total = 15;
+    for (let day = 10; day < 30; day++) {
+      const c = compensationCount(3, day, posted);
+      total += c.count; posted += c.count;
+    }
+    expect(total).toBeGreaterThanOrEqual(90);
+    expect(compensationCount(3, 10, 15).count).toBe(4);
+    expect(compensationCount(3, 10, 30).count).toBe(3); // 不足なし
+    expect(compensationCount(1, 10, 5).count).toBe(1);  // ライトは補填なし
   });
 });
 

@@ -84,8 +84,9 @@ export async function runDailyPostCountReportJob(): Promise<void> {
         try {
           const { rampForAccount } = await import("./accountRampCheck");
           const full: any = acct ? await db.getThreadsAccountById(Number(acct.id)) : null;
-          const rc = full ? await rampForAccount(full, entitled) : { count: entitled, capped: false, note: "" };
-          if (rc.capped) { entitled = rc.count; note = `慣らし運転中：${rc.note}`; }
+          const rc = full ? await rampForAccount(full, entitled) : { count: entitled, capped: false, extra: false, note: "" };
+          if (rc.capped) { entitled = rc.count; note = rc.note; }
+          else if (rc.extra) { entitled = rc.count; note = rc.note; }
         } catch { /* そのまま */ }
         lines.push({ ...r, entitled, note });
       }

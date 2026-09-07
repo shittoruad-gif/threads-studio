@@ -7,7 +7,7 @@
 
 | ルール | 実装 |
 |---|---|
-| 新規アカウントは慣らし運転：連携7日未満は1日1件、14日未満は2件 | shared/accountRamp.ts → autoPostScheduler / dailyPostCountReport |
+| 新規アカウントは慣らし運転：連携1〜5日目は1日1件、6〜10日目は2件。減った分は11日目以降に1日＋1件で補い、30日間の合計を契約どおり（3件×30＝90件）にする。Threads歴30日以上・フォロワー100以上のアカウントは対象外（連携時に判定して本人に伝える） | shared/accountRamp.ts / server/accountRampCheck.ts → autoPostScheduler / dailyPostCountReport |
 | 慣らし運転中はご本人の手動投稿も数え、合計が上限なら自動投稿を見送る（本人にLINEで説明） | scheduledPostExecutor（Threads APIで当日の投稿数を確認） |
 | 慣らし運転中は末尾の誘導文を付けない（URLは全期間で本文に入れない） | autoPostScheduler includeCta / stripRawUrls |
 | 健康系業種（整体・整骨・鍼灸・エステ・医療・ジム等）は結果の断定・体験談・価格文を機械的に言い換え／削除。短くなりすぎたら公開しない | shared/healthClaimGuard.ts + threadsPrompts の禁止則 |
@@ -30,7 +30,7 @@
 ## 3. 運営が毎朝確認すること（threads-studio-daily-check）
 
 - `account_health` が動いたか、自動停止・投稿消失の通知が出ていないか
-- 慣らし運転中のアカウント一覧（連携14日未満）と、当日の上限で見送った件数
+- 慣らし運転中（連携10日未満）・補填中（11〜30日目）のアカウント一覧と、当日の上限で見送った件数
 - healthClaimGuard の発動が多いアカウント（登録内容に結果表現・価格が多い＝はじめの設定の見直しをLINEで案内）
 - 自動停止されたアカウントは、お客様の復帰連絡があるまで再開しない。再開時は慣らし運転（1件/日）から
 
@@ -44,6 +44,6 @@
 
 ## 5. 変更するときの決まり
 
-- しきい値（7日/14日・1件/2件）を変えるときは、この文書 → shared/accountRamp.ts → 説明書 の順で同時に直す
+- しきい値（5日/10日・1件/2件・補填＋1件・30日で契約どおり）を変えるときは、この文書 → shared/accountRamp.ts → 説明書 の順で同時に直す
 - 新しい業種を扱うときは healthClaimGuard の業種判定と言い換え表を先に足す
 - 本番反映は夜間整備でまとめて行い、日中は反映しない（例外は実害が出続けているときだけ）

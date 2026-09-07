@@ -3529,6 +3529,19 @@ export async function listLineLinks(userId: number) {
 }
 
 /** 通知の宛先LINE userId一覧（連携者全員に配信する） */
+/** 連携してから今日までに作られた自動投稿（公開済み・予約中・承認待ち）の数。慣らし運転の補填の計算用 */
+export async function countAccountAutoPostsSinceConnect(accountId: number): Promise<number> {
+  const database = await getDb();
+  if (!database) return 0;
+  const rows: any = await database.execute(sql`
+    SELECT COUNT(*) AS n FROM scheduledPosts sp JOIN threadsAccounts ta ON ta.id = sp.threadsAccountId
+    WHERE sp.threadsAccountId = ${accountId} AND sp.source = 'auto' AND sp.replyToThreadsId IS NULL
+      AND sp.angle <> 'meta_ai_call' AND sp.status IN ('posted','pending','awaiting_approval','processing')
+      AND sp.scheduledAt >= ta.createdAt
+      AND DATE(CONVERT_TZ(sp.scheduledAt,'+00:00','+09:00')) < DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
+  return Number((rows as any)[0]?.[0]?.n ?? 0);
+}
+
 export async function getLineUserIdsForUser(userId: number): Promise<string[]> {
   const links = await listLineLinks(userId);
   return links.map((l) => l.lineUserId);

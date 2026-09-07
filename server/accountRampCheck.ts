@@ -1,13 +1,14 @@
 /**
  * 慣らし運転の判定（サーバー側）。shared/accountRamp.ts の日数判定に、
- * 「Threads歴の長いアカウントには掛けない」を足す（2026-09-07 比嘉様の質問を受けて）。
- *
- * Threads APIにアカウント作成日は無いので、直近25件の投稿の最古が30日より前なら
- * 「以前から使っているアカウント」とみなして慣らし運転を外す。判定結果は1日キャッシュ。
+ *  - 「Threads歴の長いアカウントには掛けない」（直近100件の最古が30日以上前、またはフォロワー100以上）
+ *  - 「慣らしで減った分の補填」（連携30日以内・契約×経過日数に届いていなければ＋1件）
+ * を足す。判定は1日キャッシュ。
  */
-import { rampCap, rampNote } from "../shared/accountRamp";
+import * as db from "./db";
+import { rampCap, rampNote, compensationCount, compensationNote, COMPENSATION_WINDOW_DAYS } from "../shared/accountRamp";
 
 const ESTABLISHED_DAYS = 30;
+const ESTABLISHED_FOLLOWERS = 100;
 const cache = new Map<number, { day: string; established: boolean }>();
 
 export async function isEstablishedAccount(account: { id: number; threadsUserId: string; accessToken: string }): Promise<boolean> {
@@ -16,25 +17,47 @@ export async function isEstablishedAccount(account: { id: number; threadsUserId:
   if (c && c.day === day) return c.established;
   let established = false;
   try {
-    const r: any = await (await fetch(`https://graph.threads.net/v1.0/${account.threadsUserId}/threads?fields=id,timestamp&limit=25&access_token=${account.accessToken}`)).json();
+    const r: any = await (await fetch(`https://graph.threads.net/v1.0/${account.threadsUserId}/threads?fields=id,timestamp&limit=100&access_token=${account.accessToken}`)).json();
     const ts: number[] = (r?.data ?? []).map((p: any) => new Date(p.timestamp).getTime()).filter((n: number) => Number.isFinite(n));
-    if (ts.length >= 20) {
-      const oldest = Math.min(...ts);
-      established = (Date.now() - oldest) / 86400000 >= ESTABLISHED_DAYS;
+    if (ts.length > 0 && (Date.now() - Math.min(...ts)) / 86400000 >= ESTABLISHED_DAYS) established = true;
+    if (!established) {
+      const fi: any = await (await fetch(`https://graph.threads.net/v1.0/${account.threadsUserId}/threads_insights?metric=followers_count&access_token=${account.accessToken}`)).json();
+      const followers = Number(fi?.data?.[0]?.total_value?.value ?? fi?.data?.[0]?.values?.[0]?.value ?? 0);
+      if (followers >= ESTABLISHED_FOLLOWERS) established = true;
     }
   } catch { established = false; }
   cache.set(account.id, { day, established });
   return established;
 }
 
-/** そのアカウントの今日の上限（contract=契約本数）。established なら契約どおり。 */
+export interface RampDecision {
+  /** 今日つくる本数 */
+  count: number;
+  /** 慣らしで契約より少ない */
+  capped: boolean;
+  /** 補填で契約より多い */
+  extra: boolean;
+  days: number;
+  note: string;
+  established: boolean;
+  shortfall: number;
+}
+
+/** そのアカウントの今日の本数（contract=契約本数） */
 export async function rampForAccount(
   account: { id: number; threadsUserId: string; accessToken: string; createdAt?: Date | string | null },
   contract: number,
-): Promise<{ count: number; capped: boolean; days: number; note: string; established: boolean }> {
+): Promise<RampDecision> {
   const r = rampCap(contract, account.createdAt);
-  if (!r.capped) return { ...r, note: "", established: false };
+  const base: RampDecision = { count: contract, capped: false, extra: false, days: r.days, note: "", established: false, shortfall: 0 };
+  if (r.days >= COMPENSATION_WINDOW_DAYS) return base; // 30日を過ぎたら通常
   const established = await isEstablishedAccount(account);
-  if (established) return { count: contract, capped: false, days: r.days, note: "", established: true };
-  return { ...r, note: rampNote(r.days), established: false };
+  if (established) return { ...base, established: true };
+  if (r.capped) return { ...base, count: r.count, capped: true, note: rampNote(r.days, contract) };
+  // 慣らしを抜けた：減った分を補填
+  let posted = 0;
+  try { posted = await db.countAccountAutoPostsSinceConnect(account.id); } catch { posted = contract * r.days; }
+  const c = compensationCount(contract, r.days, posted);
+  if (c.count > contract) return { ...base, count: c.count, extra: true, shortfall: c.shortfall, note: compensationNote(contract, c.shortfall) };
+  return base;
 }

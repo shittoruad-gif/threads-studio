@@ -1,15 +1,20 @@
 /**
- * 新しいThreadsアカウントの「慣らし運転」（2026-09-06 梅原様のアカウント停止を受けて）。
+ * 新しいThreadsアカウントの「慣らし運転」と「減った分の補填」（2026-09-06〜07）。
  *
- * 事実：連携4日目・フォロワー0のアカウントに、自動3件＋ご本人の手動2〜3件＝1日5〜6件を
- * 同じ話題で出し続け、Instagramの本人確認（ロボット判定→電話→顔写真）と停止が2回起きた。
- * 新しいアカウントで最初から機械的に多く出すのは、Meta側にスパムと見えやすい。
+ * 事実：連携4日目・フォロワー0のアカウントに自動3件＋手動2〜3件＝1日5〜6件を出し続け、
+ * 本人確認→停止が2回起きた（Meta側は後に「準拠していた」と誤判定を認めた）。
+ * 新しいアカウントで最初から機械的に多く出すのは、Meta側の自動判定にスパムと見えやすい。
  *
- * 決まり：連携から7日未満は1日1件、14日未満は1日2件まで（契約本数より少なければそちら）。
- * 14日以降は契約どおり。フォロワーが付いていても同じ（日数だけで判定＝説明しやすい）。
+ * 決まり（2026-09-07 三上様指示「1日3件で契約している方に違和感を与えない。減った分は補填し、30日で90件」）
+ *  - 連携1〜5日目：1日1件、6〜10日目：1日2件、11日目〜：契約どおり
+ *  - 慣らしで減った分は、11日目以降に1日＋1件（3件契約なら4件）で補い、30日間の合計を契約どおり（3件×30＝90件）にする
+ *    例：5＋10＝15件（10日）→ 残り20日で75件が必要 → 4件×15日＋3件×5日 ＝ 90件（28日目ごろに追いつく）
+ *  - Threads歴が長いアカウント（30日以上前の投稿がある／フォロワー100以上）には慣らしを掛けない（server/accountRampCheck.ts）
  */
-export const RAMP_DAYS_1 = 7;
-export const RAMP_DAYS_2 = 14;
+export const RAMP_DAYS_1 = 5;
+export const RAMP_DAYS_2 = 10;
+export const COMPENSATION_WINDOW_DAYS = 30;
+export const COMPENSATION_EXTRA_PER_DAY = 1;
 
 export function accountAgeDays(createdAt: Date | string | null | undefined, now: number = Date.now()): number {
   if (!createdAt) return 999;
@@ -26,9 +31,26 @@ export function rampCap(want: number, createdAt: Date | string | null | undefine
   return { count, capped: count < want, days };
 }
 
-export function rampNote(days: number): string {
-  const n = days + 1; // 連携した日を「1日目」と数える（0日目と出さない）
-  if (days < RAMP_DAYS_1) return `連携から${n}日目のため1日1件（7日目まで）`;
-  if (days < RAMP_DAYS_2) return `連携から${n}日目のため1日2件（14日目まで）`;
+/**
+ * 慣らしで減った分の補填。連携から30日以内で、これまでの実績が「契約×経過日数」に届いていなければ、
+ * 契約本数＋1件を返す（それ以上は増やさない＝1日4件まで）。
+ */
+export function compensationCount(want: number, days: number, postedSinceConnect: number, now?: number): { count: number; shortfall: number } {
+  const elapsed = Math.min(days, COMPENSATION_WINDOW_DAYS); // 今日を含まない経過日数
+  const expected = want * elapsed;
+  const shortfall = Math.max(0, expected - postedSinceConnect);
+  if (days >= COMPENSATION_WINDOW_DAYS || shortfall <= 0 || want < 2) return { count: want, shortfall };
+  return { count: want + COMPENSATION_EXTRA_PER_DAY, shortfall };
+}
+
+export function rampNote(days: number, want: number = 3): string {
+  const n = days + 1; // 連携した日を「1日目」と数える
+  const tail = want >= 2 ? `。減った分は${RAMP_DAYS_2 + 1}日目以降に1日${want + COMPENSATION_EXTRA_PER_DAY}件で補い、30日間で${want * 30}件になります` : "";
+  if (days < RAMP_DAYS_1) return `慣らし運転：連携から${n}日目のため1日1件（${RAMP_DAYS_1}日目まで）${tail}`;
+  if (days < RAMP_DAYS_2) return `慣らし運転：連携から${n}日目のため1日2件（${RAMP_DAYS_2}日目まで）${tail}`;
   return "";
+}
+
+export function compensationNote(want: number, shortfall: number): string {
+  return `補填中：慣らし運転で減った分（あと${shortfall}件）を1日${want + COMPENSATION_EXTRA_PER_DAY}件で補っています`;
 }

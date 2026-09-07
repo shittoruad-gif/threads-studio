@@ -288,7 +288,9 @@ function getNextPostingTime(index: number, customHours?: number[] | null): Date 
   // 本人の実績で「反応が高い時間帯」が分かっていればそれを優先。
   // データ不足（null）のときは従来のデフォルト時刻を使う。
   const hours = customHours && customHours.length > 0 ? customHours : POSTING_HOURS;
-  const hour = hours[index % hours.length];
+  // ★補填で4件目があるときは、既定の3枠と重ねず昼12時台に出す
+  const list = index >= hours.length && hours.length < 4 ? [...hours, 12] : hours;
+  const hour = list[index % list.length];
   const randMinute = Math.floor(Math.random() * 30); // 自然さのためのランダム分
 
   // 現在時刻を「JSTの壁時計」に変換し、UTCゲッターで年月日を取り出す
@@ -835,6 +837,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             const { rampForAccount } = await import('./accountRampCheck');
             const r = await rampForAccount(account as any, postCount);
             if (r.capped) { console.log(`[AutoPost] account ${account.id} 慣らし運転: ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count; }
+            else if (r.extra) { console.log(`[AutoPost] account ${account.id} 補填: ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count; }
             else if (r.established) console.log(`[AutoPost] account ${account.id} はThreads歴が長いため慣らし運転なし`);
           }
 
