@@ -175,6 +175,8 @@ export interface ThreadsComment {
   media_id?: string;
   parent_post_text?: string;
   parent_post_id?: string;
+  /** 返信のショートコード（Threadsの投稿インテントで「この返信に返信」を開くのに使う） */
+  shortcode?: string;
 }
 
 /**
@@ -209,7 +211,7 @@ export async function getThreadsComments(
 
     for (const thread of threads) {
       try {
-        const repliesFields = ["id", "text", "username", "timestamp"].join(",");
+        const repliesFields = ["id", "text", "username", "timestamp", "shortcode"].join(",");
         const repliesUrl = `${THREADS_API_BASE_URL}/v1.0/${thread.id}/conversation?fields=${repliesFields}&reverse=true&access_token=${accessToken}`;
         const repliesResponse = await fetch(repliesUrl);
 
@@ -230,6 +232,7 @@ export async function getThreadsComments(
             timestamp: reply.timestamp,
             media_id: thread.id,
             parent_post_text: thread.text || '',
+            shortcode: reply.shortcode,
             parent_post_id: thread.id,
           });
         }

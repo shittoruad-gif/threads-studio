@@ -1437,10 +1437,34 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   if (q.m === "staff") {
     return startStaffHandoff(lineUserId, q.q ? Number(q.q) : undefined);
   }
+  // ── コメント返信の1タップ（2026-09-07）──
+  if (q.cr === "send" && q.a && q.c) {
+    const acct: any = await db.getThreadsAccountById(Number(q.a));
+    if (!acct || acct.userId !== user.id) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    if (acct.hasReplyScope === false || acct.hasReplyScope === 0) return [textWithQuick("このアカウントは返信の送信権限がまだありません。「Threadsアプリで返信する」からお願いします。", MENU_HINT)];
+    const { draftCommentReply, sendReplyViaApi } = await import("./commentReply");
+    const cm: any = await (await fetch(`https://graph.threads.net/v1.0/${encodeURIComponent(String(q.c))}?fields=id,text,username&access_token=${acct.accessToken}`)).json();
+    if (!cm?.id) return [textWithQuick("そのコメントが見つかりませんでした（削除された可能性があります）。", MENU_HINT)];
+    const draft = await draftCommentReply({ commentText: String(cm.text || ""), commenter: cm.username ?? null, storeName: (user as any).storeName ?? null });
+    const r = await sendReplyViaApi(acct.accessToken, String(cm.id), draft);
+    if (r.error) return [textWithQuick(`返信を送れませんでした（${r.error.slice(0, 80)}）。「Threadsアプリで返信する」からお願いします。`, MENU_HINT)];
+    return [textWithQuick(`返信しました。\n\n${draft}`, MENU_HINT)];
+  }
+  if (q.cr === "redo" && q.a && q.c) {
+    const acct: any = await db.getThreadsAccountById(Number(q.a));
+    if (!acct || acct.userId !== user.id) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    const { draftCommentReply, buildCommentReplyCards } = await import("./commentReply");
+    const cm: any = await (await fetch(`https://graph.threads.net/v1.0/${encodeURIComponent(String(q.c))}?fields=id,text,username,shortcode&access_token=${acct.accessToken}`)).json();
+    if (!cm?.id) return [textWithQuick("そのコメントが見つかりませんでした。", MENU_HINT)];
+    const draft = await draftCommentReply({ commentText: String(cm.text || ""), commenter: cm.username ?? null, storeName: (user as any).storeName ?? null });
+    return buildCommentReplyCards([{ accountId: Number(acct.id), accountUsername: String(acct.threadsUsername), hasReplyScope: !(acct.hasReplyScope === false || acct.hasReplyScope === 0), commentId: String(cm.id), shortcode: cm.shortcode ?? null, commenter: cm.username ?? null, commentText: String(cm.text || ""), draft }]);
+  }
   if (q.m === "comments") {
     return [textWithQuick(
-      "新しいコメントが届いたときは、このトークで内容と返信の文案をお送りします。\n" +
-      "※ コメントへの返信の送信は、現在Meta社の追加審査の承認待ちです。承認され次第、このトークから返信できるようにします。",
+      "新しいコメントが届いたときは、このトークに「返信の文案つきカード」をお送りします。\n" +
+      "「Threadsアプリで返信する」を押すと文章が入った返信画面が開くので、「投稿」を押すだけです（返信の送信権限があるアカウントは「この文で送る」で即返信）。\n" +
+      "返信が早いほど、投稿は多くの人に表示されます。フォローやいいねの連打は逆効果なので行いません。\n\n" +
+      "コメントへの返信を「送る」ボタンで直接送れるのは、返信の送信権限があるアカウントだけです（Meta社の追加審査の承認後に全員に広がります）。",
       MENU_HINT,
     )];
   }

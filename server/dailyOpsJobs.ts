@@ -220,7 +220,7 @@ export async function runCommentWatchJob(): Promise<void> {
         ? new Date(fullUser.lastCommentCheckAt)
         : new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-      const newComments: { text: string; username?: string; parent?: string }[] = [];
+      const newComments: { text: string; username?: string; parent?: string; id?: string; shortcode?: string; accountId?: number; accountUsername?: string; hasReplyScope?: boolean }[] = [];
       for (const account of accounts) {
         try {
           const comments = await getThreadsComments(account.accessToken, account.threadsUserId, 30);
@@ -236,6 +236,11 @@ export async function runCommentWatchJob(): Promise<void> {
               text: c.text,
               username: c.username,
               parent: c.parent_post_text ?? undefined,
+              id: c.id,
+              shortcode: (c as any).shortcode ?? undefined,
+              accountId: Number(account.id),
+              accountUsername: String(account.threadsUsername || ""),
+              hasReplyScope: (account as any).hasReplyScope !== false && (account as any).hasReplyScope !== 0,
             });
           }
         } catch (e) {
@@ -271,17 +276,30 @@ export async function runCommentWatchJob(): Promise<void> {
       });
       notified++;
 
-      // LINE連携済みなら連携者全員にLINEでも通知（本文プレビュー最大3件＋管理画面リンク）
+      // ★LINEには「返信の文案つきカード」を送り、1タップで返信できるようにする（2026-09-07）。
+      //   返信権限があれば「この文で送る」（API）、無ければ「Threadsアプリで返信する」（投稿インテント）。
       try {
         const { getLineUserIdsForUser } = await import('./db');
         const lineIds = await getLineUserIdsForUser(u.id);
         if (lineIds.length > 0) {
-          const { sendCommentPush, liffUrl } = await import('./lineNotify');
-          const previews = newComments.slice(0, 3).map((c) => (c.username ? '@' + c.username + '：' : '') + (c.text || ''));
-          // LIFF設定済みならLINEトーク内で開く（自動ログイン）。未設定なら通常URL
-          const url = liffUrl('/comment-manager', base);
-          for (const lineId of lineIds) {
-            await sendCommentPush(lineId, newComments.length, previews, url);
+          const { draftCommentReply, buildCommentReplyCards } = await import('./commentReply');
+          const { pushMessages, sendCommentPush, liffUrl } = await import('./lineNotify');
+          const storeName = (fullUser as any).storeName ?? null;
+          const items: any[] = [];
+          for (const c of newComments.slice(0, 5)) {
+            if (!c.id || !c.accountId) continue;
+            let draft = "";
+            try { draft = await draftCommentReply({ commentText: c.text, commenter: c.username ?? null, parentText: c.parent ?? null, storeName }); } catch { draft = ""; }
+            if (!draft) continue;
+            items.push({ accountId: c.accountId, accountUsername: c.accountUsername, hasReplyScope: !!c.hasReplyScope, commentId: c.id, shortcode: c.shortcode ?? null, commenter: c.username ?? null, commentText: c.text, parentText: c.parent ?? null, draft });
+          }
+          if (items.length > 0) {
+            const msgs = buildCommentReplyCards(items);
+            for (const lineId of lineIds) await pushMessages(lineId, msgs);
+          } else {
+            const previews = newComments.slice(0, 3).map((c) => (c.username ? '@' + c.username + '：' : '') + (c.text || ''));
+            const url = liffUrl('/comment-manager', base);
+            for (const lineId of lineIds) await sendCommentPush(lineId, newComments.length, previews, url);
           }
         }
       } catch (e) {
