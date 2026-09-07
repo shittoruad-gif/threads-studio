@@ -21,7 +21,16 @@ export async function runAccountHealthJob(): Promise<void> {
     try {
       const acct: any = await db.getThreadsAccountById(Number(a.id)); // トークンは復号済み
       if (!acct?.accessToken) continue;
-      const me: any = await (await fetch(`${THREADS}/me?fields=id,username&access_token=${acct.accessToken}`)).json();
+      const me: any = await (await fetch(`${THREADS}/me?fields=id,username,threads_profile_picture_url,threads_biography&access_token=${acct.accessToken}`)).json();
+      // ★プロフィールの保存値を毎朝新しくする。8:30の「次にやること」が古い自己紹介（空）で
+      //   誤って「自己紹介を整えて」と送っていた（2026-09-07 梅原様）。
+      if (!me?.error && me?.username) {
+        await db.updateThreadsAccountProfile(Number(a.id), {
+          threadsUsername: String(me.username),
+          profilePictureUrl: me.threads_profile_picture_url || undefined,
+          biography: typeof me.threads_biography === "string" ? me.threads_biography : undefined,
+        }).catch(() => undefined);
+      }
       if (me?.error) {
         const kind = classifyThreadsError(JSON.stringify(me.error));
         if (kind === "restricted") {
