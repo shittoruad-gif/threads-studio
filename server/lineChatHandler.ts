@@ -2470,6 +2470,11 @@ async function escalateUnanswered(
     if (questionId) {
       try { await db.markSupportQuestionNeedsHuman(questionId); }
       catch { /* 記録に失敗しても通知は試みる */ }
+      // ★ご要望なら「要望」として記録（夜間整備が拾う）
+      try {
+        const { isFeatureRequest } = await import("../shared/requestDetect");
+        if (isFeatureRequest(question)) await db.updateSupportQuestion(questionId, { category: "要望" } as any);
+      } catch { /* 分類失敗は無視 */ }
     }
     let user: any = null;
     try { user = await db.getUserById(userId); } catch { user = null; }
@@ -2529,6 +2534,12 @@ async function autoAnswer(userId: number, lineUserId: string, question: string):
     //   お答えできなかった時点で、お客様の操作を待たずに担当者へお知らせする。
     //   投稿の材料・ご依頼（上の requestKind）は対象外なので、通知が埋もれることはない。
     const notified = await escalateUnanswered(userId, lineUserId, question, res.questionId);
+    // ★ご要望（機能の追加・変更）は「答えられない質問」ではなく「承った要望」として返す。
+    //   夜の更新で反映し翌日から使える、と分かるように（2026-09-07 三上様指示）。
+    {
+      const { isFeatureRequest, REQUEST_ACK_TEXT } = await import("../shared/requestDetect");
+      if (notified && isFeatureRequest(question)) return [textWithQuick(REQUEST_ACK_TEXT, MENU_HINT)];
+    }
     return [textWithQuick(
       notified
         ? "申し訳ありません、こちらではお答えできないご質問でした。\n" +
