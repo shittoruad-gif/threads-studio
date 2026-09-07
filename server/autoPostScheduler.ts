@@ -836,7 +836,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           {
             const { rampForAccount } = await import('./accountRampCheck');
             const r = await rampForAccount(account as any, postCount);
-            if (r.capped) { console.log(`[AutoPost] account ${account.id} 慣らし運転: ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count; }
+            if (r.capped) { console.log(`[AutoPost] account ${account.id} ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count; }
             else if (r.extra) { console.log(`[AutoPost] account ${account.id} 補填: ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count; }
             else if (r.established) console.log(`[AutoPost] account ${account.id} はThreads歴が長いため慣らし運転なし`);
           }

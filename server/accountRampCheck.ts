@@ -11,17 +11,23 @@ const ESTABLISHED_DAYS = 30;
 const ESTABLISHED_FOLLOWERS = 100;
 const cache = new Map<number, { day: string; established: boolean }>();
 
-export async function isEstablishedAccount(account: { id: number; threadsUserId: string; accessToken: string }): Promise<boolean> {
+export async function isEstablishedAccount(account: { id: number; threadsUserId: string; accessToken?: string }): Promise<boolean> {
   const day = new Date().toISOString().slice(0, 10);
   const c = cache.get(account.id);
   if (c && c.day === day) return c.established;
   let established = false;
   try {
-    const r: any = await (await fetch(`https://graph.threads.net/v1.0/${account.threadsUserId}/threads?fields=id,timestamp&limit=100&access_token=${account.accessToken}`)).json();
+    // ★トークンは必ず復号済みのものを使う（一覧取得の行は暗号化されたまま＝APIが失敗して
+    //   「新規」扱いになっていた。2026-09-07 岩根様（投稿歴2025年10月〜）が慣らし運転にかかった原因）
+    const full: any = await db.getThreadsAccountById(account.id);
+    const token = full?.accessToken; const tuid = full?.threadsUserId || account.threadsUserId;
+    if (!token) throw new Error("no token");
+    const r: any = await (await fetch(`https://graph.threads.net/v1.0/${tuid}/threads?fields=id,timestamp&limit=100&access_token=${token}`)).json();
+    if (r?.error) console.warn(`[Ramp] history check failed @${account.id}: ${JSON.stringify(r.error).slice(0, 120)}`);
     const ts: number[] = (r?.data ?? []).map((p: any) => new Date(p.timestamp).getTime()).filter((n: number) => Number.isFinite(n));
     if (ts.length > 0 && (Date.now() - Math.min(...ts)) / 86400000 >= ESTABLISHED_DAYS) established = true;
     if (!established) {
-      const fi: any = await (await fetch(`https://graph.threads.net/v1.0/${account.threadsUserId}/threads_insights?metric=followers_count&access_token=${account.accessToken}`)).json();
+      const fi: any = await (await fetch(`https://graph.threads.net/v1.0/${tuid}/threads_insights?metric=followers_count&access_token=${token}`)).json();
       const followers = Number(fi?.data?.[0]?.total_value?.value ?? fi?.data?.[0]?.values?.[0]?.value ?? 0);
       if (followers >= ESTABLISHED_FOLLOWERS) established = true;
     }
