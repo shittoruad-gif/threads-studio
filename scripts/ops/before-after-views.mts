@@ -9,14 +9,18 @@ const days = Number(args[args.indexOf("--days") + 1] || 30);
 const csvPath = args.includes("--csv") ? args[args.indexOf("--csv") + 1] : null;
 const db = await import("../../server/db");
 const d = await db.getDb(); const { sql } = await import("drizzle-orm");
-const accts: any[] = ((await d!.execute(sql`SELECT ta.id, ta.threadsUsername, ta.threadsUserId, ta.createdAt, u.name, u.isDemoMode FROM threadsAccounts ta JOIN users u ON u.id=ta.userId WHERE ta.isActive=1 ORDER BY ta.id`)) as any)[0];
+const accts: any[] = ((await d!.execute(sql`SELECT ta.id, ta.userId, ta.threadsUsername, ta.threadsUserId, ta.createdAt, u.name, u.isDemoMode FROM threadsAccounts ta JOIN users u ON u.id=ta.userId WHERE ta.isActive=1 ORDER BY ta.id`)) as any)[0];
+const { getPlan, resolveEffectivePlanId } = await import("../../shared/plans");
+const planGroup = (name: string) => /ライト/.test(name) ? "ライト" : /プロ/.test(name) ? "プロ" : /ビジネス/.test(name) ? "ビジネス" : "無料";
+const agg: Record<string, { n: number; posts: number; days: number; views: number; perPost: number[] }> = {};
 const get = async (u: string) => (await fetch(u)).json() as any;
 const out: string[] = [];
-const header = ["アカウント", "連携日", "導入前: 投稿数/日数", "導入前: 1投稿あたり表示", "導入前: 1日あたり表示", "導入後: 投稿数/日数", "導入後: 1投稿あたり表示", "導入後: 1日あたり表示", "1日あたり倍率"];
+const header = ["アカウント", "プラン", "連携日", "導入前: 投稿数/日数", "導入前: 1投稿あたり表示", "導入前: 1日あたり表示", "導入後: 投稿数/日数", "導入後: 1投稿あたり表示", "導入後: 1日あたり表示", "1日あたり倍率"];
 console.log(header.join(" | ")); out.push(header.join(","));
 for (const a of accts) {
   if (a.isDemoMode) continue;
   const full: any = await db.getThreadsAccountById(Number(a.id)); const tok = full?.accessToken; if (!tok) continue;
+  const sub = await db.getSubscriptionByUserId(Number(a.userId)); const planName = String(getPlan(resolveEffectivePlanId(sub?.planId, sub?.status))?.name || "無料"); const grp = planGroup(planName);
   const connect = new Date(a.createdAt).getTime();
   const since = Math.floor((connect - days * 86400000) / 1000);
   // 投稿を集める（ページング・最大200件）
@@ -33,8 +37,13 @@ for (const a of accts) {
   const perPostB = before.length ? Math.round(vb / before.length) : 0, perPostA = after.length ? Math.round(va / after.length) : 0;
   const perDayB = Math.round(vb / daysBefore), perDayA = Math.round(va / daysAfter);
   const ratio = perDayB > 0 ? (perDayA / perDayB).toFixed(1) + "倍" : (perDayA > 0 ? "導入前0" : "-");
-  const row = [`@${a.threadsUsername}`, new Date(connect + 9 * 3600e3).toISOString().slice(0, 10), `${before.length}件/${daysBefore}日`, String(perPostB), String(perDayB), `${after.length}件/${daysAfter}日`, String(perPostA), String(perDayA), ratio];
+  if (after.length > 0) { const g = (agg[grp] ??= { n: 0, posts: 0, days: 0, views: 0, perPost: [] }); g.n++; g.posts += after.length; g.days += daysAfter; g.views += va; g.perPost.push(perPostA); }
+  const row = [`@${a.threadsUsername}`, grp, new Date(connect + 9 * 3600e3).toISOString().slice(0, 10), `${before.length}件/${daysBefore}日`, String(perPostB), String(perDayB), `${after.length}件/${daysAfter}日`, String(perPostA), String(perDayA), ratio];
   console.log(row.join(" | ")); out.push(row.join(","));
 }
+console.log("\n=== プラン別（導入後・アカウント平均）===");
+console.log(["プラン", "アカウント数", "投稿数/日", "1投稿あたり表示", "1日あたり表示"].join(" | "));
+out.push(""); out.push("プラン,アカウント数,投稿数/日,1投稿あたり表示,1日あたり表示");
+for (const [g, v] of Object.entries(agg)) { const r = [g, String(v.n), (v.posts / v.days).toFixed(1), String(Math.round(v.views / v.posts)), String(Math.round(v.views / v.days))]; console.log(r.join(" | ")); out.push(r.join(",")); }
 if (csvPath) { const fs = await import("node:fs"); fs.writeFileSync(csvPath, "﻿" + out.join("\n")); console.log("csv:", csvPath); }
 process.exit(0);
