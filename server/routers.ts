@@ -3697,7 +3697,8 @@ ${input.commentText}
         return {
           questions: rows,
           categoryCounts: Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([category, count]) => ({ category, count })),
-          waitingCount: rows.filter((r: any) => r.needsHuman === 1 && !r.repliedAt).length,
+          // ★「対応済み」に印を付けたもの（お電話などで直接お答えした分）は未返信に数えない
+          waitingCount: rows.filter((r: any) => r.needsHuman === 1 && !r.repliedAt && !r.handledAt).length,
         };
       }),
 
@@ -3716,6 +3717,28 @@ ${input.commentText}
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'LINEへの送信に失敗しました' });
         }
         await db.updateSupportQuestion(input.id, { staffReply: input.message, repliedAt: new Date() });
+        return { success: true } as const;
+      }),
+
+    /**
+     * 「対応済み」の印を付け外しする。
+     *
+     * ★お電話や個人のLINEで直接お答えした分に印を付けるためのもの。
+     *   お客様には何も送らない（この画面からの返信は replyToQuestion）。
+     */
+    markQuestionHandled: adminProcedure
+      .input(z.object({ id: z.number(), handled: z.boolean() }))
+      .mutation(async ({ input, ctx }) => {
+        const q = await db.getSupportQuestionById(input.id);
+        if (!q) throw new TRPCError({ code: 'NOT_FOUND', message: 'ご質問が見つかりません' });
+        await db.updateSupportQuestion(input.id, input.handled
+          ? {
+              handledAt: new Date(),
+              handledBy: String(ctx.user.name || ctx.user.email || '担当者').slice(0, 120),
+              // 対応済みにしたものは「未返信」の数から外す
+              needsHuman: 0,
+            }
+          : { handledAt: null, handledBy: null });
         return { success: true } as const;
       }),
 

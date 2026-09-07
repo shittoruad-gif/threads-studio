@@ -867,6 +867,10 @@ export const supportQuestions = mysqlTable("supportQuestions", {
   category: varchar("category", { length: 40 }),
   staffReply: text("staffReply"),
   repliedAt: timestamp("repliedAt"),
+  // ★お電話や個人のLINEなど、この画面を通さずにお答えした分にも印を付けられるようにする。
+  //   repliedAt はこの画面から送った返信にしか入らないため、それだけでは対応済みか分からない。
+  handledAt: timestamp("handledAt"),
+  handledBy: varchar("handledBy", { length: 120 }),
   faqPublished: tinyint("faqPublished").default(0).notNull(),
   faqQuestion: varchar("faqQuestion", { length: 255 }),
   faqAnswer: text("faqAnswer"),

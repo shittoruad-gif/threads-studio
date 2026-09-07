@@ -7,7 +7,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, MessageSquare, Send, BookOpen, AlertTriangle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Loader2, MessageSquare, Send, BookOpen, AlertTriangle, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 /**
@@ -21,6 +22,7 @@ import { toast } from 'sonner';
  */
 export default function AdminQuestions() {
   const [needsHumanOnly, setNeedsHumanOnly] = useState(false);
+  const [hideHandled, setHideHandled] = useState(false);
   const [replyTarget, setReplyTarget] = useState<any>(null);
   const [replyText, setReplyText] = useState('');
   const [faqTarget, setFaqTarget] = useState<any>(null);
@@ -40,6 +42,15 @@ export default function AdminQuestions() {
     onError: (e) => toast.error(e.message),
   });
 
+  // ★お客様には何も送らない。お電話や個人のLINEでお答えした分に印を付けるだけ。
+  const markHandled = trpc.admin.markQuestionHandled.useMutation({
+    onSuccess: (_d, v) => {
+      toast.success(v.handled ? '対応済みにしました' : '対応済みを取り消しました');
+      utils.admin.listQuestions.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const publish = trpc.admin.publishQuestionToFaq.useMutation({
     onSuccess: () => {
       toast.success('よくある質問を更新しました');
@@ -50,7 +61,9 @@ export default function AdminQuestions() {
     onError: (e) => toast.error(e.message),
   });
 
-  const rows = data?.questions ?? [];
+  const allRows = data?.questions ?? [];
+  const rows = hideHandled ? allRows.filter((q: any) => !q.handledAt) : allRows;
+  const handledCount = allRows.filter((q: any) => q.handledAt).length;
   const counts = data?.categoryCounts ?? [];
   const waiting = data?.waitingCount ?? 0;
 
@@ -77,6 +90,7 @@ export default function AdminQuestions() {
         <h1 className="text-2xl font-bold text-foreground">お客様からのご質問</h1>
         <p className="text-sm text-muted-foreground mt-1">
           公式LINEに届いたご質問と、自動でお答えした内容です。答えられなかったものは、ここから直接ご返信いただけます。
+          お電話や個人のLINEでお答えしたものは「対応済み」にチェックを入れておくと、未返信の数から外れます。
         </p>
       </div>
 
@@ -150,6 +164,13 @@ export default function AdminQuestions() {
         >
           担当者対応が必要なものだけ
         </Button>
+        <Button
+          variant={hideHandled ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setHideHandled((v) => !v)}
+        >
+          対応済みを隠す{handledCount > 0 ? `（${handledCount}件）` : ''}
+        </Button>
         {waiting > 0 && (
           <span className="text-sm font-bold text-red-600">未返信 {waiting} 件</span>
         )}
@@ -164,17 +185,32 @@ export default function AdminQuestions() {
       ) : (
         <div className="space-y-3">
           {rows.map((q: any) => (
-            <Card key={q.id}>
+            <Card key={q.id} className={q.handledAt ? 'opacity-70' : undefined}>
               <CardContent className="pt-5 space-y-3">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="outline">{q.category || 'その他'}</Badge>
                     <Badge variant="outline">{q.source === 'web' ? 'アプリから' : 'LINEから'}</Badge>
-                    {q.needsHuman === 1 && !q.repliedAt && <Badge variant="destructive">要返信</Badge>}
+                    {q.handledAt && <Badge className="bg-emerald-600">対応済み</Badge>}
+                    {q.needsHuman === 1 && !q.repliedAt && !q.handledAt && <Badge variant="destructive">要返信</Badge>}
                     {q.repliedAt && <Badge variant="secondary">返信済み</Badge>}
                     {q.faqPublished === 1 && <Badge className="bg-emerald-600">よくある質問に掲載中</Badge>}
                   </div>
                   <span className="text-xs text-muted-foreground">{fmt(q.createdAt)}</span>
+                </div>
+
+                {/* ★どなたからのご質問か。連携前などでお名前が無いこともある。
+                    スマホでは名前が細切れにならないよう、メールは次の行に置く。 */}
+                <div className="flex items-start gap-1.5">
+                  <User className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-foreground break-words">
+                      {q.userName || '（お名前未設定）'}
+                    </p>
+                    {q.userEmail && (
+                      <p className="text-xs text-muted-foreground break-all">{q.userEmail}</p>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -197,6 +233,21 @@ export default function AdminQuestions() {
                     <p className="text-sm text-foreground whitespace-pre-wrap break-words">{q.staffReply}</p>
                   </div>
                 )}
+
+                {/* ★お電話や個人のLINEで直接お答えした分に印を付ける。お客様には何も送らない。 */}
+                <label className="flex items-center gap-2 cursor-pointer w-fit">
+                  <Checkbox
+                    checked={!!q.handledAt}
+                    disabled={markHandled.isPending}
+                    onCheckedChange={(v) => markHandled.mutate({ id: q.id, handled: v === true })}
+                  />
+                  <span className="text-sm text-foreground">対応済み</span>
+                  {q.handledAt && (
+                    <span className="text-xs text-muted-foreground">
+                      {fmt(q.handledAt)}{q.handledBy ? `・${q.handledBy}` : ''}
+                    </span>
+                  )}
+                </label>
 
                 <div className="flex gap-2 flex-wrap pt-1">
                   {q.lineUserId && (
@@ -236,7 +287,9 @@ export default function AdminQuestions() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="rounded-lg bg-muted/50 p-3">
-              <p className="text-xs text-muted-foreground mb-1">ご質問</p>
+              <p className="text-xs text-muted-foreground mb-1">
+                ご質問{replyTarget?.userName ? `（${replyTarget.userName} 様）` : ''}
+              </p>
               <p className="text-sm whitespace-pre-wrap break-words">{replyTarget?.question}</p>
             </div>
             <Textarea

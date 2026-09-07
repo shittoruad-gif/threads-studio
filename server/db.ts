@@ -4056,10 +4056,37 @@ export async function markSupportQuestionNeedsHuman(id: number): Promise<void> {
 export async function listSupportQuestions(opts?: { needsHumanOnly?: boolean; limit?: number }): Promise<any[]> {
   const database = await getDb();
   if (!database) return [];
-  const { supportQuestions } = await import("../drizzle/schema");
+  const { supportQuestions, users } = await import("../drizzle/schema");
   const { desc, eq } = await import("drizzle-orm");
   const limit = Math.min(Math.max(opts?.limit ?? 200, 1), 500);
-  const base = database.select().from(supportQuestions);
+  // ★どなたからのご質問かが分かるように、お名前とメールを一緒に取る。
+  //   userId が無いご質問（連携前など）もあるので、必ず leftJoin にする。
+  const base = database
+    .select({
+      id: supportQuestions.id,
+      userId: supportQuestions.userId,
+      lineUserId: supportQuestions.lineUserId,
+      source: supportQuestions.source,
+      question: supportQuestions.question,
+      aiAnswer: supportQuestions.aiAnswer,
+      aiConfident: supportQuestions.aiConfident,
+      needsHuman: supportQuestions.needsHuman,
+      category: supportQuestions.category,
+      staffReply: supportQuestions.staffReply,
+      repliedAt: supportQuestions.repliedAt,
+      handledAt: supportQuestions.handledAt,
+      handledBy: supportQuestions.handledBy,
+      faqPublished: supportQuestions.faqPublished,
+      faqQuestion: supportQuestions.faqQuestion,
+      faqAnswer: supportQuestions.faqAnswer,
+      faqPublishedAt: supportQuestions.faqPublishedAt,
+      createdAt: supportQuestions.createdAt,
+      updatedAt: supportQuestions.updatedAt,
+      userName: users.name,
+      userEmail: users.email,
+    })
+    .from(supportQuestions)
+    .leftJoin(users, eq(users.id, supportQuestions.userId));
   const q = opts?.needsHumanOnly
     ? base.where(eq(supportQuestions.needsHuman, 1))
     : base;
