@@ -2083,6 +2083,14 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
 
         // ★連携直後：自己紹介が空のままなら、貼るだけの提案を公式LINEへ（2026-09-06 三上様指示）
         void import('./profileAdvice').then((m) => m.nudgeAfterConnect(ctx.user.id, String(profile.username))).catch(() => undefined);
+        // ★本人がもともと投稿していた文章を「文体のお手本」に自動で取り込む（2026-09-07 三上様指示）
+        void (async () => {
+          try {
+            const accts: any[] = await db.getThreadsAccountsByUserId(ctx.user.id);
+            const a = accts.find((x: any) => String(x.threadsUsername) === String(profile.username));
+            if (a) { const { fillStyleSamplesForAccount } = await import('./styleSamplesFromThreads'); const r = await fillStyleSamplesForAccount(Number(a.id)); console.log(`[StyleSamples] connect user=${ctx.user.id} @${profile.username}:`, JSON.stringify(r)); }
+          } catch (e) { console.warn('[StyleSamples] connect fill failed:', (e as Error)?.message); }
+        })();
 
         // ★Threadsがつながった時点で、デモモードは自動で終了する。
         //   以前は「本番モードに切り替える」を別途押す必要があり、連携済みなのに
