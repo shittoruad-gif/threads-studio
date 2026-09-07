@@ -34,51 +34,67 @@ export interface MetaAiCallMessageInput {
 /** 手順の絵（GitHub Pages・https必須）。①LINEの緑のボタン → ②Threadsで「投稿」 */
 export const META_AI_CALL_HOWTO_IMAGE = "https://shittoruad-gif.github.io/shittoru-service-docs/img/metaai-call-howto.png";
 
-/**
- * LINEに送る2通。★2026-09-06 氷見様「このやり方がよくわかりません」を受けて全面的に短くした。
- *   1通目＝絵つきカード（やることは「ボタンを押す→投稿を押す」の2つだけ、と絵で示す）
- *   2通目＝一言（何のための投稿か・アカウントの確認）。長い手順文は出さない。
- */
-export function buildMetaAiCallMessages(p: MetaAiCallMessageInput): unknown[] {
-  const store = String(p.storeName ?? "").replace(/\s*[\r\n]+\s*/g, "／").trim(); // 店名の改行は「／」に
+function callBubble(p: MetaAiCallMessageInput, withHero: boolean) {
+  const store = String(p.storeName ?? "").replace(/\s*[\r\n]+\s*/g, "／").trim();
   const acct = `@${p.username}${store ? `（${store}）` : ""}`;
   const url = buildThreadsIntentUrl(p.text);
   const title = p.redo ? "今朝の分を、アプリからもう一度" : "今日のMeta AI呼びかけ投稿";
-  const flex = {
-    type: "flex",
-    altText: `${title}：下のボタンを押して「投稿」を押すだけです`,
-    contents: {
-      type: "bubble",
-      size: "mega",
-      hero: { type: "image", url: META_AI_CALL_HOWTO_IMAGE, size: "full", aspectRatio: "1040:680", aspectMode: "cover" },
-      body: {
-        type: "box", layout: "vertical", spacing: "md",
-        contents: [
-          { type: "text", text: title, weight: "bold", size: "md", color: "#13343B", wrap: true },
-          { type: "text", text: "やることは2つだけです。", size: "sm", color: "#13343B", wrap: true },
-          { type: "text", text: "1. 下の緑のボタンを押す（Threadsが開き、文章はもう入っています）\n2. 画面右下の「投稿」を押す", size: "sm", color: "#13343B", wrap: true },
-          { type: "separator" },
-          { type: "text", text: `投稿するアカウント：${acct}`, size: "xs", color: "#0E8388", weight: "bold", wrap: true },
-          { type: "text", text: p.text.slice(0, 300), size: "xs", color: "#6B7A78", wrap: true },
-        ],
-      },
-      footer: {
-        type: "box", layout: "vertical",
-        contents: [
-          { type: "button", style: "primary", color: "#0E8388", height: "md",
-            action: { type: "uri", label: "Threadsアプリで投稿する", uri: url } },
-        ],
-      },
+  return {
+    type: "bubble",
+    size: "mega",
+    ...(withHero ? { hero: { type: "image", url: META_AI_CALL_HOWTO_IMAGE, size: "full", aspectRatio: "1040:680", aspectMode: "cover" } } : {}),
+    body: {
+      type: "box", layout: "vertical", spacing: "md",
+      contents: [
+        { type: "text", text: title, weight: "bold", size: "md", color: "#13343B", wrap: true },
+        { type: "text", text: "やることは2つだけです。\n1. 下の緑のボタンを押す（Threadsが開き、文章は入っています）\n2. 画面右下の「投稿」を押す", size: "sm", color: "#13343B", wrap: true },
+        { type: "separator" },
+        { type: "text", text: `投稿するアカウント：${acct}`, size: "xs", color: "#0E8388", weight: "bold", wrap: true },
+        { type: "text", text: p.text.slice(0, 300), size: "xs", color: "#6B7A78", wrap: true },
+      ],
+    },
+    footer: {
+      type: "box", layout: "vertical",
+      contents: [
+        { type: "button", style: "primary", color: "#0E8388", height: "md",
+          action: { type: "uri", label: "Threadsアプリで投稿する", uri: url } },
+      ],
     },
   };
+}
+
+/**
+ * 1人分をまとめて2通にする：カード1通（複数アカウントは横に並べたカルーセル）＋説明文1通。
+ * ★2026-09-07 三上様指摘「3アカウントだと同じ文章が何個も届く」→ アカウント数に関係なく2通。
+ */
+export function buildMetaAiCallBundle(items: MetaAiCallMessageInput[]): unknown[] {
+  if (items.length === 0) return [];
+  const redo = items.some((i) => i.redo);
+  const bubbles = items.slice(0, 10).map((p, i) => callBubble(p, i === 0));
+  const flex = {
+    type: "flex",
+    altText: `${redo ? "今朝の分を、アプリからもう一度" : "今日のMeta AI呼びかけ投稿"}：緑のボタンを押して「投稿」を押すだけです${items.length > 1 ? `（${items.length}アカウント分）` : ""}`,
+    contents: bubbles.length === 1 ? bubbles[0] : { type: "carousel", contents: bubbles },
+  };
+  const names = items.map((p) => {
+    const store = String(p.storeName ?? "").replace(/\s*[\r\n]+\s*/g, "／").trim();
+    return `@${p.username}${store ? `（${store}）` : ""}`;
+  }).join("・");
   const note =
-    (p.redo
+    (redo
       ? "今朝の自動投稿は、Threadsの決まりでMeta AIに届きませんでした（自動投稿からだと@meta.aiが効かないため）。すみません。上のボタンからアプリで出し直すと届きます。今朝の投稿は消さなくて大丈夫です。\n\n"
       : "") +
     "これは、Meta AI（Threadsの中のAI）に「うちのお店を紹介して」と頼む投稿です。Meta AIがお店の名前を出してコメントで答えてくれるので、見る人が増えます。\n\n" +
-    `開いた画面の上に出る名前が ${acct} なら、そのまま「投稿」で大丈夫です。別の名前なら、Threadsアプリでお店のアカウントに切り替えてから、もう一度ボタンを押してください。\n\n` +
+    (items.length > 1
+      ? `カードは${items.length}枚（${names}）あります。横にめくって、それぞれのアカウントでログインした状態でボタンを押してください。開いた画面の上の名前がカードのアカウントと同じなら、そのまま「投稿」で大丈夫です。\n\n`
+      : `開いた画面の上に出る名前が ${names} なら、そのまま「投稿」で大丈夫です。別の名前なら、Threadsアプリでお店のアカウントに切り替えてから、もう一度ボタンを押してください。\n\n`) +
     "分からなければ、このままここに送ってください。";
   return [flex, { type: "text", text: note }];
+}
+
+/** 1アカウント分（後方互換） */
+export function buildMetaAiCallMessages(p: MetaAiCallMessageInput): unknown[] {
+  return buildMetaAiCallBundle([p]);
 }
 
 function eligibleProjectsOf(projects: any[]): any[] {
@@ -145,12 +161,11 @@ export async function runMetaAiCallPromptJob(): Promise<void> {
       const targets = await db.getLineUserIdsForUser(userId);
       if (targets.length === 0) continue;
       const { pushMessages } = await import("./lineNotify");
-      for (const c of calls) {
-        const msgs = buildMetaAiCallMessages({ username: c.username, storeName: c.storeName, text: c.text });
-        for (const to of targets) await pushMessages(to, msgs);
-        sent++;
-        console.log(`[MetaAiCall] 送信 user=${userId} @${c.username} 「${c.text}」`);
-      }
+      // ★アカウント数に関係なく1人2通（カード1通＝カルーセル＋説明文1通）
+      const msgs = buildMetaAiCallBundle(calls.map((c) => ({ username: c.username, storeName: c.storeName, text: c.text })));
+      for (const to of targets) await pushMessages(to, msgs);
+      sent++;
+      for (const c of calls) console.log(`[MetaAiCall] 送信 user=${userId} @${c.username} 「${c.text}」`);
     } catch (e) {
       console.error(`[MetaAiCall] 失敗 user=${userId}:`, e);
     }

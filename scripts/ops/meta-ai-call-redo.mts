@@ -12,7 +12,7 @@ const names = args.filter((a) => !a.startsWith("--")).filter((a) => {
   const m = a.match(/^([^=]+)=(.+)$/); if (m) { focus[m[1]] = m[2]; return true; } return true;
 }).map((a) => a.split("=")[0]);
 if (names.length === 0) { console.error("Threadsのユーザー名を指定してください"); process.exit(1); }
-const { buildRedoForUsernames, buildMetaAiCallMessages } = await import("../../server/metaAiCallPrompt");
+const { buildRedoForUsernames, buildMetaAiCallMessages, buildMetaAiCallBundle } = await import("../../server/metaAiCallPrompt");
 const rows = await buildRedoForUsernames(names, focus);
 for (const r of rows) {
   const msgs: any = buildMetaAiCallMessages({ username: r.username, storeName: r.storeName, text: r.text, redo: true });
@@ -21,10 +21,14 @@ for (const r of rows) {
 if (!send) { console.log(`\n--- dry run（送信しません）対象 ${rows.length} アカウント ---`); process.exit(0); }
 const { pushMessages } = await import("../../server/lineNotify");
 let ok = 0, ng = 0;
-for (const r of rows) {
-  const msgs = buildMetaAiCallMessages({ username: r.username, storeName: r.storeName, text: r.text, redo: true });
-  if (r.targets.length === 0) { console.log(`@${r.username}: LINE未連携のため送れません`); ng++; continue; }
-  for (const to of r.targets) { const res = await pushMessages(to, msgs); if (res) ok++; else ng++; await new Promise((s) => setTimeout(s, 300)); }
+// 同じ方の複数アカウントは1束（カルーセル＋説明文）にまとめる
+const byUser = new Map<number, typeof rows>();
+for (const r of rows) { const a = byUser.get(r.userId) ?? []; a.push(r); byUser.set(r.userId, a); }
+for (const [, group] of byUser) {
+  const targets = group[0].targets;
+  if (targets.length === 0) { console.log(`@${group.map((g) => g.username).join(",")}: LINE未連携のため送れません`); ng++; continue; }
+  const msgs = buildMetaAiCallBundle(group.map((r) => ({ username: r.username, storeName: r.storeName, text: r.text, redo: true })));
+  for (const to of targets) { const res = await pushMessages(to, msgs); if (res) ok++; else ng++; await new Promise((s) => setTimeout(s, 300)); }
 }
 console.log(`送信完了: 成功 ${ok} / 失敗 ${ng}`);
 process.exit(ng > 0 ? 2 : 0);

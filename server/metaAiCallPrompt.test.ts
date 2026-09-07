@@ -19,3 +19,19 @@ describe("Meta AI呼びかけ文のLINEカード", () => {
     expect(msgs[1].text).toContain("消さなくて大丈夫");
   });
 });
+
+describe("複数アカウントは1束にまとめる", () => {
+  it("3アカウントでもカード1通（カルーセル3枚）＋説明文1通", async () => {
+    const { buildMetaAiCallBundle } = await import("./metaAiCallPrompt");
+    const msgs: any[] = buildMetaAiCallBundle([
+      { username: "a1", storeName: "店1", text: "@meta.ai x1" },
+      { username: "a2", storeName: "店2", text: "@meta.ai x2" },
+      { username: "a3", storeName: "店3", text: "@meta.ai x3" },
+    ]) as any[];
+    expect(msgs).toHaveLength(2);
+    expect(msgs[0].contents.type).toBe("carousel");
+    expect(msgs[0].contents.contents).toHaveLength(3);
+    expect(msgs[0].contents.contents[0].hero).toBeDefined();
+    expect(msgs[1].text).toContain("カードは3枚");
+  });
+});
