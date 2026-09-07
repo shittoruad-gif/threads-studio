@@ -30,3 +30,13 @@ describe("新しいアカウントの慣らし", () => {
     expect(rampCap(1, "2026-08-25T00:00:00Z", now).capped).toBe(false);
   });
 });
+
+describe("健康系の断定ガード（2026-09-07 追加）", () => {
+  it("「2ヶ月でよく寝られるように」を検出する", () => {
+    const v = checkHealthClaims("八千代の30代女性が、頭痛や不眠で悩んでいました。\n2ヶ月でよく寝られるように。\n\n痛くない施術を大切に、一人ひとりに合わせたやり方で身体を整えます😊\n\nあなたはどんな変化がほしいですか？");
+    expect(v.ok).toBe(false);
+    expect(v.text).not.toContain("2ヶ月で");
+    expect(v.text).not.toContain("寝られる");
+    expect(v.text).toContain("痛くない施術を大切に");
+  });
+});

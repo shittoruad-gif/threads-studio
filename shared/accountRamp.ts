@@ -27,7 +27,8 @@ export function rampCap(want: number, createdAt: Date | string | null | undefine
 }
 
 export function rampNote(days: number): string {
-  if (days < RAMP_DAYS_1) return `連携から${days}日目のため1日1件（7日目まで）`;
-  if (days < RAMP_DAYS_2) return `連携から${days}日目のため1日2件（14日目まで）`;
+  const n = days + 1; // 連携した日を「1日目」と数える（0日目と出さない）
+  if (days < RAMP_DAYS_1) return `連携から${n}日目のため1日1件（7日目まで）`;
+  if (days < RAMP_DAYS_2) return `連携から${n}日目のため1日2件（14日目まで）`;
   return "";
 }

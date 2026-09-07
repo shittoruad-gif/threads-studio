@@ -210,8 +210,8 @@ export async function executePendingPosts() {
         //   上限に達していれば、この投稿は公開せず取り消す（翌日の生成で改めて作られる）。
         if (post.source === 'auto' && !(post as any).replyToThreadsId) {
           try {
-            const { rampCap } = await import('../shared/accountRamp');
-            const rc = rampCap(99, (account as any).createdAt);
+            const { rampForAccount } = await import('./accountRampCheck');
+            const rc = await rampForAccount({ ...(account as any), accessToken }, 99);
             if (rc.capped) {
               const { getThreadsUserPosts } = await import('./threadsApi');
               const recent = await getThreadsUserPosts(accessToken, account.threadsUserId, 25);

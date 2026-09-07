@@ -544,9 +544,9 @@ async function generateAutoPost(
     // ★慣らし運転中（連携14日未満）は投稿にリンク（CTA）を付けない。
     //   新規アカウントで毎回リンク付き投稿＝スパム判定の典型（入口はプロフィールのリンクと固定投稿）。
     try {
-      const { rampCap } = await import('../shared/accountRamp');
+      const { rampForAccount } = await import('./accountRampCheck');
       const acc: any = await db.getThreadsAccountById(threadsAccountId);
-      if (acc && rampCap(99, acc.createdAt).capped) includeCta = false;
+      if (acc && (await rampForAccount(acc, 99)).capped) includeCta = false;
     } catch { /* 取れなければ従来どおり */ }
 
     // ★人間化リライト（2パス目）：factGuard通過後の本文を口語に書き直す。
@@ -832,9 +832,10 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           // ★新しいアカウントの慣らし運転（shared/accountRamp.ts）。連携7日未満は1件、14日未満は2件。
           //   2026-09-06 連携4日目・フォロワー0のアカウントが本人確認→停止になった再発防止。
           {
-            const { rampCap, rampNote } = await import('../shared/accountRamp');
-            const r = rampCap(postCount, (account as any).createdAt);
-            if (r.capped) { console.log(`[AutoPost] account ${account.id} 慣らし運転: ${rampNote(r.days)}（契約${postCount}→${r.count}）`); postCount = r.count; }
+            const { rampForAccount } = await import('./accountRampCheck');
+            const r = await rampForAccount(account as any, postCount);
+            if (r.capped) { console.log(`[AutoPost] account ${account.id} 慣らし運転: ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count; }
+            else if (r.established) console.log(`[AutoPost] account ${account.id} はThreads歴が長いため慣らし運転なし`);
           }
 
           // ★当日補充: 今日すでにある分を引いて、残り時間に入る本数だけ作る

@@ -82,9 +82,10 @@ export async function runDailyPostCountReportJob(): Promise<void> {
         let note: string | undefined;
         // 新しいアカウントは慣らし運転中の本数で数える（「ご契約より少ない」と出さない）
         try {
-          const { rampCap, rampNote } = await import("../shared/accountRamp");
-          const rc = rampCap(entitled, acct?.createdAt);
-          if (rc.capped) { entitled = rc.count; note = `慣らし運転中：${rampNote(rc.days)}`; }
+          const { rampForAccount } = await import("./accountRampCheck");
+          const full: any = acct ? await db.getThreadsAccountById(Number(acct.id)) : null;
+          const rc = full ? await rampForAccount(full, entitled) : { count: entitled, capped: false, note: "" };
+          if (rc.capped) { entitled = rc.count; note = `慣らし運転中：${rc.note}`; }
         } catch { /* そのまま */ }
         lines.push({ ...r, entitled, note });
       }
