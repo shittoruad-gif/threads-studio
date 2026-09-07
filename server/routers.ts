@@ -3880,7 +3880,7 @@ ${input.commentText}
         if (plan.isCampaign) {
           const { campaignTierForCode } = await import('@shared/plans');
           const tier = plan.id.endsWith('_seminar') ? campaignTierForCode('SEMINAR2026') : campaignTierForCode('CPMONITOR2026');
-          await db.setUserMonitor(user.id, true).catch(() => {});
+          // ★「モニター中」は自動で立てない（2026-09-07 三上様指示）。価格は campaignTier だけで決まる
           try {
             const { users: usersT } = await import('../drizzle/schema');
             const { eq: eqOp } = await import('drizzle-orm');

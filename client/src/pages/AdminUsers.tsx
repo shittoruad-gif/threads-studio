@@ -294,7 +294,7 @@ export default function AdminUsers() {
                       size="sm"
                       className={u.isMonitor ? 'bg-amber-500 hover:bg-amber-600 text-white h-7 text-xs' : 'h-7 text-xs'}
                       disabled={setMonitorMutation.isPending}
-                      title={u.isMonitor ? '押すとモニターを解除します（セミナー/キャンペーン価格が出なくなります）' : '押すとモニターにします'}
+                      title={u.isMonitor ? '押すとモニターを解除します（フィードバック募集の対象から外れます。価格には影響しません）' : '押すとモニターにします'}
                       onClick={() => {
                         if (u.isMonitor) {
                           const ok = window.confirm(

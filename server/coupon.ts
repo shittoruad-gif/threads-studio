@@ -89,13 +89,14 @@ export async function applyCoupon(
   const alreadyUsed = await hasUserUsedCoupon(userId, coupon.id);
   if (alreadyUsed) {
     // モニター系コードは冪等に扱う。再入力しても「エラー」ではなく、
-    // isMonitorを確実に立て直して成功として返す（モニター取りこぼし防止）。
+    // キャンペーン価格（campaignTier）を確実に立て直して成功として返す。
+    // ★isMonitor（モニター中）は既定で立てない（2026-09-07 三上様指示）。料金は campaignTier で決まる。
     if (coupon.type === "monitor" || coupon.type === "monitor_only") {
       try {
         const { users } = await import("../drizzle/schema");
         const db2 = await getDb();
         if (db2) {
-          await db2.update(users).set({ isMonitor: true, campaignTier: campaignTierForCode(coupon.code) }).where(eq(users.id, userId));
+          await db2.update(users).set({ campaignTier: campaignTierForCode(coupon.code) }).where(eq(users.id, userId));
         }
       } catch (e) {
         console.error("[Coupon] monitor re-apply isMonitor set failed:", e);
@@ -190,12 +191,14 @@ export async function applyCoupon(
     .then(({ runAutoPostCatchUpForUser }) => runAutoPostCatchUpForUser(userId, "無料トライアル開始"))
     .catch(() => {});
 
-  // monitor / monitor_only クーポンはユーザーをモニターに設定
+  // monitor / monitor_only クーポンはキャンペーン価格（campaignTier）だけを設定する。
+  // ★「モニター中」フラグ（isMonitor＝フィードバック募集の対象）は既定で立てない（2026-09-07 三上様指示）。
+  //   必要なときだけ管理画面の「モニターにする」で明示的にONにする。
   if (coupon.type === "monitor" || coupon.type === "monitor_only") {
     const { users } = await import("../drizzle/schema");
     await db
       .update(users)
-      .set({ isMonitor: true, campaignTier: campaignTierForCode(coupon.code) })
+      .set({ campaignTier: campaignTierForCode(coupon.code) })
       .where(eq(users.id, userId));
   }
 
