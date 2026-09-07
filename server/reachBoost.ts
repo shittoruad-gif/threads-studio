@@ -74,7 +74,10 @@ export function buildFollowUpContent(mainProblem: string | null | undefined, see
  * （誰も見ていない時間の追い投稿は意味が薄いため）。
  */
 export function computeFollowUpTime(base: Date): Date {
-  let t = new Date(base.getTime() + 6 * 60 * 60 * 1000);
+  // ★2026-09-07：6時間後→公開20〜35分後に。Threadsは「公開直後の反応の速さ」を重く見るため、
+  //   早い自己返信で会話を作る（2週間後に表示回数で効果を測る）。
+  const minutes = 20 + (Math.abs(base.getTime()) % 16); // 20〜35分で自然にばらす
+  let t = new Date(base.getTime() + minutes * 60 * 1000);
   const jstHour = new Date(t.getTime() + JST_OFFSET_MS).getUTCHours();
   if (jstHour >= 22 || jstHour < 8) {
     // 「その時点のJST日付の翌朝8時」に設定（既に0-7時台なら当日8時）

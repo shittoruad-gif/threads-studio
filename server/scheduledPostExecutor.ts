@@ -268,7 +268,7 @@ export async function executePendingPosts() {
             ? (await import('./reachBoost')).deriveTopicTag(postProject) ?? undefined
             : undefined;
           result = await createAndPublishThread(
-            { accessToken, threadsUserId: account.threadsUserId, topicTag },
+            { accessToken, threadsUserId: account.threadsUserId, topicTag, quotePostId: (post as any).quotePostId || undefined },
             segments,
           );
         }
@@ -362,7 +362,7 @@ export async function executePendingPosts() {
         //     どの投稿から何人来たかをLINE受信箱から判別できる。
         //   - 各キーワードにはLINE側（Keiro）の部分一致自動応答を用意しておくこと。
         if (post.source === 'auto' && !(post as any).replyToThreadsId &&
-          (post as any).angle !== 'meta_ai_call' // ★Meta AI呼びかけ投稿には計測コメントを付けない
+          (post as any).angle !== 'meta_ai_call' && (post as any).angle !== 'quote_pinned' // ★Meta AI呼びかけ・引用投稿には計測コメントを付けない
         ) {
           try {
             const { inquiryCommentText } = await import('../shared/inquiryKeywords');
@@ -401,12 +401,12 @@ export async function executePendingPosts() {
         }
 
         // ★追い投稿の自動作成：自動投稿のメイン投稿が公開できたら、
-        //   約6時間後に「ひとこと返信」を予約（設定ONのユーザーのみ）。
+        //   公開20〜35分後に「ひとこと返信」を予約（設定ONのユーザーのみ。2026-09-07 6時間後から変更）。
         //   承認モードONの人は承認待ちに入れて、勝手に公開しない。
         if (
           post.source === 'auto' &&
           !(post as any).replyToThreadsId &&
-          (post as any).angle !== 'meta_ai_call' && // ★Meta AI呼びかけ投稿には追い投稿を付けない
+          (post as any).angle !== 'meta_ai_call' && (post as any).angle !== 'quote_pinned' && // ★Meta AI呼びかけ・引用投稿には追い投稿を付けない
           postUser?.autoFollowUpEnabled !== false &&
           canReply
         ) {

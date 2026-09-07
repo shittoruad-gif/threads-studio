@@ -489,6 +489,8 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   postContent: text("postContent"),
   // 公開直後に自分の投稿へ返信する「@meta.ai ＋質問」。無ければ返信しない（shared/metaAiAsk.ts）
   metaAiAskText: text("metaAiAskText"),
+  // 引用投稿：この投稿IDを引用して公開する（週1回の固定投稿の再露出。2026-09-07）
+  quotePostId: varchar("quotePostId", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [

@@ -395,6 +395,12 @@ export function initDailyOpsSchedulers(): void {
     const { runDailyPostCountReportJob } = await import("./dailyPostCountReport");
     await runTrackedJob("daily_post_count", runDailyPostCountReportJob);
   });
+  // 水曜 11:00 JST = 2:00 UTC — 固定投稿を週1回引用して再露出（当日20時台に予約）
+  cron.schedule("0 2 * * 3", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runQuoteBoostJob } = await import("./quoteBoostJob");
+    await runTrackedJob("quote_boost", runQuoteBoostJob);
+  });
   // 10:00 JST = 1:00 UTC — 今日のMeta AI呼びかけ文を「Threadsアプリで投稿する」ボタン付きでお届け
   //   （APIからの投稿では @meta.ai がメンションにならないため、アプリから出していただく）
   cron.schedule("0 1 * * *", async () => {

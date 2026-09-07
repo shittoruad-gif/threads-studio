@@ -326,6 +326,33 @@ async function startServer() {
   // Univapayの実イベント構造は環境で差があるため、生ペイロードを必ずログし、
   // 主要フィールドは複数経路で防御的に読む。未知イベントでも200で返し
   // Univapay側のリトライ嵐を防ぐ（署名NG時のみ400）。
+  // ── Threads Webhook（返信の即時通知 → LINEの返信文案カード）2026-09-07 ──
+  app.get('/api/threads/webhook', (req, res) => {
+    const token = process.env.THREADS_WEBHOOK_VERIFY_TOKEN || '';
+    if (token && req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === token) {
+      res.status(200).send(String(req.query['hub.challenge'] ?? ''));
+    } else {
+      res.status(403).send('forbidden');
+    }
+  });
+  app.post('/api/threads/webhook',
+    express.raw({ type: '*/*' }),
+    async (req, res) => {
+      const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : String(req.body ?? '');
+      try {
+        const { verifyThreadsSignature, extractReplyEvents, handleReplyEvents } = await import('../threadsWebhook');
+        const ok = verifyThreadsSignature(rawBody, req.headers['x-hub-signature-256'] as string | undefined, process.env.THREADS_APP_SECRET || '');
+        if (!ok) { console.warn('[ThreadsWebhook] 署名不一致'); res.status(403).send('bad signature'); return; }
+        let payload: any = {}; try { payload = JSON.parse(rawBody || '{}'); } catch { payload = {}; }
+        const events = extractReplyEvents(payload);
+        res.status(200).send('ok'); // Metaには先に200を返し、処理は非同期
+        if (events.length > 0) void handleReplyEvents(events);
+      } catch (e) {
+        console.error('[ThreadsWebhook] error:', e);
+        if (!res.headersSent) res.status(200).send('ok');
+      }
+    });
+
   app.post('/api/univapay/webhook',
     express.raw({ type: '*/*' }),
     async (req, res) => {

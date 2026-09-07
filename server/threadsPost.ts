@@ -26,6 +26,8 @@ export interface CreatePostParams {
    * 制約: 1〜50文字、ピリオド(.)とアンパサンド(&)は不可。
    */
   topicTag?: string;
+  /** 引用投稿：この投稿IDを引用する（自分の固定投稿の再露出などに使う） */
+  quotePostId?: string;
 }
 
 /** topic_tag のAPI制約に合わせて整形（不正なら null＝付けない） */
@@ -50,12 +52,13 @@ export interface PublishResponse {
 export async function createMediaContainer(
   params: CreatePostParams
 ): Promise<MediaContainer> {
-  const { accessToken, threadsUserId, text, mediaType = "TEXT", imageUrl, videoUrl, children, replyToId, topicTag } = params;
+  const { accessToken, threadsUserId, text, mediaType = "TEXT", imageUrl, videoUrl, children, replyToId, topicTag, quotePostId } = params;
 
   const body: Record<string, string> = {
     media_type: mediaType,
     access_token: accessToken,
   };
+  if (quotePostId) body.quote_post_id = quotePostId;
 
   // Add text content
   if (text) {
@@ -289,7 +292,7 @@ export class PartialThreadError extends Error {
 }
 
 export async function createAndPublishThread(
-  base: { accessToken: string; threadsUserId: string; topicTag?: string },
+  base: { accessToken: string; threadsUserId: string; topicTag?: string; quotePostId?: string },
   segments: string[],
 ): Promise<{ id: string; replyIds: string[] }> {
   const clean = segments.map((s) => (s || '').trim()).filter(Boolean);
@@ -302,6 +305,7 @@ export async function createAndPublishThread(
     text: clean[0],
     mediaType: 'TEXT',
     topicTag: base.topicTag,
+    quotePostId: base.quotePostId, // 引用投稿（固定投稿の再露出）
   });
 
   // ルート投稿後に失敗した場合は PartialThreadError を投げる（再試行で二重投稿しない）
