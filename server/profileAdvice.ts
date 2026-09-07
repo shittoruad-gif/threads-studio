@@ -87,12 +87,22 @@ export async function nudgeAfterConnect(userId: number, username: string): Promi
     const r = await buildProfileAdviceForAccount(userId, Number(acct.id));
     if (!r) return;
     const { pushMessages } = await import("./lineNotify");
+    // ★連携時にThreads歴を見て、慣らし運転が要るかを判断して伝える（2026-09-07 三上様指示）
+    let rampText = "";
+    try {
+      const { isEstablishedAccount } = await import("./accountRampCheck");
+      const full: any = await db.getThreadsAccountById(Number(acct.id));
+      const established = full ? await isEstablishedAccount(full) : false;
+      rampText = established
+        ? "■ このアカウントは以前から使われているので、慣らし運転はありません\n" +
+          "投稿の履歴が30日以上あるため、初日からご契約の本数で投稿します。\n\n"
+        : "■ 最初の2週間は「慣らし運転」です\n" +
+          "新しいアカウントで最初から多く投稿すると、Meta側の自動判定で本人確認や停止が起きやすいため、自動投稿は連携から7日間は1日1件、14日間は1日2件までに抑えます（その後ご契約の本数に）。\n" +
+          "この期間は、ご自身の手動投稿も1日1〜2件までがおすすめです。価格や「治る・歩けるようになった」などの結果の表現は入れません。\n\n";
+    } catch { rampText = ""; }
     const msgs = [
       { type: "text", text:
-        `Threads（@${r.username}）がつながりました。\n\n` +
-        "■ 最初の2週間は「慣らし運転」です\n" +
-        "新しいアカウントで最初から多く投稿すると、Meta側の自動判定で本人確認や停止が起きやすいため、自動投稿は連携から7日間は1日1件、14日間は1日2件までに抑えます（その後ご契約の本数に）。\n" +
-        "この期間は、ご自身の手動投稿も1日1〜2件までがおすすめです。価格や「治る・歩けるようになった」などの結果の表現は入れません。\n\n" +
+        `Threads（@${r.username}）がつながりました。\n\n` + rampText +
         "プロフィールを点検したところ、整えると見つけてもらいやすくなる点がありましたので、貼るだけの文章と一緒にお送りします。" },
       ...buildProfileAdviceMessages(r),
     ];
