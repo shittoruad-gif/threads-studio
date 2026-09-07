@@ -2625,16 +2625,20 @@ async function startStaffHandoff(lineUserId: string, questionId?: number): Promi
 async function forwardToStaff(userId: number, lineUserId: string, message: string, questionId?: number): Promise<unknown[]> {
   let user: any = null;
   try { user = await db.getUserById(userId); } catch { user = null; }
+  // ★ご要望（機能の追加・変更）は「要望」として記録し、翌日反映の見込みを自動で伝える
+  //   （2026-09-07 三上様指示）。夜間整備がこの分類を拾って実装し、反映後にこのトークへ知らせる。
+  const { isFeatureRequest, REQUEST_ACK_TEXT } = await import("../shared/requestDetect");
+  const isRequest = isFeatureRequest(message);
   let qid = questionId;
   if (!qid) {
     try {
       qid = await db.createSupportQuestion({
-        userId, lineUserId, source: "line", question: message, needsHuman: 1, category: "その他",
+        userId, lineUserId, source: "line", question: message, needsHuman: 1, category: isRequest ? "要望" : "その他",
       });
     } catch { qid = undefined; }
   } else {
     try {
-      await db.updateSupportQuestion(qid, { needsHuman: 1, question: message });
+      await db.updateSupportQuestion(qid, { needsHuman: 1, question: message, ...(isRequest ? { category: "要望" } : {}) } as any);
     } catch { /* 記録に失敗しても、担当者への連絡は続ける */ }
   }
 
@@ -2647,6 +2651,7 @@ async function forwardToStaff(userId: number, lineUserId: string, message: strin
     message,
   });
 
+  if (isRequest) return [textWithQuick(REQUEST_ACK_TEXT, MENU_HINT)];
   return [textWithQuick(
     delivered
       ? "担当者にお送りしました。確認のうえ、このトークにお返事します。\n（営業時間の都合で、お返事までお時間をいただく場合があります）"
