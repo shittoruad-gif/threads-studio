@@ -326,6 +326,42 @@ async function startServer() {
   // Univapayの実イベント構造は環境で差があるため、生ペイロードを必ずログし、
   // 主要フィールドは複数経路で防御的に読む。未知イベントでも200で返し
   // Univapay側のリトライ嵐を防ぐ（署名NG時のみ400）。
+  // ── サービス詳細希望（案内メールのボタン）→ 記録＋運営LINEへ即通知（2026-09-07）──
+  app.get('/api/service-interest', async (req, res) => {
+    const page = (title: string, body: string) =>
+      `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head>` +
+      `<body style="font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;background:#f4fafa;margin:0;padding:32px 16px;color:#13343B">` +
+      `<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:14px;padding:28px 24px;border:1px solid #e1eaea"><h1 style="font-size:20px;margin:0 0 12px">${title}</h1><p style="line-height:1.8;font-size:15px;margin:0">${body}</p></div></body></html>`;
+    try {
+      const { verifyInterestToken } = await import('../interestToken');
+      const v = verifyInterestToken(String(req.query.token || ''));
+      if (!v) { res.status(400).send(page('リンクが無効です', '案内メールのボタンをもう一度押すか、このメールへご返信ください。')); return; }
+      const db = await import('../db');
+      const user: any = await db.getUserById(v.userId);
+      const { serviceBySlug } = await import('../../shared/relatedServices');
+      const svc = serviceBySlug(v.slug);
+      const label = svc?.label ?? v.slug;
+      const name = user?.name || '(名前未設定)';
+      const store = user?.storeName ? `（${user.storeName}）` : '';
+      // 記録（返信待ちに載せる）。同じ人・同じサービスの重複は24時間以内なら1件にまとめる
+      try {
+        const d = await db.getDb();
+        const { sql } = await import('drizzle-orm');
+        const dup: any = d ? ((await d.execute(sql`SELECT id FROM supportQuestions WHERE userId = ${v.userId} AND category = '詳細希望' AND question LIKE ${'%' + label + '%'} AND createdAt >= NOW() - INTERVAL 1 DAY LIMIT 1`)) as any)[0][0] : null;
+        if (!dup) await db.createSupportQuestion({ userId: v.userId, lineUserId: null as any, source: 'email', question: `【サービス詳細希望】${label}`, needsHuman: 1, category: '詳細希望' } as any);
+      } catch (e) { console.warn('[ServiceInterest] 記録失敗:', (e as Error)?.message); }
+      const { notifyOwner } = await import('./notification');
+      await notifyOwner({
+        title: `サービス詳細のご希望：${name}${store}`,
+        content: `サービス：${label}\nお客様：${name}${store}\nメール：${user?.email ?? '不明'}\n\n案内メールの「詳細を希望する」ボタンが押されました。管理画面の「返信待ち」にも載せています。早めのご連絡を。`,
+      });
+      res.status(200).send(page('ありがとうございます', `「${label}」の詳細をご希望として承りました。担当者から、ご登録のメール（${user?.email ?? ''}）または公式LINEへご連絡します。`));
+    } catch (e) {
+      console.error('[ServiceInterest] error:', e);
+      res.status(200).send(page('承りました', '担当者からご連絡します。'));
+    }
+  });
+
   // ── Threads Webhook（返信の即時通知 → LINEの返信文案カード）2026-09-07 ──
   app.get('/api/threads/webhook', (req, res) => {
     const token = process.env.THREADS_WEBHOOK_VERIFY_TOKEN || '';

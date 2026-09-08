@@ -389,7 +389,7 @@ export function renderRelatedServicesEmail(
  * 中身は紹介ページ（/services/<slug>）と同じ定義（shared/relatedServices.ts）から作る。
  * ★料金は確定しているものだけが定義に入っている。ここで金額を書き足さない。
  */
-export function renderServiceIntroEmail(service: RelatedService, pageUrl: string, contactEmail: string): string {
+export function renderServiceIntroEmail(service: RelatedService, pageUrl: string, contactEmail: string, interestUrl?: string): string {
   const p = service.page;
   const li = (items: string[]) => items.map((t) => `<li style="margin:0 0 6px;">${escapeHtml(t)}</li>`).join('');
   const steps = p.steps
@@ -424,6 +424,7 @@ export function renderServiceIntroEmail(service: RelatedService, pageUrl: string
       ${price}
       ${sample}
       ${docs}
+      ${interestUrl ? `<p style="margin:18px 0 0;"><a href="${interestUrl}" style="display:inline-block;background:#065f46;color:#ffffff;border:1px solid #065f46;padding:11px 18px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:bold;">このサービスの詳細を希望する（担当者からご連絡します）</a></p>` : ''}
       <p style="margin:16px 0 0;font-size:14px;line-height:1.7;">くわしい内容は下のボタンからご覧ください。お見積り・ご相談は
         <a href="${mailto}" style="color:#065f46;">こちら</a>、またはこのメールへのご返信でも承ります。</p>
     `,
@@ -440,13 +441,14 @@ export async function sendServiceIntroEmails(
   services: RelatedService[],
   contactEmail: string,
   pageUrlFor: (service: RelatedService) => string,
+  interestUrlFor?: (service: RelatedService) => string,
 ): Promise<number> {
   let sent = 0;
   for (const s of services) {
     const ok = await sendEmail({
       to,
       subject: `【Threads Studio】${s.label} のご案内`,
-      html: renderServiceIntroEmail(s, pageUrlFor(s), contactEmail),
+      html: renderServiceIntroEmail(s, pageUrlFor(s), contactEmail, interestUrlFor ? interestUrlFor(s) : undefined),
     });
     if (ok !== false) sent++;
   }

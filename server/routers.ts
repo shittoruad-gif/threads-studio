@@ -4357,7 +4357,11 @@ ${input.commentText}
             const matched = servicesFromLabels(input.interests);
             if (matched.length > 0) {
               const { sendServiceIntroEmails } = await import('./_core/notification');
-              const sent = await sendServiceIntroEmails(ctx.user.email, matched, RELATED_SERVICES_CONTACT_EMAIL, (s) => serviceIntroUrl(s));
+              // ★「詳細を希望する」ボタン：押すと当社のURLに来て、運営のLINEへ即通知（メール返信任せにしない）
+              const { createInterestToken } = await import('./interestToken');
+              const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
+              const sent = await sendServiceIntroEmails(ctx.user.email, matched, RELATED_SERVICES_CONTACT_EMAIL, (s) => serviceIntroUrl(s),
+                (s) => `${base}/api/service-interest?token=${createInterestToken(ctx.user.id, s.slug)}`);
               console.log(`[survey] 案内メール ${sent}/${matched.length}通 → ${ctx.user.email}`);
             }
           } catch (e) { console.error('[survey] 案内メール送信失敗:', e); }
