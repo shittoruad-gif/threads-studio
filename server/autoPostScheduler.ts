@@ -643,6 +643,19 @@ async function generateAutoPost(
       }
     } catch { /* ガード失敗時はそのまま */ }
 
+    // ★登録情報に無い数字（割合・順位・人数など）が入っていたら公開しない。
+    //   2026-09-08 比嘉先生の当日補充で「3人に1人が知らないこと」が出た。実績は
+    //   「開業11年・業界歴20年・のべ20万人以上」だけで、根拠の無い数字だった。
+    //   「書いていない数字をAIが作らない」はお客様へのお約束なので、機械的に止める。
+    try {
+      const { findFabricatedNumbers, registeredFactsOf } = await import('../shared/fabricatedNumberGuard');
+      const fab = findFabricatedNumbers(naturalMain, registeredFactsOf(project));
+      if (fab.length > 0) {
+        console.warn(`[AutoPost] fabricatedNumberGuard: 登録に無い数字 ${fab.map((x) => x.text).join('・')} のため公開しない userId=${userId} projectId=${project.id}`);
+        return false;
+      }
+    } catch { /* ガード失敗時はそのまま */ }
+
     // 「。」の直後に絵文字が続く形（「〜しますね。✨」）は人間の投稿に無い機械の癖。
     // 誤爆しない決定的な整形なので、どちらの経路（リライト採用/差し戻し）にも適用する。
     const mainText = polishPunctuation(naturalMain);
