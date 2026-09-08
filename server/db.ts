@@ -4031,7 +4031,8 @@ export async function listUsersForNextActionNotify(): Promise<Array<{ userId: nu
   //   設定のご案内はオーナーにだけ届けたいので、最初に連携した1件を選ぶ。
   const rows: any = await database.execute(sql.raw(
     `SELECT u.\`id\` AS userId, l.\`lineUserId\` AS lineUserId,
-            u.\`nextActionLastKey\` AS lastKey, u.\`nextActionLastSentAt\` AS lastSentAt
+            u.\`nextActionLastKey\` AS lastKey, u.\`nextActionLastSentAt\` AS lastSentAt,
+            u.\`lastAnnouncementKey\` AS lastAnnouncementKey
      FROM \`users\` u
      JOIN \`userLineLinks\` l ON l.\`id\` = (
        SELECT MIN(l2.\`id\`) FROM \`userLineLinks\` l2 WHERE l2.\`userId\` = u.\`id\`
@@ -4043,7 +4044,15 @@ export async function listUsersForNextActionNotify(): Promise<Array<{ userId: nu
     lineUserId: String(r.lineUserId),
     lastKey: r.lastKey ?? null,
     lastSentAt: r.lastSentAt ? new Date(r.lastSentAt) : null,
+    lastAnnouncementKey: r.lastAnnouncementKey ?? null,
   }));
+}
+
+/** その日のお知らせを送ったことを記録する（1人1回。shared/announcements.ts の key） */
+export async function recordAnnouncementSent(userId: number, key: string): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  await database.update(users).set({ lastAnnouncementKey: key } as any).where(eq(users.id, userId));
 }
 
 /** 送った案内を記録する（同じものを毎日送らないため）*/

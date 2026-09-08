@@ -25,8 +25,21 @@ export async function runNextActionNotifyJob(): Promise<void> {
   let sent = 0;
   let skipped = 0;
 
+  // ★その日だけ全員に送る「お知らせ」（shared/announcements.ts）。1人1回。
+  //   次にやることが無い（設定が済んでいる）方にも届くよう、案内の判定より前に送る
+  //   （2026-09-09 三上様指示：何がどう簡単になったかを、案内と一緒に届ける）。
+  const { announcementForToday } = await import("../shared/announcements");
+  const ann = announcementForToday();
+  let announced = 0;
+
   for (const t of targets) {
     try {
+      if (ann && (t as any).lastAnnouncementKey !== ann.key) {
+        const okA = await pushMessages(t.lineUserId, [
+          textWithQuick(ann.text, [{ label: "次にやること", data: "m=next" }, ...MENU_ITEMS.filter((m) => m.data !== "m=next")]),
+        ]);
+        if (okA) { await db.recordAnnouncementSent(t.userId, ann.key); announced++; }
+      }
       const action = await detectNextAction(t.userId);
       if (!action) { skipped++; continue; }
 
@@ -53,5 +66,5 @@ export async function runNextActionNotifyJob(): Promise<void> {
     }
   }
 
-  console.log(`[NextAction] 送信 ${sent}件 / 対象外 ${skipped}件 / 全 ${targets.length}人`);
+  console.log(`[NextAction] 送信 ${sent}件 / 対象外 ${skipped}件 / 全 ${targets.length}人${ann ? ` / お知らせ「${ann.key}」${announced}件` : ""}`);
 }
