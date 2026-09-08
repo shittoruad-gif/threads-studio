@@ -395,7 +395,21 @@ async function generateAutoPost(
     // ★実績学習：実際に見られた回数（インプレッション）でも重みを補正する。
     //   クライアントが◯✕を押さなくても、結果そのものから伸びる型が増えていく。
     const perf = await db.getAnglePerformanceStats(userId, project.id);
-    angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store');
+    // ★健康系のお店の新しいアカウントには、ビフォーアフター・お客様の声を書かせない。
+    //   2026-09-08 @haisaiseikotsuin（整骨院・連携2日目）の公開3件がThreads側で削除された。
+    //   消された投稿も承認待ちの投稿も change_story / customer_voice で作られていた。
+    //   下流の言い換えで直すより、最初から結果を語らせないほうが安全。
+    let excludeOutcomeAngles = false;
+    try {
+      const { isHealthBusiness } = await import('../shared/healthClaimGuard');
+      if (isHealthBusiness(project.businessType)) {
+        const { accountAgeDays, RAMP_DAYS_2 } = await import('../shared/accountRamp');
+        const acct: any = await db.getThreadsAccountById(threadsAccountId);
+        excludeOutcomeAngles = accountAgeDays(acct?.createdAt) < RAMP_DAYS_2;
+      }
+    } catch { /* 判定できなければ従来どおり */ }
+    angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles });
+    if (excludeOutcomeAngles) console.log(`[AutoPost] 健康系の新規アカウントのため結果を語る切り口を除外 userId=${userId}`);
     // ◯✕が付いた実例をプロンプトに注入して「このお店の好み」を学習させる
     const [liked, disliked] = await Promise.all([
       db.getRatedPostSamples(userId, 'good', 2, project.id),
@@ -461,12 +475,14 @@ async function generateAutoPost(
     //   AIGenerate の手動生成で treeCount を選んでもらう。
     // ★お客様がご自分で手直しした投稿から「好み」を作り、翌日以降の投稿を寄せていく。
     //   材料が無ければ空文字になるので、これまでと同じ生成になる（2026-09-08 三上様指示）。
-    let preferenceNote = '';
+    // ★名前を preferenceNote にすると、上で作った◯✕評価の好み（line 391）を隠してしまい、
+    //   評価による学習がプロンプトから消える。別の名前にして両方を渡す。
+    let editPreferenceNote = '';
     try {
       const { buildPreferenceNote } = await import('../shared/postPreference');
       const edits = await db.getUserEditedPosts(userId, 5);
-      preferenceNote = buildPreferenceNote(edits);
-      if (preferenceNote) console.log(`[AutoPost] 手直しの好みを反映 userId=${userId} edits=${edits.length}`);
+      editPreferenceNote = buildPreferenceNote(edits);
+      if (editPreferenceNote) console.log(`[AutoPost] 手直しの好みを反映 userId=${userId} edits=${edits.length}`);
     } catch (e) { console.warn(`[AutoPost] 手直しの好みの反映をとばしました: ${(e as Error)?.message}`); }
 
     const prompt = generateThreadsPrompt({
@@ -475,7 +491,7 @@ async function generateAutoPost(
       area: project.area,
       localTerms: approvedLocalTerms(project),
       styleSamples: (project as any).styleSamples || undefined,
-      preferenceNote: preferenceNote || undefined,
+      preferenceNote: editPreferenceNote || undefined,
       target: project.target,
       mainProblem: project.mainProblem,
       strength: project.strength,

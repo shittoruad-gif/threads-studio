@@ -242,14 +242,31 @@ export function activeAngles(now: number = Date.now(), mode: string = 'store'): 
   return POST_ANGLES;
 }
 
+/**
+ * 治療の結果（ビフォーアフター・お客様の声）を語らせる切り口。
+ *
+ * ★健康系のお店（整体・整骨・接骨・鍼灸など）の新しいアカウントでは使わない。
+ *   2026-09-08 @haisaiseikotsuin（整骨院・連携2日目）の公開3件がThreads側で削除された。
+ *   消された投稿も、承認待ちだった投稿も、この2つの切り口で作られたもので、
+ *   「つらい症状から解放された」「眠りが変わった」のような結果の断定が入っていた。
+ *   下流の言い換えガードで直すより、新しいアカウントには最初から書かせないほうが安全。
+ *   慣らし運転を抜けたら（Threads歴のあるアカウントも含め）通常どおり使う。
+ */
+export const OUTCOME_RISK_ANGLES: readonly string[] = ['change_story', 'customer_voice'];
+
 export function pickAngle(
   stats: Record<string, { good: number; bad: number }>,
   random: () => number = Math.random,
   perf?: AnglePerformance,
   now: number = Date.now(),
   mode: string = 'store',
+  opts: { excludeOutcomeAngles?: boolean } = {},
 ): PostAngle {
-  const pool = activeAngles(now, mode);
+  let pool = activeAngles(now, mode);
+  if (opts.excludeOutcomeAngles) {
+    const safe = pool.filter((a) => !OUTCOME_RISK_ANGLES.includes(a.id));
+    if (safe.length > 0) pool = safe;
+  }
   const weights = pool.map((a) => {
     const s = stats[a.id] ?? { good: 0, bad: 0 };
     // 好み（◯✕）× 結果（実測インプレッション）の掛け合わせ
