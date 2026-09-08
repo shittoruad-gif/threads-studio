@@ -48,10 +48,15 @@ export async function runAccountHealthJob(): Promise<void> {
       // 直近3日の公開投稿がThreads上に残っているか
       const pr: any = await d.execute(sql`SELECT publishedThreadsPostId FROM scheduledPosts WHERE threadsAccountId = ${Number(a.id)} AND status = 'posted' AND postedAt >= NOW() - INTERVAL 3 DAY AND publishedThreadsPostId IS NOT NULL ORDER BY postedAt DESC LIMIT 8`);
       const ids: string[] = ((pr as any)[0] ?? []).map((r: any) => String(r.publishedThreadsPostId));
-      let gone = 0;
+      let gone = 0; const goneIds: string[] = [];
       for (const id of ids) {
         const p: any = await (await fetch(`${THREADS}/${id}?fields=id&access_token=${acct.accessToken}`)).json();
-        if (p?.error && /does not exist|cannot be loaded|unsupported get request/i.test(JSON.stringify(p.error))) gone++;
+        if (p?.error && /does not exist|cannot be loaded|unsupported get request/i.test(JSON.stringify(p.error))) { gone++; goneIds.push(id); }
+      }
+      // ★消えた投稿は「失敗（Threads側で削除）」として記録し、翌日以降に同じ警告を繰り返さない
+      //   （2026-09-09 比嘉様に3日連続で「投稿が消えています」が届いた）
+      if (goneIds.length > 0) {
+        try { await d.execute(sql`UPDATE scheduledPosts SET status = 'failed', errorMessage = 'Threads側で削除された（健全性点検で検知・スパム判定の可能性）' WHERE threadsAccountId = ${Number(a.id)} AND status = 'posted' AND publishedThreadsPostId IN (${sql.join(goneIds.map((g) => sql`${g}`), sql`, `)})`); } catch (e) { console.warn(`[AccountHealth] mark removed failed:`, (e as Error)?.message); }
       }
       if (gone >= 2) {
         missing++;
