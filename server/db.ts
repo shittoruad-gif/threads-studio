@@ -3986,6 +3986,7 @@ export async function listUsersForOnboardingEmail(): Promise<Array<{
      FROM \`users\` u
      LEFT JOIN \`userLineLinks\` l ON l.\`userId\` = u.\`id\`
      WHERE u.\`emailOptOut\` = 0
+       AND u.\`nextActionNotifyEnabled\` = 1
        AND u.\`email\` IS NOT NULL AND u.\`email\` <> ''
        AND l.\`id\` IS NULL
        AND u.\`onboardingEmailStage\` < 2`

@@ -64,11 +64,12 @@ async function main() {
     } catch { /* 判定できなくても続ける */ }
     const route = linked ? 'LINEで案内' : (age > 30 ? '案内対象外(30日超)' : 'メールで案内');
     // ★登録から1日以上、一歩も進んでいない方は「電話推奨」。案内メールでは動かない（2026-09-08 三上様指示）
-    const phone = s.noAction && typeof age === 'number' && age >= 1 && age <= 30 ? ' / ★何も進んでいない→電話推奨' : '';
+    // 案内OFF（運営が意図して外した方。例：2026-09-09 比嘉美和様）には電話推奨も付けない
+    const phone = s.noAction && s.notifyEnabled && typeof age === 'number' && age >= 1 && age <= 30 ? ' / ★何も進んでいない→電話推奨' : '';
     console.log(`  ${String(s.name || '(名前なし)').padEnd(14)} ${String(s.email).padEnd(32)} ${s.key.padEnd(24)} 登録${age}日 / ${route}${s.notifyEnabled ? '' : ' / 案内OFF'}${phone}`);
   }
   if (stuck.length === 0) console.log('  なし（全員、設定が整っています）');
-  const phoneList = stuck.filter((s) => s.noAction);
+  const phoneList = stuck.filter((s) => s.noAction && s.notifyEnabled);
   if (phoneList.length > 0) console.log(`  → 電話推奨: ${phoneList.map((s) => s.name || s.email).join('、')}`);
 
   // ── 1.5 業種と登録内容のズレ（呉服店に整体の選択肢が入っていた・2026-09-06 三上様指示）
