@@ -548,6 +548,14 @@ interface CounselingState {
   step: number;
   answers: Record<string, string>;
   projectId: string;
+  /**
+   * ★「まず5問」モード（2026-09-08 三上様指示「ド素人でも自動投稿まで進める」）。
+   *   業種・地域・店名・お客さん像・お悩みの5問だけで登録を終え、その場で最初の投稿を作る。
+   *   残りは投稿が動き始めてから「1日1問」（c=more）で足す。
+   */
+  quick?: boolean;
+  /** 「1日1問」で1問だけ答えて保存する途中（答えたら確認画面を出さずに保存して終わる） */
+  moreOne?: boolean;
   /** 確認画面から1問だけ直しているとき、その質問番号（0始まり）。直し終えたら確認画面へ戻る。 */
   editing?: number | null;
   /** どのThreadsアカウントの設定か（複数運用時。1つだけなら未設定） */
@@ -614,7 +622,7 @@ async function offerCounselingResume(
   cs: CounselingState,
   pending?: string,
 ): Promise<unknown[]> {
-  const qs = questionsFor(cs.mode, cs.answers);
+  const qs = questionsFor(cs.mode, cs.answers, cs.quick);
   const done = Math.min(cs.step, qs.length);
   if (pending !== undefined) {
     cs.pending = pending.slice(0, 500);
@@ -639,20 +647,45 @@ async function offerCounselingResume(
   )];
 }
 
-function questionsFor(mode: "store" | "personal", answers?: Record<string, string>) {
+/** 「まず5問」で聞く質問。この5つで投稿は作れる（店名・地名で「この店らしさ」も満たせる） */
+const QUICK_QUESTION_IDS: readonly string[] = ["businessTypeRaw", "areaRaw", "storeNameRaw", "targetRaw", "mainProblemRaw"];
+
+function questionsFor(mode: "store" | "personal", answers?: Record<string, string>, quick?: boolean) {
   // ★個人モードでも、まず業種で候補を差し替えてから個人向けの言い回しを重ねる。
   //   以前は個人モードだけ業種の差し替えを通しておらず、コンサルタントの方に
   //   「40〜60代の男性」「繰り返す腰痛」「夜遅くまで営業」（治療院の既定チップ）が出て、
   //   そのまま登録され、業種ズレの通知が運営に何度も届いていた（2026-09-08 佐々木様）。
-  if (mode === "personal") return applyPersonalOverrides(applyIndustryOverrides(COUNSELING_QUESTIONS, answers?.businessTypeRaw));
-  // ★1問目で答えていただいた業種に合わせて、候補と例文を出し分ける。
-  //   これがないと、カフェや教室のお客様に「骨盤矯正」「痛い施術ですか？」が出る。
-  return applyIndustryOverrides(COUNSELING_QUESTIONS, answers?.businessTypeRaw);
+  const full = mode === "personal"
+    ? applyPersonalOverrides(applyIndustryOverrides(COUNSELING_QUESTIONS, answers?.businessTypeRaw))
+    // ★1問目で答えていただいた業種に合わせて、候補と例文を出し分ける。
+    //   これがないと、カフェや教室のお客様に「骨盤矯正」「痛い施術ですか？」が出る。
+    : applyIndustryOverrides(COUNSELING_QUESTIONS, answers?.businessTypeRaw);
+  if (!quick) return full;
+  return full.filter((q) => QUICK_QUESTION_IDS.includes(String(q.id)));
+}
+
+/** お店の情報に、まだ答えていない質問（全20問のうち）の番号（0始まり）と id */
+function unansweredQuestions(project: any): Array<{ index: number; id: string }> {
+  let raw: Record<string, string> = {};
+  try { raw = JSON.parse(project?.counselingResult || "{}")?.rawAnswers ?? {}; } catch { raw = {}; }
+  // 列の値も答えとみなす（アプリ側で直した分）
+  const colMap: Record<string, string | null | undefined> = {
+    businessTypeRaw: project?.businessType, areaRaw: project?.area, storeNameRaw: project?.storeName,
+    targetRaw: project?.target, mainProblemRaw: project?.mainProblem, strengthRaw: project?.strength, uspRaw: project?.usp,
+  };
+  const qs = questionsFor(project?.mode === "personal" ? "personal" : "store", raw);
+  const out: Array<{ index: number; id: string }> = [];
+  qs.forEach((q: any, index: number) => {
+    const id = String(q.id);
+    const v = String(raw[id] ?? colMap[id] ?? "").trim();
+    if (!v) out.push({ index, id });
+  });
+  return out;
 }
 
 /** n問目を出す（選択肢はタップで送れるようにする） */
 function askQuestion(st: CounselingState): unknown[] {
-  const qs = questionsFor(st.mode, st.answers);
+  const qs = questionsFor(st.mode, st.answers, st.quick);
   const q: any = qs[st.step];
   const total = qs.length;
   const editing = st.editing !== null && st.editing !== undefined;
@@ -719,7 +752,7 @@ function askQuestion(st: CounselingState): unknown[] {
  * ここから「◯番を直す」で1問だけ直せる（直したらまたこの画面に戻る）。
  */
 function reviewCounseling(st: CounselingState): unknown[] {
-  const qs = questionsFor(st.mode, st.answers);
+  const qs = questionsFor(st.mode, st.answers, st.quick);
   const lines = qs.map((q: any, i: number) => {
     const v = (st.answers[q.id] ?? "").trim();
     const shown = v ? (v.length > 40 ? v.slice(0, 40) + "…" : v) : "（未記入）";
@@ -747,7 +780,7 @@ function reviewCounseling(st: CounselingState): unknown[] {
 
 /** 回答を受け取り、次の質問へ進む。全問終わったら確認画面を出す。 */
 async function advanceCounseling(userId: number, lineUserId: string, st: CounselingState, answer: string): Promise<unknown[]> {
-  const qs = questionsFor(st.mode, st.answers);
+  const qs = questionsFor(st.mode, st.answers, st.quick);
   const q: any = qs[st.step];
   const a = answer.trim();
   if (/^(やめる|中止|キャンセル)$/.test(a)) {
@@ -802,6 +835,20 @@ async function advanceCounseling(userId: number, lineUserId: string, st: Counsel
   }
 
   st.step += 1;
+  // ★「1日1問」：1問答えたら確認画面を出さずにそのまま保存して終わる
+  if (st.moreOne) {
+    await db.clearLineChatState(lineUserId);
+    await clearCounselingBackup(lineUserId);
+    const res = await saveCounselingAnswers({ userId, projectId: st.projectId, mode: st.mode, answers: st.answers as any, oneLine: st.oneLine ?? "" });
+    if (!res.ok) return [textWithQuick("保存に失敗しました。時間をおいてもう一度お試しください。", MENU_HINT)];
+    const pj: any = await db.getProjectById(st.projectId).catch(() => null);
+    const remaining = pj ? unansweredQuestions(pj).length : 0;
+    return [textWithQuick(
+      `ありがとうございます。1問追加しました${remaining > 0 ? `（残り ${remaining} 問）` : "（これで全部そろいました）"}。\n` +
+      "答えが増えるほど、投稿がお店らしくなります。明日の投稿から反映されます。",
+      [...(remaining > 0 ? [{ label: "もう1問答える", data: `c=more&p=${st.projectId}` }] : []), ...MENU_HINT],
+    )];
+  }
   await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
   if (st.step < qs.length) return askQuestion(st);
   return reviewCounseling(st);
@@ -850,7 +897,11 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
       `このままだと別の業種の投稿が作られます。「はじめの設定」を押すと前回の答えが入った状態で開くので、` +
       `合わない項目（${(((res as any).mismatchFields as string[]) || []).join("・") || "該当の項目"}）だけ直してください。\n\n`
     : "";
-  const head = "ありがとうございました。設定が終わりました。\n内容を直したくなったら、いつでも「お店の情報」から確認・修正できます。\n\n" + mismatchNote;
+  // ★「まず5問」で終えた方には、残りを1日1問で足すことを添える
+  const quickNote = st.quick
+    ? "最初の投稿は、いまこの場で作ってお届けします（少しお待ちください）。\n残りの質問は、投稿が動き始めてから「きょうの1問」として少しずつお聞きします。すぐ続けたい方は、メニューの「設定を1問足す」からどうぞ。\n\n"
+    : "";
+  const head = "ありがとうございました。設定が終わりました。\n内容を直したくなったら、いつでも「お店の情報」から確認・修正できます。\n\n" + quickNote + mismatchNote;
 
   if (accounts.length === 0) {
     return [textWithQuick(
@@ -1140,7 +1191,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const cs: CounselingState = JSON.parse(cur.payload);
     if (q.c === "save") return saveCounselingFromChat(user.id, lineUserId, cs);
     if (q.c === "edit") {
-      const qs = questionsFor(cs.mode, cs.answers);
+      const qs = questionsFor(cs.mode, cs.answers, cs.quick);
       return [{
         type: "text",
         text: `直したい項目の番号（1〜${qs.length}）を送ってください。\n例：「3」と送ると3番目の質問をもう一度お聞きします。`,
@@ -1150,7 +1201,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     if (q.c === "oneline") {
       const b = buildCounselingBrief(cs.answers as any, cs.oneLine);
       cs.editing = null;
-      cs.step = questionsFor(cs.mode, cs.answers).length; // 送信後は確認画面へ戻す
+      cs.step = questionsFor(cs.mode, cs.answers, cs.quick).length; // 送信後は確認画面へ戻す
       await db.setLineChatState(lineUserId, "counseling", JSON.stringify({ ...cs, awaitingOneLine: true }));
       return [{
         type: "text",
@@ -1174,7 +1225,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const pending = cs.pending;
     cs.pending = null;
     await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
-    const qs = questionsFor(cs.mode, cs.answers);
+    const qs = questionsFor(cs.mode, cs.answers, cs.quick);
     if (cs.step >= qs.length) return reviewCounseling(cs);
     // 預かっていた文章があれば、それを回答として使う（書き直させない）
     if (pending) {
@@ -1240,14 +1291,18 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       console.error("[LineChat] 先埋めに失敗（ふつうに質問します）:", e);
     }
     const prefillCount = Object.keys(prefill).length;
+    // ★はじめての登録は「まず5問」で終える（2026-09-08 三上様指示）。
+    //   前回の登録内容があるやり直し（prefillKind=saved）や、full=1 の指定があれば従来の全20問。
+    const quick = q.quick === "1" || (q.full !== "1" && prefillKind !== "saved");
     const st: CounselingState = {
-      mode: q.mode, step: 0, answers: {}, projectId, accountId, accountName,
+      mode: q.mode, step: 0, answers: {}, projectId, accountId, accountName, quick,
       ...(prefillCount > 0 ? { prefill, prefillSource, prefillKind } : {}),
     };
     await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
     const { prefillIntroText } = await import("./counselingPrefill");
     return [
       { type: "text", text: (accountName ? `${accountName} の設定として、` : "") + (q.mode === "personal" ? "「個人にファンをつける」で進めます。" : "「お店の集客」で進めます。") },
+      ...(quick ? [{ type: "text", text: "まず5問だけお聞きします（2分ほど）。答え終わると、その場で最初の投稿を作ってお届けします。\n残りの質問は、投稿が動き始めてから1日1問ずつお聞きします（答えるほど、投稿がお店らしくなります）。" }] : []),
       ...(prefillCount > 0 ? [{ type: "text", text: prefillIntroText(prefillSource, prefillCount, prefillKind) }] : []),
       ...askQuestion(st),
     ];
@@ -1618,11 +1673,17 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
     const good = q.v === "good";
     await db.updateScheduledPost(Number(q.i), { clientRating: good ? "good" : "bad", ratedAt: new Date() } as any);
+    // ★評価の直後は「きょうの1問」を足す好機（答えるほど投稿がお店らしくなる）
+    let moreBtn: Array<{ label: string; data: string }> = [];
+    try {
+      const pj: any = (post as any).projectId ? await db.getProjectById(String((post as any).projectId)) : null;
+      if (pj && unansweredQuestions(pj).length > 0) moreBtn = [{ label: "設定を1問足す", data: `c=more&p=${pj.id}` }];
+    } catch { moreBtn = []; }
     return [textWithQuick(
       good
         ? "ありがとうございます。この書き方を増やしていきます。"
         : "ありがとうございます。この書き方は減らします。どこが違うか一言いただければ、なお寄せられます（「文章をコピーして自分で直す」で直していただいた文も、次から手本にします）。",
-      MENU_HINT,
+      [...moreBtn, ...MENU_HINT].slice(0, 13),
     )];
   }
   if (q.a === "skip" && q.i) {
@@ -1880,6 +1941,55 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   //   ご本人の言葉がそのまま最終文になること。微調整したいだけの方向け。
   // ★理想の投稿（文体のお手本）を貼ってもらう。連携時に本人の過去投稿を自動で取り込むが、
   //   投稿の無い新しいアカウントは空のままで、寄せる先が無かった（2026-09-08 比嘉先生）。
+  // ★「1日1問」：まだ答えていない質問を1つだけ聞いて、答えたら保存して終わる（2026-09-08）。
+  //   「まず5問」で始めた方の残り15問を、投稿が動き始めてから少しずつ埋める。
+  if (q.c === "more") {
+    const pjs: any[] = ((await db.getUserProjects(user.id)) || []).filter((p: any) => !String(p.id).startsWith("demo_"));
+    const pj = (q.p && pjs.find((p: any) => String(p.id) === String(q.p))) || (pjs.length === 1 ? pjs[0] : null);
+    if (!pj) {
+      if (pjs.length === 0) return [textWithQuick("先に「はじめの設定」でお店の情報を登録してください。", [{ label: "はじめの設定", data: "m=setup" }, ...MENU_HINT])];
+      return [textWithQuick("どのお店の設定を足しますか？", pjs.slice(0, 6).map((p: any) => ({ label: String(p.storeName || p.businessType || p.id).slice(0, 20), data: `c=more&p=${p.id}` })))];
+    }
+    const missing = unansweredQuestions(pj);
+    if (missing.length === 0) return [textWithQuick("お店の情報は全部そろっています。直したい場合は「はじめの設定」からどうぞ。", MENU_HINT)];
+    let raw: Record<string, string> = {};
+    try { raw = JSON.parse(pj.counselingResult || "{}")?.rawAnswers ?? {}; } catch { raw = {}; }
+    // 列の値も答えとして持たせる（アプリ側で直した分を消さないため）
+    for (const [k, v] of Object.entries({ businessTypeRaw: pj.businessType, areaRaw: pj.area, storeNameRaw: pj.storeName, targetRaw: pj.target, mainProblemRaw: pj.mainProblem, strengthRaw: pj.strength, uspRaw: pj.usp })) {
+      if (!raw[k] && v) raw[k] = String(v);
+    }
+    const st: CounselingState = {
+      mode: pj.mode === "personal" ? "personal" : "store",
+      step: missing[0].index, answers: raw, projectId: String(pj.id), accountId: null, accountName: null,
+      moreOne: true,
+    };
+    await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
+    return [
+      { type: "text", text: `きょうの1問です（残り ${missing.length} 問）。答えるとそのまま保存されます。` },
+      ...askQuestion(st),
+    ];
+  }
+  // ★プロプラン以上の方の「運営にお願いする」（固定投稿・ご案内先URL・プロフィール整え。2026-09-08 三上様指示）。
+  //   担当者へのお問い合わせと同じ経路で記録・通知する（お客様には受付の返事だけ）。
+  if (q.m === "support") {
+    const what: Record<string, string> = {
+      pinned: "固定投稿の作成と公開・ピン留め",
+      link: "ご案内先URL（公式LINE・Web予約・ホームページ）の登録",
+      profile: "Threadsプロフィール（名前・自己紹介・アイコン）の整え",
+    };
+    const item = what[String(q.k || "")] || "初期設定";
+    const { plan } = await planOf(user.id);
+    const planName = String((plan as any)?.name || (plan as any)?.id || "");
+    const staffReply = await forwardToStaff(user.id, lineUserId, `【サポート依頼】${item} をお願いします。（プラン：${planName || "不明"}）`);
+    // ★サポートは期間限定・Zoomは初回30分のみ。それ以降は公式LINEから（2026-09-08 三上様指示）
+    return [
+      { type: "text", text:
+        `承りました（${item}）。\n` +
+        "プロプランの方への初期設定サポートは期間限定で、Zoomでの初回30分のみです。担当者から日程のご連絡をします。\n" +
+        "それ以降のご不明点は、この公式LINEにそのままお送りください（自動でお答えし、答えられないものは担当者にお伝えします）。" },
+      ...(Array.isArray(staffReply) ? staffReply.slice(-1) : []),
+    ];
+  }
   if (q.c === "ideal") {
     const pjs: any[] = ((await db.getUserProjects(user.id)) || []).filter((p: any) => !String(p.id).startsWith("demo_"));
     if (pjs.length === 0) return [textWithQuick("先に「はじめの設定」でお店の情報を登録してください。", [{ label: "はじめの設定", data: "m=setup" }, ...MENU_HINT])];
@@ -2109,7 +2219,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
         cs.pending = null;
         await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
       }
-      const qs = questionsFor(cs.mode, cs.answers);
+      const qs = questionsFor(cs.mode, cs.answers, cs.quick);
       // ★「一言でいうと」の書き直しを待っている状態
       if (cs.awaitingOneLine) {
         const t = text.trim();

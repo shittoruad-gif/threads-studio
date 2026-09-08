@@ -3885,6 +3885,20 @@ ${input.commentText}
         try {
           const action = await detectNextAction(u.id);
           if (!action) continue;
+          // ★登録から一歩も進んでいない方（お店の情報なし・Threads未連携・LINE未連携）は、
+          //   仕組みの案内より人が電話するほうが早い。朝の点検で見分けられるように印を付ける（2026-09-08）
+          let noAction = false;
+          if (action.key === 'no_project' || action.key === 'no_account') {
+            try {
+              const [pjs, accts, lines] = await Promise.all([
+                db.getProjectsByUserId(u.id).catch(() => [] as any[]),
+                db.getThreadsAccountsByUserId(u.id).catch(() => [] as any[]),
+                db.listLineLinks(u.id).catch(() => [] as any[]),
+              ]);
+              noAction = (pjs || []).filter((p: any) => !String(p.id).startsWith('demo_')).length === 0
+                && (accts || []).length === 0 && (lines || []).length === 0;
+            } catch { noAction = false; }
+          }
           out.push({
             userId: u.id,
             name: u.name,
@@ -3893,6 +3907,8 @@ ${input.commentText}
             message: action.text,
             notifyEnabled: Number((u as any).nextActionNotifyEnabled ?? 1) === 1,
             lastSentAt: (u as any).nextActionLastSentAt ?? null,
+            noAction,
+            registeredAt: (u as any).createdAt ?? null,
           });
         } catch (e) {
           console.error('[Admin] 状態の判定に失敗 user=', u.id, e);

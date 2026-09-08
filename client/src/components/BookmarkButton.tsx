@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useFirstStep } from "@/components/useFirstStep";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,12 +28,15 @@ function detectPlatform(): "ios" | "android" | "desktop" {
  *   端末に合わせた手順を分かりやすく案内する。
  */
 export function BookmarkButton() {
+  const firstStep = useFirstStep();
   const { t } = useLang();
   const { isInstallable, isInstalled, install } = usePWAInstall();
   const [open, setOpen] = useState(false);
   const platform = detectPlatform();
 
   // すでにアプリとしてインストール済みなら、そもそも保存不要なので何も出さない
+  // ★登録直後の1本道画面では出さない（「アプリをインストール」の吹き出しが友だち追加ボタンを隠していた。2026-09-08）
+  if (firstStep) return null;
   if (isInstalled) return null;
 
   const handleClick = async () => {

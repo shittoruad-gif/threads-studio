@@ -435,6 +435,28 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
     };
   }
 
+  // ★順番の方針（2026-09-08 三上様指示）：まず自動投稿を動かす。固定投稿・ご案内先URL・
+  //   プロフィール整えは「投稿が動いてから」に回し、プロプラン以上の方には運営がサポートする。
+  // ③' プランでは自動投稿が使えるのに、OFFのまま。ここを最初に直す。
+  const settings: any = await db.getAutoPostSettings(userId).catch(() => null);
+  if (maxPerDay > 0 && settings && settings.autoPostEnabled === false) {
+    return {
+      key: "auto_off",
+      text:
+        "次にやることが1つあります。\n\n" +
+        "毎日の自動投稿がOFFになっています。このままでは投稿が作られません。\n" +
+        "下のボタンで、いますぐ始められます。",
+      buttons: [{ label: "自動投稿を始める", data: "s=auto&v=on" }],
+    };
+  }
+  // プロプラン以上（1日3件以上のプラン）は、後回しにした工程を運営が代わりに／一緒に進める
+  const proSupport = maxPerDay >= 3;
+  // ★サポートは期間限定・Zoomは初回30分のみ。それ以降やご不明点は公式LINEから（2026-09-08 三上様指示）
+  const supportTail = (k: string) => proSupport
+    ? "\n\nプロプランの方は、期間限定で運営が一緒に進めます（Zoomでの初回30分のみ）。ご自身でやるのが大変なときは、下の「運営にお願いする」を押してください。その後のご不明点は、この公式LINEからいつでもお問い合わせください。"
+    : "";
+  const supportBtn = (k: string) => proSupport ? [{ label: "運営にお願いする", data: `m=support&k=${k}` }] : [];
+
   // ④0 文体のお手本が空。連携時に本人の過去投稿が取れなかった（投稿の無い新しいアカウント）ので、
   //    「こういう投稿を出したい」という例を貼ってもらう。これが無いと、どこの店でも出せる文になる。
   if (usable.length > 0 && activeAccounts.length > 0 && !usable.some((p: any) => String(p.styleSamples || "").trim())) {
@@ -457,8 +479,8 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
       text:
         "次にやることが1つあります。\n\n" +
         "「ご案内先URL」がまだ登録されていません。毎日の投稿の誘導と、固定投稿のコメント欄に使う、お客様に来てほしい場所です。\n" +
-        "下の「ご案内先URLを登録」から、公式LINE・Web予約・ホームページのどれかのURLを送ってください（1分）。",
-      buttons: [{ label: "ご案内先URLを登録", data: "c=seturl" }],
+        "下の「ご案内先URLを登録」から、公式LINE・Web予約・ホームページのどれかのURLを送ってください（1分）。" + supportTail("link"),
+      buttons: [{ label: "ご案内先URLを登録", data: "c=seturl" }, ...supportBtn("link")],
     };
   }
 
@@ -472,8 +494,8 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
           "次にやることが1つあります。\n\n" +
           `@${bare.threadsUsername} のThreadsプロフィール（自己紹介）が空、または短いままです。\n` +
           "投稿を見た人が次に見る場所なので、ここが空だと来店につながりません。\n" +
-          "下の「プロフィールの提案」を押すと、名前と自己紹介の文章を貼るだけの形でお送りします（5分）。",
-        buttons: [{ label: "プロフィールの提案", data: `c=proadv&a=${Number(bare.id)}` }],
+          "下の「プロフィールの提案」を押すと、名前と自己紹介の文章を貼るだけの形でお送りします（5分）。" + supportTail("profile"),
+        buttons: [{ label: "プロフィールの提案", data: `c=proadv&a=${Number(bare.id)}` }, ...supportBtn("profile")],
       };
     }
   }
@@ -496,8 +518,8 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
         "次にやることが1つあります。\n\n" +
         "プロフィールに固定しておく「固定投稿」がまだ作られていません。\n" +
         "はじめて見に来た方が最初に読む投稿なので、集客の入口になります。\n\n" +
-        "下のボタンを押すと、このトークの中で作って、そのまま公開できます。",
-      buttons: [{ label: "固定投稿を作る", data: "m=makepin" }],
+        "下のボタンを押すと、このトークの中で作って、そのまま公開できます。" + supportTail("pinned"),
+      buttons: [{ label: "固定投稿を作る", data: "m=makepin" }, ...supportBtn("pinned")],
     };
   }
 
@@ -539,23 +561,10 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
           "次にやることが1つあります。\n\n" +
           "固定投稿はできていますが、まだThreadsでピン留めされていないようです。\n\n" +
           pinGuideText() +
-          "\n\n終わったら、下の「ピン留めしました」を押してください。",
-        buttons: [{ label: "ピン留めしました", data: "n=pinned" }],
+          "\n\n終わったら、下の「ピン留めしました」を押してください。" + supportTail("pinned"),
+        buttons: [{ label: "ピン留めしました", data: "n=pinned" }, ...supportBtn("pinned")],
       };
     }
-  }
-
-  // ⑧ プランでは自動投稿が使えるのに、OFFのまま。
-  const settings: any = await db.getAutoPostSettings(userId).catch(() => null);
-  if (maxPerDay > 0 && settings && settings.autoPostEnabled === false) {
-    return {
-      key: "auto_off",
-      text:
-        "次にやることが1つあります。\n\n" +
-        "毎日の自動投稿がOFFになっています。このままでは投稿が作られません。\n" +
-        "下のボタンで、いますぐ始められます。",
-      buttons: [{ label: "自動投稿を始める", data: "s=auto&v=on" }],
-    };
   }
 
   // ⑨ 公開前の確認がOFFのまま。最初のうちは中身を見てからのほうが安心。

@@ -30,15 +30,20 @@ function dismissedRecently(): boolean {
   }
 }
 
+import { useFirstStep } from '@/components/useFirstStep';
+
 export function LineFirstBanner() {
   const { t } = useLang();
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [hidden, setHidden] = useState<boolean>(() => dismissedRecently());
   const status = trpc.lineNotify.getStatus.useQuery(undefined, { enabled: isAuthenticated, retry: false });
+  const firstStep = useFirstStep();
 
   if (!isAuthenticated || hidden) return null;
   if (!status.data || status.data.linked) return null;
+  // ★登録直後はダッシュボードの1本道画面が同じ案内を出すので、ここでは出さない（二重表示の防止）
+  if (firstStep) return null;
   const addUrl: string | null = (status.data as any).addFriendUrl ?? null;
 
   const dismiss = () => {

@@ -60,6 +60,7 @@ import { UsageProgress } from '@/components/UsageProgress';
 import SetupWizard from '@/components/SetupWizard';
 import { DemoModeBanner } from '@/components/DemoModeBanner';
 import { SetupProgress } from '@/components/SetupProgress';
+import { OnboardingStart } from '@/components/OnboardingStart';
 // AIChatWidgetはmarkdownレンダラ（streamdown/shiki）を引き込み重いため遅延ロード
 const AIChatWidget = lazy(() =>
   import('@/components/AIChatWidget').then((m) => ({ default: m.AIChatWidget })),
@@ -175,23 +176,23 @@ export default function Dashboard() {
     else setLocation('/ai-generate');
   };
 
-  // ★登録後の最初の一歩はカウンセリング。プロジェクトが1つも無ければ自動誘導する。
-  //   一度だけ実行（ユーザーが手動で /dashboard に戻った時に毎回飛ばさないよう sessionStorage で抑制）。
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    if (projectCount === 0) {
-      const already = sessionStorage.getItem('counseling-redirected') === 'true';
-      if (!already) {
-        sessionStorage.setItem('counseling-redirected', 'true');
-        setLocation('/ai-counseling');
-      }
-    }
-  }, [isAuthenticated, projectCount, setLocation]);
-
   const { data: threadsAccounts } = trpc.threads.list.useQuery(
     undefined,
     { enabled: isAuthenticated }
   );
+  const { data: lineStatus } = trpc.lineNotify.getStatus.useQuery(undefined, { enabled: isAuthenticated });
+
+  // ★登録直後（お店の情報なし・Threads未連携・LINE未連携）は、この画面を「1本道」にする。
+  //   以前は /ai-counseling（Web版の20問）へ自動で飛ばしていたが、直近30日の新規17名のうち
+  //   5名がそこで止まっていた。LINEを友だち追加して6桁のコードを送るだけにし、あとはLINEで進める
+  //   （2026-09-08 三上様指示「ド素人でも自動投稿まで進める」）。
+  const firstStep =
+    isAuthenticated &&
+    projectCount === 0 &&
+    (threadsAccounts?.length ?? 0) === 0 &&
+    lineStatus !== undefined && !(lineStatus as any)?.linked;
+
+  // LINE連携済みでお店の情報がまだ無い方は、LINEの「はじめの設定」に任せる（Webの20問へは飛ばさない）。
 
   const { data: stats } = trpc.stats.getUserStats.useQuery(
     { accountId: selectedAccountId },
@@ -299,6 +300,10 @@ export default function Dashboard() {
       </span>
     );
   };
+
+  if (firstStep) {
+    return <OnboardingStart />;
+  }
 
   return (
     <div>
