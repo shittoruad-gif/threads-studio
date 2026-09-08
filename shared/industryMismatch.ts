@@ -131,12 +131,16 @@ export function detectIndustryMismatch(
 
   const hits = [...chipHits, ...termHits];
   const coreChipHits = chipHits.filter((h) => CORE_FIELDS.has(h.field));
+  // ★主要項目（お客さん像・お悩み・メニュー）に治療院の言葉が入っているのも、それだけでズレ。
+  //   コンサルタントのお客さん像「腰痛・肩こり」が、当たりを検出しながら「ズレでない」と
+  //   返っていて、「これでOK」で残り続ける経路になっていた（2026-09-08）。
+  const coreTermHits = termHits.filter((h) => CORE_FIELDS.has(h.field));
   const fieldsWithHits = new Set(hits.map((h) => h.field));
 
   // 業種が分からない（その他）ときは、別の業種の選択肢が2つ以上あるときだけ
   const mismatch = declaredKey === 'general'
     ? chipHits.length >= 2
-    : coreChipHits.length >= 1 || chipHits.length >= 2 || fieldsWithHits.size >= 2;
+    : coreChipHits.length >= 1 || coreTermHits.length >= 1 || chipHits.length >= 2 || fieldsWithHits.size >= 2;
 
   const summary = mismatch
     ? `業種は「${declared.raw || declared.label}」（${det.label}）ですが、` +

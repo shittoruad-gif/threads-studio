@@ -39,7 +39,10 @@ export async function saveCounselingAnswers(params: {
   answers: CounselingAnswersInput;
   /** お客様が書き換えた「一言でいうと」。無ければ回答から下書きする */
   oneLine?: string;
-}): Promise<{ ok: true; projectId: string } | { ok: false; reason: string }> {
+}): Promise<
+  | { ok: true; projectId: string; /** 業種と答えのズレ（あれば本人にも伝える） */ mismatchSummary?: string; mismatchFields?: string[] }
+  | { ok: false; reason: string }
+> {
   const a = normalize(params.answers);
   const trimmed = (s: string) => (s ?? "").trim();
   const deriveTitle = () => {
@@ -101,23 +104,41 @@ export async function saveCounselingAnswers(params: {
   await db.updateProject(params.projectId, patch);
   // ★業種と答えがずれていたら運営に知らせる（呉服店に整体の選択肢が入っていた・2026-09-06）。
   //   保存は止めない。通知が失敗しても保存には影響させない。
+  let mismatchSummary: string | undefined;
+  let mismatchFields: string[] = [];
   try {
     const { detectIndustryMismatch } = await import("../shared/industryMismatch");
     const check = detectIndustryMismatch(a.businessTypeRaw, a);
+    // ★同じ内容のズレを保存のたびに通知しない（2026-09-08 三上様「ひたすら来ています」）。
+    //   ズレの指紋（どの答えに何が入っているか）が前回通知と同じなら送らない。直れば指紋は空になる。
+    const crypto = await import("crypto");
+    const key = check.mismatch
+      ? crypto.createHash("sha1").update(check.hits.map((h) => `${h.field}:${h.term}`).sort().join("|")).digest("hex").slice(0, 40)
+      : null;
+    const prevKey = (project as any).industryMismatchNoticeKey ?? null;
+    if (key !== prevKey) {
+      await db.updateProject(params.projectId, { industryMismatchNoticeKey: key } as any).catch(() => undefined);
+    }
     if (check.mismatch) {
+      mismatchSummary = check.summary;
+      mismatchFields = Array.from(new Set(check.hits.map((h) => h.fieldLabel)));
       console.warn(`[Counseling] 業種と答えのズレ user=${params.userId} project=${params.projectId}: ${check.summary}`);
-      const user: any = await db.getUserById(params.userId).catch(() => null);
-      import("./supportNotify")
-        .then(({ notifyStaffOfIndustryMismatch }) => notifyStaffOfIndustryMismatch({
-          userId: params.userId,
-          userName: user?.name ?? null,
-          userEmail: user?.email ?? null,
-          storeName: storeName || null,
-          projectId: params.projectId,
-          summary: check.summary,
-          hits: check.hits,
-        }))
-        .catch((e) => console.error("[Counseling] 業種ズレの通知に失敗:", e));
+      if (key !== prevKey) {
+        const user: any = await db.getUserById(params.userId).catch(() => null);
+        import("./supportNotify")
+          .then(({ notifyStaffOfIndustryMismatch }) => notifyStaffOfIndustryMismatch({
+            userId: params.userId,
+            userName: user?.name ?? null,
+            userEmail: user?.email ?? null,
+            storeName: storeName || null,
+            projectId: params.projectId,
+            summary: check.summary,
+            hits: check.hits,
+          }))
+          .catch((e) => console.error("[Counseling] 業種ズレの通知に失敗:", e));
+      } else {
+        console.log(`[Counseling] 業種ズレは前回通知と同じ内容のため運営へは送らない project=${params.projectId}`);
+      }
     }
   } catch (e) {
     console.error("[Counseling] 業種ズレの判定に失敗:", e);
@@ -127,5 +148,5 @@ export async function saveCounselingAnswers(params: {
   import("./autoPostScheduler")
     .then(({ runAutoPostCatchUpForUser }) => runAutoPostCatchUpForUser(params.userId, "お店の情報の登録完了"))
     .catch(() => { /* 補充は付加機能。失敗しても保存には影響させない */ });
-  return { ok: true, projectId: params.projectId };
+  return { ok: true, projectId: params.projectId, mismatchSummary, mismatchFields };
 }

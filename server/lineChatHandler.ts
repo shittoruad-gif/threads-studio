@@ -13,6 +13,7 @@ import {
 import { COUNSELING_QUESTIONS } from "../shared/counseling";
 import { buildCounselingBrief, renderBriefText } from "../shared/counselingBrief";
 import { applyIndustryOverrides } from "../shared/industryProfiles";
+import { detectIndustryMismatch } from "../shared/industryMismatch";
 import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
@@ -639,7 +640,11 @@ async function offerCounselingResume(
 }
 
 function questionsFor(mode: "store" | "personal", answers?: Record<string, string>) {
-  if (mode === "personal") return applyPersonalOverrides(COUNSELING_QUESTIONS);
+  // ★個人モードでも、まず業種で候補を差し替えてから個人向けの言い回しを重ねる。
+  //   以前は個人モードだけ業種の差し替えを通しておらず、コンサルタントの方に
+  //   「40〜60代の男性」「繰り返す腰痛」「夜遅くまで営業」（治療院の既定チップ）が出て、
+  //   そのまま登録され、業種ズレの通知が運営に何度も届いていた（2026-09-08 佐々木様）。
+  if (mode === "personal") return applyPersonalOverrides(applyIndustryOverrides(COUNSELING_QUESTIONS, answers?.businessTypeRaw));
   // ★1問目で答えていただいた業種に合わせて、候補と例文を出し分ける。
   //   これがないと、カフェや教室のお客様に「骨盤矯正」「痛い施術ですか？」が出る。
   return applyIndustryOverrides(COUNSELING_QUESTIONS, answers?.businessTypeRaw);
@@ -684,11 +689,24 @@ function askQuestion(st: CounselingState): unknown[] {
         return c ? c.label : v.trim();
       }).filter(Boolean).join("、")
     : proposed;
+  // ★前回の答え（または連携先から取った値）が、1問目の業種と合わないときは「これでOK」を出さず、
+  //   その旨を伝えて新しい答えをもらう。出すと、治療院向けのチップがそのまま残り続ける（2026-09-08 佐々木様）。
+  //   全体のズレ判定は「2項目以上」などの条件があるので、ここでは その項目に当たりがあるか だけを見る。
+  let proposalMismatch = false;
+  if (showProposal && shownValue) {
+    try {
+      const biz = st.answers.businessTypeRaw || st.prefill?.businessTypeRaw || "";
+      const chk = detectIndustryMismatch(biz, { [q.id]: shownValue } as any);
+      proposalMismatch = chk.hits.some((h) => h.field === q.id);
+    } catch { proposalMismatch = false; }
+  }
   const proposal = showProposal
-    ? `\n\n${prefillProposalText(shownValue!, st.prefillSource || "連携アカウントのプロフィール", st.prefillKind || "profile")}`
+    ? (proposalMismatch
+        ? `\n\nいまの登録内容：\n「${shownValue}」\n\nこれは業種「${st.answers.businessTypeRaw || st.prefill?.businessTypeRaw || ""}」と合わない内容のため、そのままは使えません。上の候補をタップするか、新しい内容をそのまま送ってください。`
+        : `\n\n${prefillProposalText(shownValue!, st.prefillSource || "連携アカウントのプロフィール", st.prefillKind || "profile")}`)
     : "";
   const choices: string[] = [];
-  if (showProposal) choices.push("これでOK");
+  if (showProposal && !proposalMismatch) choices.push("これでOK");
   if (Array.isArray(q.choices)) for (const c of q.choices) choices.push(c.label);
   else if (Array.isArray(q.suggestions)) choices.push(...q.suggestions);
   if (canSkip) choices.push("スキップ");
@@ -825,7 +843,14 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
   const maxPerDay = Number(plan?.features?.maxAutoPostsPerDay ?? 0);
   const base = process.env.APP_BASE_URL || "https://threads-studio.com";
 
-  const head = "ありがとうございました。設定が終わりました。\n内容を直したくなったら、いつでも「お店の情報」から確認・修正できます。\n\n";
+  // ★業種と合わない答えがあれば、運営だけでなくご本人にもその場で伝える（2026-09-08 佐々木様）。
+  //   運営への通知だけでは、お客様側は気づかず、別の業種の投稿が作られ続ける。
+  const mismatchNote = (res as any).mismatchSummary
+    ? `【ご確認ください】${String((res as any).mismatchSummary)}\n` +
+      `このままだと別の業種の投稿が作られます。「はじめの設定」を押すと前回の答えが入った状態で開くので、` +
+      `合わない項目（${(((res as any).mismatchFields as string[]) || []).join("・") || "該当の項目"}）だけ直してください。\n\n`
+    : "";
+  const head = "ありがとうございました。設定が終わりました。\n内容を直したくなったら、いつでも「お店の情報」から確認・修正できます。\n\n" + mismatchNote;
 
   if (accounts.length === 0) {
     return [textWithQuick(

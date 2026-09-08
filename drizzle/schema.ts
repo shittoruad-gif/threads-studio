@@ -401,6 +401,8 @@ export const projects = mysqlTable("projects", {
   customerWords: text("customerWords"), // お客さんが実際に使った言葉ストック（最優先で投稿に使う）
   // 過去の良かった/バズった投稿（お手本）。文体（口調・絵文字・改行・1文の長さ）の模倣に使う。
   styleSamples: text("styleSamples"),
+  // 業種と登録内容のズレを最後に運営へ通知したときの指紋（同じ内容を何度も送らない。2026-09-08）
+  industryMismatchNoticeKey: varchar("industryMismatchNoticeKey", { length: 64 }),
   // AIカウンセリング結果（JSON）。事実ベース投稿のためにユーザから取得した
   // 「使ってよい実績」「実在の顧客エピソード」「絶対に書きたくないこと」など。
   // null の場合は未カウンセリング状態。フォーマット: shared/counseling.ts CounselingResult。
