@@ -3,12 +3,14 @@ import { useLang } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Download, X, Smartphone } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useFirstStep } from '@/components/useFirstStep';
 
 export function PWAInstallBanner() {
   const { t } = useLang();
   const { isInstallable, isInstalled, install } = usePWAInstall();
   const [dismissed, setDismissed] = useState(false);
   const [show, setShow] = useState(false);
+  const firstStep = useFirstStep();
 
   useEffect(() => {
     // Check if user previously dismissed the banner
@@ -42,6 +44,8 @@ export function PWAInstallBanner() {
     }
   };
 
+  // ★登録直後の1本道画面では出さない（友だち追加ボタンを隠していた。2026-09-09）
+  if (firstStep) return null;
   if (!show || dismissed || isInstalled) return null;
 
   return (
