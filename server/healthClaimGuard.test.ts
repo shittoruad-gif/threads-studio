@@ -52,3 +52,31 @@ describe("健康系の断定ガード（2026-09-07 追加）", () => {
     expect(v.text).toContain("痛くない施術を大切に");
   });
 });
+
+/**
+ * 2026-09-09 夜間整備。
+ * 廿日市の整体院で「15年の経験で、不妊の悩みから妊娠出産されたお客様がいます」が作られていた
+ * （たまたま公開前に止まっていた）。不妊・妊娠は医療の領域で、施術の結果として語ると
+ * 医療広告の規制にも、Threads側の健康の誤情報の判定にも当たる。
+ */
+describe("不妊・妊娠を施術の結果として語らせない（2026-09-09 追加）", () => {
+  it("実際に作られていた文を落とす", () => {
+    const v = checkHealthClaims(
+      "15年の経験で、不妊の悩みから妊娠出産されたお客様がいます。\n" +
+      "体のバランスを整え、妊娠しやすい体づくりをサポートします。\n\n" +
+      "気になることがあれば、お気軽にご相談ください。",
+    );
+    expect(v.ok).toBe(false);
+    expect(v.hits).toEqual(expect.arrayContaining(["不妊・妊娠の結果"]));
+    expect(v.text).not.toContain("不妊の悩みから妊娠出産");
+    expect(v.text).not.toContain("妊娠しやすい体づくり");
+    expect(v.text).toContain("お気軽にご相談ください");
+  });
+
+  it("産後ケアの案内そのものは残す（言葉狩りにしない）", () => {
+    const v = checkHealthClaims("産後の骨盤ケアを行っています。\n出産のあとの体の変化について、よくご相談をいただきます。");
+    expect(v.ok).toBe(true);
+    expect(v.text).toContain("産後の骨盤ケア");
+    expect(v.text).toContain("よくご相談をいただきます");
+  });
+});
