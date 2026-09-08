@@ -491,6 +491,10 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   //   （2026-09-08 三上様指示。以前は上書きしていたので、毎日直しても投稿は変わらなかった）
   originalContent: text("originalContent"),
   editedByUserAt: timestamp("editedByUserAt"),
+  // ★新規のお客様の最初の3本は運営が先に目を通す（2026-09-08）。1 かつ adminReviewAt が空なら公開しない
+  adminReviewRequired: tinyint("adminReviewRequired").default(0).notNull(),
+  adminReviewAt: timestamp("adminReviewAt"),
+  adminReviewBy: varchar("adminReviewBy", { length: 120 }),
   // 公開直後に自分の投稿へ返信する「@meta.ai ＋質問」。無ければ返信しない（shared/metaAiAsk.ts）
   metaAiAskText: text("metaAiAskText"),
   // 引用投稿：この投稿IDを引用して公開する（週1回の固定投稿の再露出。2026-09-07）

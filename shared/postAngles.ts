@@ -260,18 +260,30 @@ export function pickAngle(
   perf?: AnglePerformance,
   now: number = Date.now(),
   mode: string = 'store',
-  opts: { excludeOutcomeAngles?: boolean } = {},
+  opts: { excludeOutcomeAngles?: boolean; preferredAngles?: readonly string[] } = {},
 ): PostAngle {
   let pool = activeAngles(now, mode);
+  // ★はじめの設定で選んだ「多めに作りたい型」の切り口は、集中検証期間で候補が絞られていても必ず候補に入れる
+  //   （お客様の希望が実験より優先。2026-09-08）
+  const preferred = new Set((opts.preferredAngles ?? []).filter((id) => !(opts.excludeOutcomeAngles && OUTCOME_RISK_ANGLES.includes(id))));
+  for (const id of Array.from(preferred)) {
+    if (!pool.some((a) => a.id === id)) {
+      const a = ANGLE_BY_ID.get(id);
+      if (a) pool = [...pool, a];
+    }
+  }
   if (opts.excludeOutcomeAngles) {
     const safe = pool.filter((a) => !OUTCOME_RISK_ANGLES.includes(a.id));
     if (safe.length > 0) pool = safe;
   }
+  // 希望の切り口は4倍。集中検証期間（8候補）に1つだけ希望があっても 4/12＝約33% で出る
+  const PREFERRED_BOOST = 4;
   const weights = pool.map((a) => {
     const s = stats[a.id] ?? { good: 0, bad: 0 };
     // 好み（◯✕）× 結果（実測インプレッション）の掛け合わせ
     const preference = Math.max(0.1, 1 + 0.6 * s.good - 0.5 * s.bad);
-    return Math.max(0.05, preference * performanceMultiplier(a.id, perf));
+    const boost = preferred.has(a.id) ? PREFERRED_BOOST : 1;
+    return Math.max(0.05, preference * performanceMultiplier(a.id, perf) * boost);
   });
   const total = weights.reduce((sum, w) => sum + w, 0);
   let r = random() * total;

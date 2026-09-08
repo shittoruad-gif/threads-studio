@@ -1478,9 +1478,20 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const scheduledAt = post.scheduledAt && new Date(post.scheduledAt) > now ? undefined : now;
     await db.updateScheduledPost(Number(q.i), { status: "pending", ...(scheduledAt ? { scheduledAt } : {}) });
     const when = scheduledAt ? "まもなく" : `${fmtJst(post.scheduledAt)} に`;
-    const done = `承認しました。${when}公開されます。`;
-    // ★押し間違いに備えて取り消しを用意する（まだ公開前なら戻せる）
-    const undo = [{ label: "取り消す", data: `a=undo&i=${q.i}` }, ...MENU_HINT];
+    // ★新規の最初の3本は運営が目を通してから公開する
+    const heldByAdmin = Number((post as any).adminReviewRequired) === 1 && !(post as any).adminReviewAt;
+    const done = heldByAdmin
+      ? "承認ありがとうございます。最初の数回は運営でも内容を確認してから公開しています。確認が終わり次第、公開します。"
+      : `承認しました。${when}公開されます。`;
+    // ★押し間違いに備えて取り消しを用意する（まだ公開前なら戻せる）。
+    //   あわせて「先生らしいか」を1タップで聞く（◯✕は翌日以降の切り口と文の好みに効く。
+    //   アプリにはあったがLINEに無く、押されていなかった。2026-09-08）
+    const undo = [
+      { label: "◯ 自分らしい", data: `a=rate&i=${q.i}&v=good` },
+      { label: "✕ 違う", data: `a=rate&i=${q.i}&v=bad` },
+      { label: "取り消す", data: `a=undo&i=${q.i}` },
+      ...MENU_HINT,
+    ];
     if (q.o) {
       const next = await replyOneWaiting(user.id, done + "\n（間違えた場合は「取り消す」を押してください）");
       return next;
@@ -1576,11 +1587,28 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const note = alreadyPosted > 0 ? `\n${alreadyPosted}件はすでに公開されていたため戻せません（Threadsアプリから削除できます）。` : "";
     return [textWithQuick(`${reverted}件を確認待ちに戻しました。${note}`, [{ label: "今日の投稿", data: "m=posts" }, ...MENU_HINT])];
   }
+  // ★「◯ 自分らしい／✕ 違う」（承認の直後に聞く）。翌日以降の切り口と文の好みに効く
+  if (q.a === "rate" && q.i) {
+    const post = await ownedPost(user.id, Number(q.i));
+    if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
+    const good = q.v === "good";
+    await db.updateScheduledPost(Number(q.i), { clientRating: good ? "good" : "bad", ratedAt: new Date() } as any);
+    return [textWithQuick(
+      good
+        ? "ありがとうございます。この書き方を増やしていきます。"
+        : "ありがとうございます。この書き方は減らします。どこが違うか一言いただければ、なお寄せられます（「文章をコピーして自分で直す」で直していただいた文も、次から手本にします）。",
+      MENU_HINT,
+    )];
+  }
   if (q.a === "skip" && q.i) {
     const post = await ownedPost(user.id, Number(q.i));
     if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
-    await db.updateScheduledPost(Number(q.i), { status: "canceled" });
-    const done = "この投稿は見送りにしました。明日の投稿はまた新しく作ります。";
+    // ★見送りは「違う」という明確な信号なので、評価が無ければ ✕ として学習に使う（2026-09-08）
+    await db.updateScheduledPost(Number(q.i), {
+      status: "canceled",
+      ...(!(post as any).clientRating ? { clientRating: "bad", ratedAt: new Date() } : {}),
+    } as any);
+    const done = "この投稿は見送りにしました。明日の投稿はまた新しく作ります。\n（見送った投稿の書き方は、これから避けるようにします）";
     const undo = [{ label: "取り消す", data: `a=undo&i=${q.i}` }, ...MENU_HINT];
     if (q.o) return replyOneWaiting(user.id, done + "\n（間違えた場合は「取り消す」を押してください）");
     return [textWithQuick(done + "\n\n間違えて押した場合は「取り消す」で元に戻せます。", undo)];
@@ -1825,6 +1853,26 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   // ── 一部修正：AIを通さず、ご自身で直した全文にそのまま置き換える ──
   //   「作り直す」(AI再生成)・「書き直す」(AIに指示)との違いは、
   //   ご本人の言葉がそのまま最終文になること。微調整したいだけの方向け。
+  // ★理想の投稿（文体のお手本）を貼ってもらう。連携時に本人の過去投稿を自動で取り込むが、
+  //   投稿の無い新しいアカウントは空のままで、寄せる先が無かった（2026-09-08 比嘉先生）。
+  if (q.c === "ideal") {
+    const pjs: any[] = ((await db.getUserProjects(user.id)) || []).filter((p: any) => !String(p.id).startsWith("demo_"));
+    if (pjs.length === 0) return [textWithQuick("先に「はじめの設定」でお店の情報を登録してください。", [{ label: "はじめの設定", data: "m=setup" }, ...MENU_HINT])];
+    const pj = (q.p && pjs.find((p: any) => String(p.id) === String(q.p))) || (pjs.length === 1 ? pjs[0] : null);
+    if (!pj) {
+      return [textWithQuick("どのお店のお手本ですか？", pjs.slice(0, 6).map((p: any) => ({ label: String(p.storeName || p.businessType || p.id).slice(0, 20), data: `c=ideal&p=${p.id}` })))];
+    }
+    await db.setLineChatState(lineUserId, "ideal_posts", String(pj.id));
+    const have = String(pj.styleSamples || "").split(/\n---\n/).filter((s: string) => s.trim()).length;
+    return [textWithQuick(
+      "「こういう投稿を出したい」という例を、1〜3本そのまま貼って送ってください。\n" +
+      "ご自身の過去の投稿でも、いいなと思った他の方の投稿でも構いません（内容ではなく書き方を手本にします）。\n" +
+      "複数ある場合は、空行で区切ってください。\n" +
+      (have > 0 ? `（いま ${have} 本登録されています。新しいものを優先して最大8本まで残します）\n` : "") +
+      "やめる場合は「やめる」と送ってください。",
+      [{ label: "やめる", data: "m=cancel" }],
+    )];
+  }
   if (q.a === "selfedit" && q.i) {
     const post = await ownedPost(user.id, Number(q.i));
     if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
@@ -2103,7 +2151,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   // ★入力待ちの途中で「やめる」と打たれたら、その言葉を内容として使わずに抜ける。
   //   （NGワード待ち・書き直し待ちでこれが無く、「やめる」がそのまま
   //     NGワードや書き直し指示として使われてしまっていた）
-  if ((st?.state === "ngword" || st?.state === "rewrite_free" || st?.state === "self_edit" || st?.state === "set_line_url" || st?.state === "set_call_focus") &&
+  if ((st?.state === "ngword" || st?.state === "rewrite_free" || st?.state === "self_edit" || st?.state === "set_line_url" || st?.state === "set_call_focus" || st?.state === "ideal_posts") &&
       /^(やめる|中止|キャンセル|戻る|終わり|終了)$/.test(text.trim())) {
     await db.clearLineChatState(lineUserId);
     return [textWithQuick("わかりました。中止しました。", MENU_HINT)];
@@ -2154,6 +2202,23 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     )];
   }
   // ── 一部修正：送られてきた全文で、そのまま置き換える ──
+  // ── 理想の投稿（文体のお手本）の受け取り ──
+  if (st?.state === "ideal_posts" && st.payload) {
+    const projectId = String(st.payload);
+    const pieces = text.split(/\n\s*\n|\n-{3,}\n/).map((s) => s.trim()).filter((s) => Array.from(s).length >= 20);
+    if (pieces.length === 0) {
+      return [{ type: "text", text: "短すぎるようです。投稿の文章をそのまま貼って送ってください（20文字以上）。\nやめる場合は「やめる」と送ってください。" }];
+    }
+    await db.clearLineChatState(lineUserId);
+    const pj: any = await db.getProjectById(projectId);
+    if (!pj || pj.userId !== user.id) return [textWithQuick("お店の情報が見つかりませんでした。", MENU_HINT)];
+    const total = await db.appendStyleSamples(projectId, pieces.slice(0, 5));
+    return [textWithQuick(
+      `${pieces.slice(0, 5).length}本をお手本として登録しました（合計 ${total} 本）。\n` +
+      "明日の投稿から、この書き方（言葉づかい・長さ・改行の癖）に寄せて作ります。内容は登録いただいたお店の情報だけで書きます。",
+      [{ label: "もう1本足す", data: `c=ideal&p=${projectId}` }, ...MENU_HINT],
+    )];
+  }
   if (st?.state === "self_edit" && st.payload) {
     let postId = 0, one = false;
     try { const p = JSON.parse(st.payload); postId = Number(p.i); one = !!p.o; } catch { postId = Number(st.payload); }

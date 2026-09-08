@@ -171,6 +171,18 @@ export async function getSetupSteps(userId: number): Promise<SetupStep[]> {
       actionLabel: "連携する",
     },
   ];
+  // ★文体のお手本（本人の理想の投稿）。連携時に本人の過去投稿を自動で取り込むが、
+  //   投稿の無い新しいアカウントは空のままで、AIが寄せる先が無い（2026-09-08 三上様指示）。
+  if (active.length > 0 && usable.length > 0) {
+    steps.push({
+      id: "no_style_samples",
+      label: "理想の投稿（お手本）を登録",
+      done: usable.some((p: any) => String(p.styleSamples || "").trim().length > 0),
+      path: "/ai-generate",
+      actionLabel: "登録する",
+      important: true,
+    });
+  }
   // ★ご案内先URL（毎日の投稿の誘導と固定投稿のコメント欄に使う）。2026-09-06 三上様指示で工程に追加
   if (usable.length > 0) {
     steps.push({
@@ -420,6 +432,20 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
         "連携中のアカウントに、どのお店の情報を使うかが決まっていません。\n" +
         "下の「はじめの設定」からアカウントを選ぶと、そのアカウント専用の内容で投稿されるようになります。",
       buttons: [{ label: "はじめの設定", data: "m=setup" }],
+    };
+  }
+
+  // ④0 文体のお手本が空。連携時に本人の過去投稿が取れなかった（投稿の無い新しいアカウント）ので、
+  //    「こういう投稿を出したい」という例を貼ってもらう。これが無いと、どこの店でも出せる文になる。
+  if (usable.length > 0 && activeAccounts.length > 0 && !usable.some((p: any) => String(p.styleSamples || "").trim())) {
+    return {
+      key: "no_style_samples",
+      text:
+        "次にやることが1つあります。\n\n" +
+        "「こういう投稿を出したい」という例が、まだ登録されていません。\n" +
+        "ご自身の過去の投稿でも、いいなと思った他の方の投稿でも構いません。1〜3本貼っていただくと、毎日の投稿の言葉づかいや長さをそこに寄せて作ります（2分）。\n" +
+        "下の「理想の投稿を貼る」を押してから、文章をそのまま送ってください。",
+      buttons: [{ label: "理想の投稿を貼る", data: `c=ideal&p=${usable[0].id}` }],
     };
   }
 

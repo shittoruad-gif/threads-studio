@@ -2088,7 +2088,24 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           try {
             const accts: any[] = await db.getThreadsAccountsByUserId(ctx.user.id);
             const a = accts.find((x: any) => String(x.threadsUsername) === String(profile.username));
-            if (a) { const { fillStyleSamplesForAccount } = await import('./styleSamplesFromThreads'); const r = await fillStyleSamplesForAccount(Number(a.id)); console.log(`[StyleSamples] connect user=${ctx.user.id} @${profile.username}:`, JSON.stringify(r)); }
+            if (a) {
+              const { fillStyleSamplesForAccount } = await import('./styleSamplesFromThreads');
+              const r = await fillStyleSamplesForAccount(Number(a.id));
+              console.log(`[StyleSamples] connect user=${ctx.user.id} @${profile.username}:`, JSON.stringify(r));
+              // ★過去投稿が無くて取り込めなかった方には、理想の投稿を貼ってもらう（2026-09-08 三上様指示）
+              if (!r.filled && r.reason !== 'already set (manual)' && r.projectId) {
+                try {
+                  const lineIds = await db.getLineUserIdsForUser(ctx.user.id);
+                  const { pushMessages } = await import('./lineNotify');
+                  const msg = {
+                    type: 'text',
+                    text: 'Threadsの過去の投稿が少ないため、文章の手本を取り込めませんでした。\n「こういう投稿を出したい」という例を1〜3本貼っていただくと、毎日の投稿の言葉づかいや長さをそこに寄せて作ります。ご自身の投稿でも、いいなと思った他の方の投稿でも構いません。',
+                    quickReply: { items: [{ type: 'action', action: { type: 'postback', label: '理想の投稿を貼る', data: `c=ideal&p=${r.projectId}`, displayText: '理想の投稿を貼る' } }] },
+                  };
+                  for (const to of lineIds) await pushMessages(to, [msg]);
+                } catch (e) { console.warn('[StyleSamples] ask-ideal push failed:', (e as Error)?.message); }
+              }
+            }
           } catch (e) { console.warn('[StyleSamples] connect fill failed:', (e as Error)?.message); }
         })();
 
@@ -2780,7 +2797,12 @@ ${input.commentText}
         if (post.status !== 'awaiting_approval' && post.status !== 'pending') {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'この投稿は編集できません。' });
         }
-        await db.updateScheduledPost(input.postId, { postContent: input.postContent });
+        // ★「直す前」を残して、翌日以降の投稿に活かす（LINEの「文章をコピーして自分で直す」と同じ）
+        await db.updateScheduledPost(input.postId, {
+          postContent: input.postContent,
+          ...((post as any).originalContent ? {} : { originalContent: post.postContent || null }),
+          editedByUserAt: new Date(),
+        } as any);
         return { success: true };
       }),
 
@@ -3739,6 +3761,62 @@ ${input.commentText}
               needsHuman: 0,
             }
           : { handledAt: null, handledBy: null });
+        return { success: true } as const;
+      }),
+
+    /**
+     * 新規のお客様の最初の3本（運営の確認待ち）。2026-09-08 三上様指示
+     * 「最初の1週間は人が見る」。お客様へ承認カードを送る前に、運営がここで目を通す。
+     */
+    listAdminReviewPosts: adminProcedure.query(async () => db.listAdminReviewPosts()),
+
+    /** 運営が確認した → お客様へ承認カードを送る（承認済みなら予定どおり公開される） */
+    releaseAdminReviewPost: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const post: any = await db.getScheduledPostById(input.id);
+        if (!post) throw new TRPCError({ code: 'NOT_FOUND', message: '投稿が見つかりません' });
+        await db.updateScheduledPost(input.id, {
+          adminReviewAt: new Date(),
+          adminReviewBy: String(ctx.user.name || ctx.user.email || '運営').slice(0, 120),
+        } as any);
+        let notified = 0;
+        if (post.status === 'awaiting_approval') {
+          try {
+            const lineIds = await db.getLineUserIdsForUser(post.userId);
+            const { sendApprovalPush } = await import('./lineNotify');
+            const { createApprovalToken } = await import('./approvalToken');
+            const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
+            const posts = [{ id: post.id, postContent: post.postContent, scheduledAt: post.scheduledAt }];
+            const urlFor = (postId: number) => `${base}/api/post-approval?token=${createApprovalToken(postId, post.userId, 'approve')}`;
+            for (const to of lineIds) { if (await sendApprovalPush(to, posts, urlFor)) notified++; }
+            if (notified === 0) {
+              const owner = await db.getUserById(post.userId);
+              if (owner?.email) {
+                const { sendApprovalDigestEmail } = await import('./approvalEmail');
+                await sendApprovalDigestEmail({ to: owner.email, userId: post.userId, posts });
+                notified = 1;
+              }
+            }
+          } catch (e) { console.warn('[AdminReview] approval push failed:', (e as Error)?.message); }
+        }
+        return { success: true, notified } as const;
+      }),
+
+    /** 運営が取り下げる（翌朝また作られる） */
+    cancelAdminReviewPost: adminProcedure
+      .input(z.object({ id: z.number(), reason: z.string().max(300).optional() }))
+      .mutation(async ({ input, ctx }) => {
+        const post: any = await db.getScheduledPostById(input.id);
+        if (!post) throw new TRPCError({ code: 'NOT_FOUND', message: '投稿が見つかりません' });
+        await db.updateScheduledPost(input.id, {
+          status: 'canceled',
+          adminReviewAt: new Date(),
+          adminReviewBy: String(ctx.user.name || ctx.user.email || '運営').slice(0, 120),
+          errorMessage: `運営が確認して取り下げ${input.reason ? `：${input.reason}` : ''}`,
+          // 取り下げは「違う」の信号として学習に使う
+          ...(!post.clientRating ? { clientRating: 'bad', ratedAt: new Date() } : {}),
+        } as any);
         return { success: true } as const;
       }),
 

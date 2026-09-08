@@ -176,6 +176,8 @@ const PENDING_TEXT_INPUT: Record<string, (q: Record<string, string>) => boolean>
   pending_url: (q) => q.c === "urlk",
   // 実績として登録する文章の預かり。登録ボタン以外を押されたら捨てる
   pending_material: (q) => q.c === "addproof",
+  // 理想の投稿（文体のお手本）の入力待ち
+  ideal_posts: (q) => q.c === "ideal",
 };
 
 /**

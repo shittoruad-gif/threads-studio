@@ -33,12 +33,24 @@ const SCHEMA = {
 
 export async function reviewNaturalness(
   text: string,
-  ctx: { brandVoice?: string | null; businessType?: string | null; storeName?: string | null },
+  ctx: {
+    brandVoice?: string | null; businessType?: string | null; storeName?: string | null;
+    /** 店主の理想の投稿（本人の過去投稿、または本人が貼った例）。あれば「これに近いか」で採点する */
+    styleSamples?: string | null;
+    /** この店を指す言葉（地名・店名・実績など）。らしさの手がかり */
+    identityHint?: string | null;
+  },
 ): Promise<NaturalnessReview | null> {
   const voice = String(ctx.brandVoice || "").trim();
+  const samples = String(ctx.styleSamples || "").split(/\n---\n/).map((s) => s.trim()).filter(Boolean).slice(0, 2)
+    .map((s) => Array.from(s).slice(0, 300).join(""));
+  const sampleBlock = samples.length
+    ? `\n【店主の理想の投稿（お手本）】\n以下は店主本人が「こういう投稿を出したい」と示した実物です。採点は「この店主が書いたと言われて違和感がないか」を最優先にしてください。\n---\n${samples.join("\n---\n")}\n---\n`
+    : "";
   const prompt = `あなたは日本語の編集者です。次の文は、${ctx.businessType || "お店"}${ctx.storeName ? `「${ctx.storeName}」` : ""}の店主がThreadsに投稿する下書きです。
-${voice ? `店主が登録した口調：「${voice}」\n` : ""}
-店主本人が自分のスマホで打った文に見えるかを、1〜5で採点してください。
+${voice ? `店主が登録した口調：「${voice}」\n` : ""}${ctx.identityHint ? `この店を指す言葉：${ctx.identityHint}\n` : ""}${sampleBlock}
+店主本人が自分のスマホで打った文に見えるか、そしてこの店主らしいかを、1〜5で採点してください。
+どこの${ctx.businessType || "お店"}でも出せる一般的な文は、文法が正しくても3以下です。
 
 【3以下（出せない）にする例】
 - 名詞や一語で切る問いかけ（「〜など、心当たり？」）

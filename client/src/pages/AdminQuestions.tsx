@@ -32,6 +32,16 @@ export default function AdminQuestions() {
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.admin.listQuestions.useQuery({ needsHumanOnly });
   const { data: stuck } = trpc.admin.listStuckUsers.useQuery();
+  // ★新規のお客様の最初の3本は、お客様へ送る前にここで目を通す（2026-09-08）
+  const { data: reviewPosts } = trpc.admin.listAdminReviewPosts.useQuery(undefined, { refetchInterval: 60_000 });
+  const releasePost = trpc.admin.releaseAdminReviewPost.useMutation({
+    onSuccess: (r) => { toast.success(r.notified > 0 ? 'お客様へ承認カードを送りました' : '確認済みにしました'); utils.admin.listAdminReviewPosts.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const cancelPost = trpc.admin.cancelAdminReviewPost.useMutation({
+    onSuccess: () => { toast.success('取り下げました（翌朝また作られます）'); utils.admin.listAdminReviewPosts.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const reply = trpc.admin.replyToQuestion.useMutation({
     onSuccess: () => {
@@ -152,6 +162,50 @@ export default function AdminQuestions() {
           )}
           <p className="text-xs text-muted-foreground mt-3">
             同じ内容を、毎朝8時30分に公式LINEでもお伝えしています（同じ案内は3日おき・お客様が止めることもできます）。
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* 新規のお客様の最初の投稿。お客様へ送る前に運営が読む。 */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">新規のお客様の最初の投稿（送る前に確認）</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!reviewPosts ? (
+            <p className="text-sm text-muted-foreground">確認中です。</p>
+          ) : reviewPosts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">確認待ちはありません。</p>
+          ) : (
+            <div className="space-y-3">
+              {reviewPosts.map((p: any) => (
+                <div key={p.id} className="rounded-lg border p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-foreground break-words">{p.userName || '（お名前未設定）'}{p.threadsUsername ? `　@${p.threadsUsername}` : ''}</p>
+                      <p className="text-xs text-muted-foreground break-all">{p.userEmail}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{p.angle || '-'}</Badge>
+                      <span className="text-xs text-muted-foreground">{fmt(p.scheduledAt)} 予定</span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-foreground whitespace-pre-wrap break-words">{p.postContent}</p>
+                  <div className="flex gap-2 flex-wrap pt-1">
+                    <Button size="sm" onClick={() => releasePost.mutate({ id: p.id })} disabled={releasePost.isPending || cancelPost.isPending}>
+                      <Send className="w-4 h-4 mr-1.5" />
+                      お客様へ送る
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => cancelPost.mutate({ id: p.id })} disabled={releasePost.isPending || cancelPost.isPending}>
+                      取り下げる
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground mt-3">
+            連携してから公開3本目までは、ここで確認するまでお客様に届きません。「お客様へ送る」で承認カードが届きます。取り下げは「違う」として学習に使われ、翌朝また作られます。
           </p>
         </CardContent>
       </Card>

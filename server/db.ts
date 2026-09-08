@@ -3561,6 +3561,49 @@ export async function getUserEditedPosts(userId: number, limit = 5): Promise<Arr
   }));
 }
 
+/** そのアカウントで実際に公開された自動投稿の数（最初の3本は運営が先に確認する、の判定に使う） */
+export async function countAccountPublishedAutoPosts(accountId: number): Promise<number> {
+  const database = await getDb();
+  if (!database) return 0;
+  const rows: any = await database.execute(sql`
+    SELECT COUNT(*) AS n FROM scheduledPosts
+    WHERE threadsAccountId = ${accountId} AND source = 'auto' AND status = 'posted' AND replyToThreadsId IS NULL`);
+  return Number((rows as any)[0]?.[0]?.n ?? 0);
+}
+
+/** 運営の確認待ちの投稿（新規のお客様の最初の3本）。お名前つき */
+export async function listAdminReviewPosts(): Promise<any[]> {
+  const database = await getDb();
+  if (!database) return [];
+  const rows: any = await database.execute(sql`
+    SELECT sp.id, sp.userId, sp.threadsAccountId, sp.angle, sp.status, sp.scheduledAt, sp.postContent, sp.createdAt,
+           u.name AS userName, u.email AS userEmail, ta.threadsUsername
+    FROM scheduledPosts sp
+    LEFT JOIN users u ON u.id = sp.userId
+    LEFT JOIN threadsAccounts ta ON ta.id = sp.threadsAccountId
+    WHERE sp.adminReviewRequired = 1 AND sp.adminReviewAt IS NULL
+      AND sp.status IN ('awaiting_approval','pending')
+    ORDER BY sp.scheduledAt ASC LIMIT 50`);
+  return ((rows as any)[0] ?? []) as any[];
+}
+
+/**
+ * お客様が貼った「理想の投稿」を文体のお手本に足す（新しいものを優先し、最大8本）。
+ * 連携時に本人の過去投稿が取れなかった方（投稿が無い新しいアカウント）向け。
+ */
+export async function appendStyleSamples(projectId: string, samples: string[]): Promise<number> {
+  const database = await getDb();
+  if (!database) return 0;
+  const [pj]: any[] = await database.select({ styleSamples: projects.styleSamples }).from(projects).where(eq(projects.id, projectId)).limit(1);
+  const existing = String(pj?.styleSamples || "").split(/\n---\n/).map((s) => s.trim()).filter(Boolean);
+  const fresh = samples.map((s) => s.trim()).filter((s) => Array.from(s).length >= 20);
+  const merged: string[] = [];
+  for (const s of [...fresh, ...existing]) if (!merged.includes(s)) merged.push(s);
+  const kept = merged.slice(0, 8);
+  await database.update(projects).set({ styleSamples: kept.join("\n---\n") } as any).where(eq(projects.id, projectId));
+  return kept.length;
+}
+
 export async function getLineUserIdsForUser(userId: number): Promise<string[]> {
   const links = await listLineLinks(userId);
   return links.map((l) => l.lineUserId);

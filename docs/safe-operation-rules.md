@@ -47,3 +47,9 @@
 - しきい値（5日/10日・1件/2件・補填＋1件・30日で契約どおり）を変えるときは、この文書 → shared/accountRamp.ts → 説明書 の順で同時に直す
 - 新しい業種を扱うときは healthClaimGuard の業種判定と言い換え表を先に足す
 - 本番反映は夜間整備でまとめて行い、日中は反映しない（例外は実害が出続けているときだけ）
+
+## 追記 2026-09-08：新規アカウントの最初の3本は運営が先に読む／この店らしさの必須条件
+
+- 連携してから公開3本目までの自動投稿は `adminReviewRequired=1` で作られ、運営が管理画面（お問い合わせ）の「新規のお客様の最初の投稿」で「お客様へ送る」を押すまで、承認カードを送らず、承認されても公開しない（`server/scheduledPostExecutor.ts`）。
+- 健康系のお店の連携10日未満は、結果を語る切り口（変化の物語・お客様の声）を候補から外す（`shared/postAngles.ts` OUTCOME_RISK_ANGLES）。希望の型「実績・体験談型」は「数字・実績」だけに寄せる。
+- 生成後の検査は、登録口調との矛盾（`shared/voiceGuard.ts`）→ この店らしさ（`shared/identityGuard.ts`：地名・店名・実績の数字のどれか1つ必須）→ AI採点（`server/naturalnessReview.ts` 4/5未満は不可）→ NGワード → 健康表現（`shared/healthClaimGuard.ts` 文ごと落とす・2か所以上は不可）→ 登録に無い数字（`shared/fabricatedNumberGuard.ts`）の順。落ちたら理由を渡して最大3回作り直す。

@@ -428,7 +428,16 @@ async function generateAutoPost(
         excludeOutcomeAngles = accountAgeDays(acct?.createdAt) < RAMP_DAYS_2;
       }
     } catch { /* 判定できなければ従来どおり */ }
-    angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles });
+    // ★はじめの設定「どんな投稿を多めに作りましょうか」を切り口の重みに反映（2026-09-08）。
+    //   登録してもらっているのに、これまで切り口選びに一切使われていなかった。
+    let preferredAngles: string[] = [];
+    try {
+      const { preferredAngleIds } = await import('../shared/preferredAngles');
+      const cr = project.counselingResult ? JSON.parse(project.counselingResult) : null;
+      preferredAngles = preferredAngleIds(cr?.preferredTypes ?? cr?.rawAnswers?.preferredTypesRaw ?? null, { excludeOutcomeAngles });
+    } catch { preferredAngles = []; }
+    angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles });
+    if (preferredAngles.length) console.log(`[AutoPost] 希望の型を優先 userId=${userId} ${preferredAngles.join('/')} → ${angle.id}`);
     if (excludeOutcomeAngles) console.log(`[AutoPost] 健康系の新規アカウントのため結果を語る切り口を除外 userId=${userId}`);
     // ◯✕が付いた実例をプロンプトに注入して「このお店の好み」を学習させる
     const [liked, disliked] = await Promise.all([
@@ -663,11 +672,28 @@ async function generateAutoPost(
       }
     } catch (e) { console.warn(`[AutoPost] voiceGuard skipped: ${(e as Error)?.message}`); }
 
+    // ★この店らしさ（shared/identityGuard.ts）。地名・店名・実績の数字・出身地など、
+    //   「この店を指す言葉」が1つも無い投稿は、安全で自然でも「どこの店でも出せる文」なので作り直す。
+    let identityHint = '';
+    try {
+      const { checkIdentity, identityTokens } = await import('../shared/identityGuard');
+      identityHint = identityTokens(project).slice(0, 6).join('／');
+      const idv = checkIdentity(naturalMain, project);
+      if (!idv.ok) {
+        console.warn(`[AutoPost] identityGuard: この店を指す言葉が無い → 作り直し userId=${userId} projectId=${project.id}`);
+        lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex), idv.hint);
+        return false;
+      }
+    } catch (e) { console.warn(`[AutoPost] identityGuard skipped: ${(e as Error)?.message}`); }
+
     // ★自然さの採点（server/naturalnessReview.ts）。正規表現で取れない不自然さの最終関門。
     //   基準未満は公開せず作り直す。採点できないとき（API障害）は止めない。
     try {
       const { reviewNaturalness, NATURALNESS_MIN_SCORE } = await import('./naturalnessReview');
-      const rv = await reviewNaturalness(naturalMain, { brandVoice, businessType: project.businessType, storeName: (project as any).storeName });
+      const rv = await reviewNaturalness(naturalMain, {
+        brandVoice, businessType: project.businessType, storeName: (project as any).storeName,
+        styleSamples: (project as any).styleSamples || null, identityHint: identityHint || null,
+      });
       if (rv && rv.score < NATURALNESS_MIN_SCORE) {
         console.warn(`[AutoPost] naturalnessReview: ${rv.score}/5 ${rv.problems.join(' / ')} → 作り直し userId=${userId} projectId=${project.id}`);
         lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex),
@@ -762,6 +788,11 @@ async function generateAutoPost(
     // （「Meta AIに聞く」セルフ返信は 2026-09-06 に「呼びかけ投稿」方式へ変更。下の scheduleMetaAiCallPost）
     const metaAiAskText: string | null = null;
 
+    // ★新規のお客様の最初の3本は、お客様に届く前に運営が目を通す（2026-09-08 三上様指示）。
+    //   adminReviewRequired=1 のあいだは承認カードを送らず、承認されても公開しない（運営が「送る」を押すまで）。
+    let adminReviewRequired = false;
+    try { adminReviewRequired = (await db.countAccountPublishedAutoPosts(threadsAccountId)) < 3; } catch { adminReviewRequired = false; }
+
     await db.createScheduledPost({
       userId,
       projectId: project.id,
@@ -770,6 +801,7 @@ async function generateAutoPost(
       postContent: fullContent,
       // ★承認モードON時は awaiting_approval で作成し、ユーザーが承認するまで投稿しない
       status: requireApproval ? 'awaiting_approval' : 'pending',
+      adminReviewRequired: adminReviewRequired ? 1 : 0,
       source: 'auto',
       // 使った切り口を記録（◯✕評価と組み合わせて好み学習に使う）
       angle: angle?.id ?? null,
@@ -777,6 +809,17 @@ async function generateAutoPost(
       postLength: effectiveLength,
       metaAiAskText,
     } as any);
+
+    if (adminReviewRequired) {
+      try {
+        const { notifyOwner } = await import('./_core/notification');
+        const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
+        await notifyOwner({
+          title: '新規のお客様の最初の投稿（運営の確認待ち）',
+          content: `${(project as any).storeName || ''}（user ${userId}）の投稿を作りました。お客様へ送る前に確認してください。\n${base}/admin/questions\n\n${fullContent}`,
+        });
+      } catch (e) { console.warn(`[AutoPost] 運営への確認依頼に失敗: ${(e as Error)?.message}`); }
+    }
 
     // ★#3 自動投稿は手動AI生成の月間枠(maxAiGenerations)を消費しない。
     //   料金表記「AI投稿生成 ◯回/月」は手動生成の回数を指す。自動投稿でこれを
@@ -1021,7 +1064,9 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         //   メール内で本文を読み、そのまま承認できる（ログイン不要）。
         if (anyApproval) {
           try {
-            const fresh = await db.getRecentAwaitingApprovalPosts(user.id, 30);
+            // ★運営の確認待ち（新規の最初の3本）は、運営が「送る」を押すまでお客様に案内しない
+            const fresh = (await db.getRecentAwaitingApprovalPosts(user.id, 30))
+              .filter((p: any) => !(Number(p.adminReviewRequired) === 1 && !p.adminReviewAt));
             const owner = fresh.length > 0 ? await db.getUserById(user.id) : null;
             if (fresh.length > 0 && owner?.email) {
               const { sendApprovalDigestEmail } = await import('./approvalEmail');
