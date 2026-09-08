@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Loader2, MessageCircle, Copy } from 'lucide-react';
@@ -17,10 +18,14 @@ export function OnboardingStart() {
   const { data: line } = trpc.lineNotify.getStatus.useQuery();
   const createCode = trpc.lineNotify.createLinkCode.useMutation({ onError: (e) => toast.error(e.message) });
   const [code, setCode] = useState<string | null>(null);
+  // ★コードは1回だけ発行する。2回発行すると、画面の数字とサーバーの数字が食い違うことがある
+  //   （後から発行した方が有効になるため）。React の二重実行にも耐えるよう ref で守る。
+  const requested = useRef(false);
 
   useEffect(() => {
-    if (!line?.available || code || createCode.isPending) return;
-    createCode.mutateAsync().then((r: any) => setCode(String(r?.code ?? ''))).catch(() => undefined);
+    if (!line?.available || requested.current) return;
+    requested.current = true;
+    createCode.mutateAsync().then((r: any) => setCode(String(r?.code ?? ''))).catch(() => { requested.current = false; });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [line?.available]);
 
@@ -83,6 +88,11 @@ export function OnboardingStart() {
 
         <p className="text-xs text-muted-foreground border-t pt-4">
           うまくいかないときは、公式LINEのトークに「連携」と送ってください。案内が届きます。
+        </p>
+        <p className="text-xs text-muted-foreground">
+          LINEを使わずに、この画面で入力したい方は
+          <Link href="/ai-counseling" className="text-primary underline ml-1">こちら</Link>
+          （20問・10〜15分）。
         </p>
       </div>
     </div>

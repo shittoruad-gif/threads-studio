@@ -612,7 +612,11 @@ async function generateAutoPost(
     //   事実の追加は禁止プロンプトで担保（削るのみ可）。CTAは定型で良いので対象外。
     //   リライト後にNGワードガードを再適用する（言い換えで規制語が混入した場合の保険）。
     const beforeNaturalize = stripRawUrls(result.mainPost);
-    const brandVoice: string | null = (counselingResult?.brandVoice ?? (stylePreference as any)?.voice ?? null) as string | null;
+    // ★口調が未登録（「まず5問」で始めた方は「きょうの1問」で聞くまで空）のあいだは、
+    //   お店の発信として無難な「丁寧で落ち着いた口調」を既定にする。空のままだと
+    //   砕けた締め（〜ますよ😊）の検査が効かず、初日から不自然な投稿が出うる（2026-09-09）。
+    const registeredVoice = (counselingResult?.brandVoice ?? (stylePreference as any)?.voice ?? null) as string | null;
+    const brandVoice: string | null = String(registeredVoice || '').trim() ? registeredVoice : (personal ? null : '丁寧で落ち着いた口調（未登録のため既定）');
     let naturalMain = await naturalizeContent(beforeNaturalize, personal, brandVoice);
 
     // ★日本語品質ガード（shared/jpQualityGuard.ts）。

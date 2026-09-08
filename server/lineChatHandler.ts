@@ -762,6 +762,19 @@ function reviewCounseling(st: CounselingState): unknown[] {
   });
   // ★まず「AIはこう理解しました」の要旨をお見せする（2026-09-04 三上様指示）。
   //   20問の答えをそのまま並べても、何がどう使われるのかが伝わらなかった。
+  //   「まず5問」のときは要旨に「（未記入）」が並んで不安にさせるので、5問の答えだけを見せる。
+  if (st.quick) {
+    return [
+      textWithQuick(
+        "5問ありがとうございました。入力いただいた内容です。\n\n" + lines.join("\n") +
+        "\n\nこの内容でよろしければ「登録する」を押してください。\n直したい項目がある場合は「直す」を押して、番号を送ってください。",
+        [
+          { label: "この内容で登録する", data: "c=save" },
+          { label: "直す", data: "c=edit" },
+        ],
+      ),
+    ];
+  }
   const brief = buildCounselingBrief(st.answers as any, st.oneLine);
   return [
     { type: "text", text: renderBriefText(brief) + "\n\nこの理解で合っていれば、そのまま登録できます。" },
@@ -898,8 +911,14 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
       `合わない項目（${(((res as any).mismatchFields as string[]) || []).join("・") || "該当の項目"}）だけ直してください。\n\n`
     : "";
   // ★「まず5問」で終えた方には、残りを1日1問で足すことを添える
+  //   ★「いま作ります」はThreadsがつながっていて自動投稿のあるプランのときだけ言う。
+  //     つながっていない方に言うと嘘になる（下の分岐で連携をご案内する）。
+  const canMakeNow = accounts.length > 0 && maxPerDay > 0;
   const quickNote = st.quick
-    ? "最初の投稿は、いまこの場で作ってお届けします（少しお待ちください）。\n残りの質問は、投稿が動き始めてから「きょうの1問」として少しずつお聞きします。すぐ続けたい方は、メニューの「設定を1問足す」からどうぞ。\n\n"
+    ? (canMakeNow
+        ? "最初の投稿は、いまこの場で作ってお届けします（少しお待ちください）。\n"
+        : "Threadsがつながると、その場で最初の投稿を作ってお届けします。\n") +
+      "残りの質問は、投稿が動き始めてから「きょうの1問」として少しずつお聞きします。すぐ続けたい方は、評価の直後に出る「設定を1問足す」からどうぞ。\n\n"
     : "";
   const head = "ありがとうございました。設定が終わりました。\n内容を直したくなったら、いつでも「お店の情報」から確認・修正できます。\n\n" + quickNote + mismatchNote;
 

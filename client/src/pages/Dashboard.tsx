@@ -190,7 +190,7 @@ export default function Dashboard() {
     isAuthenticated &&
     projectCount === 0 &&
     (threadsAccounts?.length ?? 0) === 0 &&
-    lineStatus !== undefined && !(lineStatus as any)?.linked;
+    lineStatus !== undefined && (lineStatus as any)?.available === true && !(lineStatus as any)?.linked;
 
   // LINE連携済みでお店の情報がまだ無い方は、LINEの「はじめの設定」に任せる（Webの20問へは飛ばさない）。
 

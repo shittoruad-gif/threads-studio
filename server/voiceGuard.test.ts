@@ -43,6 +43,8 @@ describe("登録した口調との矛盾", () => {
 
   it("口調の判定", () => {
     expect(isPoliteVoice(HIGA_VOICE)).toBe(true);
+    // 「まず5問」で口調が未登録のあいだに生成側が使う既定（autoPostScheduler）は敬語として扱われる
+    expect(isPoliteVoice("丁寧で落ち着いた口調（未登録のため既定）")).toBe(true);
     expect(isPoliteVoice("明るく元気なタメ口")).toBe(false);
     expect(isPoliteVoice(null)).toBe(false);
   });
