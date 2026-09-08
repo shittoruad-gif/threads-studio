@@ -171,9 +171,23 @@ function findForeignRegionWords(
  * factGuard通過後に実行しても捏造は発生しない。
  * 失敗時は元のテキストをそのまま返す（リライトはベストエフォート）。
  */
-export async function naturalizeContent(text: string, personal: boolean = false): Promise<string> {
+/**
+ * 品質ガードで落ちた理由を、同じ枠の作り直しに渡すための一時置き場（プロセス内・その場限り）。
+ * キー＝ユーザー:アカウント:枠。作り直しループが読んで generateAutoPost の retryHint に渡す。
+ */
+const lastRejectReason = new Map<string, string>();
+const rejectKey = (userId: number, accountId: number, slot: number) => `${userId}:${accountId}:${slot}`;
+
+export async function naturalizeContent(text: string, personal: boolean = false, brandVoice?: string | null): Promise<string> {
   try {
     const persona = personal ? 'あなたは自分の名前で発信している個人事業主です' : 'あなたはお店のオーナーです';
+    // ★登録された口調を最優先にする（2026-09-08）。
+    //   このリライトは一律に「友達に送る口語」へ崩していたため、「敬語で落ち着いた口調」と
+    //   登録したお店に「〜など、心当たり？」「〜していますよ😊」が出ていた。
+    const voice = String(brandVoice || '').trim();
+    const voiceNote = voice
+      ? `\n【登録された口調（最優先・ここに合わせる）】\n- 店主が登録した口調：「${voice}」。この口調に合わない言い方には直さない。\n- 敬語・丁寧・落ち着いた口調の登録なら、です・ます調のまま崩さない。「〜ますよ」「〜だね」「〜かな」のような砕けた語尾にしない。\n${/(敬語|丁寧|落ち着|上品|誠実|真面目)/.test(voice) ? '- 絵文字は使わない（元の文にあっても消す）。落ち着いた口調の店主は絵文字で締めない。\n- 「〜が大切です」「〜楽になります」「〜の一歩です」「お手伝いしています」のような、どの店でも言える締めは削る。最後の文は、この投稿の内容にしか当てはまらない言葉にする。\n' : ''}`
+      : '';
     const prompt = `${persona}。次のThreads投稿の下書きを、自分のスマホで打ち直すつもりで自然な投稿に直してください。
 
 【最優先：スマホでの見た目】
@@ -191,7 +205,10 @@ export async function naturalizeContent(text: string, personal: boolean = false)
 - 連続する2つの文を同じ語尾にしない。
 - 体言止め（名詞で終わる文）や「〜って」の引用、「…」の余韻は使ってよい。文のリズムが人間らしくなる。
 
+${voiceNote}
 【問いかけのルール】
+- 名詞や一語で切る問いかけは禁止（「〜など、心当たり？」「本当？」）。問いかけるなら、相手が答えられる形の文にする（「朝起きたとき、首は重くないですか？」）。
+- 「〜や〜、〜など」と並べてから問いかけない。並べるだけの文は1つに絞る。
 - 「〜いませんか？」「〜と思いませんか？」「気になりませんか？」のような**同意を求める確認疑問は禁止**。実際の人間の投稿にはひとつも出てこない、機械だけが書く形。
 - 締めの形は元の文に従う。元が言い切りなら言い切りのまま。締めを問いかけに書き換えることは絶対にしない。
 
@@ -381,6 +398,9 @@ async function generateAutoPost(
   postLength: string | null = null,
   // 当日補充のときは時刻を外で決めて渡す（null なら従来どおり翌回の勝ち時間帯）
   fixedScheduledAt: Date | null = null,
+  // ★前回の下書きが品質ガードで落ちた理由。作り直しのときに渡して、同じ失敗を繰り返させない
+  //   （2026-09-08 比嘉先生：3回とも「〜楽になります😊」型の汎用の締めで落ち、投稿ゼロになった）
+  retryHint: string | null = null,
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
   const purpose = PURPOSES[purposeIndex % PURPOSES.length];
@@ -525,6 +545,7 @@ async function generateAutoPost(
           + seasonContextJST()
           + angleNote
           + lengthNote
+          + (retryHint ? `\n\n【前回の下書きが不合格だった理由（厳守・同じ形にしない）】\n${retryHint}\n- 上の型の締めは書かない。締めは絵文字なしで、この投稿の内容に固有の1文にする。` : '')
           + preferenceNote
           + (CONVERSATION_POST_TYPES.has(postType) ? CONVERSATION_ENDING_ADDENDUM : '')
           // ★個人モードの上書きは最末尾（末尾の指示が最も遵守されやすい）
@@ -582,7 +603,8 @@ async function generateAutoPost(
     //   事実の追加は禁止プロンプトで担保（削るのみ可）。CTAは定型で良いので対象外。
     //   リライト後にNGワードガードを再適用する（言い換えで規制語が混入した場合の保険）。
     const beforeNaturalize = stripRawUrls(result.mainPost);
-    let naturalMain = await naturalizeContent(beforeNaturalize, personal);
+    const brandVoice: string | null = (counselingResult?.brandVoice ?? (stylePreference as any)?.voice ?? null) as string | null;
+    let naturalMain = await naturalizeContent(beforeNaturalize, personal, brandVoice);
 
     // ★日本語品質ガード（shared/jpQualityGuard.ts）。
     //   リライトが口癖（「正直、」）・お手本コピー・ひらがな開きすぎ・
@@ -622,6 +644,38 @@ async function generateAutoPost(
       const guarded = await enforceNgWords({ mainPost: naturalMain } as any, ngWords);
       naturalMain = (guarded as any).mainPost || naturalMain;
     } catch { /* ガード失敗時はリライト文をそのまま使う（生成時ガードは通過済み） */ }
+
+    // ★登録された口調との矛盾（shared/voiceGuard.ts）。2026-09-08 三上様「二度と不自然な日本語を出さない」。
+    //   リライト後が矛盾していてリライト前が大丈夫なら前に戻す。両方ダメなら作り直す（呼び出し側で最大3回）。
+    try {
+      const { checkVoice } = await import('../shared/voiceGuard');
+      const vAfter = checkVoice(naturalMain, brandVoice);
+      if (!vAfter.ok) {
+        const vBefore = checkVoice(beforeNaturalize, brandVoice);
+        if (vBefore.ok && !findBannedTic(beforeNaturalize)) {
+          console.warn(`[AutoPost] voiceGuard: ${vAfter.reasons.join('・')} → リライト前に戻す userId=${userId}`);
+          naturalMain = beforeNaturalize;
+        } else {
+          console.warn(`[AutoPost] voiceGuard: ${vAfter.reasons.join('・')}（前も ${vBefore.reasons.join('・') || '決まり文句'}）→ 作り直し userId=${userId}`);
+          lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex), `- 登録した口調と矛盾：${vAfter.reasons.join('／')}`);
+          return false;
+        }
+      }
+    } catch (e) { console.warn(`[AutoPost] voiceGuard skipped: ${(e as Error)?.message}`); }
+
+    // ★自然さの採点（server/naturalnessReview.ts）。正規表現で取れない不自然さの最終関門。
+    //   基準未満は公開せず作り直す。採点できないとき（API障害）は止めない。
+    try {
+      const { reviewNaturalness, NATURALNESS_MIN_SCORE } = await import('./naturalnessReview');
+      const rv = await reviewNaturalness(naturalMain, { brandVoice, businessType: project.businessType, storeName: (project as any).storeName });
+      if (rv && rv.score < NATURALNESS_MIN_SCORE) {
+        console.warn(`[AutoPost] naturalnessReview: ${rv.score}/5 ${rv.problems.join(' / ')} → 作り直し userId=${userId} projectId=${project.id}`);
+        lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex),
+          rv.problems.length ? rv.problems.map((p) => `- 不自然と判定された箇所：「${p}」`).join('\n') : '- 店主が自分で打った文に見えない（説明文・汎用の締め）');
+        return false;
+      }
+      if (rv) console.log(`[AutoPost] naturalnessReview: ${rv.score}/5 userId=${userId}`);
+    } catch (e) { console.warn(`[AutoPost] naturalnessReview skipped: ${(e as Error)?.message}`); }
 
     // ★健康系の断定・治療結果の体験談・価格連呼のガード（shared/healthClaimGuard.ts）。
     //   2026-09-06 停止されたアカウントの投稿に「杖なしで歩ける」「痛みなく」「初回1980円」が並んでいた。
@@ -921,18 +975,29 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           for (let i = 0; i < regularCount; i++) {
             const project = pinnedProject || eligibleProjects[(dayOffset + i) % eligibleProjects.length];
 
-            const success = await generateAutoPost(
-              user.id,
-              project,
-              typeIdx,
-              purposeIdx,
-              account.id,
-              i,
-              eff.autoPostRequireApproval,
-              bestHours,
-              eff.postLength,
-              sameDaySlots ? sameDaySlots[i] : null,
-            );
+            // ★品質ガードで落ちた日に「投稿ゼロ」で終わらせない（2026-09-08 比嘉先生の当日補充で
+            //   1回目が健康表現ガードに落ち、generated=0 のまま終わっていた）。最大3回まで作り直す。
+            let success = false;
+            const rk = rejectKey(user.id, account.id, i);
+            lastRejectReason.delete(rk);
+            for (let attempt = 1; attempt <= 3 && !success; attempt++) {
+              const hint = lastRejectReason.get(rk) ?? null;
+              success = await generateAutoPost(
+                user.id,
+                project,
+                typeIdx,
+                purposeIdx,
+                account.id,
+                i,
+                eff.autoPostRequireApproval,
+                bestHours,
+                eff.postLength,
+                sameDaySlots ? sameDaySlots[i] : null,
+                hint,
+              );
+              if (!success && attempt < 3) console.log(`[AutoPost] user=${user.id} account=${account.id} slot=${i} 作り直し ${attempt + 1}回目${hint ? '（前回の理由を渡す）' : ''}`);
+            }
+            lastRejectReason.delete(rk);
 
             if (success) {
               generated++;
