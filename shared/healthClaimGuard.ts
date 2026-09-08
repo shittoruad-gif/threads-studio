@@ -27,6 +27,15 @@ export const OUTCOME_PATTERNS: ReadonlyArray<{ re: RegExp; label: string; fix?: 
   { re: /\d+\s*(ヶ|か|カ|ケ)?月で[^。\n]*/g, label: "期間つきの結果", fix: () => "" },
   { re: /(不眠|頭痛|めまい|しびれ|便秘)(が|も)(改善|解消|なくな|楽にな|良くな)[^。\n]*/g, label: "症状の改善断定", fix: () => "楽に感じる方もいます" },
   { re: /(治る|治り|治し|治せ|完治|根治|根本改善|改善します|改善する|改善した|良くなります|良くなる|効きます|効く)/g, label: "治る・改善の断定", fix: () => "ケア" },
+  // ★2026-09-08 @haisaiseikotsuin の公開3件がThreads側で削除された。承認待ちだった投稿は
+  //   「つらい症状から解放された！」「眠りが変わった！」「睡眠の質の向上も感じていただけた」で、
+  //   上のどの型にも当てはまらず素通りしていた（「眠れ」ではなく「眠り」、「不眠が改善」ではなく
+  //   「症状から解放」だったため）。実際に消された投稿の言い回しで型を足す。
+  { re: /(症状|痛み|つらさ|辛さ|不調)(から|が)?[^。\n]{0,6}(解放|解消|抜け出|おさらば)[^。\n]*/g, label: "症状からの解放", fix: () => "楽に感じると話す方もいます" },
+  { re: /(睡眠|眠り)(の)?(質|深さ)[^。\n]*(向上|上がっ|良くな|改善|変わ)[^。\n]*/g, label: "睡眠の質の改善", fix: () => "休めていると話す方もいます" },
+  { re: /(眠り|寝つき|寝起き)(が|も)[^。\n]{0,6}(変わ|良くな|楽にな|深くな)[^。\n]*/g, label: "睡眠改善の体験談", fix: () => "休めていると話す方もいます" },
+  { re: /(長年|何年も|ずっと)[^。\n]{0,12}(悩まされ|苦しんで)[^。\n]{0,20}(解放|改善|良くな|楽にな|治)[^。\n]*/g, label: "長年の悩みが解決した体験談", fix: () => "" },
+  { re: /(体験|実感)して(くださ|いただ)[^。\n]*(解放|改善|治|良くな)[^。\n]*/g, label: "効果の実感の断定", fix: () => "" },
   { re: /(必ず|絶対|確実に|100%|誰でも)[^。\n]{0,12}(楽|良く|改善|変わ|効)/g, label: "保証表現", fix: () => "" },
   { re: /(ヘルニア|坐骨神経痛|自律神経失調|うつ|糖尿|高血圧|がん|癌)[^。\n]{0,10}(治|改善|完治|解消)/g, label: "疾患名＋治癒", fix: () => "" },
 ];
@@ -41,14 +50,52 @@ export interface ClaimVerdict {
   priceMentions: number;
 }
 
+/**
+ * 引っかかった表現を含む「文」を丸ごと落とす。
+ *
+ * ★以前は文の途中だけを言い換え表で差し替えていたため、日本語が壊れていた。
+ *   例：「それが今回、つらい症状から解放された！って実感してくださったんですよ。」
+ *   →「それが今回、つらい楽に感じると話す方もいます。」（「つらい」が残る）
+ *   お客様に出る文章なので、中途半端に繕うより、その文を落として
+ *   残りの自然な文だけを残すほうが安全（2026-09-08 @haisaiseikotsuin の件）。
+ */
+function dropSentencesMatching(text: string, re: RegExp): { text: string; dropped: boolean } {
+  let dropped = false;
+  const lines = String(text).split("\n").map((line) => {
+    // 「。」「！」「？」で切って、区切り文字は前の文に残す
+    const parts = line.match(/[^。！？!?]*[。！？!?]|[^。！？!?]+/g) ?? [];
+    const kept = parts.filter((s) => {
+      re.lastIndex = 0;
+      const hit = re.test(s);
+      re.lastIndex = 0;
+      if (hit) dropped = true;
+      return !hit;
+    });
+    // ★落とした文の続き（「〜！」で切れた後ろ半分）が、助詞から始まる断片として残ることがある。
+    //   例：「つらい症状から解放された！」を落として「って実感してくださったんですよ。」だけ残る。
+    //   宙に浮いた言い出しは意味をなさないので、あわせて落とす。
+    const cleaned: string[] = [];
+    for (let i = 0; i < kept.length; i++) {
+      const s = kept[i];
+      const isOrphan = /^[\s　]*(って|とか|と、|など|けど|でも、|それが|そんな)/.test(s) && kept.length !== parts.length;
+      if (isOrphan && i > 0) { dropped = true; continue; }
+      cleaned.push(s);
+    }
+    return cleaned.join("");
+  });
+  return { text: lines.join("\n"), dropped };
+}
+
 export function checkHealthClaims(text: string, opts: { allowPrice?: boolean } = {}): ClaimVerdict {
   const hits: string[] = [];
   let out = String(text ?? "");
   for (const p of OUTCOME_PATTERNS) {
+    p.re.lastIndex = 0;
     if (p.re.test(out)) {
-      hits.push(p.label);
       p.re.lastIndex = 0;
-      out = out.replace(p.re, (m) => (p.fix ? p.fix(m) : ""));
+      const r = dropSentencesMatching(out, p.re);
+      if (r.dropped) hits.push(p.label);
+      out = r.text;
     }
     p.re.lastIndex = 0;
   }

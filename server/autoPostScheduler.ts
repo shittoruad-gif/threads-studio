@@ -459,12 +459,23 @@ async function generateAutoPost(
     //   本来「毎日自動」のユースケースは短く読みやすい単発投稿の連投なので、
     //   ここを treeCount=0 に固定する。ツリーで深く語りたいときは
     //   AIGenerate の手動生成で treeCount を選んでもらう。
+    // ★お客様がご自分で手直しした投稿から「好み」を作り、翌日以降の投稿を寄せていく。
+    //   材料が無ければ空文字になるので、これまでと同じ生成になる（2026-09-08 三上様指示）。
+    let preferenceNote = '';
+    try {
+      const { buildPreferenceNote } = await import('../shared/postPreference');
+      const edits = await db.getUserEditedPosts(userId, 5);
+      preferenceNote = buildPreferenceNote(edits);
+      if (preferenceNote) console.log(`[AutoPost] 手直しの好みを反映 userId=${userId} edits=${edits.length}`);
+    } catch (e) { console.warn(`[AutoPost] 手直しの好みの反映をとばしました: ${(e as Error)?.message}`); }
+
     const prompt = generateThreadsPrompt({
       storeName: (project as any).storeName || undefined,
       businessType: project.businessType,
       area: project.area,
       localTerms: approvedLocalTerms(project),
       styleSamples: (project as any).styleSamples || undefined,
+      preferenceNote: preferenceNote || undefined,
       target: project.target,
       mainProblem: project.mainProblem,
       strength: project.strength,
@@ -604,8 +615,13 @@ async function generateAutoPost(
       if (isHealthBusiness(project.businessType)) {
         const v = checkHealthClaims(naturalMain, { allowPrice: false });
         if (!v.ok) {
-          console.warn(`[AutoPost] healthClaimGuard: ${v.hits.join('・')} を和らげた userId=${userId} projectId=${project.id}`);
-          if (Array.from(v.text).length < 30) { console.warn('[AutoPost] healthClaimGuard: 本文が短くなりすぎたため公開しない'); return false; }
+          console.warn(`[AutoPost] healthClaimGuard: ${v.hits.join('・')} を落とした userId=${userId} projectId=${project.id}`);
+          // ★2か所以上引っかかった投稿は、残りを繋いでも中身が薄い（体験談のオチだけ消えた形になる）。
+          //   繕って出すより作り直すほうが安全なので、その日は公開しない（翌朝また作られる）。
+          //   2026-09-08 @haisaiseikotsuin：公開3件がThreads側で消され、承認待ちの1件も
+          //   「症状から解放」「眠りが変わった」「睡眠の質の向上」の3か所が引っかかっていた。
+          if (v.hits.length >= 2) { console.warn('[AutoPost] healthClaimGuard: 引っかかりが多いため公開しない'); return false; }
+          if (Array.from(v.text).length < 60) { console.warn('[AutoPost] healthClaimGuard: 本文が短くなりすぎたため公開しない'); return false; }
           naturalMain = v.text;
         }
       }

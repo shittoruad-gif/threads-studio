@@ -3542,6 +3542,25 @@ export async function countAccountAutoPostsSinceConnect(accountId: number): Prom
   return Number((rows as any)[0]?.[0]?.n ?? 0);
 }
 
+/**
+ * お客様がご自分で直した投稿（直す前・直した後）を新しい順に取る。
+ * 翌日以降の投稿を、その方の好みに寄せるための材料（shared/postPreference.ts）。
+ */
+export async function getUserEditedPosts(userId: number, limit = 5): Promise<Array<{ originalContent: string | null; postContent: string | null }>> {
+  const database = await getDb();
+  if (!database) return [];
+  const n = Math.min(Math.max(limit, 1), 20);
+  const rows: any = await database.execute(sql`
+    SELECT originalContent, postContent FROM scheduledPosts
+    WHERE userId = ${userId} AND editedByUserAt IS NOT NULL
+      AND originalContent IS NOT NULL AND postContent IS NOT NULL
+    ORDER BY editedByUserAt DESC LIMIT ${n}`);
+  return ((rows as any)[0] ?? []).map((r: any) => ({
+    originalContent: r.originalContent ?? null,
+    postContent: r.postContent ?? null,
+  }));
+}
+
 export async function getLineUserIdsForUser(userId: number): Promise<string[]> {
   const links = await listLineLinks(userId);
   return links.map((l) => l.lineUserId);

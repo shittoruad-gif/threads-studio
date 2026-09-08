@@ -487,6 +487,10 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   errorMessage: text("errorMessage"),
   // Store the post content snapshot at scheduling time
   postContent: text("postContent"),
+  // ★お客様がご自分で直した投稿の「直す前」。何をどう直されたかを翌日以降の投稿に活かすために残す
+  //   （2026-09-08 三上様指示。以前は上書きしていたので、毎日直しても投稿は変わらなかった）
+  originalContent: text("originalContent"),
+  editedByUserAt: timestamp("editedByUserAt"),
   // 公開直後に自分の投稿へ返信する「@meta.ai ＋質問」。無ければ返信しない（shared/metaAiAsk.ts）
   metaAiAskText: text("metaAiAskText"),
   // 引用投稿：この投稿IDを引用して公開する（週1回の固定投稿の再露出。2026-09-07）

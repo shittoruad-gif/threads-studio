@@ -2171,7 +2171,13 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     if (post.status !== "awaiting_approval") {
       return [textWithQuick("この投稿はすでに確認が終わっています。", MENU_HINT)];
     }
-    await db.updateScheduledPost(postId, { postContent: next });
+    // ★「直す前」を残す。何をどう直されたかを、翌日以降の投稿に活かすため（shared/postPreference.ts）。
+    //   すでに直したことのある投稿は、いちばん最初のAIの文を残す（直した文で上書きしない）。
+    await db.updateScheduledPost(postId, {
+      postContent: next,
+      ...((post as any).originalContent ? {} : { originalContent: post.postContent || null }),
+      editedByUserAt: new Date(),
+    } as any);
     return [
       { type: "text", text: "直しました。この内容でよろしければ「これで投稿する」を押してください。" },
       { type: "text", text: next },

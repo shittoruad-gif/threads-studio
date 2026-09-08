@@ -141,6 +141,9 @@ export interface ThreadsPromptInput {
   catchphrase?: string; // 口癖・方言・決めゼリフ（キャラ付け）
   customerWords?: string; // お客さんが実際に使った言葉（最優先で使う）
   styleSamples?: string; // 過去の良かった投稿（文体＝口調/絵文字/改行/1文の長さ を模倣するお手本）
+  // ★お客様がご自分で手直しした文から作る「好み」（shared/postPreference.ts）。
+  //   文体のお手本より優先する（この人が実際に直して「これでよい」とした文そのものだから）
+  preferenceNote?: string;
   trendWord?: string;  // トレンドワード
   /**
    * 季節ネタ（今月のおすすめネタ）。shared/seasonalTopics.ts の静的データ由来の
@@ -1250,7 +1253,7 @@ ${safe.trendWord ? `- トレンドワード：${safe.trendWord}` : ''}
 ${formatLinksForPrompt(input.links, input.postType, input.preferredLinkType, (input as any).pinnedChannel)}
 
 【投稿タイプ】
-${postTypeDescription}${localNote}${trendNote}${seasonalNote}${regionalRefNote}${buzzNote}${ngWordsNote}${styleSamplesNote}
+${postTypeDescription}${localNote}${trendNote}${seasonalNote}${regionalRefNote}${buzzNote}${ngWordsNote}${styleSamplesNote}${input.preferenceNote || ''}
 
 【★会話設計（全投稿共通。Threadsはコメント＝会話量が最も評価される）】
 - 読者が「思わず返信したくなる」書き方を常に心がける：一方的な解説で完結させず、読者の体験・意見が入り込む余白を残す。
