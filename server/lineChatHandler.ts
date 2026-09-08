@@ -18,7 +18,7 @@ import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 import { contractSummary, type ContractInfo } from "../shared/contractSummary";
-import { classifyRequestKind as requestKind, isPastedContent } from "../shared/requestKind";
+import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord } from "../shared/requestKind";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
 
@@ -738,13 +738,26 @@ function askQuestion(st: CounselingState): unknown[] {
         ? `\n\nいまの登録内容：\n「${shownValue}」\n\nこれは業種「${st.answers.businessTypeRaw || st.prefill?.businessTypeRaw || ""}」と合わない内容のため、そのままは使えません。上の候補をタップするか、新しい内容をそのまま送ってください。`
         : `\n\n${prefillProposalText(shownValue!, st.prefillSource || "連携アカウントのプロフィール", st.prefillKind || "profile")}`)
     : "";
+  // ★長い答えを少しだけ直したい方が、全文を打ち直しておられた
+  //   （2026-09-06 大木様「スクリーンショットをとってから、写真のアプリでコピペする形に
+  //    なってます。そのままコピペできれば、修正しやすいです」）。
+  //   LINEは長押しでメッセージ全体しかコピーできないため、質問文に混ぜて出すと
+  //   その答えだけを取り出せない。打ち直しが負担になる長さの答えだけ、
+  //   投稿の「一部修正」と同じように単独のメッセージで先にお出しする。
+  const copyable = Boolean(
+    showProposal && !proposalMismatch && shownValue
+    && !Array.isArray(q.choices)
+    && Array.from(String(shownValue)).length >= 25,
+  );
+  const copyHint = copyable ? "\n（上の文を長押し→「コピー」で、直したものを送り返せます）" : "";
   const choices: string[] = [];
   if (showProposal && !proposalMismatch) choices.push("これでOK");
   if (Array.isArray(q.choices)) for (const c of q.choices) choices.push(c.label);
   else if (Array.isArray(q.suggestions)) choices.push(...q.suggestions);
   if (canSkip) choices.push("スキップ");
   if (editing || st.step > 0) choices.push("戻る");
-  return [textWithChoices(head + hint + example + choiceDesc + proposal + skip + back, choices)];
+  const ask = textWithChoices(head + hint + example + choiceDesc + proposal + copyHint + skip + back, choices);
+  return copyable ? [{ type: "text", text: String(shownValue) }, ask] : [ask];
 }
 
 /**
@@ -2417,8 +2430,24 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     return rewritePost(user.id, postId, text.slice(0, 200), one);
   }
   if (st?.state === "ngword") {
+    // ★入力待ちのあいだに、言葉ではなく文章（投稿文・別のご用件）が届くことがある。
+    //   そのまま登録すると、文章まるごとが「使わない言葉」になり、
+    //   以後の投稿がその一文を避けようとしておかしくなる。
+    //   登録せずに聞き直す（状態は消さない。「やめる」で抜けられる）。
+    if (isPastedContent(text)
+        || text.split(/\r?\n/).filter((l) => l.trim()).length >= 3
+        || Array.from(text).length > 60) {
+      return [textWithQuick(
+        "いまは「使ってほしくない言葉」をお待ちしています。\n" +
+        "文章ではなく、避けたい言葉だけをお送りください（例：化繊、岡山市北区京橋町）。\n" +
+        "別のご用件でしたら、下の「やめる」を押してください。",
+        [{ label: "やめる", data: "m=cancel" }],
+      )];
+    }
     await db.clearLineChatState(lineUserId);
-    const words = text.split(/[、,\n]/).map((w) => w.trim()).filter(Boolean).slice(0, 20);
+    const words = text.split(/[、,\n]/).map((w) => w.trim())
+      // 1語が長すぎるものは言葉ではなく文章。登録しても避けようがないので落とす。
+      .filter((w) => w && Array.from(w).length <= 30).slice(0, 20);
     if (words.length === 0) return [textWithQuick("言葉を読み取れませんでした。", MENU_HINT)];
     try {
       // NGワードはプロジェクト（お店の情報）側に保持している。
@@ -2441,7 +2470,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   // 「メニュー」「使い方」などのキーワードにも反応する
   const t = text.trim();
   if (/^(メニュー|めにゅー|menu)$/i.test(t)) return [textWithQuick("どれをご覧になりますか？", MENU_HINT)];
-  if (/(投稿|承認).{0,4}(確認|見たい|見る)|^今日の投稿$/.test(t)) return handlePostback(lineUserId, "m=posts");
+  if (wantsTodayPosts(t)) return handlePostback(lineUserId, "m=posts");
   if (/^(設定|せってい)$/.test(t)) return handlePostback(lineUserId, "m=settings");
   if (/^(追加|ついか)$/.test(t)) return issueStaffLinkCode(user.id);
   // ★紹介コードをそのまま送られた場合は、その場で適用して料金ページへご案内する。
@@ -2459,6 +2488,20 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   //   （以前は「料金」などの言葉に反応して料金ページのリンクを返すだけで、
   //     「プロプランは何アカウントまで？」のような具体的なご質問に答えられていなかった）
   //   自動で答えられなかったときだけ、下のキーワード案内にまわす。
+  // ★送っていただいた文章が、その方ご自身の投稿そのものであることがある
+  //   （投稿カードの本文をコピーして、ボタンを押さずに送り返される）。
+  //   「投稿の材料をお預かりします」ではなく、その投稿に対してできることをお出しする。
+  {
+    const own = await db.findOwnRecentPostByContent(user.id, t);
+    if (own) return replyToOwnPost(own);
+  }
+
+  // ★「〇〇という言い方はやめてほしい」は、NGワードのご登録で解決する。
+  //   以前は自動応答が「設定メニューから登録できます」と説明するだけで、
+  //   お客様がもう一度メニューをたどる必要があった（2026-09-06 ご質問 #10。
+  //   ご登録は今も行われていない）。その場で言葉の入力までお通しする。
+  if (wantsNgWord(t)) return handlePostback(lineUserId, "s=ng");
+
   // ★投稿文の貼り付けは、ご質問として自動応答に回さない（的外れな返事・担当者への誤通知を防ぐ）
   if (isPastedContent(t)) return replyToRequest("pasted", null, await stashMaterial(lineUserId, user.id, t));
 
@@ -2588,7 +2631,12 @@ function toHalfWidthLocal(s: string): string {
 function looksLikeQuestion(t: string): boolean {
   if (t.length < 5) return false;
   if (/^(はい|いいえ|ありがとう|了解|おはよう|こんにちは|こんばんは|よろしく)/.test(t)) return false;
-  return /[?？]$/.test(t) || /(ですか|でしょうか|ますか|できます|教えて|とは|どう|なぜ|いつ|どこ|いくら|何|方法|やり方)/.test(t) || t.length >= 12;
+  // ★「ログインできません」は12字未満で、どの言葉にも当たらず自動応答に回っていなかった。
+  //   知識には答えが載っているのに、受け皿の「ご用件を下から選んでください」で
+  //   終わっていた（2026-09-09 夜間整備で確認）。困りごとの言い方を足す。
+  return /[?？]$/.test(t)
+    || /(ですか|でしょうか|ますか|できます|できません|できない|わからない|分からない|わかりません|分かりません|届かない|届きません|来ません|来ない|出ない|止まっ|動かない|表示されない|反映されない|教えて|とは|どう|なぜ|いつ|どこ|いくら|何|方法|やり方)/.test(t)
+    || t.length >= 12;
 }
 
 /**
@@ -2612,6 +2660,48 @@ async function stashMaterial(lineUserId: string, userId: number, text: string): 
   } catch {
     return false;
   }
+}
+
+/**
+ * 送っていただいた文章が、その方ご自身の投稿だったときのお返事。
+ *
+ * ★状態によってできることが違うので、そのままできるボタンだけを出す。
+ *   ・確認待ち：そのまま公開／一部修正／書き直す／見送る
+ *   ・公開ずみ：こちらからは直せないことをお伝えし、◯✕のご評価だけお願いする
+ */
+function replyToOwnPost(post: any): unknown[] {
+  const id = Number(post.id);
+  const rate = [
+    { label: "◯ 自分らしい", data: `a=rate&i=${id}&v=good` },
+    { label: "✕ 違う", data: `a=rate&i=${id}&v=bad` },
+  ];
+  if (post.status === "awaiting_approval") {
+    return [textWithQuick(
+      "この文章は、いま確認待ちの投稿と同じ内容です。\n" +
+      "文章を直してお送りいただく場合は、先に「一部修正」を押してから送り返してください" +
+      "（ボタンを押さずに送っても、投稿は差し替わりません）。",
+      [
+        { label: "これで投稿する", data: `a=ok&i=${id}` },
+        { label: "一部修正", data: `a=selfedit&i=${id}` },
+        { label: "書き直す", data: `a=rw&i=${id}` },
+        { label: "見送る", data: `a=skip&i=${id}` },
+        ...MENU_HINT,
+      ],
+    )];
+  }
+  if (post.status === "posted") {
+    return [textWithQuick(
+      "この文章は、すでにThreadsに公開ずみの投稿と同じ内容です。\n" +
+      "公開後の文章は、こちらからは直せません（Threadsアプリで投稿右上の「…」→削除でご対応いただけます）。\n" +
+      "この書き方が良かったか／違ったかを教えていただけると、明日からの投稿に反映します。",
+      [...rate, { label: "担当者に聞く", data: "m=staff" }, ...MENU_HINT],
+    )];
+  }
+  return [textWithQuick(
+    "この文章は、お預かりしている投稿と同じ内容です。\n" +
+    "この書き方が良かったか／違ったかを教えていただけると、明日からの投稿に反映します。",
+    [...rate, { label: "今日の投稿", data: "m=posts" }, ...MENU_HINT],
+  )];
 }
 
 function replyToRequest(req: "post" | "material" | "pasted", questionId?: number | string | null, canSave = false): unknown[] {

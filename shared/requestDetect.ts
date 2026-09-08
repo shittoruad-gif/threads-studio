@@ -9,12 +9,18 @@
  *   返っていた。翌日反映のお約束（REQUEST_ACK_TEXT）が届かないので、ご要望が
  *   お預かりされたことも伝わっていなかった。
  */
+import { isPastedContent } from "./requestKind";
+
 const REQUEST_RE = /(してほしい|して欲しい|できるように|できるといい|できたら|できれば|できると|欲しい|ほしい|追加して|付けて|つけて|変えて|直して|改善|要望|できませんか|できないですか|できないでしょうか|対応して|機能|いただけ|何とか|なんとか|なりませんか|なりませんでしょうか|ならないでしょうか|可能でしょうか|可能ですか|(と|ば|たら|れば)助か)/;
 const QUESTION_ONLY_RE = /(どうやって|やり方|方法|とは|ですか？$|ますか？$|でしょうか？$)/;
 
 export function isFeatureRequest(text: string): boolean {
   const t = String(text || "").trim();
   if (!t) return false;
+  // ★投稿文には「〜してほしい」が普通に出てくる（「着物をもっと身近に感じてほしい」）。
+  //   投稿文の貼り付けをご要望として受け取ると、「夜の更新で反映します」という
+  //   まったく的外れなお返事になる（2026-09-08 ご質問 #21）。
+  if (isPastedContent(t)) return false;
   if (!REQUEST_RE.test(t)) return false;
   // 「やり方を教えてほしい」のような使い方の質問は要望にしない
   if (/(教えて|やり方|方法|どうやって)/.test(t) && !/(機能|追加|変えて|直して|できるように)/.test(t)) return false;

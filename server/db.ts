@@ -617,6 +617,43 @@ export async function getScheduledPostsByUserId(userId: number, threadsAccountId
     .orderBy(desc(scheduledPosts.scheduledAt));
 }
 
+/** 見比べるために、空白・改行・飾りを落として本文をそろえる。 */
+function normalizePostText(s: string): string {
+  return String(s || "").replace(/\s+/g, "").replace(/[「」『』（）()【】…・]/g, "");
+}
+
+/**
+ * 送っていただいた文章が、その方ご自身の最近の投稿と同じものかを探す。
+ *
+ * ★投稿カードの本文をコピーして、ボタンを押さずにそのまま送り返される方がいる。
+ *   以前はそれが「ご質問」として自動応答に回り、文中の「〜てほしい」に反応して
+ *   「ご要望として承りました。夜の更新で反映します」という的外れな返事になっていた
+ *   （2026-09-08 呉服店様。送られた文は前夜に公開ずみのご自身の投稿だった）。
+ *   ご自身の投稿だと分かれば、その投稿に対してできること（評価・書き直し・一部修正）を
+ *   そのままお出しできる。
+ */
+export async function findOwnRecentPostByContent(userId: number, text: string): Promise<ScheduledPost | null> {
+  const database = await getDb();
+  if (!database) return null;
+  const needle = normalizePostText(text);
+  // 短すぎる文は、たまたま一致してしまうので見ない。
+  if (needle.length < 30) return null;
+  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const rows = await database.select()
+    .from(scheduledPosts)
+    .where(and(eq(scheduledPosts.userId, userId), gte(scheduledPosts.createdAt, since)))
+    .orderBy(desc(scheduledPosts.createdAt))
+    // 1日9投稿の方でも2週間分が入るように多めに見る（1件あたり短いので負荷は小さい）
+    .limit(120);
+  // 頭の30字がそろっていれば同じ投稿とみなす（末尾を少し直して送り返される場合があるため）。
+  const head = needle.slice(0, 30);
+  for (const r of rows) {
+    const body = normalizePostText((r as any).postContent || "");
+    if (body.length >= 30 && (body.startsWith(head) || needle.startsWith(body.slice(0, 30)))) return r as ScheduledPost;
+  }
+  return null;
+}
+
 /**
  * LINE問い合わせ計測用：公開済みの自動メイン投稿（追い投稿=返信は除く）を古い順で返す。
  * 各投稿の合言葉は shared/inquiryKeywords.ts の inquiryKeywordForPost(id) で決まる。

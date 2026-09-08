@@ -35,3 +35,28 @@ describe("Threadsアプリ側の知識", () => {
     expect(k).toMatch(/順番に配られ|段階的/);
   });
 });
+
+/**
+ * 2026-09-06〜09-08 に届いたご質問。同じことを二度聞かれないよう、
+ * 自動応答の知識に事実が載っていることを固定する。
+ */
+describe("その日のご質問から足した知識", () => {
+  const k = productKnowledge();
+
+  it("今日の投稿はいつでも出し直せる（#22「今日の投稿をもう一度みたい」）", () => {
+    expect(k).toContain("今日の投稿");
+    expect(k).toMatch(/もう一度お出しします|もう一度見たい/);
+    expect(k).toMatch(/さかのぼって探す必要はありません/);
+  });
+
+  it("お店の情報の直しは全文の打ち直しが要らない（#11・#12 大木様）", () => {
+    expect(k).toMatch(/全文を打ち直す必要はありません/);
+    expect(k).toMatch(/別のメッセージ/);
+    expect(k).toContain("長押し");
+  });
+
+  it("ほかのSNSへの自動投稿は無いと書いてある（#20）", () => {
+    expect(k).toContain("Instagram");
+    expect(k).toMatch(/ほかのSNSへの自動投稿には対応していません|他のSNS/);
+  });
+});
