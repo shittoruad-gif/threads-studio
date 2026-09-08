@@ -16,6 +16,33 @@ describe("健康系の断定ガード", () => {
     expect(v.ok).toBe(true);
     expect(v.text).toBe("腰が辛い時、つい揉んでしまう。\n僕も昔は、揉めば良いと思っていました。\n\nでも実は、身体の使い方が大切なんです。");
   });
+  it("2026-09-09 はいさい整骨院でThreads側に消された「たった1分で楽になる」型を止める", () => {
+    const v = checkHealthClaims("寝る前のたった1分で肩こりが楽になるワザ、ありますよ。\n\n深くゆっくり呼吸するだけ。\nこれだけで自律神経が整いやすくなります。\n\n毎日続けると、寝起きもスッキリします😊\n\nあなたは寝る前、何か習慣にしていますか？");
+    expect(v.ok).toBe(false);
+    expect(v.hits).toEqual(expect.arrayContaining(["短時間で楽になる約束", "症状が楽になる断定", "寝起き改善の断定"]));
+    expect(v.text).not.toContain("1分で");
+    expect(v.text).not.toContain("スッキリ");
+    expect(v.text).toContain("深くゆっくり呼吸するだけ。");
+  });
+  it("2026-09-09 「毎日頭痛や不眠で…」と症状名で悩みを呼び込む書き出しを止める", () => {
+    const v = checkHealthClaims("「毎日頭痛や不眠で…」八千代市でよく聞くお悩みです。\n\n夏の疲れが出るこの時期、体調を崩しやすい方も多いです。");
+    expect(v.ok).toBe(false);
+    expect(v.hits).toContain("症状名で悩みを呼び込む書き出し");
+    expect(v.text).not.toContain("頭痛や不眠");
+    expect(v.text).toContain("夏の疲れ");
+  });
+  it("症状名を出しても断定でなければ通す（過剰に落とさない）", () => {
+    for (const t of [
+      "八千代市勝田台で開業11年。\n\n強く押すのが良い施術とは限りません。\n\n一人ひとりのお話を聞いてから、その方に合う施術を選びます。",
+      "デスクワークの合間に、肩を大きく回してみてください。\n\n身体の使い方を少し変えるだけで、日常が変わることがあります。",
+      "肩こりでお悩みの方へ。\n\n原因は肩そのものではなく、座り方にあることも多いです。",
+      "「一度会えば、みんな兄弟」沖縄の言葉です。\n\n私、この言葉がすごく好きなんです。",
+    ]) {
+      const v = checkHealthClaims(t);
+      expect(v.ok, t).toBe(true);
+      expect(v.text).toBe(t);
+    }
+  });
   it("業種判定", () => {
     expect(isHealthBusiness("トレーニングを取り入れた整体院")).toBe(true);
     expect(isHealthBusiness("呉服小売店")).toBe(false);
