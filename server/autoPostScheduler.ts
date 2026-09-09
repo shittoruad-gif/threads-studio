@@ -11,7 +11,7 @@ import * as db from "./db";
 import { getPlan } from "../shared/plans";
 import { buildCtaText } from "../shared/autoPostCta";
 import { charBudgetFor, resolveWithAlternation, POST_LENGTHS, trimToBudget } from "../shared/postLength";
-import { checkNaturalized, findBannedTic, polishPunctuation } from "../shared/jpQualityGuard";
+import { checkNaturalized, findBannedTic, findRepeatedPhrase, polishPunctuation } from "../shared/jpQualityGuard";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle } from "../shared/postAngles";
@@ -178,9 +178,20 @@ function findForeignRegionWords(
 const lastRejectReason = new Map<string, string>();
 const rejectKey = (userId: number, accountId: number, slot: number) => `${userId}:${accountId}:${slot}`;
 
-export async function naturalizeContent(text: string, personal: boolean = false, brandVoice?: string | null): Promise<string> {
+export async function naturalizeContent(
+  text: string,
+  personal: boolean = false,
+  brandVoice?: string | null,
+  /** 下書きに入っている「この店を指す言葉」（店名・地名・実績の数字）。消させない。 */
+  keepWords: string[] = [],
+): Promise<string> {
   try {
     const persona = personal ? 'あなたは自分の名前で発信している個人事業主です' : 'あなたはお店のオーナーです';
+    // ★「削るのはOK」の指示に従って店名・地名まで削られ、あとの identityGuard で
+    //   枠ごと作り直しになっていた（2026-09-10）。下書きに実在する言葉だけを明示して守る。
+    const keepNote = keepWords.length > 0
+      ? `\n【消してはいけない言葉（最優先。文字を変えずそのまま残す）】\n- ${keepWords.map((w) => `「${w}」`).join('／')}\n- 短くするために他を削っても、この言葉だけは必ず本文に残す。言い換え・省略・ふりがな化も禁止。\n`
+      : '';
     // ★登録された口調を最優先にする（2026-09-08）。
     //   このリライトは一律に「友達に送る口語」へ崩していたため、「敬語で落ち着いた口調」と
     //   登録したお店に「〜など、心当たり？」「〜していますよ😊」が出ていた。
@@ -197,8 +208,8 @@ export async function naturalizeContent(text: string, personal: boolean = false,
 - 1文は30文字以内を目安に短く。
 
 【事実のルール】
-- 事実・情報を足さない。数字・店名・地名・意味を変えない。削るのはOK。
-
+- 事実・情報を足さない。数字・店名・地名・意味を変えない。削るのはOK（ただし下の「消してはいけない言葉」は除く）。
+${keepNote}
 【語尾のルール（最重要。実際の投稿分析で人間との差が一番大きかった）】
 - 「〜んです」「〜なんです」「〜んですよ」「〜んですよね」は投稿全体で**最大1回**。2回以上は書き直す。普通の「〜です」「〜ます」言い切りに変える。
 - 「〜ですよね」「〜ますね」で同意を求めない。自分の感想は「〜と思う」「〜でした」と言い切る。
@@ -401,6 +412,9 @@ async function generateAutoPost(
   // ★前回の下書きが品質ガードで落ちた理由。作り直しのときに渡して、同じ失敗を繰り返させない
   //   （2026-09-08 比嘉先生：3回とも「〜楽になります😊」型の汎用の締めで落ち、投稿ゼロになった）
   retryHint: string | null = null,
+  // ★最後の作り直し。ここで落とすとその枠は投稿ゼロで終わるので、
+  //   「使い回し」のような程度の問題では止めず、記録だけ残して公開する。
+  lastAttempt: boolean = false,
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
   const purpose = PURPOSES[purposeIndex % PURPOSES.length];
@@ -544,6 +558,15 @@ async function generateAutoPost(
     const personal = isPersonalMode((project as any).mode);
     const promptWithMode = prompt;
 
+    // ★直近の自分の投稿を見せて、決め台詞の使い回しを止める（2026-09-10）。
+    //   切り口は毎回変わっていたのに書き出しの一節だけが同じ投稿が5本続き、
+    //   香取様が5本とも「✕ 違う」を付けて4本を見送られた。
+    let recentPosts: string[] = [];
+    try { recentPosts = await db.getRecentPostContents(threadsAccountId, 8); } catch { recentPosts = []; }
+    const recentNote = recentPosts.length > 0
+      ? `\n\n【直近の投稿（同じ言い回しを繰り返さない）】\n${recentPosts.slice(0, 6).map((p, i) => `${i + 1}. ${String(p).replace(/\s+/g, ' ').slice(0, 90)}`).join('\n')}\n- 上の投稿で使った書き出し・決め台詞・たとえを、そのまま使い回さない。同じことを言うなら、別の入り方・別の言葉にする。\n- 読んだ人が「この前と同じ投稿だ」と感じたら失敗。`
+      : '';
+
     // Call LLM
     // ★自動投稿は人の目を通らず公開されるため、短文・会話調の最終指示を
     //   プロンプト末尾に追加する（末尾の指示が最も遵守されやすい）。
@@ -553,6 +576,7 @@ async function generateAutoPost(
         content: promptWithMode + AUTO_POST_STYLE_ADDENDUM
           + seasonContextJST()
           + angleNote
+          + recentNote
           + lengthNote
           + (retryHint ? `\n\n【前回の下書きが不合格だった理由（厳守・同じ形にしない）】\n${retryHint}\n- 上の型の締めは書かない。締めは絵文字なしで、この投稿の内容に固有の1文にする。` : '')
           + preferenceNote
@@ -617,7 +641,17 @@ async function generateAutoPost(
     //   砕けた締め（〜ますよ😊）の検査が効かず、初日から不自然な投稿が出うる（2026-09-09）。
     const registeredVoice = (counselingResult?.brandVoice ?? (stylePreference as any)?.voice ?? null) as string | null;
     const brandVoice: string | null = String(registeredVoice || '').trim() ? registeredVoice : (personal ? null : '丁寧で落ち着いた口調（未登録のため既定）');
-    let naturalMain = await naturalizeContent(beforeNaturalize, personal, brandVoice);
+    // ★リライトに「この店を指す言葉」を消させない（2026-09-10）。
+    //   このリライトは「50〜100文字に収める／情報は削ってよい」と指示しているため、
+    //   下書きに入っていた店名・地名を真っ先に削っていた。その結果あとの identityGuard に
+    //   落ちて枠ごと作り直しになり、3回で諦めて投稿ゼロになる枠が出ていた（2026-09-09の実測）。
+    //   下書きに実際に入っている言葉だけを「消さないで」と渡す（無い言葉は渡さない）。
+    let keepIdentityWords: string[] = [];
+    try {
+      const { checkIdentity } = await import('../shared/identityGuard');
+      keepIdentityWords = checkIdentity(beforeNaturalize, project).found.slice(0, 3);
+    } catch { keepIdentityWords = []; }
+    let naturalMain = await naturalizeContent(beforeNaturalize, personal, brandVoice, keepIdentityWords);
 
     // ★日本語品質ガード（shared/jpQualityGuard.ts）。
     //   リライトが口癖（「正直、」）・お手本コピー・ひらがな開きすぎ・
@@ -684,9 +718,23 @@ async function generateAutoPost(
       identityHint = identityTokens(project).slice(0, 6).join('／');
       const idv = checkIdentity(naturalMain, project);
       if (!idv.ok) {
-        console.warn(`[AutoPost] identityGuard: この店を指す言葉が無い → 作り直し userId=${userId} projectId=${project.id}`);
-        lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex), idv.hint);
-        return false;
+        // ★リライトが店名・地名を削っただけで、下書きには入っている場合は、
+        //   枠を捨てずにリライト前の文へ戻す（voiceGuard と同じ扱い・2026-09-10）。
+        //   ガードは緩めていない：戻した文も同じ検査を通っている。
+        const idBefore = checkIdentity(beforeNaturalize, project);
+        const { checkVoice } = await import('../shared/voiceGuard');
+        if (idBefore.ok && checkVoice(beforeNaturalize, brandVoice).ok && !findBannedTic(beforeNaturalize)) {
+          console.warn(`[AutoPost] identityGuard: リライトが「${idBefore.found[0]}」を削ったため、リライト前の文に戻す userId=${userId} projectId=${project.id}`);
+          naturalMain = beforeNaturalize;
+          try {
+            const guarded = await enforceNgWords({ mainPost: naturalMain } as any, ngWords);
+            naturalMain = (guarded as any).mainPost || naturalMain;
+          } catch { /* 生成時ガードは通過済みなのでそのまま使う */ }
+        } else {
+          console.warn(`[AutoPost] identityGuard: この店を指す言葉が無い → 作り直し userId=${userId} projectId=${project.id}`);
+          lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex), idv.hint);
+          return false;
+        }
       }
     } catch (e) { console.warn(`[AutoPost] identityGuard skipped: ${(e as Error)?.message}`); }
 
@@ -739,6 +787,24 @@ async function generateAutoPost(
         return false;
       }
     } catch { /* ガード失敗時はそのまま */ }
+
+    // ★直近の投稿の使い回し（shared/jpQualityGuard.ts の findRepeatedPhrase）。
+    //   2026-09-09 香取様が5本続けて「✕ 違う」を付けられた5本すべてに
+    //   「痛い場所だけ揉んでも」が入っていた。切り口は毎回違うのに決め台詞が同じ。
+    //   ただしこれは程度の問題なので、最後の作り直しでは止めない（枠を捨てない）。
+    if (recentPosts.length > 0) {
+      const dup = findRepeatedPhrase(naturalMain, recentPosts);
+      if (dup) {
+        if (lastAttempt) {
+          console.warn(`[AutoPost] 使い回し「${dup}」が残ったが、最後の作り直しのため公開する userId=${userId} projectId=${project.id}`);
+        } else {
+          console.warn(`[AutoPost] 直近の投稿と同じ言い回し「${dup}」→ 作り直し userId=${userId} projectId=${project.id}`);
+          lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex),
+            `- 直近の投稿と同じ言い回し「${dup}」を使っている。同じことを言うなら、別の入り方・別の言葉にする。`);
+          return false;
+        }
+      }
+    }
 
     // 「。」の直後に絵文字が続く形（「〜しますね。✨」）は人間の投稿に無い機械の癖。
     // 誤爆しない決定的な整形なので、どちらの経路（リライト採用/差し戻し）にも適用する。
@@ -1042,6 +1108,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                 eff.postLength,
                 sameDaySlots ? sameDaySlots[i] : null,
                 hint,
+                attempt === 3,
               );
               if (!success && attempt < 3) console.log(`[AutoPost] user=${user.id} account=${account.id} slot=${i} 作り直し ${attempt + 1}回目${hint ? '（前回の理由を渡す）' : ''}`);
             }

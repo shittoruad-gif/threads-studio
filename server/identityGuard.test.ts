@@ -48,3 +48,42 @@ describe("この店らしさの必須条件", () => {
     expect(checkIdentity("こんにちは", { storeName: null, area: null }).ok).toBe(true);
   });
 });
+
+/**
+ * 2026-09-09 の実測。リライト（naturalizeContent）が「50〜100文字に収める・
+ * 情報は削ってよい」の指示どおり店名・地名を先に削り、そのあとの identityGuard に
+ * 落ちて枠ごと作り直し→3回で諦め→その枠は投稿ゼロ、が繰り返し起きていた。
+ * 下書きには店を指す言葉が入っていたので、リライト前へ戻せば枠は救える。
+ */
+describe("リライトが店名・地名を削ったときは下書きに戻せる（2026-09-10）", () => {
+  const TENJIN = {
+    storeName: "廿日市天神整体院",
+    area: "広島県廿日市市",
+    localTerms: null,
+    proof: null,
+    strength: null,
+    usp: null,
+    counselingResult: null,
+  };
+
+  it("下書きには店を指す言葉があり、リライト後には無い", () => {
+    const draft = "廿日市で長引く肩こり。\n湿布でごまかしても、原因の姿勢は変わりません。\n姿勢から見直しています。";
+    const rewritten = "長引く肩こり。\n湿布でごまかしても、原因の姿勢は変わりません。\n姿勢から見直しています。";
+    expect(checkIdentity(rewritten, TENJIN).ok).toBe(false);
+    expect(checkIdentity(draft, TENJIN).ok).toBe(true);
+    expect(checkIdentity(draft, TENJIN).found).toContain("廿日市");
+  });
+
+  it("下書きにも入っていなければ、戻さず作り直すのが正しい", () => {
+    const draft = "長引く肩こり。湿布でごまかしても、原因の姿勢は変わりません。";
+    expect(checkIdentity(draft, TENJIN).ok).toBe(false);
+  });
+
+  it("リライトに渡す「消してはいけない言葉」は、下書きに実在するものだけ", () => {
+    const draft = "廿日市で長引く肩こり。姿勢から見直しています。";
+    // found は下書きに実際に入っていた言葉。登録にあっても本文に無い言葉は渡さない
+    const keep = checkIdentity(draft, TENJIN).found;
+    expect(keep).toContain("廿日市");
+    expect(keep).not.toContain("廿日市天神整体院");
+  });
+});

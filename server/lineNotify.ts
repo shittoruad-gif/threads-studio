@@ -51,6 +51,109 @@ export function generateLinkCode(): string {
 /** 連携コードの有効期限（10分） */
 export const LINK_CODE_TTL_MS = 10 * 60 * 1000;
 
+/**
+ * 月間の通数を使い切ったか（LINEは429 + "monthly limit" で返す）。
+ *
+ * 2026-09-09、無料枠200通を使い切って24時間で push が22件すべて 429 になり、
+ * 承認依頼・投稿のお知らせがどなたにも届かなかった。届かなかったことに
+ * こちらが気づけたのは翌朝の点検だった。以降は「メールで同じ内容をお届けし、
+ * 運営にも知らせる」ところまでを push の中でやる。
+ */
+export function isLineQuotaError(status: number, body: string): boolean {
+  return status === 429 && /monthly limit|quota/i.test(body);
+}
+
+/** 枠切れを運営へ知らせるのは1日1回まで（同じ通知を何十通も出さない） */
+let quotaAlertedOn: string | null = null;
+
+/** LINEの文章メッセージだけを取り出す（メールへ振り替える本文に使う） */
+function textOf(messages: unknown[]): string {
+  const out: string[] = [];
+  for (const m of messages as any[]) {
+    if (m?.type === "text" && m.text) out.push(String(m.text));
+    else if (m?.type === "template" && m.altText) out.push(String(m.altText));
+    else if (m?.type === "flex" && m.altText) out.push(String(m.altText));
+  }
+  return out.join("\n\n").trim();
+}
+
+/**
+ * LINEが送れなかったときに、同じ内容をメールでお届けする。
+ * 本文が取り出せない（画像・カードだけ）ときは何もしない。
+ */
+async function fallbackToEmail(lineUserId: string, messages: unknown[], reason: string): Promise<void> {
+  const body = textOf(messages);
+  if (!body) return;
+  try {
+    const [{ getUserByLineUserId }, { sendEmail }] = await Promise.all([
+      import("./db"),
+      import("./_core/notification"),
+    ]);
+    const user: any = await getUserByLineUserId(lineUserId);
+    if (!user?.email) return;
+    const { escapeHtml } = await import("../shared/sanitize");
+    await sendEmail({
+      to: user.email,
+      subject: "【Threads Studio】LINEでお送りできなかったお知らせ",
+      html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+        <p>いつもご利用ありがとうございます。<br>本来LINEでお届けする内容が、送信の上限に達したためお送りできませんでした。同じ内容をメールでお届けします。</p>
+        <div style="white-space:pre-wrap;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0;">${escapeHtml(body)}</div>
+        <p style="color:#666;font-size:13px;">ご不便をおかけします。LINEは復旧しだい元どおりお届けします。</p>
+      </div>`,
+    });
+    console.log(`[LineNotify] push不可（${reason}）→ ${user.email} へメールで振り替えた`);
+  } catch (e) {
+    console.error("[LineNotify] メールへの振り替えに失敗:", (e as Error)?.message);
+  }
+}
+
+/** 枠切れを運営へ1日1回だけ知らせる */
+async function alertStaffQuotaExhausted(): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  if (quotaAlertedOn === today) return;
+  quotaAlertedOn = today;
+  try {
+    const { sendEmail } = await import("./_core/notification");
+    const q = await fetchLineQuota();
+    await sendEmail({
+      to: process.env.ADMIN_NOTIFICATION_EMAIL || "shittoru.ad@gmail.com",
+      subject: "【Threads Studio】LINEの月間通数を使い切りました（お客様への通知がメールに切り替わっています）",
+      html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+        <h2>LINEの月間通数を使い切りました</h2>
+        <p>公式LINEからのプッシュ通知が送れない状態です。お客様には同じ内容をメールでお届けしていますが、
+        LINEのプランを上げるまで、承認依頼や投稿のお知らせはLINEに届きません。</p>
+        <p>いまの残量：${q ? `${q.limit === null ? "無制限" : `上限 ${q.limit} 通 / 使用 ${q.used} 通`}` : "取得できませんでした"}</p>
+      </div>`,
+    });
+  } catch (e) {
+    console.error("[LineNotify] 枠切れの通知に失敗:", (e as Error)?.message);
+  }
+}
+
+/**
+ * 月間通数の残量。朝の点検と枠切れ通知で使う。
+ * limit=null は無制限プラン。
+ */
+export async function fetchLineQuota(): Promise<{ limit: number | null; used: number; remaining: number | null } | null> {
+  const token = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
+  if (!token) return null;
+  try {
+    const headers = { Authorization: `Bearer ${token}` };
+    const [qr, cr] = await Promise.all([
+      fetch(`${API_BASE}/message/quota`, { headers }),
+      fetch(`${API_BASE}/message/quota/consumption`, { headers }),
+    ]);
+    if (!qr.ok || !cr.ok) return null;
+    const q = (await qr.json()) as { type?: string; value?: number };
+    const c = (await cr.json()) as { totalUsage?: number };
+    const limit = q.type === "limited" && typeof q.value === "number" ? q.value : null;
+    const used = Number(c.totalUsage ?? 0);
+    return { limit, used, remaining: limit === null ? null : Math.max(0, limit - used) };
+  } catch {
+    return null;
+  }
+}
+
 async function pushMessage(lineUserId: string, messages: unknown[]): Promise<boolean> {
   const token = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
   if (!token) return false;
@@ -62,6 +165,12 @@ async function pushMessage(lineUserId: string, messages: unknown[]): Promise<boo
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     console.error(`[LineNotify] push失敗 ${res.status}: ${body.slice(0, 200)}`);
+    // ★通数を使い切って届かなかったときは、黙って消さずメールで同じ内容をお届けする。
+    //   （2026-09-09 22通すべてが 429 で消え、翌朝まで誰も気づけなかった）
+    if (isLineQuotaError(res.status, body)) {
+      await fallbackToEmail(lineUserId, messages, `LINE ${res.status}`);
+      await alertStaffQuotaExhausted();
+    }
     return false;
   }
   return true;

@@ -43,8 +43,17 @@ export function compensationCount(want: number, days: number, postedSinceConnect
   return { count: want + COMPENSATION_EXTRA_PER_DAY, shortfall };
 }
 
+/**
+ * 連携した日を「1日目」と数えた表示用の日数。
+ * お客様に見せる文はすべてこれを通す（生成側は「8日目」・公開側は「7日目」と
+ * 食い違っていた・2026-09-10）。
+ */
+export function rampDayLabel(days: number): number {
+  return days + 1;
+}
+
 export function rampNote(days: number, want: number = 3): string {
-  const n = days + 1; // 連携した日を「1日目」と数える
+  const n = rampDayLabel(days); // 連携した日を「1日目」と数える
   const tail = want >= 2 ? `。減った分は${RAMP_DAYS_2 + 1}日目以降に1日${want + COMPENSATION_EXTRA_PER_DAY}件で補い、30日間で${want * 30}件になります` : "";
   if (days < RAMP_DAYS_1) return `慣らし運転：連携から${n}日目のため1日1件（${RAMP_DAYS_1}日目まで）${tail}`;
   if (days < RAMP_DAYS_2) return `慣らし運転：連携から${n}日目のため1日2件（${RAMP_DAYS_2}日目まで）${tail}`;

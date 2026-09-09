@@ -135,6 +135,32 @@ async function main() {
     }
   }
 
+  // ★LINEの月間通数の残り（2026-09-09に無料枠200通を使い切り、24時間ぶんの
+  //   お知らせがどなたにも届かなかった。使い切る前に気づけるようにする）
+  try {
+    const tk = e.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
+    if (tk) {
+      const h = { Authorization: `Bearer ${tk}` };
+      const [qr, cr] = await Promise.all([
+        fetch('https://api.line.me/v2/bot/message/quota', { headers: h }),
+        fetch('https://api.line.me/v2/bot/message/quota/consumption', { headers: h }),
+      ]);
+      const q = await qr.json();
+      const c = await cr.json();
+      const used = Number(c.totalUsage ?? 0);
+      console.log('\n■ LINEの月間通数');
+      if (q.type === 'limited' && typeof q.value === 'number') {
+        const left = Math.max(0, q.value - used);
+        const low = left <= Math.ceil(q.value * 0.1);
+        console.log(`  残り ${left} 通 / 上限 ${q.value} 通（使用 ${used} 通）${low ? '  ★残り1割を切っています。プラン変更を検討してください' : ''}`);
+      } else {
+        console.log(`  上限なし（使用 ${used} 通）`);
+      }
+    }
+  } catch (err) {
+    console.log(`\n■ LINEの月間通数: 取得できず (${String(err.message).slice(0, 40)})`);
+  }
+
   console.log('\n===== 点検おわり =====');
 }
 

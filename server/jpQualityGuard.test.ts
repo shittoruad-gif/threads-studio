@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   checkNaturalized, hiraganaRatio, endsWithQuestion, countNdesu,
-  countEmoji, hasRepeatedEnding, polishPunctuation, findBannedTic,
+  countEmoji, hasRepeatedEnding, polishPunctuation, findBannedTic, findRepeatedPhrase,
   HIRAGANA_RATIO_MAX, NDESU_MAX,
 } from "../shared/jpQualityGuard";
 
@@ -146,5 +146,41 @@ describe("部品の単体動作", () => {
   it("endsWithQuestion は絵文字付きの問いかけも判定する", () => {
     expect(endsWithQuestion("どこが気になりますか？😊")).toBe(true);
     expect(endsWithQuestion("今日から始めます😊")).toBe(false);
+  });
+});
+
+/**
+ * 2026-09-09 実測。香取様（@shin_honetugi）が5本続けて「✕ 違う」を付け、
+ * うち4本をご自身で見送られた。切り口は毎回違うのに、書き出しの決め台詞だけが
+ * 毎回同じだった。生成側が自分の直近の投稿を見ていなかったのが原因。
+ */
+describe("直近の投稿の使い回しを見つける（2026-09-10）", () => {
+  const 直近 = [
+    "痛い場所だけ揉んでも、なかなか良くならないんです。\n\n根本原因は別の場所にあることが多い。\n整形外科で11年勤務した経験から、しっかりサポートします。",
+    "スポーツの秋。ケガで悩む人の勘違い3つ。\n\n痛い場所だけ揉んでも、なかなか良くならないんです。\n昔の私もそうだった😅",
+  ];
+
+  it("実際に✕が付いた5本に共通していた一節を拾う", () => {
+    const 新しい下書き = "スポーツのケガ、痛い場所だけ揉んでも、なかなか良くならないんです。\n\n昔の私もそうでした😅";
+    const dup = findRepeatedPhrase(新しい下書き, 直近);
+    expect(dup).not.toBeNull();
+    expect(dup).toContain("痛い場所だけ揉んでも");
+  });
+
+  it("句読点・絵文字の違いは吸収する（「、」を抜いても同じ使い回し）", () => {
+    expect(findRepeatedPhrase("痛い場所だけ揉んでもなかなか良くならないんです✨", 直近)).not.toBeNull();
+  });
+
+  it("同じ業種の言葉が少し重なるだけでは止めない（誤爆させない）", () => {
+    expect(findRepeatedPhrase("肩こりの原因は姿勢にあることが多いです。今日は座り方の話を。", 直近)).toBeNull();
+    expect(findRepeatedPhrase("スポーツの秋ですね。", 直近)).toBeNull();
+  });
+
+  it("直近の投稿が無ければ何も止めない", () => {
+    expect(findRepeatedPhrase("痛い場所だけ揉んでも、なかなか良くならないんです。", [])).toBeNull();
+  });
+
+  it("短い下書きで誤爆しない", () => {
+    expect(findRepeatedPhrase("こんにちは", 直近)).toBeNull();
   });
 });

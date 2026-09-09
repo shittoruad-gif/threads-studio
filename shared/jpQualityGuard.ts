@@ -258,3 +258,57 @@ export function checkNaturalized(
 
   return { ok: true };
 }
+
+// ── 直近の自分の投稿の使い回しを見つける ──────────────────────
+/**
+ * 2026-09-09 実測。香取様（@shin_honetugi）が5本続けて「✕ 違う」を付け、
+ * うち4本をご自身で見送られた。その5本すべてに同じ一節が入っていた：
+ *   「痛い場所だけ揉んでも、なかなか良くならないんです。」
+ *   「スポーツのケガ、痛い場所だけ揉んでも良くならない。」
+ *   「整形外科で11年勤務していました。痛い場所だけ揉んでも、根本は変わりません。」
+ * 切り口（angle）は毎回変えているのに、書き出しの決め台詞だけが毎回同じで、
+ * 読む側には「同じ投稿が続いている」と映る。生成側は自分の直近の投稿を
+ * 見ていないため、これを避けようがなかった。
+ */
+
+/** 比較用に整える（記号・空白・絵文字を落とす） */
+function plain(s: string): string {
+  return String(s || "")
+    .replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0))
+    .replace(/[\s　]/g, "")
+    .replace(/[、。！？!?・「」『』（）()…‥~〜\-—:：;；'"”“]/g, "")
+    // 絵文字・記号（サロゲートペア域と記号域）。u フラグはこのビルド設定では使えないため範囲で書く
+    .replace(/[\uD800-\uDFFF]/g, "")
+    .replace(/[←-⇿☀-➿️⬀-⯿]/g, "");
+}
+
+/** これ以上長く一致したら「使い回し」とみなす文字数 */
+export const REPEAT_MIN_CHARS = 14;
+
+/**
+ * 直近の投稿と連続して一致する一番長い部分を返す（無ければ null）。
+ * 短い決まり文句や業種の言葉（「肩こり」など）で誤爆しないよう、
+ * REPEAT_MIN_CHARS 以上つながって一致したときだけ拾う。
+ */
+export function findRepeatedPhrase(
+  text: string,
+  recentTexts: readonly string[],
+  minChars: number = REPEAT_MIN_CHARS,
+): string | null {
+  const a = Array.from(plain(text));
+  if (a.length < minChars) return null;
+  let best = "";
+  for (const r of recentTexts) {
+    const b = plain(r);
+    if (b.length < minChars) continue;
+    // a の各位置から、b に含まれる最長の連続一致を伸ばす
+    for (let i = 0; i + minChars <= a.length; i++) {
+      let len = minChars;
+      if (!b.includes(a.slice(i, i + len).join(""))) continue;
+      while (i + len < a.length && b.includes(a.slice(i, i + len + 1).join(""))) len++;
+      const hit = a.slice(i, i + len).join("");
+      if (hit.length > best.length) best = hit;
+    }
+  }
+  return best.length >= minChars ? best : null;
+}

@@ -450,7 +450,7 @@ async function repliesForProfile(userId: number): Promise<unknown[]> {
     );
     if (projects.length === 0) {
       return [textWithQuick(
-        "まだお店の情報が登録されていません。\nこのトークで質問にお答えいただくだけで登録できます（10〜15分・全20問）。",
+        "まだお店の情報が登録されていません。\nこのトークで質問にお答えいただくだけで登録できます。最初は5つだけです（URL1つと質問4つ・2分ほど）。",
         [{ label: "はじめの設定を始める", data: "m=setup" }, ...MENU_HINT],
       )];
     }
@@ -1064,8 +1064,24 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
 /** はじめの設定を開始（まず目的を選んでもらう） */
 async function startCounseling(lineUserId: string, accountId?: number | null): Promise<unknown[]> {
   const a = accountId ? `&a=${accountId}` : "";
+  // ★はじめての方は実際には「まず5問」で終わる（2026-09-10 デプロイの quick 経路）のに、
+  //   この入口だけ「10〜15分・全20問」と告げていた。設定に入る前に諦める方が出るので、
+  //   これから通る道と同じ案内にする。前回の登録内容がある方（やり直し）は従来どおり。
+  let redo = false;
+  try {
+    const user = await db.getUserByLineUserId(lineUserId);
+    if (user) {
+      const { buildPrefillFromSavedProject } = await import("./counselingPrefill");
+      const projects = ((await db.getProjectsByUserId(user.id)) || [])
+        .filter((pj: any) => !String(pj.id).startsWith("demo_"));
+      redo = projects.some((pj: any) => Object.keys(buildPrefillFromSavedProject(pj)).length >= 3);
+    }
+  } catch { redo = false; }
+  const lead = redo
+    ? "はじめの設定を始めます。前回の答えが入った状態でお出しするので、合っていれば「これでOK」を押すだけで進みます。\n\n"
+    : "はじめの設定を始めます。最初は5つだけです（URL1つと質問4つ・2分ほど）。\n\n";
   return [textWithQuick(
-    "はじめの設定を始めます（10〜15分・全20問）。\n\n" +
+    lead +
     "まず、何のための発信かを選んでください。\n" +
     "・お店の集客：お客様に来てもらうための発信\n" +
     "・個人にファンをつける：ご自身の名前での発信\n\n" +
@@ -2582,6 +2598,18 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   if (wantsTodayPosts(t)) return handlePostback(lineUserId, "m=posts");
   if (/^(設定|せってい)$/.test(t)) return handlePostback(lineUserId, "m=settings");
   if (/^(追加|ついか)$/.test(t)) return issueStaffLinkCode(user.id);
+  // ★「Zoom希望」とお送りくださいとご案内しているのに、受け取り口が無く
+  //   「ご用件を下から選んでください」で終わっていた（2026-09-10 夜間整備で検出）。
+  //   担当者へお伝えする経路に乗せ、朝の報告で日程調整として拾えるようにする。
+  if (/(zoom|ズーム|ずーむ)/i.test(t) && Array.from(t).length <= 40) {
+    await forwardToStaff(user.id, lineUserId, `【Zoom希望】画面を一緒に見ながらの説明をご希望です。（お客様の文面：${t}）`);
+    return [textWithQuick(
+      "承りました。Zoomで画面を一緒に見ながら進めます（プロプラン以上・期間限定・初回30分）。\n" +
+      "担当者から、このトークに日程のご相談をお送りします。ご都合のよい曜日・時間帯があれば、続けてお送りください。\n\n" +
+      "お急ぎの場合は、お困りの画面のスクリーンショットをこのトークに送っていただければ、先に文字でお答えします。",
+      MENU_HINT,
+    )];
+  }
   // ★紹介コードをそのまま送られた場合は、その場で適用して料金ページへご案内する。
   if (looksLikeReferralCode(t)) return referralLink(lineUserId, t, user.id);
 

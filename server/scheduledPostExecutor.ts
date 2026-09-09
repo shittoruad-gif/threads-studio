@@ -226,7 +226,8 @@ export async function executePendingPosts() {
                 try {
                   const targets = await db.getLineUserIdsForUser(post.userId);
                   const { pushMessages } = await import('./lineNotify');
-                  for (const to of targets) await pushMessages(to, [{ type: 'text', text: `@${account.threadsUsername} は連携から${rc.days}日目の「慣らし運転」中です。今日はご自身の投稿を含めて${todayCount}件になったため、自動投稿1件を見送りました（上限は1日${rc.count}件）。新しいアカウントで多く投稿すると停止されやすいための安全策です。` }]);
+                  const { rampDayLabel } = await import('../shared/accountRamp');
+                  for (const to of targets) await pushMessages(to, [{ type: 'text', text: `@${account.threadsUsername} は連携から${rampDayLabel(rc.days)}日目の「慣らし運転」中です。今日はご自身の投稿を含めて${todayCount}件になったため、自動投稿1件を見送りました（上限は1日${rc.count}件）。新しいアカウントで多く投稿すると停止されやすいための安全策です。` }]);
                 } catch { /* 通知失敗は無視 */ }
                 continue;
               }

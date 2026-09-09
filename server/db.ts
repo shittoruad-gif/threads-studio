@@ -3580,6 +3580,27 @@ export async function countAccountAutoPostsSinceConnect(accountId: number): Prom
 }
 
 /**
+ * そのアカウントの直近の投稿本文（新しい順）。
+ * 生成のときに「この言い回しは直近で使ったから繰り返さない」の材料に使う。
+ * 2026-09-09、切り口は毎回変えているのに書き出しの決め台詞だけが同じ投稿が
+ * 5本続き、お客様が5本とも「✕ 違う」を付けられた（shared/jpQualityGuard.ts）。
+ */
+export async function getRecentPostContents(accountId: number, limit: number = 10): Promise<string[]> {
+  const database = await getDb();
+  if (!database) return [];
+  try {
+    const rows: any = await database.execute(sql`
+      SELECT postContent FROM scheduledPosts
+      WHERE threadsAccountId = ${accountId} AND postContent IS NOT NULL AND postContent <> ''
+        AND status IN ('posted','pending','awaiting_approval','processing')
+      ORDER BY scheduledAt DESC LIMIT ${limit}`);
+    return (((rows as any)[0] ?? []) as any[]).map((r) => String(r.postContent || "")).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * お客様がご自分で直した投稿（直す前・直した後）を新しい順に取る。
  * 翌日以降の投稿を、その方の好みに寄せるための材料（shared/postPreference.ts）。
  */
