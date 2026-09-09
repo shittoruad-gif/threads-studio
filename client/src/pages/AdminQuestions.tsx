@@ -34,10 +34,6 @@ export default function AdminQuestions() {
   const { data: stuck } = trpc.admin.listStuckUsers.useQuery();
   // ★新規のお客様の最初の3本は、お客様へ送る前にここで目を通す（2026-09-08）
   const { data: reviewPosts } = trpc.admin.listAdminReviewPosts.useQuery(undefined, { refetchInterval: 60_000 });
-  const releasePost = trpc.admin.releaseAdminReviewPost.useMutation({
-    onSuccess: (r) => { toast.success(r.notified > 0 ? 'お客様へ承認カードを送りました' : '確認済みにしました'); utils.admin.listAdminReviewPosts.invalidate(); },
-    onError: (e) => toast.error(e.message),
-  });
   const cancelPost = trpc.admin.cancelAdminReviewPost.useMutation({
     onSuccess: () => { toast.success('取り下げました（翌朝また作られます）'); utils.admin.listAdminReviewPosts.invalidate(); },
     onError: (e) => toast.error(e.message),
@@ -169,7 +165,7 @@ export default function AdminQuestions() {
       {/* 新規のお客様の最初の投稿。お客様へ送る前に運営が読む。 */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">新規のお客様の最初の投稿（送る前に確認）</CardTitle>
+          <CardTitle className="text-base">新規のお客様の最初の投稿（参考）</CardTitle>
         </CardHeader>
         <CardContent>
           {!reviewPosts ? (
@@ -192,11 +188,7 @@ export default function AdminQuestions() {
                   </div>
                   <p className="text-sm text-foreground whitespace-pre-wrap break-words">{p.postContent}</p>
                   <div className="flex gap-2 flex-wrap pt-1">
-                    <Button size="sm" onClick={() => releasePost.mutate({ id: p.id })} disabled={releasePost.isPending || cancelPost.isPending}>
-                      <Send className="w-4 h-4 mr-1.5" />
-                      お客様へ送る
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => cancelPost.mutate({ id: p.id })} disabled={releasePost.isPending || cancelPost.isPending}>
+                    <Button size="sm" variant="outline" onClick={() => cancelPost.mutate({ id: p.id })} disabled={cancelPost.isPending}>
                       取り下げる
                     </Button>
                   </div>
@@ -205,7 +197,7 @@ export default function AdminQuestions() {
             </div>
           )}
           <p className="text-xs text-muted-foreground mt-3">
-            連携してから公開3本目までは、ここで確認するまでお客様に届きません。「お客様へ送る」で承認カードが届きます。取り下げは「違う」として学習に使われ、翌朝また作られます。
+            連携してから公開3本目までの投稿です。お客様の承認で公開されます（運営の操作は不要）。気になる投稿だけ「取り下げる」を押してください。取り下げた分は翌朝作り直されます。
           </p>
         </CardContent>
       </Card>

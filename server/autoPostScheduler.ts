@@ -792,8 +792,9 @@ async function generateAutoPost(
     // （「Meta AIに聞く」セルフ返信は 2026-09-06 に「呼びかけ投稿」方式へ変更。下の scheduleMetaAiCallPost）
     const metaAiAskText: string | null = null;
 
-    // ★新規のお客様の最初の3本は、お客様に届く前に運営が目を通す（2026-09-08 三上様指示）。
-    //   adminReviewRequired=1 のあいだは承認カードを送らず、承認されても公開しない（運営が「送る」を押すまで）。
+    // ★新規のお客様の最初の3本には印を付け、運営が管理画面で読めるようにする（参考）。
+    //   2026-09-10 三上様指示「ユーザーがOKを出したら、そのまま投稿される形に」＝運営の操作は要らない。
+    //   承認カードはふつうに送り、お客様の承認だけで公開される。
     let adminReviewRequired = false;
     try { adminReviewRequired = (await db.countAccountPublishedAutoPosts(threadsAccountId)) < 3; } catch { adminReviewRequired = false; }
 
@@ -819,8 +820,8 @@ async function generateAutoPost(
         const { notifyOwner } = await import('./_core/notification');
         const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
         await notifyOwner({
-          title: '新規のお客様の最初の投稿（運営の確認待ち）',
-          content: `${(project as any).storeName || ''}（user ${userId}）の投稿を作りました。お客様へ送る前に確認してください。\n${base}/admin/questions\n\n${fullContent}`,
+          title: '新規のお客様の最初の投稿（参考）',
+          content: `${(project as any).storeName || ''}（user ${userId}）の投稿を作りました。お客様の承認で公開されます（運営の操作は不要）。気になる点があれば管理画面で取り下げられます。\n${base}/admin/questions\n\n${fullContent}`,
         });
       } catch (e) { console.warn(`[AutoPost] 運営への確認依頼に失敗: ${(e as Error)?.message}`); }
     }
@@ -1068,9 +1069,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         //   メール内で本文を読み、そのまま承認できる（ログイン不要）。
         if (anyApproval) {
           try {
-            // ★運営の確認待ち（新規の最初の3本）は、運営が「送る」を押すまでお客様に案内しない
-            const fresh = (await db.getRecentAwaitingApprovalPosts(user.id, 30))
-              .filter((p: any) => !(Number(p.adminReviewRequired) === 1 && !p.adminReviewAt));
+            const fresh = await db.getRecentAwaitingApprovalPosts(user.id, 30);
             const owner = fresh.length > 0 ? await db.getUserById(user.id) : null;
             if (fresh.length > 0 && owner?.email) {
               const { sendApprovalDigestEmail } = await import('./approvalEmail');

@@ -114,11 +114,9 @@ export async function executePendingPosts() {
 
     for (const post of posts) {
       try {
-        // ★新規のお客様の最初の3本は、運営が目を通すまで公開しない（2026-09-08 三上様指示）。
-        //   お客様が先に承認していても pending のまま待ち、運営の「送る」で adminReviewAt が入ってから公開する。
-        if (Number((post as any).adminReviewRequired) === 1 && !(post as any).adminReviewAt) {
-          continue;
-        }
+        // ★2026-09-10 三上様指示「ユーザーがOKを出したら、そのまま投稿される形に」。
+        //   以前は新規の最初の3本を運営が「送る」を押すまで公開しなかったが、押す人がいない日に
+        //   承認済みの投稿が3本止まったため撤廃。adminReviewRequired は管理画面の「参考に読む」印としてだけ残す。
         // ★#3 アトミック CAS で処理権を取得（他のワーカーと競合した場合は false）。
         //   失敗（既に他で処理済み）ならこの投稿はスキップ → 二重送信を防止。
         const claimed = await db.claimScheduledPost(post.id);

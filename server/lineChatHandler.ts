@@ -570,6 +570,15 @@ interface CounselingState {
   /** saved＝前回の登録内容、profile＝連携アカウントのプロフィール */
   prefillKind?: "saved" | "profile";
   /**
+   * 最初の「ホームページのURLを貼ってください」への返事を待っている（2026-09-10 三上様指示）。
+   * URLが来たらページを読んで答えを先に入れ、そのあと質問に進む。「なし」なら、そのまま質問へ。
+   */
+  awaitingUrl?: boolean;
+  /** ホームページから読み取れた項目のうち、「まず5つ」で聞かない分（保存時にそのまま登録する） */
+  webExtras?: Record<string, string>;
+  /** 読み取ったホームページのURL */
+  websiteUrl?: string;
+  /**
    * 時間が空いたあとに送られてきた文章。
    * 「続きから再開する」を選ばれたら、いま出している質問への回答として使う。
    * （再開の確認をしている間、お客様が書いた文章を捨てないため）
@@ -647,8 +656,12 @@ async function offerCounselingResume(
   )];
 }
 
-/** 「まず5問」で聞く質問。この5つで投稿は作れる（店名・地名で「この店らしさ」も満たせる） */
-const QUICK_QUESTION_IDS: readonly string[] = ["businessTypeRaw", "areaRaw", "storeNameRaw", "targetRaw", "mainProblemRaw"];
+/**
+ * 「まず5つ」で聞く質問（URL1つ＋この4問）。優先順位の高い順（2026-09-10 三上様指示）。
+ * 業種・地域・店名で「この店らしさ」が満たせ、お悩みで話題が決まる。
+ * お客さん像はホームページから読めることが多く、読めなければ「きょうの1問」の最初に聞く。
+ */
+const QUICK_QUESTION_IDS: readonly string[] = ["businessTypeRaw", "areaRaw", "storeNameRaw", "mainProblemRaw"];
 
 function questionsFor(mode: "store" | "personal", answers?: Record<string, string>, quick?: boolean) {
   // ★個人モードでも、まず業種で候補を差し替えてから個人向けの言い回しを重ねる。
@@ -761,6 +774,63 @@ function askQuestion(st: CounselingState): unknown[] {
 }
 
 /**
+ * 最初の「ホームページのURL」への返事を受け取る。
+ * URLならページを読んで答えを先に入れる。「なし」ならそのまま質問へ。
+ * 読めなかったときは、その旨を正直に伝えて質問へ（推測で埋めない）。
+ */
+async function receiveWebsiteUrl(lineUserId: string, cs: CounselingState, text: string): Promise<unknown[]> {
+  const t = text.trim();
+  if (/^(やめる|中止|キャンセル)$/.test(t)) {
+    await db.clearLineChatState(lineUserId);
+    await clearCounselingBackup(lineUserId);
+    return [textWithQuick("はじめの設定を中断しました。「はじめの設定」からいつでも再開できます。", MENU_HINT)];
+  }
+  const { extractUrl, buildPrefillFromWebsite } = await import("./websitePrefill");
+  const url = extractUrl(t);
+  if (!url) {
+    if (/^(なし|無い|ない|ありません|スキップ|無し|URLは無い)$/.test(t)) {
+      cs.awaitingUrl = false;
+      await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
+      return [{ type: "text", text: "分かりました。質問でお聞きします。" }, ...askQuestion(cs)];
+    }
+    return [textWithQuick(
+      "URLが見つかりませんでした。\nhttps:// から始まるホームページのアドレスを、そのまま貼ってください。\n\nホームページが無い場合は下の「URLは無い」を押してください。",
+      [{ label: "URLは無い", data: "c=nourl" }],
+    )];
+  }
+  const r = await buildPrefillFromWebsite(url);
+  cs.awaitingUrl = false;
+  if (!r.ok) {
+    await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
+    return [
+      { type: "text", text: `すみません、そのページは読み取れませんでした（${r.reason ?? "取得できず"}）。\n質問でお聞きしますので、そのままお答えください。` },
+      ...askQuestion(cs),
+    ];
+  }
+  // 聞く質問はプロフィールより優先して「こう読み取りました」に、聞かない分はそのまま登録する
+  const asked = new Set(questionsFor(cs.mode, cs.answers, cs.quick).map((q: any) => String(q.id)));
+  const prefill: Record<string, string> = { ...(cs.prefill ?? {}) };
+  const extras: Record<string, string> = { ...(cs.webExtras ?? {}) };
+  let filled = 0;
+  for (const [k, v] of Object.entries(r.answers)) {
+    if (!v) continue;
+    filled++;
+    if (asked.has(k)) prefill[k] = v; else extras[k] = v;
+  }
+  cs.prefill = prefill;
+  cs.prefillSource = r.source;
+  cs.prefillKind = "profile";
+  cs.webExtras = extras;
+  cs.websiteUrl = r.url;
+  await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
+  const askedCount = Object.keys(r.answers).filter((k) => asked.has(k) && r.answers[k as keyof typeof r.answers]).length;
+  return [
+    { type: "text", text: `${r.source}を読んで、${filled}項目を先に入れました。\n次の質問で「こう読み取りました」と出しますので、合っていれば「これでOK」、違えば正しい内容を送ってください${askedCount < asked.size ? "。読み取れなかった分は、そのままお答えください" : ""}。` },
+    ...askQuestion(cs),
+  ];
+}
+
+/**
  * 全問の回答を一覧で見せる確認画面。
  * ここから「◯番を直す」で1問だけ直せる（直したらまたこの画面に戻る）。
  */
@@ -777,9 +847,20 @@ function reviewCounseling(st: CounselingState): unknown[] {
   //   20問の答えをそのまま並べても、何がどう使われるのかが伝わらなかった。
   //   「まず5問」のときは要旨に「（未記入）」が並んで不安にさせるので、5問の答えだけを見せる。
   if (st.quick) {
+    const extras = Object.entries(st.webExtras ?? {}).filter(([, v]) => String(v || "").trim());
+    const extraText = extras.length
+      ? "\n\nホームページから読み取った次の項目も、一緒に登録します。\n" +
+        extras.map(([k, v]) => {
+          const q: any = COUNSELING_QUESTIONS.find((x) => String(x.id) === k);
+          const title = q ? String(q.prompt).split("\n")[0].replace(/[。？]$/, "").slice(0, 22) : k;
+          const val = String(v).length > 40 ? String(v).slice(0, 40) + "…" : String(v);
+          return `・${title}\n　 ${val}`;
+        }).join("\n") +
+        "\n（違うところは、登録のあと「はじめの設定をやり直す」で直せます）"
+      : "";
     return [
       textWithQuick(
-        "5問ありがとうございました。入力いただいた内容です。\n\n" + lines.join("\n") +
+        "ありがとうございました。入力いただいた内容です。\n\n" + lines.join("\n") + extraText +
         "\n\nこの内容でよろしければ「登録する」を押してください。\n直したい項目がある場合は「直す」を押して、番号を送ってください。",
         [
           { label: "この内容で登録する", data: "c=save" },
@@ -884,8 +965,10 @@ async function advanceCounseling(userId: number, lineUserId: string, st: Counsel
 async function saveCounselingFromChat(userId: number, lineUserId: string, st: CounselingState): Promise<unknown[]> {
   await db.clearLineChatState(lineUserId);
   await clearCounselingBackup(lineUserId);
+  // ★ホームページから読み取った「聞かなかった項目」も一緒に登録する（お客様の答えが優先）
+  const answers = { ...(st.webExtras ?? {}), ...st.answers };
   const res = await saveCounselingAnswers({
-    userId, projectId: st.projectId, mode: st.mode, answers: st.answers as any,
+    userId, projectId: st.projectId, mode: st.mode, answers: answers as any,
     oneLine: st.oneLine ?? "",
   });
   // 指定のアカウントに、いま登録したお店の情報を結びつける（そのアカウントの投稿に使われる）
@@ -1329,15 +1412,37 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const st: CounselingState = {
       mode: q.mode, step: 0, answers: {}, projectId, accountId, accountName, quick,
       ...(prefillCount > 0 ? { prefill, prefillSource, prefillKind } : {}),
+      // ★はじめての登録は、まずホームページのURLをお願いする（2026-09-10 三上様指示）。
+      //   ページを読めば業種・地域・店名・強み・メニュー・営業時間はほぼ埋まり、残りは「これでOK」で進める。
+      ...(quick ? { awaitingUrl: true } : {}),
     };
     await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
     const { prefillIntroText } = await import("./counselingPrefill");
+    if (quick) {
+      return [
+        { type: "text", text: (accountName ? `${accountName} の設定として、` : "") + (q.mode === "personal" ? "「個人にファンをつける」で進めます。" : "「お店の集客」で進めます。") },
+        { type: "text", text: "最初は5つだけです（URL1つと質問4つ・2分ほど）。終わると、その場で最初の投稿を作ってお届けします。\n残りの質問は、投稿が動き始めてから1日1問ずつお聞きします。\n\n途中でやめたいときは「やめる」と送ってください。" },
+        textWithQuick(
+          "【1／5】\nお店のホームページのURLを貼ってください。\n（ホットペッパー・Instagram・Googleマップのページでも大丈夫です）\n\nページを読んで、業種・場所・店名・強み・メニューなどを先に入れておきます。合っているものは「これでOK」を押すだけで進めます。\n\nホームページが無い場合は下の「URLは無い」を押してください。",
+          [{ label: "URLは無い", data: "c=nourl" }],
+        ),
+      ];
+    }
     return [
       { type: "text", text: (accountName ? `${accountName} の設定として、` : "") + (q.mode === "personal" ? "「個人にファンをつける」で進めます。" : "「お店の集客」で進めます。") },
       ...(quick ? [{ type: "text", text: "まず5問だけお聞きします（2分ほど）。答え終わると、その場で最初の投稿を作ってお届けします。\n残りの質問は、投稿が動き始めてから1日1問ずつお聞きします（答えるほど、投稿がお店らしくなります）。" }] : []),
       ...(prefillCount > 0 ? [{ type: "text", text: prefillIntroText(prefillSource, prefillCount, prefillKind) }] : []),
       ...askQuestion(st),
     ];
+  }
+  // 「URLは無い」→ そのまま質問へ
+  if (q.c === "nourl") {
+    const cur = await db.getLineChatState(lineUserId);
+    if (cur?.state !== "counseling" || !cur.payload) return [textWithQuick("設定が始まっていません。「はじめの設定」から始めてください。", [{ label: "はじめの設定", data: "m=setup" }, ...MENU_HINT])];
+    const cs: CounselingState = JSON.parse(cur.payload);
+    cs.awaitingUrl = false;
+    await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
+    return [{ type: "text", text: "分かりました。質問でお聞きします。" }, ...askQuestion(cs)];
   }
   if (q.m === "menu") return [textWithQuick("どれをご覧になりますか？", MENU_HINT)];
   if (q.m === "cancel") {
@@ -2254,6 +2359,8 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
         await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
       }
       const qs = questionsFor(cs.mode, cs.answers, cs.quick);
+      // ★最初の「ホームページのURL」を待っている状態
+      if (cs.awaitingUrl) return await receiveWebsiteUrl(lineUserId, cs, text);
       // ★「一言でいうと」の書き直しを待っている状態
       if (cs.awaitingOneLine) {
         const t = text.trim();
