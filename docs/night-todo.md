@@ -27,6 +27,31 @@
 やること:
 - [ ] 業種ズレ通知の重複を止める（送信済みキーの保存が効いているか確認し、回帰テストを足す）。
 
+### 1-3. Coolify の環境変数 `RESEND_FROM_DOMAIN` が二重登録されている
+
+- `threads-studio.com` と `resend.dev` の2つが登録されている。後を拾うと送信元が `onboarding@resend.dev` になり、
+  Resendのテスト制限で**お客様へのメールが全部落ちる**（9/9 10:19 に実際に1通落ちた。送り直して到達済み）。
+- 本番アプリは正しい方を読めているが、順序が変わると壊れる。
+
+やること:
+- [ ] Coolify の環境変数から `RESEND_FROM_DOMAIN=resend.dev` の方を消す。
+- [ ] 他にも重複しているキーが無いか一覧で確認する。
+
+### 1-4. 電話をやめ、LINE（スクリーンショット）→ Zoom に統一（2026-09-09 三上様指示・**コード変更済み・未デプロイ**）
+
+お電話では受けない。まず公式LINEでご連絡いただき、**お困りの画面のスクリーンショット**を送っていただく。
+文字で解決しないときだけ Zoom（プロプラン以上・期間限定・初回30分／「Zoom希望」で日程相談）。
+
+変更済み（ローカルコミットのみ。**このデプロイに含めること**）:
+- `server/nextAction.ts` … 「次にやること」のサポート案内文
+- `server/lineChatHandler.ts` … 「運営にお願いする」を押したときの返信
+- `shared/productKnowledge.ts` … 自動応答が使う商品知識
+- `scripts/ops/daily-check.mjs` … 朝の点検の「電話推奨」→「LINEでお声がけ（スクショをお願いする）」（ローカル実行のためデプロイ不要）
+
+やること:
+- [ ] 説明書側の表現も合わせる（`shittoru-service-docs/docs/threads-setup-manual.html` ／ `service-catalog/data/manuals.json`）。
+- [ ] `docs/client.html` に電話サポートの記載が無いか確認する。
+
 ### 2. 品質検査で作り直し3回に達し、投稿が作られない枠が多い
 
 - 9/9 6時の自動投稿: **33枠中 19生成・14失敗**（`[AutoPost] Complete: 13 processed, 19 generated, 14 failed`）。

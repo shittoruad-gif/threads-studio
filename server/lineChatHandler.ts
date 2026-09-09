@@ -2013,12 +2013,14 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const { plan } = await planOf(user.id);
     const planName = String((plan as any)?.name || (plan as any)?.id || "");
     const staffReply = await forwardToStaff(user.id, lineUserId, `【サポート依頼】${item} をお願いします。（プラン：${planName || "不明"}）`);
-    // ★サポートは期間限定・Zoomは初回30分のみ。それ以降は公式LINEから（2026-09-08 三上様指示）
+    // ★お問い合わせは公式LINEで受ける。お電話では受けない（2026-09-09 三上様指示）。
+    //   まずスクリーンショットを送っていただき、文字で解決しなければZoom（期間限定・初回30分のみ／2026-09-08 三上様指示）
     return [
       { type: "text", text:
         `承りました（${item}）。\n` +
-        "プロプランの方への初期設定サポートは期間限定で、Zoomでの初回30分のみです。担当者から日程のご連絡をします。\n" +
-        "それ以降のご不明点は、この公式LINEにそのままお送りください（自動でお答えし、答えられないものは担当者にお伝えします）。" },
+        "まず、お困りの画面のスクリーンショットをこのトークに送ってください。こちらで確認して、どこをどうすればよいかお返しします。\n" +
+        "文字のやりとりでは進めにくいときは、Zoomで画面を一緒に見ながら進めます（プロプランの方・期間限定・初回30分）。「Zoom希望」とお送りいただければ、担当者から日程のご連絡をします。\n" +
+        "その後のご不明点も、この公式LINEにそのままお送りください（自動でお答えし、答えられないものは担当者にお伝えします）。" },
       ...(Array.isArray(staffReply) ? staffReply.slice(-1) : []),
     ];
   }
