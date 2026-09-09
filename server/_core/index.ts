@@ -196,7 +196,7 @@ async function startServer() {
               const { handlePostback } = await import('../lineChatHandler');
               const { replyMessages } = await import('../lineNotify');
               const msgs = await handlePostback(lineUserId, ev.postback?.data || '');
-              await replyMessages(ev.replyToken, msgs);
+              await replyMessages(ev.replyToken, msgs, lineUserId);
             } catch (e) {
               console.error('[LineChat] postback error:', e);
               await replyMessage(ev.replyToken, '処理中にエラーが起きました。もう一度お試しください。');
@@ -276,7 +276,7 @@ async function startServer() {
                 ).catch(() => false);
                 await replyMessages(ev.replyToken, [
                   textWithQuick(
-                    LINE_TEXTS.linked + (hasProject ? '' : '\n\n続けて、はじめの設定（全20問・10〜15分）に進みましょう。'),
+                    LINE_TEXTS.linked + (hasProject ? '' : '\n\n続けて、はじめの設定（最初は5つだけ・2分ほど）に進みましょう。'),
                     hasProject
                       ? [{ label: '今日の投稿', data: 'm=posts' }, { label: '設定', data: 'm=settings' }]
                       : [{ label: 'はじめの設定を始める', data: 'm=setup' }, { label: 'あとで', data: 'm=menu' }],
@@ -296,7 +296,7 @@ async function startServer() {
               const { replyMessages } = await import('../lineNotify');
               const msgs = await handleFreeText(lineUserId, text);
               if (msgs) {
-                await replyMessages(ev.replyToken, msgs);
+                await replyMessages(ev.replyToken, msgs, lineUserId);
                 continue;
               }
             } catch (e) {

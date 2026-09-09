@@ -291,9 +291,12 @@ export async function pushTextTo(lineUserId: string, text: string): Promise<bool
   return pushMessage(lineUserId, [{ type: "text", text: text.slice(0, 4900) }]);
 }
 
-export async function replyMessages(replyToken: string, messages: unknown[]): Promise<void> {
+export async function replyMessages(replyToken: string, messages: unknown[], fallbackTo?: string): Promise<void> {
   const token = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
   if (!token || !replyToken || messages.length === 0) return;
+  // ★処理に時間がかかった（ホームページを読む・AIに聞く）あとは reply token が期限切れになることがある。
+  //   その場合は push で同じ内容を届ける（黙って何も返さない、を防ぐ。2026-09-10）。
+  let fallback = false;
   try {
     const res = await fetch("https://api.line.me/v2/bot/message/reply", {
       method: "POST",
@@ -302,9 +305,14 @@ export async function replyMessages(replyToken: string, messages: unknown[]): Pr
     });
     if (!res.ok) {
       console.error(`[LineNotify] reply失敗 ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      fallback = true;
     }
   } catch (e) {
     console.error("[LineNotify] reply エラー:", e);
+    fallback = true;
+  }
+  if (fallback && fallbackTo) {
+    try { await pushMessages(fallbackTo, messages.slice(0, 5)); } catch (e) { console.error("[LineNotify] reply→push の切り替えに失敗:", e); }
   }
 }
 
