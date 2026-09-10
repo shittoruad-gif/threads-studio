@@ -11,4 +11,11 @@ UPDATE `threadsAccounts` SET `extraPostsPerDay` = 1, `extraPostsUntil` = '2026-0
 UPDATE `threadsAccounts` SET `extraPostsPerDay` = 1, `extraPostsUntil` = '2026-09-11', `extraPostsReason` = '9/10に届かなかった1件の補填（9/11は1日2件）' WHERE `id` = 21 AND `threadsUsername` = 'shin_honetugi';
 --> statement-breakpoint
 UPDATE `threadsAccounts` SET `extraPostsPerDay` = 1, `extraPostsUntil` = '2026-09-17', `extraPostsReason` = '9/9〜9/10に届かなかった6件の補填（9/12〜9/17は1日4件）' WHERE `id` = 24 AND `threadsUsername` = 'hatsukaichitenjinseitai';
-
+--> statement-breakpoint
+UPDATE `threadsAccounts` SET `extraPostsPerDay` = 1, `extraPostsUntil` = '2026-09-13', `extraPostsReason` = '9/10に届かなかった2件の補填（9/12〜9/13は1日4件）' WHERE `id` = 11 AND `threadsUsername` = 'takimoto_sora';
+--> statement-breakpoint
+UPDATE `threadsAccounts` SET `extraPostsPerDay` = 1, `extraPostsUntil` = '2026-09-12', `extraPostsReason` = '9/10に届かなかった1件の補填（9/12は1日4件）' WHERE `id` = 15 AND `threadsUsername` = 'miraiseitai_kanazawa';
+--> statement-breakpoint
+UPDATE `threadsAccounts` SET `extraPostsPerDay` = 1, `extraPostsUntil` = '2026-09-13', `extraPostsReason` = '9/9に届かなかった2件の補填（9/12〜9/13は1日4件）' WHERE `id` = 17 AND `threadsUsername` = 'yokunaru4976seitai';
+--> statement-breakpoint
+UPDATE `threadsAccounts` SET `extraPostsPerDay` = 1, `extraPostsUntil` = '2026-09-14', `extraPostsReason` = '9/9〜9/10に届かなかった3件の補填（9/12〜9/14は1日4件）' WHERE `id` = 25 AND `threadsUsername` = 'black_eyes_1896';
