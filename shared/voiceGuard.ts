@@ -94,7 +94,9 @@ export interface VoiceVerdict {
 /**
  * 登録された口調と矛盾していないかを検査する。
  * 断片の問いかけは口調に関わらず不合格（誰の投稿でも読み手に伝わらない）。
- * 砕けた締めは、敬語で登録しているお店だけ不合格。
+ * です・ます が崩れた締めは、敬語で登録しているお店なら不合格。
+ * です・ます を保ったあたたかい締め（「〜していますよ😊」）は、
+ * 「フレンドリー」も一緒に登録している方には認める（登録内容と矛盾しないため）。
  */
 export function checkVoice(text: string, brandVoice: string | null | undefined): VoiceVerdict {
   const reasons: string[] = [];
@@ -103,6 +105,10 @@ export function checkVoice(text: string, brandVoice: string | null | undefined):
   if (isPoliteVoice(brandVoice)) {
     const casual = findCasualClosers(text);
     if (casual.length > 0) reasons.push(`敬語の登録なのに砕けた締め「${casual[0]}」`);
+    if (!isFriendlyVoice(brandVoice)) {
+      const warm = findWarmClosers(text);
+      if (warm.length > 0) reasons.push(`落ち着いた口調の登録なのに崩した締め「${warm[0]}」`);
+    }
   }
   return { ok: reasons.length === 0, reasons };
 }

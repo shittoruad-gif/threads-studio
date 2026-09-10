@@ -4,7 +4,7 @@ import { personalNoticesFor, personalNoticeUserIds, PERSONAL_NOTICES } from "../
 describe("個別のお知らせ（朝のまとめの直後のもう1通）", () => {
   const jst = (s: string) => Date.parse(s + "+09:00");
   it("送る日にだけ、その方の分を返す", () => {
-    expect(personalNoticeUserIds(jst("2026-09-11T07:40:00")).sort()).toEqual([556, 2768, 2907, 3500, 5002, 5443]);
+    expect(personalNoticeUserIds(jst("2026-09-11T07:40:00")).sort((a, b) => a - b)).toEqual([556, 2768, 2907, 3500, 5002, 5443]);
     expect(personalNoticesFor(3500, jst("2026-09-11T07:40:00"))[0]?.requireAccountPostsToday).toEqual({ accountId: 21, min: 2 });
     expect(personalNoticeUserIds(jst("2026-09-12T07:40:00"))).toEqual([]);
   });
