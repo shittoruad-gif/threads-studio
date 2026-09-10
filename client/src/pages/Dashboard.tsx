@@ -547,6 +547,8 @@ export default function Dashboard() {
           onNavigate={setLocation}
           onEnableAutoPost={() => updateAutoPost.mutate({ autoPostEnabled: true })}
           enablingAutoPost={updateAutoPost.isPending}
+          lineLinked={!!(lineStatus as any)?.linked}
+          lineOpenUrl={(lineStatus as any)?.addFriendUrl ?? null}
         />
 
         {/* Hero: Auto Post + Stats Row */}

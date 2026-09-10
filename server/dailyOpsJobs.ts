@@ -370,18 +370,6 @@ export function initDailyOpsSchedulers(): void {
     const { runTrackedJob } = await import("./jobRunner");
     await runTrackedJob("approval_reminder", runApprovalReminderJob);
   });
-  // 8:30 JST = 23:30 UTC — 設定が途中で止まっている方に「次にやること」をお伝えする
-  cron.schedule("30 23 * * *", async () => {
-    const { runTrackedJob } = await import("./jobRunner");
-    const { runNextActionNotifyJob } = await import("./nextActionJob");
-    await runTrackedJob("next_action_notify", runNextActionNotifyJob);
-  });
-  // 8:35 JST = 23:35 UTC — 公開前の確認を続けている方に「自動（確認なし）にしませんか」（2026-09-10 三上様指示）
-  cron.schedule("35 23 * * *", async () => {
-    const { runTrackedJob } = await import("./jobRunner");
-    const { runAutoModeNudgeJob } = await import("./autoModeNudgeJob");
-    await runTrackedJob("auto_mode_nudge", runAutoModeNudgeJob);
-  });
   // 9:00 JST = 0:00 UTC — 登録したまま止まっている方へのメール案内（LINE未連携の方のみ）
   cron.schedule("0 0 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");
@@ -394,12 +382,12 @@ export function initDailyOpsSchedulers(): void {
     const { runLineFollowerNudgeJob } = await import("./lineFollowerNudgeJob");
     await runTrackedJob("line_follower_nudge", runLineFollowerNudgeJob);
   });
-  // 7:40 JST = 22:40 UTC — 昨日の公開数をアカウントごとに数字でお知らせ（0件は理由つき）。
-  // ★夜中の通知は迷惑なので朝に送る（2026-09-06 三上様指示）
+  // 7:40 JST = 22:40 UTC — 朝のまとめ通知（昨日の結果／お知らせ／きょうやること1つ／承認待ち）を1人1通。
+  // ★2026-09-10 三上様指示「朝のLINEを2通にまとめる」：以前の 7:40 件数報告・8:30 次にやること・8:35 自動にしませんか を統合
   cron.schedule("40 22 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");
-    const { runDailyPostCountReportJob } = await import("./dailyPostCountReport");
-    await runTrackedJob("daily_post_count", runDailyPostCountReportJob);
+    const { runMorningDigestJob } = await import("./morningDigestJob");
+    await runTrackedJob("morning_digest", runMorningDigestJob);
   });
   // 水曜 11:00 JST = 2:00 UTC — 固定投稿を週1回引用して再露出（当日20時台に予約）
   cron.schedule("0 2 * * 3", async () => {

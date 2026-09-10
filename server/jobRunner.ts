@@ -92,7 +92,7 @@ async function jobRegistry(): Promise<TrackedJob[]> {
   const { runWeeklyReportBatch } = await import('./weeklyReport');
   const { runAnalyticsSnapshotJob, runApprovalReminderJob } = await import('./dailyOpsJobs');
   const { runBillingReconcileJob } = await import('./billingReconcile');
-  const { runNextActionNotifyJob } = await import('./nextActionJob');
+  const { runMorningDigestJob } = await import('./morningDigestJob');
   const { runOnboardingEmailJob } = await import('./onboardingEmailJob');
   const { runLineFollowerNudgeJob } = await import('./lineFollowerNudgeJob');
   const { runOpsDigestJob } = await import('./opsDigestJob');
@@ -106,8 +106,8 @@ async function jobRegistry(): Promise<TrackedJob[]> {
     { name: 'billing_reconcile', hour: 22, minute: 20, tzOffsetHours: 0, maxStalenessHours: 23, run: runBillingReconcileJob },
     // dailyOpsJobs: '0 23 * * *' UTC（8:00 JST）
     { name: 'approval_reminder', hour: 23, minute: 0, tzOffsetHours: 0, maxStalenessHours: 23, run: runApprovalReminderJob },
-    // dailyOpsJobs: '30 23 * * *' UTC（8:30 JST）
-    { name: 'next_action_notify', hour: 23, minute: 30, tzOffsetHours: 0, maxStalenessHours: 23, run: runNextActionNotifyJob },
+    // dailyOpsJobs: '40 22 * * *' UTC（7:40 JST）朝のまとめ通知
+    { name: 'morning_digest', hour: 22, minute: 40, tzOffsetHours: 0, maxStalenessHours: 23, run: runMorningDigestJob },
     // dailyOpsJobs: '0 0 * * *' UTC（9:00 JST）
     { name: 'onboarding_email', hour: 0, minute: 0, tzOffsetHours: 0, maxStalenessHours: 23, run: runOnboardingEmailJob },
     // dailyOpsJobs: '10 0 * * *' UTC（9:10 JST）

@@ -6,6 +6,22 @@ import * as db from "./db";
 import { textWithQuick, MENU_ITEMS } from "./lineChat";
 import { shouldNudgeAutoMode, autoModeNudgeText } from "../shared/autoModeNudge";
 
+/** 1人分の「自動にしませんか」（送ってよければ文とボタン。朝のまとめ通知から使う） */
+export async function autoModeNudgePart(userId: number, nudgeCount: number, lastNudgeAt: Date | null): Promise<{ text: string; buttons: Array<{ label: string; data: string }>; reason: string } | null> {
+  const stats = await db.approvalStatsForUser(userId);
+  const s = { ...stats, nudgeCount, lastNudgeAt };
+  const v = shouldNudgeAutoMode(s);
+  if (!v.ok) return null;
+  return {
+    text: autoModeNudgeText(s),
+    buttons: [
+      { label: "自動にする（確認なし）", data: "c=automode&v=on" },
+      { label: "このまま確認する", data: "c=automode&v=keep" },
+    ],
+    reason: v.reason,
+  };
+}
+
 export async function runAutoModeNudgeJob(): Promise<void> {
   const targets = await db.listUsersForAutoModeNudge();
   if (targets.length === 0) { console.log("[AutoModeNudge] 対象なし"); return; }

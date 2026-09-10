@@ -16,6 +16,10 @@ import { CheckCircle2, Link2, MessageCircleQuestion, Zap, CalendarCheck, X, Arro
 const DISMISS_KEY = 'setup-checklist-dismissed';
 
 interface Props {
+  /** 公式LINEがつながっているか（つながっていれば「はじめの設定」へ案内） */
+  lineLinked?: boolean;
+  /** 公式LINEを開くURL（友だち追加URL） */
+  lineOpenUrl?: string | null;
   threadsConnected: boolean;
   hasProject: boolean;
   autoPostOn: boolean;
@@ -31,6 +35,8 @@ export default function SetupChecklist({
   onNavigate,
   onEnableAutoPost,
   enablingAutoPost,
+  lineLinked,
+  lineOpenUrl,
 }: Props) {
   const { t } = useLang();
   const [dismissed, setDismissed] = useState(
@@ -49,10 +55,16 @@ export default function SetupChecklist({
     {
       done: hasProject,
       icon: MessageCircleQuestion,
-      title: t('発信の目的を選んで、AIに教える'),
-      desc: t('最初に「お店の集客」か「個人にファンをつける」かを選び、質問に答えるだけです（10〜15分）。答えた内容だけを使って投稿が作られます。'),
-      cta: t('入力を始める'),
-      action: () => onNavigate('/ai-counseling'),
+      title: t('お店のことをLINEで教える'),
+      // ★入口は公式LINEの1本道（2026-09-10 三上様指示）。最初はURL1つと質問4つ（2分）。
+      desc: lineLinked
+        ? t('公式LINEのトークで「はじめの設定」を押してください。最初はホームページのURL1つと質問4つ（2分）で終わり、その場で最初の投稿が届きます。')
+        : t('先に公式LINEをつないでください。つないだあと、LINEの「はじめの設定」から2分で終わります。'),
+      cta: lineLinked ? t('LINEを開く') : t('LINEをつなぐ'),
+      action: () => {
+        if (lineLinked) window.open(lineOpenUrl || 'https://line.me/R/ti/p/@936rschf', '_blank', 'noopener');
+        else onNavigate('/settings');
+      },
     },
     {
       done: autoPostOn,

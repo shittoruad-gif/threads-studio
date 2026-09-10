@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Loader2, MessageCircle, Copy } from 'lucide-react';
@@ -90,10 +89,7 @@ export function OnboardingStart() {
           うまくいかないときは、公式LINEのトークに「連携」と送ってください。案内が届きます。
         </p>
         <p className="text-xs text-muted-foreground">
-          公式LINEなら最初は5つだけ（URL1つと質問4つ・2分ほど）です。
-          LINEを使わずに、この画面でまとめて入力したい方は
-          <Link href="/ai-counseling" className="text-primary underline ml-1">こちら</Link>
-          （全20問・10〜15分）。
+          最初にお聞きするのは5つだけ（お店のホームページのURL1つと質問4つ・2分ほど）です。
         </p>
       </div>
     </div>

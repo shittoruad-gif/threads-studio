@@ -80,3 +80,13 @@
   - [ ] 9/11 8:35 のログ `[AutoModeNudge] 送信 N件 / 対象 M人`。送った相手と理由が出る
   - [ ] 「自動にする（確認なし）」を押した方の users.autoPostRequireApproval が 0 になり、翌朝の投稿が承認カードなしで pending で作られる
 
+## 2026-09-10 昼（三上様「すべてお願いします」：使いやすさ3件）
+
+- 朝のLINEを1通に統合：`morning_digest`（7:40 JST・server/morningDigestJob.ts）。7:40 件数報告・8:30 次にやること・8:35 自動にしませんか の cron は外した（関数は残っている）。jobRunner の追い実行リストも `morning_digest` に差し替え。
+- Meta AI呼びかけ：7日間使っていないアカウントは送信停止＋一度だけお知らせ（migration `0083_meta_ai_call_pause.sql`、threadsAccounts.metaAiCallPausedAt）。9/10昼の実測で0件のまま7日以上なのは @shittoru_official・@shin_honetugi・@angyomori・@black_eyes_1896・@shittoru.1203（@desire_6981 は連携7日未満）。
+- アプリの「お店の情報」入口はLINEへ（SetupChecklist・OnboardingStart）。
+- デプロイ後に確認すること:
+  - [ ] 9/11 7:40 ログ `[MorningDigest] 送信 N件（やること付き M件）`。8:30／8:35 に別の通知が出ていないこと
+  - [ ] 9/11 10:00 ログに `送信停止` が出て、対象の方に「再開する」ボタン付きの一言が1回だけ届く
+  - [ ] ダッシュボードの手順2が「お店のことをLINEで教える／LINEを開く」になっている（スマホ幅で崩れなし）
+

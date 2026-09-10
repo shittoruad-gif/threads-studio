@@ -365,6 +365,8 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   extraPostsPerDay: int("extraPostsPerDay").notNull().default(0),
   extraPostsUntil: date("extraPostsUntil"),
   extraPostsReason: varchar("extraPostsReason", { length: 200 }),
+  // Meta AI呼びかけ文を7日間使っていない → 送るのをやめた時刻（設定の「再開する」で消える）
+  metaAiCallPausedAt: timestamp("metaAiCallPausedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

@@ -1507,9 +1507,10 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         ],
       )];
     }
+    const metaAiPaused = accts.some((a: any) => !!a.metaAiCallPausedAt);
     return [textWithQuick(
-      settingsSummary(s as any, { maxPerDay, planName: plan?.name, nextActionNotify: notify }),
-      settingsQuick(s as any, maxPerDay, notify),
+      settingsSummary(s as any, { maxPerDay, planName: plan?.name, nextActionNotify: notify, metaAiPaused }),
+      settingsQuick(s as any, maxPerDay, notify, metaAiPaused),
     )];
   }
   // ── アカウント別の設定画面 ──
@@ -2255,6 +2256,12 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       }
     }
     await db.updateAutoPostSettings(user.id, { metaAiAskEnabled: on });
+    // ★「使われていないため停止」も、ONにしたら解く（再開の入口をひとつにする）
+    if (on) {
+      for (const a of (await db.getThreadsAccountsByUserId(user.id)) as any[]) {
+        if (a.metaAiCallPausedAt) await db.updateThreadsAccount(a.id, { metaAiCallPausedAt: null } as any).catch(() => {});
+      }
+    }
     return [textWithQuick(
       (on
         ? "Meta AI呼びかけ投稿をONにしました。\n\n" +

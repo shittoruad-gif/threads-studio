@@ -116,7 +116,7 @@ function callSourceOf(project: any) {
 }
 
 /** その方の、アカウントごとの「今日の呼びかけ文」を組み立てる（送らない） */
-export async function buildTodayCallsForUser(userId: number, dayIndex: number): Promise<Array<{ accountId: number; username: string; storeName: string | null; text: string }>> {
+export async function buildTodayCallsForUser(userId: number, dayIndex: number, opts: { onPause?: (username: string) => void } = {}): Promise<Array<{ accountId: number; username: string; storeName: string | null; text: string }>> {
   const user: any = await db.getUserById(userId);
   if (!user || user.isDemoMode) return [];
   if (user.metaAiAskEnabled === false) return [];
@@ -136,11 +136,34 @@ export async function buildTodayCallsForUser(userId: number, dayIndex: number): 
     //   呼びかけ投稿はご自身の手で出していただくぶん「その日の1件」に数えられるため、
     //   慣らし中（1日1〜2件）に送ると、承認済みの自動投稿が押し出されて見送りになる
     //   （2026-09-09 比嘉様で実際に発生）。慣らしを抜けたら通常どおり届く。
+    let full: any = null;
     try {
       const { rampForAccount } = await import("./accountRampCheck");
-      const full: any = await db.getThreadsAccountById(Number(acct.id));
+      full = await db.getThreadsAccountById(Number(acct.id));
       if (full && (await rampForAccount(full, 99)).capped) continue;
     } catch { /* 判定できないときは従来どおり送る */ }
+    // ★使われていないアカウントには送らない（2026-09-10 三上様指示）。
+    //   連携7日以上で、直近7日にご本人の @meta.ai 投稿が1件も無ければ止め、一度だけお知らせする。
+    //   使っている方には今までどおり届く。再開は「設定」→「Meta AI呼びかけを再開する」。
+    if (full?.metaAiCallPausedAt) continue;
+    if (full && process.env.QA_SAFE_MODE !== "1") {
+      try {
+        const linkedDays = (Date.now() - new Date(full.createdAt).getTime()) / 86400000;
+        if (linkedDays >= UNUSED_PAUSE_DAYS) {
+          const r: any = await (await fetch(`https://graph.threads.net/v1.0/me/threads?fields=id,text,timestamp&limit=30&access_token=${full.accessToken}`)).json();
+          if (!r?.error) {
+            const since = Date.now() - UNUSED_PAUSE_DAYS * 86400000;
+            const used = (r.data ?? []).some((p: any) => /@meta\.ai/.test(String(p.text ?? "")) && new Date(p.timestamp).getTime() >= since);
+            if (!used) {
+              await db.updateThreadsAccount(Number(acct.id), { metaAiCallPausedAt: new Date() } as any);
+              console.log(`[MetaAiCall] @${acct.threadsUsername} は${UNUSED_PAUSE_DAYS}日間使われていないため送信停止`);
+              opts.onPause?.(String(acct.threadsUsername));
+              continue;
+            }
+          }
+        }
+      } catch { /* 確認できないときは従来どおり送る */ }
+    }
     const pinned = acct.defaultProjectId ? projects.find((p) => p.id === acct.defaultProjectId) : null;
     const project = pinned || projects[dayIndex % projects.length];
     const text = buildMetaAiCallPost({ ...callSourceOf(project), focus: acct.callFocus ?? null }, dayIndex);
@@ -149,6 +172,9 @@ export async function buildTodayCallsForUser(userId: number, dayIndex: number): 
   }
   return out;
 }
+
+/** この日数、呼びかけ投稿が無ければ送るのをやめる */
+export const UNUSED_PAUSE_DAYS = 7;
 
 export function todayIndexJst(): number {
   return Math.floor((Date.now() + JST) / 86400000);
@@ -165,11 +191,22 @@ export async function runMetaAiCallPromptJob(): Promise<void> {
   let sent = 0;
   for (const userId of userIds) {
     try {
-      const calls = await buildTodayCallsForUser(userId, dayIndex);
-      if (calls.length === 0) continue;
+      const pausedNow: string[] = [];
+      const calls = await buildTodayCallsForUser(userId, dayIndex, { onPause: (u) => pausedNow.push(u) });
       const targets = await db.getLineUserIdsForUser(userId);
       if (targets.length === 0) continue;
       const { pushMessages } = await import("./lineNotify");
+      if (pausedNow.length > 0) {
+        const { textWithQuick } = await import("./lineChat");
+        const who = pausedNow.map((u) => `@${u}`).join("・");
+        const notice = textWithQuick(
+          `${who} のMeta AI呼びかけ文は、${UNUSED_PAUSE_DAYS}日間ご投稿が無かったので、しばらくお送りしないようにしました。\n` +
+          "使いたくなったら、いつでも下の「再開する」か「設定」から戻せます。",
+          [{ label: "Meta AI呼びかけを再開する", data: "s=metaai&v=on" }, { label: "設定", data: "m=settings" }],
+        );
+        for (const to of targets) await pushMessages(to, [notice]);
+      }
+      if (calls.length === 0) continue;
       // ★アカウント数に関係なく1人2通（カード1通＝カルーセル＋説明文1通）
       const msgs = buildMetaAiCallBundle(calls.map((c) => ({ username: c.username, storeName: c.storeName, text: c.text })));
       for (const to of targets) await pushMessages(to, msgs);

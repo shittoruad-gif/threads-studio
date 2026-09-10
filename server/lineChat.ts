@@ -491,6 +491,7 @@ export function settingsQuick(
   s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; postLength?: string | null; metaAiAskEnabled?: boolean | null },
   maxPerDay = 3,
   nextActionNotify = true,
+  metaAiPaused = false,
 ): QuickItem[] {
   // 「次にやること」の案内は、いつでも止められる／戻せるようにしておく。
   const notifyToggle: QuickItem = nextActionNotify
@@ -511,7 +512,10 @@ export function settingsQuick(
     { label: "長め にする", data: "s=len&v=long" },
     ...(maxPerDay >= 2
       ? [
-          { label: s.metaAiAskEnabled ? "Meta AI呼びかけ投稿を止める" : "Meta AI呼びかけ投稿をON", data: `s=metaai&v=${s.metaAiAskEnabled ? "off" : "on"}` },
+          // ★7日間使われず停止中なら「再開する」を出す（ONのままでも届いていない状態を分かるように）
+          metaAiPaused && s.metaAiAskEnabled
+            ? { label: "Meta AI呼びかけを再開する", data: "s=metaai&v=on" }
+            : { label: s.metaAiAskEnabled ? "Meta AI呼びかけ投稿を止める" : "Meta AI呼びかけ投稿をON", data: `s=metaai&v=${s.metaAiAskEnabled ? "off" : "on"}` },
           { label: "呼びかけの得意分野", data: "c=focus" },
         ]
       : [{ label: "プランを見る", data: "s=plan" }]),
@@ -522,7 +526,7 @@ export function settingsQuick(
 
 export function settingsSummary(
   s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; postLength?: string | null; autoPostFrequency?: string | null; metaAiAskEnabled?: boolean | null },
-  opts: { maxPerDay?: number; planName?: string; nextActionNotify?: boolean } = {},
+  opts: { maxPerDay?: number; planName?: string; nextActionNotify?: boolean; metaAiPaused?: boolean } = {},
 ): string {
   const notify = opts.nextActionNotify === false
     ? "・次にやることの案内：受け取らない\n"
@@ -548,7 +552,7 @@ export function settingsSummary(
     (want > maxPerDay ? `　※ ご利用中のプランの上限は1日${maxPerDay}回です\n` : "") +
     `・公開前の確認：${s.autoPostRequireApproval ? "する" : "しない"}\n` +
     `・投稿の長さ：${len}\n` +
-    `・Meta AI呼びかけ投稿：${maxPerDay < 2 ? "プロ・ビジネスプランで使えます（プランを変更するとその日から）" : s.metaAiAskEnabled ? "ON（毎朝10時にLINEで呼びかけ文が届き、ボタンでThreadsアプリから投稿）" : "OFF"}\n` +
+    `・Meta AI呼びかけ投稿：${maxPerDay < 2 ? "プロ・ビジネスプランで使えます（プランを変更するとその日から）" : opts.metaAiPaused && s.metaAiAskEnabled ? "停止中（7日間ご投稿が無かったため。「再開する」で戻せます）" : s.metaAiAskEnabled ? "ON（毎朝10時にLINEで呼びかけ文が届き、ボタンでThreadsアプリから投稿）" : "OFF"}\n` +
     notify + "\n" +
     "変えたいものを選んでください。"
   );

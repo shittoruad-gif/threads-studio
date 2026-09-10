@@ -50,6 +50,50 @@ export function buildDailyPostCountMessage(
   return lines.join("\n");
 }
 
+/**
+ * 1人分の「昨日の投稿結果」の文（朝のまとめ通知 morningDigestJob からも使う）。
+ * 自動投稿の無いプラン・デモ・全アカウントOFFなら null。
+ */
+export async function buildDailyCountTextForUser(
+  userId: number,
+  rows: Array<{ accountId: number; username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number }>,
+  dateLabel: string,
+): Promise<{ text: string; accounts: number; zero: number } | null> {
+  const user: any = await db.getUserById(userId);
+  if (!user || user.isDemoMode) return null;
+  const sub = await db.getSubscriptionByUserId(userId);
+  const plan = getPlan(resolveEffectivePlanId(sub?.planId, sub?.status));
+  const maxPerDay = Number(plan?.features?.maxAutoPostsPerDay ?? 0);
+  if (maxPerDay <= 0) return null; // 自動投稿の無いプラン
+  const common = await db.getAutoPostSettings(userId);
+  const accounts = await db.getThreadsAccountsByUserId(userId);
+  const lines: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number; note?: string }> = [];
+  for (const r of rows) {
+    const acct: any = (accounts || []).find((a: any) => Number(a.id) === r.accountId);
+    const eff = effectiveAccountSettings(common as any, acct);
+    if (!eff.autoPostEnabled) continue; // 自動投稿OFFのアカウントは数えない
+    let entitled = Math.min(FREQ_COUNT[eff.autoPostFrequency] ?? 1, maxPerDay);
+    let note: string | undefined;
+    // 新しいアカウントは慣らし運転中の本数で数える（「ご契約より少ない」と出さない）。補填中は＋の本数と理由
+    try {
+      const { rampForAccount } = await import("./accountRampCheck");
+      const full: any = acct ? await db.getThreadsAccountById(Number(acct.id)) : null;
+      const rc = full ? await rampForAccount(full, entitled) : { count: entitled, capped: false, extra: false, note: "" };
+      if (rc.capped) { entitled = rc.count; note = rc.note; }
+      else if (rc.extra) { entitled = rc.count; note = rc.note; }
+    } catch { /* そのまま */ }
+    lines.push({ ...r, entitled, note });
+  }
+  if (lines.length === 0) return null;
+  return { text: buildDailyPostCountMessage(dateLabel, lines), accounts: lines.length, zero: lines.filter((l) => l.posted === 0).length };
+}
+
+/** 昨日（JST）の日付ラベル（例：9月9日） */
+export function yesterdayLabelJst(): string {
+  const jst = new Date(Date.now() + 9 * 3600 * 1000 - 24 * 3600 * 1000);
+  return `${jst.getUTCMonth() + 1}月${jst.getUTCDate()}日`;
+}
+
 export async function runDailyPostCountReportJob(): Promise<void> {
   const stats = await db.getYesterdayAutoPostStatsByAccount();
   if (stats.length === 0) { console.log("[DailyPostCount] 対象なし"); return; }
@@ -65,38 +109,12 @@ export async function runDailyPostCountReportJob(): Promise<void> {
     try {
       const targets = await db.getLineUserIdsForUser(userId);
       if (targets.length === 0) continue; // LINE未連携の方には送らない（アプリの履歴で見られる）
-      const user: any = await db.getUserById(userId);
-      if (!user || user.isDemoMode) continue;
-      const sub = await db.getSubscriptionByUserId(userId);
-      const plan = getPlan(resolveEffectivePlanId(sub?.planId, sub?.status));
-      const maxPerDay = Number(plan?.features?.maxAutoPostsPerDay ?? 0);
-      if (maxPerDay <= 0) continue; // 自動投稿の無いプラン
-      const common = await db.getAutoPostSettings(userId);
-      const accounts = await db.getThreadsAccountsByUserId(userId);
-      const lines: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number; note?: string }> = [];
-      for (const r of rows) {
-        const acct: any = (accounts || []).find((a: any) => Number(a.id) === r.accountId);
-        const eff = effectiveAccountSettings(common as any, acct);
-        if (!eff.autoPostEnabled) continue; // 自動投稿OFFのアカウントは数えない
-        let entitled = Math.min(FREQ_COUNT[eff.autoPostFrequency] ?? 1, maxPerDay);
-        let note: string | undefined;
-        // 新しいアカウントは慣らし運転中の本数で数える（「ご契約より少ない」と出さない）
-        try {
-          const { rampForAccount } = await import("./accountRampCheck");
-          const full: any = acct ? await db.getThreadsAccountById(Number(acct.id)) : null;
-          const rc = full ? await rampForAccount(full, entitled) : { count: entitled, capped: false, extra: false, note: "" };
-          if (rc.capped) { entitled = rc.count; note = rc.note; }
-          else if (rc.extra) { entitled = rc.count; note = rc.note; }
-        } catch { /* そのまま */ }
-        lines.push({ ...r, entitled, note });
-      }
-      if (lines.length === 0) continue;
-      const text = buildDailyPostCountMessage(dateLabel, lines);
+      const built = await buildDailyCountTextForUser(userId, rows, dateLabel);
+      if (!built) continue;
       const { pushMessages } = await import("./lineNotify");
-      for (const to of targets) await pushMessages(to, [{ type: "text", text }]);
+      for (const to of targets) await pushMessages(to, [{ type: "text", text: built.text }]);
       sent++;
-      const zero = lines.filter((l) => l.posted === 0).length;
-      console.log(`[DailyPostCount] 送信 user=${userId} accounts=${lines.length} zero=${zero}`);
+      console.log(`[DailyPostCount] 送信 user=${userId} accounts=${built.accounts} zero=${built.zero}`);
     } catch (e) {
       console.error(`[DailyPostCount] 失敗 user=${userId}:`, e);
     }
