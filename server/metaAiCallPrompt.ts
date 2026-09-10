@@ -132,6 +132,15 @@ export async function buildTodayCallsForUser(userId: number, dayIndex: number): 
   for (const acct of accounts) {
     const eff = effectiveAccountSettings(common as any, acct);
     if (!eff.autoPostEnabled) continue;
+    // ★慣らし運転中のアカウントには呼びかけボタンを送らない（2026-09-10 三上様判断＝案A）。
+    //   呼びかけ投稿はご自身の手で出していただくぶん「その日の1件」に数えられるため、
+    //   慣らし中（1日1〜2件）に送ると、承認済みの自動投稿が押し出されて見送りになる
+    //   （2026-09-09 比嘉様で実際に発生）。慣らしを抜けたら通常どおり届く。
+    try {
+      const { rampForAccount } = await import("./accountRampCheck");
+      const full: any = await db.getThreadsAccountById(Number(acct.id));
+      if (full && (await rampForAccount(full, 99)).capped) continue;
+    } catch { /* 判定できないときは従来どおり送る */ }
     const pinned = acct.defaultProjectId ? projects.find((p) => p.id === acct.defaultProjectId) : null;
     const project = pinned || projects[dayIndex % projects.length];
     const text = buildMetaAiCallPost({ ...callSourceOf(project), focus: acct.callFocus ?? null }, dayIndex);

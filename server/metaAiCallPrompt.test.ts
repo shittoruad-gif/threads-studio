@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { buildMetaAiCallMessages, buildThreadsIntentUrl } from "./metaAiCallPrompt";
 
 describe("Meta AI呼びかけ文のLINEカード", () => {
@@ -33,5 +33,45 @@ describe("複数アカウントは1束にまとめる", () => {
     expect(msgs[0].contents.contents).toHaveLength(3);
     expect(msgs[0].contents.contents[0].hero).toBeDefined();
     expect(msgs[1].text).toContain("カードは3枚");
+  });
+});
+
+// ★案A（2026-09-10 三上様判断）：慣らし運転中のアカウントには呼びかけボタンを送らない。
+//   呼びかけ投稿は「その日の1件」に数えられるため、慣らし中（1日1〜2件）に送ると
+//   承認済みの自動投稿が押し出されて見送りになる（2026-09-09 比嘉様で発生）。
+describe("慣らし運転中は呼びかけボタンを送らない（案A）", () => {
+  const account = { id: 7, threadsUsername: "hisaisikkotsuin", defaultProjectId: null, isActive: 1 };
+  const project = {
+    id: "p1", storeName: "はいさい整骨院", businessType: "整骨院", area: "沖縄市",
+    target: "肩こりの方", mainProblem: "肩こり", strength: "国家資格", localTerms: null, counselingResult: null,
+  };
+
+  async function loadWith(capped: boolean) {
+    vi.resetModules();
+    vi.doMock("./db", () => ({
+      getUserById: async () => ({ id: 1, isDemoMode: false, metaAiAskEnabled: true }),
+      getSubscriptionByUserId: async () => ({ planId: "pro", status: "active" }),
+      getProjectsByUserId: async () => [project],
+      getActiveThreadsAccounts: async () => [account],
+      getAutoPostSettings: async () => ({ autoPostEnabled: true }),
+      getThreadsAccountById: async () => ({ ...account, accessToken: "t", threadsUserId: "u", createdAt: new Date() }),
+    }));
+    vi.doMock("./accountRampCheck", () => ({
+      rampForAccount: async () => ({ count: 1, capped, extra: false, days: 1, note: "", established: false, shortfall: 0 }),
+    }));
+    return await import("./metaAiCallPrompt");
+  }
+
+  it("慣らし中（capped）は1件も作らない", async () => {
+    const m = await loadWith(true);
+    expect(await m.buildTodayCallsForUser(1, 0)).toHaveLength(0);
+  });
+
+  it("慣らしを抜けたら今までどおり届く", async () => {
+    const m = await loadWith(false);
+    const calls = await m.buildTodayCallsForUser(1, 0);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].username).toBe("hisaisikkotsuin");
+    expect(calls[0].text).toContain("@meta.ai");
   });
 });
