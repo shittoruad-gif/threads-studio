@@ -132,6 +132,37 @@ function isUsableProject(p: any): boolean {
 }
 
 /**
+ * 自動投稿に必要なのに、まだ空いている項目（2026-09-11）。
+ *
+ * ★「はじめの設定」は2026-09-10から「まず5問」（URL＋業種・地域・店名・お悩み）になったが、
+ *   自動投稿の対象条件（autoPostScheduler の eligibleProjects）は今も
+ *   お客さん像（target）と強み（strength）まで求めている。
+ *   そのため5問を終えた方が「まだ『お店の情報』が登録されていない」と案内され、
+ *   「はじめの設定」をやり直す案内が出ていた（9/11実測：大木様・juria様の2名。
+ *   どちらも強みだけが空で、投稿は1本も作られていない）。
+ *   何が足りないかを名指しし、その1問をその場で聞くボタンを出す。
+ */
+const REQUIRED_LABELS: Array<{ key: string; label: string; questionId: string }> = [
+  { key: "businessType", label: "業種", questionId: "businessTypeRaw" },
+  { key: "area", label: "地域", questionId: "areaRaw" },
+  { key: "mainProblem", label: "お客さんのお悩み", questionId: "mainProblemRaw" },
+  { key: "target", label: "お客さん像", questionId: "targetRaw" },
+  { key: "strength", label: "強み", questionId: "strengthRaw" },
+];
+
+export function missingRequired(p: any): Array<{ label: string; questionId: string }> {
+  return REQUIRED_LABELS.filter(({ key }) => !String(p?.[key] ?? "").trim())
+    .map(({ label, questionId }) => ({ label, questionId }));
+}
+
+/** 5問は終わっているのに、自動投稿の条件だけが足りていないお店の情報 */
+export function isAlmostUsableProject(p: any): boolean {
+  if (!p || String(p.id).startsWith("demo_")) return false;
+  if (isUsableProject(p)) return false;
+  return Boolean(p.businessType && p.area && p.mainProblem);
+}
+
+/**
  * 設定の工程を、順番どおりに全部返す。
  * アプリのチェックリストはこれをそのまま表示し、
  * LINE・メールの案内は「最初の未完了」を使う。
@@ -309,6 +340,25 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
 
   // ① お店の情報が1件も無い。これが無いと投稿そのものが作れない。
   if (usable.length === 0) {
+    // ★5問は終わっているのに、あと1〜2項目だけ足りていない方（2026-09-11）。
+    //   「登録されていません」と言うと、終えた設定が無かったことになり、やり直させてしまう。
+    //   足りない項目を名指しして、その1問をこの場で聞く。
+    const almost = (projects || []).find(isAlmostUsableProject);
+    if (almost) {
+      const missing = missingRequired(almost);
+      const names = missing.map((m) => m.label);
+      return {
+        key: "project_almost",
+        text:
+          "次にやることが1つあります。\n\n" +
+          `お店の情報は「${names.join("」と「")}」だけ空いています。ここが埋まると、翌朝から投稿が届きます。\n` +
+          `下のボタンから、${names.length === 1 ? "その1問" : `${names.length}問`}にお答えください（30秒ほどです）。`,
+        buttons: [{
+          label: names.length === 1 ? "あと1問だけ答える" : `あと${names.length}問だけ答える`,
+          data: `c=more&p=${almost.id}&f=${missing[0].questionId}`,
+        }],
+      };
+    }
     return {
       key: "no_project",
       text:

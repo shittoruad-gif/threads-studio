@@ -704,9 +704,14 @@ function askQuestion(st: CounselingState): unknown[] {
   const total = qs.length;
   const editing = st.editing !== null && st.editing !== undefined;
   const who = st.accountName ? `${st.accountName} の設定　` : "";
+  // ★「きょうの1問」で聞くときは「4／20」を出さない（2026-09-11）。
+  //   最初に「5つだけ」とお伝えしてあるので、20問の進み具合を見せると
+  //   「5問に直したのに20問と案内される」（9/10 三上様のご指摘）と同じ受け取りになる。
   const head = editing
     ? `【${who}${st.step + 1}問目を直します】\n${q.prompt}`
-    : `【${who}${st.step + 1}／${total}】\n${q.prompt}`;
+    : st.moreOne
+      ? `【${who}きょうの1問】\n${q.prompt}`
+      : `【${who}${st.step + 1}／${total}】\n${q.prompt}`;
   const hint = q.helper ? `\n\n${q.helper}` : "";
   // ★例文を必ず出す。アプリ側には出ていたがLINEでは出ておらず、
   //   「どう答えたらいいか分からない」と手が止まる原因になっていた（2026-09-06 津の国や様）。
@@ -1081,6 +1086,11 @@ async function startCounseling(lineUserId: string, accountId?: number | null): P
   const lead = redo
     ? "はじめの設定を始めます。前回の答えが入った状態でお出しするので、合っていれば「これでOK」を押すだけで進みます。\n\n"
     : "はじめの設定を始めます。最初は5つだけです（URL1つと質問4つ・2分ほど）。\n\n";
+  // ★ここで待ち状態を作る（2026-09-11）。
+  //   これが無いと、ボタンを押さずに「お店の集客」と打たれた方の設定が始まらず、
+  //   打った文章はご質問として自動応答に流れていた（設定は始まっていないのに
+  //   始まったつもりで進まれる＝「設定が途中で止まっている」方が出る一因）。
+  try { await db.setLineChatState(lineUserId, "counseling_mode", JSON.stringify({ accountId: accountId ?? null })); } catch { /* 状態が作れなくてもボタンは使える */ }
   return [textWithQuick(
     lead +
     "まず、何のための発信かを選んでください。\n" +
@@ -2128,6 +2138,13 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     }
     const missing = unansweredQuestions(pj);
     if (missing.length === 0) return [textWithQuick("お店の情報は全部そろっています。直したい場合は「はじめの設定」からどうぞ。", MENU_HINT)];
+    // ★どの項目を聞くか指定されていれば、そこから聞く（2026-09-11）。
+    //   「次にやること」が「強みだけ空いています」と案内したのに、
+    //   別の質問から始まると、聞かれていることと案内が食い違う。
+    if (q.f) {
+      const i = missing.findIndex((m) => m.id === String(q.f));
+      if (i > 0) missing.unshift(...missing.splice(i, 1));
+    }
     let raw: Record<string, string> = {};
     try { raw = JSON.parse(pj.counselingResult || "{}")?.rawAnswers ?? {}; } catch { raw = {}; }
     // 列の値も答えとして持たせる（アプリ側で直した分を消さないため）
@@ -2410,6 +2427,47 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   }
 
   const st = await db.getLineChatState(lineUserId);
+
+  // ★「はじめの設定」の最初、何のための発信かを打って答えられた場合（2026-09-11）。
+  //   ボタンだけの受け付けだったため、打たれた文章はご質問として自動応答に流れ、
+  //   設定はいつまでも始まっていなかった。打ち言葉でも受け取り、選べない文なら
+  //   ご質問に流さずもう一度ボタンをお出しする。
+  if (st?.state === "counseling_mode") {
+    const t = text.trim();
+    if (/^(やめる|中止|キャンセル|戻る|もどる)$/.test(t)) {
+      await db.clearLineChatState(lineUserId);
+      return [textWithQuick("はじめの設定をやめました。またいつでもお声がけください。", MENU_HINT)];
+    }
+    // ★ここでご質問をされた方を閉じ込めない。待ち状態をやめて、いつもどおりお答えする。
+    const looksLikeQuestion = /[?？]$/.test(t)
+      || /(ですか|でしょうか|教えて|わかりません|分かりません|できますか)/.test(t);
+    if (looksLikeQuestion) {
+      await db.clearLineChatState(lineUserId);
+    } else {
+      let accountId: number | null = null;
+      try { accountId = JSON.parse(st.payload || "{}").accountId ?? null; } catch { accountId = null; }
+      const a = accountId ? `&a=${accountId}` : "";
+      // ★数字は「1」「2」だけを選択として扱う（文章の中の数字は選択ではない。
+      //   「開院10年・のべ8000人」が「1」に当たって勝手に進んでいた）。
+      const mode = /^(1|１|一)$/.test(t) ? "store"
+        : /^(2|２|二)$/.test(t) ? "personal"
+        : /(個人|ファン|自分の名前)/.test(t) ? "personal"
+        : /(店|集客|来店|お客|客)/.test(t) ? "store"
+        : null;
+      if (mode) return handlePostback(lineUserId, `c=start&mode=${mode}${a}`);
+      return [textWithQuick(
+        "どちらの発信か、下の2つから選んでください。\n" +
+        "・お店の集客：お客様に来てもらうための発信\n" +
+        "・個人にファンをつける：ご自身の名前での発信\n\n" +
+        "「お店」「個人」と打っていただいても進みます。",
+        [
+          { label: "お店の集客", data: `c=start&mode=store${a}` },
+          { label: "個人にファンをつける", data: `c=start&mode=personal${a}` },
+        ],
+      )];
+    }
+  }
+
   if (st?.state === "counseling" && st.payload) {
     try {
       const cs: CounselingState = JSON.parse(st.payload);

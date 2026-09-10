@@ -63,7 +63,10 @@ export function findFragmentQuestions(text: string): string[] {
  * 「〜だね」「〜だよ」「〜かな」「〜でしょ」で行が終わる形。です・ます が崩れている。
  */
 export function findCasualClosers(text: string): string[] {
-  const re = new RegExp("(だね|だよ|かな|でしょ)\\s*" + EMOJI_SRC + "?\\s*$", "gm");
+  // ★絵文字の部分は「あってもなくてもよい」。EMOJI_SRC は末尾が ️? で終わるため、
+  //   そのまま "?" を付けると最後の1文字だけが省略可能になり、絵文字が無い「〜だね」を
+  //   1件も拾えていなかった（2026-09-11に気づいた取りこぼし）。必ず丸ごと括る。
+  const re = new RegExp("(だね|だよ|かな|でしょ)\\s*(?:" + EMOJI_SRC + ")?\\s*$", "gm");
   const out: string[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(String(text || ""))) !== null) out.push(m[0].trim());
@@ -79,7 +82,7 @@ export function findCasualClosers(text: string): string[] {
  *   2回続けて同じ理由で落ちていた（作り直しても同じ形が出る＝指示と検査が矛盾している）。
  */
 export function findWarmClosers(text: string): string[] {
-  const re = new RegExp("((?:ます|です|います|ました)よ)\\s*" + EMOJI_SRC + "?\\s*$", "gm");
+  const re = new RegExp("((?:ます|です|います|ました)よ)\\s*(?:" + EMOJI_SRC + ")?\\s*$", "gm");
   const out: string[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(String(text || ""))) !== null) out.push(m[0].trim());

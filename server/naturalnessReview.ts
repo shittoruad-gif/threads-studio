@@ -9,6 +9,7 @@
  * APIが落ちているときは止めない（機械検査は別に通っている）。ただしログに残す。
  */
 import { invokeLLM } from "./_core/llm";
+import { emojiAllowed, splitStyleSamples } from "../shared/styleTraits";
 
 export const NATURALNESS_MIN_SCORE = 4;
 
@@ -42,7 +43,12 @@ export async function reviewNaturalness(
   },
 ): Promise<NaturalnessReview | null> {
   const voice = String(ctx.brandVoice || "").trim();
-  const samples = String(ctx.styleSamples || "").split(/\n---\n/).map((s) => s.trim()).filter(Boolean).slice(0, 2)
+  // ★お手本が絵文字を使っている／口調に「フレンドリー」が入っているなら、
+  //   絵文字とあたたかい締め（「〜していますよ😊」）を減点材料にしない（2026-09-11）。
+  //   ここが一律に減点していたため、「丁寧な敬語＋少しフレンドリー」で登録した方の投稿が
+  //   作り直しても同じ理由で落ち続け、その日の投稿がゼロになっていた。
+  const warmOk = emojiAllowed(voice, ctx.styleSamples ?? null);
+  const samples = splitStyleSamples(ctx.styleSamples).slice(0, 2)
     .map((s) => Array.from(s).slice(0, 300).join(""));
   const sampleBlock = samples.length
     ? `\n【店主の理想の投稿（お手本）】\n以下は店主本人が「こういう投稿を出したい」と示した実物です。採点は「この店主が書いたと言われて違和感がないか」を最優先にしてください。\n---\n${samples.join("\n---\n")}\n---\n`
@@ -54,7 +60,7 @@ ${voice ? `店主が登録した口調：「${voice}」\n` : ""}${ctx.identityHi
 
 【3以下（出せない）にする例】
 - 名詞や一語で切る問いかけ（「〜など、心当たり？」）
-- 登録した口調と合わない砕けた言い方（敬語の店で「〜ますよ😊」「だね」）
+- 登録した口調と合わない砕けた言い方（敬語の店で「だね」「だよ」${warmOk ? "" : "「〜ますよ😊」"}）
 - 症状や不調を予告・断定する言い切り（「秋に3つの不調が出ます」）
 - 症状やメニューを「〜や〜、〜など」と並べるだけの文
 - 「お手伝いをしています」「サポートします」のような、どの店でも言える締め
@@ -62,7 +68,8 @@ ${voice ? `店主が登録した口調：「${voice}」\n` : ""}${ctx.identityHi
 
 【4以上にしてよい例】
 - 短くても、1つのことを店主の言葉で言い切っている
-- 問いかけがあるなら、相手が本当に答えられる質問になっている
+- 問いかけがあるなら、相手が本当に答えられる質問になっている（「もし着物で海外へ行くなら、どこへ？」のように疑問詞があれば可）
+${warmOk ? "- 絵文字が入っている／「〜していますよ😊」のようにあたたかく締めている（この店主はそう登録し、お手本もそう書いているので減点しない）\n" : ""}
 
 採点だけでなく、不自然な箇所をその文を引用して挙げてください。無ければ空配列。
 

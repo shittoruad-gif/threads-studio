@@ -185,6 +185,8 @@ export async function naturalizeContent(
   brandVoice?: string | null,
   /** 下書きに入っている「この店を指す言葉」（店名・地名・実績の数字）。消させない。 */
   keepWords: string[] = [],
+  /** 文体のお手本（projects.styleSamples）。絵文字を消してよいかの判断に使う。 */
+  styleSamples?: string | null,
 ): Promise<string> {
   try {
     const persona = personal ? 'あなたは自分の名前で発信している個人事業主です' : 'あなたはお店のオーナーです';
@@ -197,8 +199,17 @@ export async function naturalizeContent(
     //   このリライトは一律に「友達に送る口語」へ崩していたため、「敬語で落ち着いた口調」と
     //   登録したお店に「〜など、心当たり？」「〜していますよ😊」が出ていた。
     const voice = String(brandVoice || '').trim();
+    // ★絵文字を消すのは「落ち着いた口調だけを登録し、お手本も絵文字を使っていない方」に限る（2026-09-11）。
+    //   生成の最終指示は「絵文字を1〜3個、毎回必ず入れる」なのに、ここが敬語登録の全員から一律に消していた。
+    //   そのあとのAI採点はお手本（絵文字あり）と比べて「絵文字が無い」と落とすため、
+    //   「丁寧な敬語＋少しフレンドリー」で登録した4名は、作り直しても同じ理由で落ち続けていた
+    //   （9/10は岩根様の3枠すべてが3回とも 2/5 で落ち、その日の投稿がゼロ）。
+    const { emojiAllowed } = await import('../shared/styleTraits');
+    const { isFriendlyVoice } = await import('../shared/voiceGuard');
+    const keepEmoji = emojiAllowed(voice, styleSamples ?? null);
+    const politeOnly = /(敬語|丁寧|落ち着|上品|誠実|真面目)/.test(voice) && !isFriendlyVoice(voice);
     const voiceNote = voice
-      ? `\n【登録された口調（最優先・ここに合わせる）】\n- 店主が登録した口調：「${voice}」。この口調に合わない言い方には直さない。\n- 敬語・丁寧・落ち着いた口調の登録なら、です・ます調のまま崩さない。「〜ますよ」「〜だね」「〜かな」のような砕けた語尾にしない。\n${/(敬語|丁寧|落ち着|上品|誠実|真面目)/.test(voice) ? '- 絵文字は使わない（元の文にあっても消す）。落ち着いた口調の店主は絵文字で締めない。\n- 「〜が大切です」「〜楽になります」「〜の一歩です」「お手伝いしています」のような、どの店でも言える締めは削る。最後の文は、この投稿の内容にしか当てはまらない言葉にする。\n' : ''}`
+      ? `\n【登録された口調（最優先・ここに合わせる）】\n- 店主が登録した口調：「${voice}」。この口調に合わない言い方には直さない。\n- 敬語・丁寧・落ち着いた口調の登録なら、です・ます調のまま崩さない。「〜だね」「〜だよ」「〜かな」のような砕けた語尾にしない。\n${politeOnly ? '- 「〜ますよ」「〜ですよ」で崩さない。言い切りで締める。\n' : ''}${keepEmoji ? '- 絵文字は消さない（元の文にある絵文字はそのまま残す。増やすのは禁止）。\n' : '- 絵文字は使わない（元の文にあっても消す）。落ち着いた口調の店主は絵文字で締めない。\n'}${/(敬語|丁寧|落ち着|上品|誠実|真面目)/.test(voice) ? '- 「〜が大切です」「〜楽になります」「〜の一歩です」「お手伝いしています」のような、どの店でも言える締めは削る。最後の文は、この投稿の内容にしか当てはまらない言葉にする。\n' : ''}`
       : '';
     const prompt = `${persona}。次のThreads投稿の下書きを、自分のスマホで打ち直すつもりで自然な投稿に直してください。
 
@@ -585,6 +596,22 @@ async function generateAutoPost(
       ? `\n\n【直近の投稿（同じ言い回しを繰り返さない）】\n${recentPosts.slice(0, 6).map((p, i) => `${i + 1}. ${String(p).replace(/\s+/g, ' ').slice(0, 90)}`).join('\n')}\n- 上の投稿で使った書き出し・決め台詞・たとえを、そのまま使い回さない。同じことを言うなら、別の入り方・別の言葉にする。\n- 読んだ人が「この前と同じ投稿だ」と感じたら失敗。`
       : '';
 
+    // ★お手本の癖を「数えた事実」として渡す（2026-09-11）。
+    //   お手本の文言は上の【文体のお手本】で渡しているが、「読み取って再現して」だけでは
+    //   絵文字・ハッシュタグ・自分の体験談が毎回落ちていた。AI採点はお手本と比べて落とすため、
+    //   同じ理由で3回とも落ちて投稿ゼロになる枠が出ていた（9/10 岩根様の3枠）。
+    let traitsNote = '';
+    let allowEmoji = true;
+    try {
+      const { extractStyleTraits, styleTraitsNote, emojiAllowed } = await import('../shared/styleTraits');
+      const samples = (project as any).styleSamples || null;
+      traitsNote = styleTraitsNote(extractStyleTraits(samples));
+      allowEmoji = emojiAllowed(
+        (counselingResult?.brandVoice ?? (stylePreference as any)?.voice ?? null) as string | null,
+        samples,
+      );
+    } catch (e) { console.warn(`[AutoPost] お手本の癖の反映をとばしました: ${(e as Error)?.message}`); }
+
     // Call LLM
     // ★自動投稿は人の目を通らず公開されるため、短文・会話調の最終指示を
     //   プロンプト末尾に追加する（末尾の指示が最も遵守されやすい）。
@@ -596,7 +623,8 @@ async function generateAutoPost(
           + angleNote
           + recentNote
           + lengthNote
-          + (retryHint ? `\n\n【前回の下書きが不合格だった理由（厳守・同じ形にしない）】\n${retryHint}\n- 上の型の締めは書かない。締めは絵文字なしで、この投稿の内容に固有の1文にする。` : '')
+          + traitsNote
+          + (retryHint ? `\n\n【前回の下書きが不合格だった理由（厳守・同じ形にしない）】\n${retryHint}\n- 上の型の締めは書かない。締めは${allowEmoji ? '' : '絵文字なしで、'}この投稿の内容に固有の1文にする。` : '')
           + preferenceNote
           + (CONVERSATION_POST_TYPES.has(postType) ? CONVERSATION_ENDING_ADDENDUM : '')
           // ★個人モードの上書きは最末尾（末尾の指示が最も遵守されやすい）
@@ -669,7 +697,9 @@ async function generateAutoPost(
       const { checkIdentity } = await import('../shared/identityGuard');
       keepIdentityWords = checkIdentity(beforeNaturalize, project).found.slice(0, 3);
     } catch { keepIdentityWords = []; }
-    let naturalMain = await naturalizeContent(beforeNaturalize, personal, brandVoice, keepIdentityWords);
+    let naturalMain = await naturalizeContent(
+      beforeNaturalize, personal, brandVoice, keepIdentityWords, (project as any).styleSamples || null,
+    );
 
     // ★日本語品質ガード（shared/jpQualityGuard.ts）。
     //   リライトが口癖（「正直、」）・お手本コピー・ひらがな開きすぎ・

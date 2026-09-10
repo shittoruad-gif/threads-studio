@@ -160,6 +160,19 @@ describe("文章の入力待ちの途中で別のボタンを押されたとき"
     expect(on("signup_code", "m=refcode")).toBe(false);
   });
 
+  /**
+   * 2026-09-11：「はじめの設定」の最初、何のための発信かを選ぶ場面。
+   * ボタンだけの受け付けだったため、打ち言葉で答えられた方の設定が始まらず、
+   * その文章はご質問として自動応答に流れていた。待ち状態を作って受け取るようにした分。
+   */
+  it("発信の種類を選ぶ場面は、選ぶボタンとやり直しでは消さず、別のメニューでは消す", () => {
+    expect(on("counseling_mode", "c=start&mode=store")).toBe(false);
+    expect(on("counseling_mode", "c=start&mode=personal&a=15")).toBe(false);
+    expect(on("counseling_mode", "m=setup")).toBe(false);
+    expect(on("counseling_mode", "m=posts")).toBe(true);
+    expect(on("counseling_mode", "m=menu")).toBe(true);
+  });
+
   it("待ち状態が無いときは、何もしない", () => {
     expect(on("", "m=menu")).toBe(false);
     expect(shouldClearPendingInput(null, parsePostback("m=menu"))).toBe(false);
