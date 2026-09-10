@@ -742,6 +742,14 @@ async function generateAutoPost(
             const guarded = await enforceNgWords({ mainPost: naturalMain } as any, ngWords);
             naturalMain = (guarded as any).mainPost || naturalMain;
           } catch { /* 生成時ガードは通過済みなのでそのまま使う */ }
+        } else if (lastAttempt && (project.storeName || project.area)) {
+          // ★最後の作り直しでも店名・地名が入らなかったら、枠を捨てずに署名の1行を足す（2026-09-10）。
+          //   9/10 香取様（ライト・1日1件）は3回とも「この店を指す言葉が無い」で落ち、その日の投稿がゼロになった。
+          //   足すのは登録どおりの地名と店名だけ（事実以外は足さない）。
+          const areaShort = String(project.area || '').replace(/^(東京都|北海道|(?:京都|大阪)府|[一-龠]{2,3}県)/, '').trim();
+          const sig = [areaShort, project.storeName].filter(Boolean).join('の');
+          naturalMain = `${naturalMain.trim()}\n\n${sig}より。`;
+          console.warn(`[AutoPost] identityGuard: 最後の作り直しのため署名「${sig}」を足して公開へ userId=${userId} projectId=${project.id}`);
         } else {
           console.warn(`[AutoPost] identityGuard: この店を指す言葉が無い → 作り直し userId=${userId} projectId=${project.id}`);
           lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex), idv.hint);

@@ -7,3 +7,6 @@ ALTER TABLE `threadsAccounts` ADD COLUMN `extraPostsUntil` date NULL;
 ALTER TABLE `threadsAccounts` ADD COLUMN `extraPostsReason` varchar(200) NULL;
 --> statement-breakpoint
 UPDATE `threadsAccounts` SET `extraPostsPerDay` = 1, `extraPostsUntil` = '2026-09-16', `extraPostsReason` = '9/8〜9/10に届かなかった6件の補填（9/11〜9/16は1日4件）' WHERE `id` = 22 AND `threadsUsername` = 'esthe_prestige_r';
+--> statement-breakpoint
+UPDATE `threadsAccounts` SET `extraPostsPerDay` = 1, `extraPostsUntil` = '2026-09-11', `extraPostsReason` = '9/10に届かなかった1件の補填（9/11は1日2件）' WHERE `id` = 21 AND `threadsUsername` = 'shin_honetugi';
+
