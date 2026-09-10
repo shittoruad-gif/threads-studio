@@ -21,9 +21,27 @@ export function isPoliteVoice(brandVoice: string | null | undefined): boolean {
 }
 
 /**
+ * 登録された口調が「フレンドリー・親しみ」系か。
+ * 「丁寧な敬語＋少しフレンドリー」のように敬語と併記される登録が一番多い（契約中7名のうち4名・2026-09-11実測）。
+ */
+export function isFriendlyVoice(brandVoice: string | null | undefined): boolean {
+  return /(フレンドリー|親しみ|明るく|明るい|元気|カジュアル|やわらか|柔らか|優し|やさし|気さく|あたたか|温か)/.test(
+    String(brandVoice || ""),
+  );
+}
+
+/** 相手が答えられる質問になっている印（疑問詞） */
+const INTERROGATIVE_RE = /(どこ|どちら|どれ|いつ|なに|何|なん|どんな|どの|だれ|誰|いくら|いくつ|どう|なぜ|どっち)/;
+
+/**
  * 名詞や一語で切る問いかけ（「心当たり？」「本当？」）。
  * 文末が「？」で、本体が6文字以下、かつ述語（です・ます・か・でしょう など）で終わっていないもの。
  * 「どうですか？」「大丈夫ですか？」は述語があるので通す。
+ *
+ * ★疑問詞がある短い問いかけは通す（2026-09-11）。
+ *   「もし着物で海外へ行くなら、どこへ？」が読点の後ろだけを見て「どこへ」＝断片と判定され、
+ *   岩根様の枠が作り直しになっていた。ルールの狙いは「名詞で切って何を聞かれているか分からない」形を
+ *   止めることで、疑問詞があれば相手は答えられる（採点側の「4以上にしてよい例」とも一致する）。
  */
 export function findFragmentQuestions(text: string): string[] {
   const out: string[] = [];
@@ -34,6 +52,7 @@ export function findFragmentQuestions(text: string): string[] {
     const last = body.split(/[、,]/).pop()!.trim();
     if (!last || Array.from(last).length > 6) continue;
     if (/(です|ます|ますか|ですか|でしょう|でしょうか|ません|ませんか|ますよね|かな|のか|るか|たか)$/.test(last)) continue;
+    if (INTERROGATIVE_RE.test(last)) continue;
     out.push(raw.trim());
   }
   return out;
@@ -41,10 +60,26 @@ export function findFragmentQuestions(text: string): string[] {
 
 /**
  * 敬語で登録したお店に出てはいけない砕けた締め。
- * 「〜ますよ😊」「〜ですよ😊」「〜だね」「〜かな」で行が終わる形。
+ * 「〜だね」「〜だよ」「〜かな」「〜でしょ」で行が終わる形。です・ます が崩れている。
  */
 export function findCasualClosers(text: string): string[] {
-  const re = new RegExp("((?:ます|です|います|ました)よ|だね|だよ|かな|でしょ)\\s*" + EMOJI_SRC + "?\\s*$", "gm");
+  const re = new RegExp("(だね|だよ|かな|でしょ)\\s*" + EMOJI_SRC + "?\\s*$", "gm");
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(String(text || ""))) !== null) out.push(m[0].trim());
+  return out;
+}
+
+/**
+ * です・ます は保ったまま、あたたかく崩した締め（「〜していますよ😊」）。
+ *
+ * ★「敬語で落ち着いた口調」だけを登録した比嘉先生には合わないが、
+ *   「丁寧な敬語＋少しフレンドリー」と登録した方には合う（2026-09-11）。
+ *   区別せず全部落としていたため、9/10は氷見様・プレステージ様の枠が
+ *   2回続けて同じ理由で落ちていた（作り直しても同じ形が出る＝指示と検査が矛盾している）。
+ */
+export function findWarmClosers(text: string): string[] {
+  const re = new RegExp("((?:ます|です|います|ました)よ)\\s*" + EMOJI_SRC + "?\\s*$", "gm");
   const out: string[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(String(text || ""))) !== null) out.push(m[0].trim());

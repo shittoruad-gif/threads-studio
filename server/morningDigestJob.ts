@@ -17,6 +17,7 @@ import { buildDailyCountTextForUser, yesterdayLabelJst } from "./dailyPostCountR
 import { autoModeNudgePart } from "./autoModeNudgeJob";
 import { announcementForToday, renderAnnouncement } from "../shared/announcements";
 import { getPlan, resolveEffectivePlanId } from "../shared/plans";
+import { personalNoticesFor, personalNoticeUserIds } from "../shared/personalNotices";
 
 const RESEND_AFTER_DAYS = 1; // 同じ「次にやること」は1日1回まで
 
@@ -33,7 +34,7 @@ export async function runMorningDigestJob(): Promise<void> {
   const ann = announcementForToday();
 
   // 送る相手＝昨日の結果がある人 ∪ 案内の対象
-  const userIds = new Set<number>([...Array.from(byUser.keys()), ...notifyTargets.map((t) => t.userId)]);
+  const userIds = new Set<number>([...Array.from(byUser.keys()), ...notifyTargets.map((t) => t.userId), ...personalNoticeUserIds()]);
   const { pushMessages } = await import("./lineNotify");
   let sent = 0;
   let withAction = 0;
@@ -97,7 +98,9 @@ export async function runMorningDigestJob(): Promise<void> {
       // ★お知らせがある日は、お知らせを先頭に（「この1通にまとめました」を先に読んでもらう）
       const ownerText = [annText, count?.text, actionText, awaitingText].filter(Boolean).join("\n\n");
       const staffText = [annText, count?.text, awaitingText].filter(Boolean).join("\n\n");
-      if (!ownerText) continue;
+      // ★特定の方だけへの「もう1通」（shared/personalNotices.ts）。まとめの直後にオーナーLINEへ
+      const notices = personalNoticesFor(userId);
+      if (!ownerText && notices.length === 0) continue;
 
       const common = [
         { label: "今日の投稿", data: "m=posts" },
@@ -108,15 +111,32 @@ export async function runMorningDigestJob(): Promise<void> {
       for (let i = 0; i < lineIds.length; i++) {
         const isOwner = i === 0;
         const text = isOwner ? ownerText : staffText;
-        if (!text) continue;
+        if (!text) { if (isOwner) ok = true; continue; }
         const msg = textWithQuick(text, isOwner ? [...buttons, ...common] : common);
         const r = await pushMessages(lineIds[i], [msg]);
         if (isOwner) ok = r;
       }
       if (ok) {
-        sent++;
+        if (ownerText) sent++;
         if (annText && ann) await db.recordAnnouncementSent(userId, ann.key).catch(() => {});
         if (after) { await after().catch(() => {}); withAction++; }
+      }
+      // ★もう1通（個別のお知らせ）。約束した本数が今朝作られていなければ送らず、運営に知らせる
+      for (const n of notices) {
+        try {
+          if (n.requireAccountPostsToday) {
+            const made = await db.countAccountPostsScheduledToday(n.requireAccountPostsToday.accountId).catch(() => 0);
+            if (made < n.requireAccountPostsToday.min) {
+              console.warn(`[MorningDigest] 個別通知 ${n.key} user=${userId} は見送り（今朝の生成 ${made}件 < ${n.requireAccountPostsToday.min}件）`);
+              try { const { notifyOwner } = await import("./_core/notification"); await notifyOwner({ title: `個別のお知らせを送れませんでした（user ${userId}）`, content: `${n.key}：今朝の生成が${made}件で、文面の約束（${n.requireAccountPostsToday.min}件）と食い違うため送っていません。` }); } catch { /* 通知失敗は無視 */ }
+              continue;
+            }
+          }
+          const r = await pushMessages(lineIds[0], [{ type: "text", text: n.text }]);
+          console.log(`[MorningDigest] 個別通知 ${n.key} user=${userId} ${r ? "送信" : "失敗"}`);
+        } catch (e) {
+          console.error(`[MorningDigest] 個別通知 user=${userId} に失敗:`, e);
+        }
       }
     } catch (e) {
       console.error(`[MorningDigest] user=${userId} に失敗:`, e);
