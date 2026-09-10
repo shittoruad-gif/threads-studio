@@ -6,11 +6,38 @@
  * ・案内OFF（nextActionNotifyEnabled=0）の方には送らない（対象者の抽出が同じ）
  * ・文面は scripts/ops/announcements/ にも同じものを置く（人が読む控え）
  */
+/** 受け取る方の状況（当てはまる段落だけを出すために使う） */
+export interface AnnouncementContext {
+  /** 1日の自動投稿の上限（0＝自動投稿の無いプラン） */
+  maxPerDay: number;
+  /** 公開前の確認をしている */
+  requireApproval: boolean;
+  /** Meta AI呼びかけ文をONにしている */
+  metaAiEnabled: boolean;
+}
+
+export interface AnnouncementSection {
+  text: string;
+  /** 省略時は全員に出す */
+  when?: (ctx: AnnouncementContext) => boolean;
+}
+
 export interface DailyAnnouncement {
   key: string;
   /** YYYY-MM-DD（JST）。この日だけ送る */
   sendOn: string;
+  /** 全員共通の文（sections があれば、その前後に付く head／tail として使う） */
   text: string;
+  /** 受け取る方に当てはまる段落だけを出す（2026-09-10 三上様指示「各ユーザーに当てはまる内容を」） */
+  sections?: AnnouncementSection[];
+  tail?: string;
+}
+
+/** その方に当てはまる段落だけを番号を振り直してつなぐ */
+export function renderAnnouncement(a: DailyAnnouncement, ctx: AnnouncementContext): string {
+  if (!a.sections || a.sections.length === 0) return a.text;
+  const parts = a.sections.filter((sec) => !sec.when || sec.when(ctx)).map((sec, i) => sec.text.replace(/^■ \d+\. /, `■ ${i + 1}. `));
+  return [a.text, ...parts, a.tail].filter(Boolean).join("\n\n");
 }
 
 export const DAILY_ANNOUNCEMENTS: readonly DailyAnnouncement[] = [
@@ -41,25 +68,49 @@ export const DAILY_ANNOUNCEMENTS: readonly DailyAnnouncement[] = [
     key: "morning_digest_2026-09-11",
     sendOn: "2026-09-11",
     text:
-      "【お知らせ】朝の案内を1通にまとめました\n" +
-      "\n" +
+      "【お知らせ】朝の案内を1通にまとめました\n\n" +
       "いつもThreads Studioをご利用いただきありがとうございます。\n" +
-      "今日から、朝のLINEが少し変わります。設定や投稿の中身は何も変わりませんので、ご安心ください。\n" +
-      "\n" +
-      "■ 1. 朝の案内は、この1通だけになりました\n" +
-      "これまで別々に届いていた「昨日の投稿結果」と「次にやること」を、毎朝7:40のこの1通にまとめました。投稿の承認カードは今までどおり別に届きます。\n" +
-      "\n" +
-      "■ 2. 承認したら、そのまま公開されます\n" +
-      "承認カードで「OK」を押した投稿は、予定の時刻にそのまま公開されます。これまでどおりで、操作は変わりません。\n" +
-      "また、こちらの都合で投稿が作れなかった日があれば、翌日に自動で1〜2件足してお届けします。\n" +
-      "\n" +
-      "■ 3. Meta AI呼びかけ文は、使っている方にだけ届きます\n" +
-      "毎朝10時の呼びかけ文は、7日間ご投稿が無いと自動でお休みになり、その旨を一度だけお知らせします。使いたくなったら「設定」→「Meta AI呼びかけを再開する」でいつでも戻せます。\n" +
-      "\n" +
-      "■ 4. 「自動（確認なし）にしませんか」の案内が届くことがあります\n" +
-      "承認が習慣になっている方に、この朝の案内の中でご提案します。押さなければ何も変わりません。切り替えても「設定」からいつでも戻せます。\n" +
-      "\n" +
-      "分からないことがあれば、このLINEに文章で送ってください。",
+      "今日から、朝のLINEが少し変わります。設定や投稿の中身は何も変わりませんので、ご安心ください。",
+    sections: [
+      {
+        when: (c) => c.maxPerDay > 0 && c.requireApproval,
+        text:
+          "■ 1. 朝の案内は、この1通だけになりました\n" +
+          "これまで別々に届いていた「昨日の投稿結果」と「次にやること」を、毎朝7:40のこの1通にまとめました。投稿の承認カードは今までどおり別に届きます。",
+      },
+      {
+        when: (c) => !(c.maxPerDay > 0 && c.requireApproval),
+        text:
+          "■ 1. 朝の案内は、この1通だけになりました\n" +
+          "これまで別々に届いていた「昨日の投稿結果」と「次にやること」を、毎朝7:40のこの1通にまとめました。",
+      },
+      {
+        when: (c) => c.maxPerDay > 0 && c.requireApproval,
+        text:
+          "■ 2. 承認したら、そのまま公開されます\n" +
+          "承認カードで「OK」を押した投稿は、予定の時刻にそのまま公開されます。これまでどおりで、操作は変わりません。\n" +
+          "また、こちらの都合で投稿が作れなかった日があれば、翌日に自動で1〜2件足してお届けします。",
+      },
+      {
+        when: (c) => c.maxPerDay > 0 && !c.requireApproval,
+        text:
+          "■ 2. 投稿が作れなかった日は、翌日に足します\n" +
+          "こちらの都合で投稿が作れなかった日があれば、翌日に自動で1〜2件足してお届けします。",
+      },
+      {
+        when: (c) => c.maxPerDay >= 2 && c.metaAiEnabled,
+        text:
+          "■ 3. Meta AI呼びかけ文は、使っている方にだけ届きます\n" +
+          "毎朝10時の呼びかけ文は、7日間ご投稿が無いと自動でお休みになり、その旨を一度だけお知らせします。使いたくなったら「設定」→「Meta AI呼びかけを再開する」でいつでも戻せます。",
+      },
+      {
+        when: (c) => c.maxPerDay > 0 && c.requireApproval,
+        text:
+          "■ 4. 「自動（確認なし）にしませんか」の案内が届くことがあります\n" +
+          "承認が習慣になっている方に、この朝の案内の中でご提案します。押さなければ何も変わりません。切り替えても「設定」からいつでも戻せます。",
+      },
+    ],
+    tail: "分からないことがあれば、このLINEに文章で送ってください。",
   },
 ];
 

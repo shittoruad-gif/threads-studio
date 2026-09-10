@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { announcementForToday, DAILY_ANNOUNCEMENTS } from "../shared/announcements";
+import { announcementForToday, DAILY_ANNOUNCEMENTS, renderAnnouncement } from "../shared/announcements";
 
 /** 8:30の案内と一緒に、その日だけ全員へ送るお知らせ（2026-09-09） */
 describe("その日のお知らせ", () => {
@@ -25,9 +25,29 @@ describe("その日のお知らせ", () => {
     expect(a909.text).toContain("次にやること");
     // 9/11：既存の方が混乱しないよう「変わらない」を先に、戻し方（設定）を必ず書く（2026-09-10 三上様指示）
     const a911 = DAILY_ANNOUNCEMENTS.find((a) => a.key === "morning_digest_2026-09-11")!;
-    expect(a911.text.indexOf("変わりません")).toBeGreaterThan(-1);
-    expect(a911.text.indexOf("変わりません")).toBeLessThan(a911.text.indexOf("■ 1."));
-    expect(a911.text).toContain("「設定」");
-    expect(a911.text).toContain("7:40");
+    const pro = renderAnnouncement(a911, { maxPerDay: 3, requireApproval: true, metaAiEnabled: true });
+    expect(pro.indexOf("変わりません")).toBeLessThan(pro.indexOf("■ 1."));
+    expect(pro).toContain("「設定」");
+    expect(pro).toContain("7:40");
+    expect(pro).toContain("■ 4. ");
+    expect(Array.from(pro).length).toBeLessThan(2000);
+  });
+
+  it("その方に当てはまる段落だけを出す（2026-09-10 三上様指示）", () => {
+    const a911 = DAILY_ANNOUNCEMENTS.find((a) => a.key === "morning_digest_2026-09-11")!;
+    // ライト（Meta AIなし）・確認あり：Meta AIの段落は出ない。番号は詰まる
+    const light = renderAnnouncement(a911, { maxPerDay: 1, requireApproval: true, metaAiEnabled: true });
+    expect(light).not.toContain("Meta AI");
+    expect(light).toContain("■ 3. 「自動（確認なし）にしませんか」");
+    // 自動（確認なし）の方：承認の話と「自動にしませんか」は出ない
+    const auto = renderAnnouncement(a911, { maxPerDay: 3, requireApproval: false, metaAiEnabled: false });
+    expect(auto).not.toContain("承認カード");
+    expect(auto).not.toContain("自動（確認なし）にしませんか");
+    expect(auto).toContain("■ 2. 投稿が作れなかった日は、翌日に足します");
+    // 自動投稿の無いプラン：1と結びの文だけ
+    const free = renderAnnouncement(a911, { maxPerDay: 0, requireApproval: true, metaAiEnabled: true });
+    expect(free).toContain("■ 1. ");
+    expect(free).not.toContain("■ 2. ");
+    expect(free).toContain("このLINEに文章で送ってください");
   });
 });

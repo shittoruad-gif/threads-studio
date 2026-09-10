@@ -213,18 +213,19 @@ async function withAccountNames(userId: number, posts: any[]): Promise<any[]> {
 }
 
 /** 承認待ちを1件だけ出す（1件ずつモード。残り件数も伝える） */
-async function replyOneWaiting(userId: number, headText?: string): Promise<unknown[]> {
+async function replyOneWaiting(userId: number, headText?: string, extraQuick: Array<{ label: string; data: string }> = []): Promise<unknown[]> {
   const all = await db.getScheduledPostsByUserId(userId);
   const waiting = all
     .filter((p: any) => p.status === "awaiting_approval")
     .sort((a: any, b: any) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
   if (waiting.length === 0) {
-    return [textWithQuick((headText ? headText + "\n\n" : "") + "確認をお待ちしている投稿は、これで全部です。おつかれさまでした。", MENU_HINT)];
+    return [textWithQuick((headText ? headText + "\n\n" : "") + "確認をお待ちしている投稿は、これで全部です。おつかれさまでした。", [...extraQuick, ...MENU_HINT])];
   }
   const withNames = await withAccountNames(userId, waiting);
   const head = (headText ? headText + "\n\n" : "") +
     (waiting.length === 1 ? "残り1件です。" : `残り${waiting.length}件です。まずこの1件から。`);
-  return [{ type: "text", text: head }, buildPostCards([withNames[0]], { one: true })];
+  // ★見送り直後の「代わりを作る」など、次のカードの前に押せるボタンを頭の文に付ける
+  return [extraQuick.length > 0 ? textWithQuick(head, extraQuick) : { type: "text", text: head }, buildPostCards([withNames[0]], { one: true })];
 }
 
 /** 承認待ちの投稿を出す（無ければ次の予定を伝える） */
@@ -1849,9 +1850,30 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       ...(!(post as any).clientRating ? { clientRating: "bad", ratedAt: new Date() } : {}),
     } as any);
     const done = "この投稿は見送りにしました。明日の投稿はまた新しく作ります。\n（見送った投稿の書き方は、これから避けるようにします）";
-    const undo = [{ label: "取り消す", data: `a=undo&i=${q.i}` }, ...MENU_HINT];
-    if (q.o) return replyOneWaiting(user.id, done + "\n（間違えた場合は「取り消す」を押してください）");
-    return [textWithQuick(done + "\n\n間違えて押した場合は「取り消す」で元に戻せます。", undo)];
+    // ★「代わりを作る」（2026-09-10 三上様指示）：見送り＝その日の1件が減るので、別の下書きを同じ枠に作れるようにする
+    const alt = { label: "代わりを作る", data: `a=alt&i=${q.i}${q.o ? "&o=1" : ""}` };
+    const undo = [alt, { label: "取り消す", data: `a=undo&i=${q.i}` }, ...MENU_HINT];
+    if (q.o) return replyOneWaiting(user.id, done + "\n（代わりの投稿がほしい場合は「代わりを作る」、間違えた場合は「取り消す」を押してください）", [alt]);
+    return [textWithQuick(done + "\n\n別の投稿がほしい場合は「代わりを作る」を押してください（1分ほどで届きます）。\n間違えて押した場合は「取り消す」で元に戻せます。", undo)];
+  }
+  // ★見送った投稿の代わりを作る（同じアカウント・同じ枠。見送った切り口は避ける）
+  if (q.a === "alt" && q.i) {
+    const post = await ownedPost(user.id, Number(q.i));
+    if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
+    if (post.status !== "canceled") return [textWithQuick("この投稿は見送りになっていないため、代わりは作れません。", MENU_HINT)];
+    const { generateReplacementPost } = await import("./autoPostScheduler");
+    const ok = await generateReplacementPost(user.id, Number(q.i)).catch(() => false);
+    if (!ok) return [textWithQuick("すみません、代わりの投稿をうまく作れませんでした。明日の朝の投稿でお届けします。", MENU_HINT)];
+    const all = await db.getScheduledPostsByUserId(user.id);
+    const fresh = all
+      .filter((p: any) => p.status === "awaiting_approval" && Number(p.threadsAccountId) === Number((post as any).threadsAccountId) && Date.now() - new Date(p.createdAt).getTime() < 5 * 60 * 1000)
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    if (fresh.length === 0) return [textWithQuick("代わりの投稿を作りました。「今日の投稿」からご確認ください。", MENU_HINT)];
+    const [withName] = await withAccountNames(user.id, [fresh[0]]);
+    return [
+      { type: "text", text: "代わりの投稿を作りました。こちらでよろしければ「これで投稿する」を押してください。" },
+      buildPostCards([withName], { one: !!q.o }),
+    ];
   }
   // ★承認・見送りの取り消し（未公開のものだけ確認待ちへ戻す）
   if (q.a === "undo" && q.i) {

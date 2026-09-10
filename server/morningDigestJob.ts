@@ -15,7 +15,8 @@ import { textWithQuick } from "./lineChat";
 import { detectNextAction } from "./nextAction";
 import { buildDailyCountTextForUser, yesterdayLabelJst } from "./dailyPostCountReport";
 import { autoModeNudgePart } from "./autoModeNudgeJob";
-import { announcementForToday } from "../shared/announcements";
+import { announcementForToday, renderAnnouncement } from "../shared/announcements";
+import { getPlan, resolveEffectivePlanId } from "../shared/plans";
 
 const RESEND_AFTER_DAYS = 1; // 同じ「次にやること」は1日1回まで
 
@@ -56,7 +57,16 @@ export async function runMorningDigestJob(): Promise<void> {
       // ② その日のお知らせ（1人1回）
       const t = notifyMap.get(userId);
       let annText: string | null = null;
-      if (ann && t && (t as any).lastAnnouncementKey !== ann.key) annText = ann.text;
+      if (ann && t && (t as any).lastAnnouncementKey !== ann.key) {
+        // その方に当てはまる段落だけを出す（プラン・公開前の確認・Meta AIの設定で出し分け）
+        const sub = await db.getSubscriptionByUserId(userId).catch(() => null);
+        const plan = getPlan(resolveEffectivePlanId(sub?.planId, sub?.status));
+        annText = renderAnnouncement(ann, {
+          maxPerDay: Number(plan?.features?.maxAutoPostsPerDay ?? 0),
+          requireApproval: user.autoPostRequireApproval !== false,
+          metaAiEnabled: user.metaAiAskEnabled !== false,
+        });
+      }
 
       // ③ きょうやること1つ（次にやること ＞ 自動にしませんか）
       let actionText: string | null = null;

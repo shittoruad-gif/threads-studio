@@ -1336,3 +1336,53 @@ export function startAutoPostScheduler() {
 
   console.log('[AutoPost Scheduler] Scheduled for 6:00 AM JST daily');
 }
+
+/**
+ * 見送りにした投稿の「代わり」を1本作る（LINEの「代わりを作る」ボタン。2026-09-10 三上様指示）。
+ * 同じアカウント・同じ店舗で、見送った下書きと同じ切り口・言い回しを避けて作り、
+ * 元の予定時刻がまだ先ならその時刻に、過ぎていれば今日の次の時間帯（21時以降は翌朝10時台）に置く。
+ * @returns 作れたら true（承認カードは呼び出し側が出す）
+ */
+export async function generateReplacementPost(userId: number, canceledPostId: number): Promise<boolean> {
+  const post: any = await db.getScheduledPostById(canceledPostId);
+  if (!post || Number(post.userId) !== Number(userId)) return false;
+  const user: any = await db.getUserById(userId);
+  if (!user) return false;
+  const projects = await db.getUserProjects(userId);
+  const project = (projects || []).find((p: any) => String(p.id) === String(post.projectId)) || (projects || [])[0];
+  if (!project) return false;
+  const accountId = Number(post.threadsAccountId);
+  const account: any = await db.getThreadsAccountById(accountId);
+  if (!account || Number(account.userId) !== Number(userId)) return false;
+  const common = await db.getAutoPostSettings(userId);
+  const { effectiveAccountSettings } = await import('../shared/accountSettings');
+  const eff = effectiveAccountSettings(common as any, account);
+
+  // 予定時刻：元の時刻が15分より先ならそのまま。過ぎていれば今日の次の正時（21時まで）、それ以降は翌朝10時台
+  const now = Date.now();
+  let at = new Date(post.scheduledAt);
+  if (at.getTime() < now + 15 * 60 * 1000) {
+    const nowJst = new Date(now + JST_OFFSET_MS);
+    const h = nowJst.getUTCHours();
+    const minute = Math.floor(Math.random() * 30);
+    if (h < 21) {
+      at = new Date(Date.UTC(nowJst.getUTCFullYear(), nowJst.getUTCMonth(), nowJst.getUTCDate(), h + 1, minute) - JST_OFFSET_MS);
+    } else {
+      at = new Date(Date.UTC(nowJst.getUTCFullYear(), nowJst.getUTCMonth(), nowJst.getUTCDate() + 1, 10, minute) - JST_OFFSET_MS);
+    }
+  }
+  const hint = `お客様が見送った下書き：「${String(post.postContent || '').replace(/\s+/g, ' ').slice(0, 160)}」。同じ切り口・同じ言い回し・同じ書き出しを避け、別の話題で書く`;
+  const typeIdx = Math.floor(Math.random() * POST_TYPES.length);
+  const purposeIdx = Math.floor(Math.random() * PURPOSES.length);
+  const rk = rejectKey(userId, accountId, 99);
+  lastRejectReason.delete(rk);
+  let ok = false;
+  for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
+    const h = attempt === 1 ? hint : `${hint}。${lastRejectReason.get(rk) ?? ''}`;
+    ok = await generateAutoPost(userId, project, typeIdx, purposeIdx, accountId, 99, true, null, eff.postLength, at, h, attempt === 3);
+  }
+  lastRejectReason.delete(rk);
+  if (ok) console.log(`[AutoPost] 代わりの投稿を作成 user=${userId} account=${accountId} 元=${canceledPostId}`);
+  return ok;
+}
+
