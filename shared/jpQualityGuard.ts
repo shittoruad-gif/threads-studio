@@ -305,9 +305,9 @@ function plain(s: string): string {
  */
 export const REPEAT_MIN_CHARS = 10;
 
-/** 決まり文句の誤爆を避ける：ひらがなだけの一致（挨拶・語尾）は使い回しとみなさない */
+/** 決まり文句の誤爆を避ける：漢字・カタカナが2字未満の一致（「よろしくお願いします」等の挨拶・語尾）は使い回しとみなさない */
 function meaningful(hit: string): boolean {
-  return /[一-龠々ァ-ヶ]/.test(hit);
+  return (hit.match(/[一-龠々ァ-ヶ]/g) ?? []).length >= 2;
 }
 
 /**
