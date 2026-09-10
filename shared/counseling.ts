@@ -522,6 +522,25 @@ export const COUNSELING_QUESTIONS: CounselingQuestion[] = [
 export const COUNSELING_QUESTION_IDS = COUNSELING_QUESTIONS.map((q) => q.id);
 
 /**
+ * 「まず5つ」で聞く質問（ホームページのURL1つ＋この4問）。優先順位の高い順。
+ * 業種・地域・店名で「この店らしさ」が満たせ、お悩みで話題が決まる。
+ * お客さん像はホームページから読めることが多く、読めなければ「きょうの1問」で聞く。
+ *
+ * ★公式LINEとアプリの画面（/ai-counseling）で必ず同じにする（2026-09-10 三上様指示
+ *   「LINEでの質問と同じように、アプリ内も5問だけに」）。以前はLINEだけが5問で、
+ *   アプリの画面は全20問のままだった。定義を2か所に置くとまたずれるので、ここだけに置く。
+ */
+export const QUICK_QUESTION_IDS: readonly string[] = [
+  'businessTypeRaw', 'areaRaw', 'storeNameRaw', 'mainProblemRaw',
+];
+
+/** 「まず5つ」の質問だけに絞る（順番は QUICK_QUESTION_IDS のとおり） */
+export function quickQuestions<T extends { id: string }>(all: readonly T[]): T[] {
+  const byId = new Map(all.map((q) => [String(q.id), q]));
+  return QUICK_QUESTION_IDS.map((id) => byId.get(id)).filter((q): q is T => Boolean(q));
+}
+
+/**
  * 「なし」「ありません」「無し」などの空回答を判定
  */
 

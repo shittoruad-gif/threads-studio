@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { checkHealthClaims, isHealthBusiness } from "../shared/healthClaimGuard";
-import { rampCap, compensationCount } from "../shared/accountRamp";
+import { rampCap, compensationCount, manualExtraPosts } from "../shared/accountRamp";
 
 describe("健康系の断定ガード", () => {
   it("杖なしで歩ける・痛みなく・ぐっすり・初回1980円を検出して和らげる", () => {
@@ -105,5 +105,15 @@ describe("不妊・妊娠を施術の結果として語らせない（2026-09-09
     expect(v.ok).toBe(true);
     expect(v.text).toContain("産後の骨盤ケア");
     expect(v.text).toContain("よくご相談をいただきます");
+  });
+  it("運営が決めた補填：期間内は1日＋n件、期間を過ぎたら0（2026-09-10 プレステージ様）", () => {
+    const a = { extraPostsPerDay: 1, extraPostsUntil: "2026-09-16", extraPostsReason: "9/8〜9/10に届かなかった6件の補填（9/11〜9/16は1日4件）" };
+    expect(manualExtraPosts(a, "2026-09-11")).toEqual({ extra: 1, note: a.extraPostsReason });
+    expect(manualExtraPosts(a, "2026-09-16").extra).toBe(1);
+    expect(manualExtraPosts(a, "2026-09-17").extra).toBe(0);
+    expect(manualExtraPosts({ extraPostsPerDay: 0, extraPostsUntil: "2026-09-16" }, "2026-09-11").extra).toBe(0);
+    expect(manualExtraPosts(null, "2026-09-11").extra).toBe(0);
+    // DBから Date で来ても同じ（UTC 15:00 = JST 翌0:00 の境目を跨がない）
+    expect(manualExtraPosts({ extraPostsPerDay: 1, extraPostsUntil: new Date("2026-09-16T00:00:00Z") }, "2026-09-16").extra).toBe(1);
   });
 });

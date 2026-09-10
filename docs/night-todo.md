@@ -63,3 +63,13 @@
 
 **デプロイ後に見ること**：翌朝の `[AutoPost] Complete` と
 `docker logs | grep -c "identityGuard: この店を指す言葉が無い"`。19件から減っていれば成功。
+
+## 2026-09-10 昼（三上様指示：プレステージ様の補填）
+
+- マイグレーション `0081_account_extra_posts.sql` で threadsAccounts に `extraPostsPerDay / extraPostsUntil / extraPostsReason` を足し、同じファイルで account 22（@esthe_prestige_r）に「9/11〜9/16は1日＋1件」を入れる。
+- デプロイ後に確認すること:
+  - [ ] `SELECT id, extraPostsPerDay, extraPostsUntil FROM threadsAccounts WHERE id=22` が 1 / 2026-09-16 になっている
+  - [ ] 9/11 6時の生成ログに `[AutoPost] account 22 補填: 9/8〜9/10に届かなかった6件の補填（9/11〜9/16は1日4件）（契約3→4）` が出て、承認カードが4件届く（4件目は昼12時台）
+  - [ ] 7:40の件数報告に補填の注記が出る
+- 設定・解除は `scripts/ops/set-extra-posts.mts`。
+

@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint, tinyint, uniqueIndex, index } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint, tinyint, uniqueIndex, index, date } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -357,6 +357,11 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   // Meta AI呼びかけ文で強調する得意分野（例：ダイエット・産後骨盤矯正）。同じお店で
   // メニュー別にアカウントを分けている場合に、アカウントごとに変える（2026-09-06 三上様指示）
   callFocus: varchar("callFocus", { length: 60 }),
+  // 届かなかった投稿の補填（2026-09-10 三上様指示）。extraPostsUntil（JSTの日付）までの間、
+  // 1日の本数に extraPostsPerDay を足す。理由は 7:40 の件数報告にそのまま出す。
+  extraPostsPerDay: int("extraPostsPerDay").notNull().default(0),
+  extraPostsUntil: date("extraPostsUntil"),
+  extraPostsReason: varchar("extraPostsReason", { length: 200 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

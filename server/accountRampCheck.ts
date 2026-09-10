@@ -5,7 +5,7 @@
  * を足す。判定は1日キャッシュ。
  */
 import * as db from "./db";
-import { rampCap, rampNote, compensationCount, compensationNote, COMPENSATION_WINDOW_DAYS } from "../shared/accountRamp";
+import { rampCap, rampNote, compensationCount, compensationNote, manualExtraPosts, COMPENSATION_WINDOW_DAYS } from "../shared/accountRamp";
 
 const ESTABLISHED_DAYS = 30;
 const ESTABLISHED_FOLLOWERS = 100;
@@ -51,6 +51,19 @@ export interface RampDecision {
 
 /** そのアカウントの今日の本数（contract=契約本数） */
 export async function rampForAccount(
+  account: { id: number; threadsUserId: string; accessToken: string; createdAt?: Date | string | null; extraPostsPerDay?: number | null; extraPostsUntil?: Date | string | null; extraPostsReason?: string | null },
+  contract: number,
+): Promise<RampDecision> {
+  const base0 = await rampDecision(account, contract);
+  // ★運営が決めた補填（期間限定で1日＋n件。2026-09-10 プレステージ様）。慣らし中は掛けない（安全側）。
+  const m = manualExtraPosts(account);
+  if (m.extra > 0 && !base0.capped) {
+    return { ...base0, count: base0.count + m.extra, extra: true, note: [base0.note, m.note].filter(Boolean).join("／") };
+  }
+  return base0;
+}
+
+async function rampDecision(
   account: { id: number; threadsUserId: string; accessToken: string; createdAt?: Date | string | null },
   contract: number,
 ): Promise<RampDecision> {

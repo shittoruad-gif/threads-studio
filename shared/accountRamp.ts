@@ -63,3 +63,20 @@ export function rampNote(days: number, want: number = 3): string {
 export function compensationNote(want: number, shortfall: number): string {
   return `補填中：慣らし運転で減った分（あと${shortfall}件）を1日${want + COMPENSATION_EXTRA_PER_DAY}件で補っています`;
 }
+
+/**
+ * 運営が決めた補填（届かなかった分を、期間限定で1日＋n件）。
+ * extraPostsUntil はJSTの日付（含む）。期間を過ぎたら 0。
+ */
+export function manualExtraPosts(
+  account: { extraPostsPerDay?: number | null; extraPostsUntil?: Date | string | null; extraPostsReason?: string | null } | null | undefined,
+  todayJst: string = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10),
+): { extra: number; note: string } {
+  const n = Number(account?.extraPostsPerDay ?? 0);
+  if (!account || !Number.isFinite(n) || n <= 0 || !account.extraPostsUntil) return { extra: 0, note: "" };
+  const until = account.extraPostsUntil instanceof Date
+    ? new Date(account.extraPostsUntil.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+    : String(account.extraPostsUntil).slice(0, 10);
+  if (todayJst > until) return { extra: 0, note: "" };
+  return { extra: n, note: String(account.extraPostsReason || `届かなかった分の補填（${until.replace(/^\d{4}-/, "").replace("-", "/")}まで1日＋${n}件）`) };
+}
