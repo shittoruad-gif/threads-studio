@@ -803,7 +803,14 @@ async function generateAutoPost(
         brandVoice, businessType: project.businessType, storeName: (project as any).storeName,
         styleSamples: (project as any).styleSamples || null, identityHint: identityHint || null,
       });
-      if (rv && rv.score < NATURALNESS_MIN_SCORE) {
+      // ★最後の作り直しでは3点を通す（2026-09-11）。9/11朝は35枠中19枠が失敗し、その3回目の理由の
+      //   半分以上が「3/5」だった（例：「土浦で11年。／早期回復をサポートしています。」）。
+      //   2点以下（明らかに不自然）は最後でも落として翌朝の自動補填に回す。
+      const minScore = lastAttempt ? NATURALNESS_MIN_SCORE - 1 : NATURALNESS_MIN_SCORE;
+      if (rv && rv.score < NATURALNESS_MIN_SCORE && rv.score >= minScore) {
+        console.log(`[AutoPost] naturalnessReview: ${rv.score}/5 だが最後の作り直しのため公開へ（${rv.problems.join(' / ')}） userId=${userId}`);
+      }
+      if (rv && rv.score < minScore) {
         console.warn(`[AutoPost] naturalnessReview: ${rv.score}/5 ${rv.problems.join(' / ')} → 作り直し userId=${userId} projectId=${project.id}`);
         lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex),
           rv.problems.length ? rv.problems.map((p) => `- 不自然と判定された箇所：「${p}」`).join('\n') : '- 店主が自分で打った文に見えない（説明文・汎用の締め）');
