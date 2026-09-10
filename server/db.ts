@@ -3585,6 +3585,15 @@ export async function countAccountAutoPostsSinceConnect(accountId: number): Prom
  * 2026-09-09、切り口は毎回変えているのに書き出しの決め台詞だけが同じ投稿が
  * 5本続き、お客様が5本とも「✕ 違う」を付けられた（shared/jpQualityGuard.ts）。
  */
+/**
+ * 直近の投稿の本文（同じ言い回しを繰り返さないために生成へ渡す）。
+ *
+ * ★お客様が「見送る」「✕ 違う」を押された下書きも入れる（2026-09-11）。
+ *   これまで canceled を外していたため、断られた切り口が次の生成から見えず、
+ *   ほぼ同じ投稿がもう一度届いていた（9/9〜9/10：香取様は同じ決め台詞で5本、
+ *   岩根様は「着物は敷居が高い」＋「本物の正絹」でほぼ同じ内容が2本）。
+ *   運営側の取り下げ（評価が付いていない canceled）は含めない。
+ */
 export async function getRecentPostContents(accountId: number, limit: number = 10): Promise<string[]> {
   const database = await getDb();
   if (!database) return [];
@@ -3592,7 +3601,8 @@ export async function getRecentPostContents(accountId: number, limit: number = 1
     const rows: any = await database.execute(sql`
       SELECT postContent FROM scheduledPosts
       WHERE threadsAccountId = ${accountId} AND postContent IS NOT NULL AND postContent <> ''
-        AND status IN ('posted','pending','awaiting_approval','processing')
+        AND (status IN ('posted','pending','awaiting_approval','processing')
+             OR (status = 'canceled' AND (clientRating = 'bad' OR ratedAt IS NOT NULL)))
       ORDER BY scheduledAt DESC LIMIT ${limit}`);
     return (((rows as any)[0] ?? []) as any[]).map((r) => String(r.postContent || "")).filter(Boolean);
   } catch {

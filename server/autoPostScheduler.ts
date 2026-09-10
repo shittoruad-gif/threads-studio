@@ -584,8 +584,9 @@ async function generateAutoPost(
     // ★直近の自分の投稿を見せて、決め台詞の使い回しを止める（2026-09-10）。
     //   切り口は毎回変わっていたのに書き出しの一節だけが同じ投稿が5本続き、
     //   香取様が5本とも「✕ 違う」を付けて4本を見送られた。
+    //   お客様が見送られた下書きも含む（断られた切り口をもう一度出さない・2026-09-11）。
     let recentPosts: string[] = [];
-    try { recentPosts = await db.getRecentPostContents(threadsAccountId, 8); } catch { recentPosts = []; }
+    try { recentPosts = await db.getRecentPostContents(threadsAccountId, 10); } catch { recentPosts = []; }
     // ★ご本人がThreadsアプリから投稿した分も見る（2026-09-11 香取様「同じ内容だったので自分で投稿していた」）。
     //   こちらの下書きだけでなく、ご本人の直近の投稿とも話題・言い回しを重ねない。1日1回だけ取りに行く。
     try {
