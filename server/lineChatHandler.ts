@@ -10,7 +10,7 @@ import {
   buildPostCards, textWithQuick, textWithChoices, parsePostback, fmtJst, REWRITE_KINDS,
   MENU_ITEMS, HELP_TOPICS, helpQuick, settingsQuick, settingsSummary, shouldClearPendingInput,
 } from "./lineChat";
-import { COUNSELING_QUESTIONS } from "../shared/counseling";
+import { COUNSELING_QUESTIONS, quickQuestions } from "../shared/counseling";
 import { buildCounselingBrief, renderBriefText } from "../shared/counselingBrief";
 import { applyIndustryOverrides } from "../shared/industryProfiles";
 import { detectIndustryMismatch } from "../shared/industryMismatch";
@@ -661,7 +661,7 @@ async function offerCounselingResume(
  * 業種・地域・店名で「この店らしさ」が満たせ、お悩みで話題が決まる。
  * お客さん像はホームページから読めることが多く、読めなければ「きょうの1問」の最初に聞く。
  */
-const QUICK_QUESTION_IDS: readonly string[] = ["businessTypeRaw", "areaRaw", "storeNameRaw", "mainProblemRaw"];
+//   ★定義は shared/counseling.ts に1つだけ置く（アプリの画面 /ai-counseling と必ず同じにするため）
 
 function questionsFor(mode: "store" | "personal", answers?: Record<string, string>, quick?: boolean) {
   // ★個人モードでも、まず業種で候補を差し替えてから個人向けの言い回しを重ねる。
@@ -674,7 +674,7 @@ function questionsFor(mode: "store" | "personal", answers?: Record<string, strin
     //   これがないと、カフェや教室のお客様に「骨盤矯正」「痛い施術ですか？」が出る。
     : applyIndustryOverrides(COUNSELING_QUESTIONS, answers?.businessTypeRaw);
   if (!quick) return full;
-  return full.filter((q) => QUICK_QUESTION_IDS.includes(String(q.id)));
+  return quickQuestions(full);
 }
 
 /** お店の情報に、まだ答えていない質問（全20問のうち）の番号（0始まり）と id */

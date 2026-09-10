@@ -20,6 +20,8 @@ import { applyIndustryOverrides } from '@shared/industryProfiles';
 import { buildCounselingBrief } from '@shared/counselingBrief';
 import {
   COUNSELING_QUESTIONS,
+  quickQuestions,
+  QUICK_QUESTION_IDS,
   type CounselingAnswers,
   type CounselingQuestion,
 } from '../../../shared/counseling';
@@ -111,8 +113,10 @@ export default function AICounseling() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ★4問に絞ったので、以前の下書き（全20問のときの stepIndex）が範囲外になることがある。
+  //   はみ出したまま復元すると質問が undefined になって画面が落ちるため、必ず丸める。
   const [stepIndex, setStepIndex] = useState(() =>
-    draft ? Math.min(draft.stepIndex ?? 0, COUNSELING_QUESTIONS.length - 1) : 0
+    draft ? Math.max(0, Math.min(draft.stepIndex ?? 0, QUICK_QUESTION_IDS.length - 1)) : 0
   );
   const [answers, setAnswers] = useState<Partial<CounselingAnswers>>(draft?.answers ?? {});
   // ★確認画面で見せる「一言でいうと」。書き換えるとそのまま保存され、以後の投稿の軸になる。
@@ -310,7 +314,7 @@ export default function AICounseling() {
         <div className="mx-auto mt-5 max-w-xl">
           <p className="mb-2 text-center text-xs font-bold tracking-wider text-muted-foreground">選んだあとの流れ</p>
           <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground sm:gap-2 sm:text-sm">
-            <span className="rounded-lg bg-card border border-border px-2.5 py-1.5 sm:px-3">質問に答える<span className="hidden sm:inline">（10〜15分）</span></span>
+            <span className="rounded-lg bg-card border border-border px-2.5 py-1.5 sm:px-3">4つの質問に答える<span className="hidden sm:inline">（2分ほど）</span></span>
             <span>→</span>
             <span className="rounded-lg bg-card border border-border px-2.5 py-1.5 sm:px-3">AIが投稿を作る</span>
             <span>→</span>
@@ -327,9 +331,15 @@ export default function AICounseling() {
 
   // ★1問目で答えていただいた業種に合わせて、以降の候補・例文・言い回しを差し替える。
   //   全業種に治療院の候補（骨盤矯正・痛い施術ですか？など）を見せないため。
-  const questions = mode === 'personal'
+  // ★アプリの画面も公式LINEと同じ「まず4問」にする（2026-09-10 三上様指示
+  //   「LINEでの質問と同じように、アプリ内も5問だけに」）。全20問の壁が理由で
+  //   設定に入れないまま何日も止まる方が出ていた。残りは投稿が動き始めてから
+  //   「きょうの1問」で1日1問ずつお聞きする。
+  //   絞る定義は shared/counseling.ts の QUICK_QUESTION_IDS ひとつだけ。
+  const allQuestions = mode === 'personal'
     ? applyPersonalOverrides(COUNSELING_QUESTIONS)
     : applyIndustryOverrides(COUNSELING_QUESTIONS, answers.businessTypeRaw);
+  const questions = quickQuestions(allQuestions);
   const totalSteps = questions.length;
   const isLast = stepIndex === totalSteps - 1;
   const isFirst = stepIndex === 0;
@@ -509,28 +519,31 @@ export default function AICounseling() {
           {(() => {
             const b = buildCounselingBrief(answers, oneLine);
             const c = b.concept;
-            const rows: [string, string][] = [
+            // ★「まず4問」では、答えていただいていない項目まで「（未記入）」と並べない。
+            //   4項目が空欄で並ぶと「これで大丈夫だろうか」と不安になる（2026-09-10）。
+            //   残りは投稿が動き始めてから「きょうの1問」でお聞きするので、
+            //   ここでは答えていただいた分だけをお見せする。
+            const rows: [string, string][] = ([
               ['誰に', c.who],
               ['どんな悩みを', c.problem],
               ['どんな方法で', c.how],
               ['どんな未来へ', c.future],
               ['なぜこのお店か', c.why],
-            ];
+            ] as [string, string][]).filter(([, v]) => Boolean(v));
             return (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 space-y-3">
                 <div>
                   <p className="text-sm font-medium text-emerald-900">AIはこう理解しました</p>
                   <p className="text-xs text-emerald-800/80 mt-0.5">
                     毎日の投稿は、この内容に沿って作られます。違うところがあれば下の各項目の「修正」から直してください。
+                    {rows.length < 5 && 'ここに出ていない項目は、投稿が動き始めてから公式LINEで1日1問ずつお聞きします。いまのままで投稿は作れます。'}
                   </p>
                 </div>
                 <dl className="space-y-1.5">
                   {rows.map(([label, value]) => (
                     <div key={label} className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-2 text-xs sm:grid-cols-[8.5rem_minmax(0,1fr)]">
                       <dt className="text-emerald-900/70">{label}</dt>
-                      <dd className={value ? 'text-emerald-950 break-words' : 'text-emerald-900/40'}>
-                        {value || '（未記入）'}
-                      </dd>
+                      <dd className="text-emerald-950 break-words">{value}</dd>
                     </div>
                   ))}
                 </dl>
