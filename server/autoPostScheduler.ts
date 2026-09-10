@@ -528,8 +528,19 @@ async function generateAutoPost(
       if (editPreferenceNote) console.log(`[AutoPost] 手直しの好みを反映 userId=${userId} edits=${edits.length}`);
     } catch (e) { console.warn(`[AutoPost] 手直しの好みの反映をとばしました: ${(e as Error)?.message}`); }
 
+    // ★生成のときにも「この店を指す言葉」を渡す（2026-09-10）。
+    //   渡していなかったため、生成側は「毎回・1行目に無理に入れない」と指示され、
+    //   生成後の identityGuard は「1つ必須」を求める矛盾になっていた。
+    //   9/10朝の自動投稿では、この理由の作り直しが19件で失敗の最大要因だった。
+    let identityWords: string[] = [];
+    try {
+      const { identityTokens } = await import('../shared/identityGuard');
+      identityWords = identityTokens(project).slice(0, 8);
+    } catch { identityWords = []; }
+
     const prompt = generateThreadsPrompt({
       storeName: (project as any).storeName || undefined,
+      identityTokens: identityWords,
       businessType: project.businessType,
       area: project.area,
       localTerms: approvedLocalTerms(project),

@@ -55,3 +55,36 @@ describe("お問い合わせの導線", () => {
     expect(productKnowledge()).toContain("スクリーンショット");
   });
 });
+
+/**
+ * 2026-09-10 三上様「5問のみに直したのに、まだ『20問』という案内が全部出てしまう」。
+ * 公式LINEの経路は「まず5問」。アプリの画面（/ai-counseling）は今も全20問。
+ * LINEの話をしている案内文が「20問」と言っていないことを固定する。
+ */
+describe("「はじめの設定」の案内が経路ごとに正しい", () => {
+  const read = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
+
+  it("毎朝の「次にやること」（LINEのボタン）が20問と言わない", () => {
+    const s = read("./nextAction.ts");
+    expect(s).not.toContain("10〜15分・全20問");
+    expect(s).toContain("最初は5つだけです（URL1つと質問4つ・2分ほど）");
+  });
+
+  it("ご登録直後のご案内メールが20問と言わない", () => {
+    const s = read("./onboardingEmailJob.ts");
+    expect(s).not.toContain("全20問");
+    expect(s).toContain("公式LINEなら最初は5つだけです");
+  });
+
+  it("自動応答の知識が、LINEは5問・アプリの画面は20問と書き分けている", () => {
+    const k = productKnowledge();
+    expect(k).toContain("公式LINEなら最初は5つだけ");
+    expect(k).toContain("/ai-counseling");
+    expect(k).not.toContain("「はじめの設定」（20問）に答える");
+  });
+
+  it("LINEの入口（トーク内）が20問と言わない", () => {
+    expect(handler).not.toContain("はじめの設定を始めます（10〜15分・全20問）");
+    expect(handler).not.toContain("登録できます（10〜15分・全20問）");
+  });
+});

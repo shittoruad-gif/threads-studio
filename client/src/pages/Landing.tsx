@@ -57,10 +57,10 @@ const demoSteps = [
   {
     step: 3,
     title: "「はじめの設定」に答える",
-    time: "10〜15分",
-    description: "公式LINEのトークで、20問に答えるだけ。お店の情報が登録され、答えた内容だけをAIが事実として使います（書いていない実績や料金が投稿に出ることはありません）。スマホのLINEで進めるのがいちばん簡単です。",
+    time: "2分",
+    description: "公式LINEのトークで、最初は5つだけ。ホームページのURLを貼ると、業種・地域・店名・強みをこちらで読み取って先に入れておくので、合っていれば「これでOK」を押すだけです。残りの質問は、投稿が動き始めてから1日1問ずつ。答えた内容だけをAIが事実として使います（書いていない実績や料金が投稿に出ることはありません）。",
     image: "/demo/counseling-sp.jpg",
-    alt: "はじめの設定（20問）の画面",
+    alt: "はじめの設定の画面",
     portrait: true,
     caption: "実際の画面です（サンプル店舗のデータ）",
   },
@@ -207,7 +207,7 @@ function VideoDemoSection() {
 
         <div className={`grid md:grid-cols-3 gap-6 mt-12 fade-in-up delay-300 ${isVisible ? 'visible' : ''}`}>
           {[
-            { value: "10〜15分", label: "はじめの設定にかかる時間" },
+            { value: "2分", label: "はじめの設定にかかる時間" },
             { value: "1タップ", label: "毎日の確認はLINEで押すだけ" },
             { value: "0円", label: "無料で始められる" },
           ].map((item, i) => (

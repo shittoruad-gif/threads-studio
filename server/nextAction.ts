@@ -314,7 +314,7 @@ export async function detectNextAction(userId: number): Promise<NextAction | nul
       text:
         "次にやることが1つあります。\n\n" +
         "まだ「お店の情報」が登録されていないため、投稿を作ることができません。\n" +
-        "下の「はじめの設定」から、質問にお答えください（10〜15分・全20問）。",
+        "下の「はじめの設定」から、質問にお答えください。最初は5つだけです（URL1つと質問4つ・2分ほど）。",
       buttons: [{ label: "はじめの設定", data: "m=setup" }],
     };
   }

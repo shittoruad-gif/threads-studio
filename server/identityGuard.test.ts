@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { checkIdentity, identityTokens } from "../shared/identityGuard";
+import { generateThreadsPrompt } from "../shared/threadsPrompts";
 
 /** 比嘉先生（はいさい整骨院）の登録に近い形 */
 const HIGA = {
@@ -85,5 +86,51 @@ describe("リライトが店名・地名を削ったときは下書きに戻せ�
     const keep = checkIdentity(draft, TENJIN).found;
     expect(keep).toContain("廿日市");
     expect(keep).not.toContain("廿日市天神整体院");
+  });
+});
+
+/**
+ * 2026-09-10 朝の実測。前夜に入れた「リライトが削ったら戻す」対策は0回しか
+ * 発火せず、identityGuard の作り直しは19件のまま（失敗の最大要因）だった。
+ * 真因はリライトではなく生成側で、プロンプトが正面から矛盾していた：
+ *   生成側「店名は…毎回・1行目に無理に入れない」
+ *   検査側「地名・店名・実績のどれか1つ必須」
+ * 生成プロンプトに identityTokens を渡し、必須条件として伝える。
+ */
+describe("生成プロンプトと検査の矛盾を無くす（2026-09-10）", () => {
+  const base = {
+    businessType: "整体院",
+    area: "広島県廿日市市",
+    target: "デスクワークの会社員",
+    mainProblem: "長引く肩こり",
+    strength: "姿勢から見直す",
+    postType: "expertise" as any,
+    treeCount: 0,
+    purpose: "集客",
+  };
+
+  it("生成プロンプトが「毎回…入れない」と言わなくなっている", () => {
+    const p = generateThreadsPrompt({ ...base, storeName: "廿日市天神整体院" });
+    expect(p).not.toContain("毎回・1行目に無理に入れない");
+  });
+
+  it("渡した「この店を指す言葉」が必須条件として本文に入る", () => {
+    const tokens = identityTokens({ storeName: "廿日市天神整体院", area: "広島県廿日市市" });
+    const p = generateThreadsPrompt({ ...base, storeName: "廿日市天神整体院", identityTokens: tokens });
+    expect(p).toContain("この店だと分かる言葉を1つ入れる");
+    expect(p).toContain("廿日市");
+    expect(p).toContain("1行目に入れる必要はない");
+  });
+
+  it("材料が無い店では、余計な必須条件を足さない（これまでどおり生成する）", () => {
+    const p = generateThreadsPrompt({ ...base, identityTokens: [] });
+    expect(p).not.toContain("この店だと分かる言葉を1つ入れる");
+  });
+
+  it("必須条件に出す言葉は、検査で実際に通る言葉と同じもの", () => {
+    const src = { storeName: "廿日市天神整体院", area: "広島県廿日市市" };
+    for (const w of identityTokens(src).slice(0, 8)) {
+      expect(checkIdentity(`本日は${w}のお話です。姿勢から見直しています。`, src).ok).toBe(true);
+    }
   });
 });
