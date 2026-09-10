@@ -297,8 +297,18 @@ function plain(s: string): string {
     .replace(/[←-⇿☀-➿️⬀-⯿]/g, "");
 }
 
-/** これ以上長く一致したら「使い回し」とみなす文字数 */
-export const REPEAT_MIN_CHARS = 14;
+/**
+ * これ以上長く一致したら「使い回し」とみなす文字数。
+ * ★14→10（2026-09-11）：香取様の「痛い場所だけ揉んでも」（10文字）が3本続けて素通りし、
+ *   ご本人から「ここ数日は同じ内容でしたので自身で投稿していました」と連絡があった。
+ *   短くした分の誤爆（「ありがとうございます」等）は、漢字・カタカナを含まない一致を数えないことで防ぐ。
+ */
+export const REPEAT_MIN_CHARS = 10;
+
+/** 決まり文句の誤爆を避ける：ひらがなだけの一致（挨拶・語尾）は使い回しとみなさない */
+function meaningful(hit: string): boolean {
+  return /[一-龠々ァ-ヶ]/.test(hit);
+}
 
 /**
  * 直近の投稿と連続して一致する一番長い部分を返す（無ければ null）。
@@ -322,7 +332,7 @@ export function findRepeatedPhrase(
       if (!b.includes(a.slice(i, i + len).join(""))) continue;
       while (i + len < a.length && b.includes(a.slice(i, i + len + 1).join(""))) len++;
       const hit = a.slice(i, i + len).join("");
-      if (hit.length > best.length) best = hit;
+      if (hit.length > best.length && meaningful(hit)) best = hit;
     }
   }
   return best.length >= minChars ? best : null;

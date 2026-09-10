@@ -575,6 +575,12 @@ async function generateAutoPost(
     //   香取様が5本とも「✕ 違う」を付けて4本を見送られた。
     let recentPosts: string[] = [];
     try { recentPosts = await db.getRecentPostContents(threadsAccountId, 8); } catch { recentPosts = []; }
+    // ★ご本人がThreadsアプリから投稿した分も見る（2026-09-11 香取様「同じ内容だったので自分で投稿していた」）。
+    //   こちらの下書きだけでなく、ご本人の直近の投稿とも話題・言い回しを重ねない。1日1回だけ取りに行く。
+    try {
+      const own = await recentOwnThreadsPosts(threadsAccountId);
+      for (const t of own) if (!recentPosts.includes(t)) recentPosts.push(t);
+    } catch { /* 取れなくてもこちらの下書きだけで続ける */ }
     const recentNote = recentPosts.length > 0
       ? `\n\n【直近の投稿（同じ言い回しを繰り返さない）】\n${recentPosts.slice(0, 6).map((p, i) => `${i + 1}. ${String(p).replace(/\s+/g, ' ').slice(0, 90)}`).join('\n')}\n- 上の投稿で使った書き出し・決め台詞・たとえを、そのまま使い回さない。同じことを言うなら、別の入り方・別の言葉にする。\n- 読んだ人が「この前と同じ投稿だ」と感じたら失敗。`
       : '';
@@ -815,14 +821,12 @@ async function generateAutoPost(
     if (recentPosts.length > 0) {
       const dup = findRepeatedPhrase(naturalMain, recentPosts);
       if (dup) {
-        if (lastAttempt) {
-          console.warn(`[AutoPost] 使い回し「${dup}」が残ったが、最後の作り直しのため公開する userId=${userId} projectId=${project.id}`);
-        } else {
-          console.warn(`[AutoPost] 直近の投稿と同じ言い回し「${dup}」→ 作り直し userId=${userId} projectId=${project.id}`);
-          lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex),
-            `- 直近の投稿と同じ言い回し「${dup}」を使っている。同じことを言うなら、別の入り方・別の言葉にする。`);
-          return false;
-        }
+        // ★最後の作り直しでも、同じ言い回しは出さない（2026-09-11）。以前は「枠を捨てない」ために公開していたが、
+        //   落ちた枠は翌朝の自動補填で足されるようになったので、同じ内容を届けるより落とすほうを取る。
+        console.warn(`[AutoPost] 直近の投稿と同じ言い回し「${dup}」→ ${lastAttempt ? '最後の作り直しでも見送り（明日の生成で補填）' : '作り直し'} userId=${userId} projectId=${project.id}`);
+        lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex),
+          `- 直近の投稿と同じ言い回し「${dup}」を使っている。同じことを言うなら、別の入り方・別の言葉にする。`);
+        return false;
       }
     }
 
@@ -1335,6 +1339,25 @@ export function startAutoPostScheduler() {
   });
 
   console.log('[AutoPost Scheduler] Scheduled for 6:00 AM JST daily');
+}
+
+/** ご本人のThreads直近投稿（返信を除く・本文のみ）。アカウントごとに1日1回だけ取得してキャッシュ */
+const ownPostsCache = new Map<number, { day: string; posts: string[] }>();
+async function recentOwnThreadsPosts(accountId: number): Promise<string[]> {
+  if (process.env.QA_SAFE_MODE === '1') return [];
+  const day = new Date().toISOString().slice(0, 10);
+  const c = ownPostsCache.get(accountId);
+  if (c && c.day === day) return c.posts;
+  let posts: string[] = [];
+  try {
+    const acct: any = await db.getThreadsAccountById(accountId);
+    if (acct?.accessToken) {
+      const r: any = await (await fetch(`https://graph.threads.net/v1.0/me/threads?fields=id,text,is_reply&limit=12&access_token=${acct.accessToken}`, { signal: AbortSignal.timeout(8000) })).json();
+      posts = (r?.data ?? []).filter((p: any) => !p.is_reply && String(p.text || '').trim()).map((p: any) => String(p.text)).slice(0, 10);
+    }
+  } catch { posts = []; }
+  ownPostsCache.set(accountId, { day, posts });
+  return posts;
 }
 
 /**
