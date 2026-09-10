@@ -84,8 +84,9 @@ export async function runMorningDigestJob(): Promise<void> {
       const awaiting = await db.getRecentAwaitingApprovalPosts(userId, 30).catch(() => [] as any[]);
       const awaitingText = awaiting.length > 0 ? `承認をお待ちしている投稿が ${awaiting.length}件 あります。「今日の投稿」から公開できます。` : null;
 
-      const ownerText = [count?.text, annText, actionText, awaitingText].filter(Boolean).join("\n\n");
-      const staffText = [count?.text, annText, awaitingText].filter(Boolean).join("\n\n");
+      // ★お知らせがある日は、お知らせを先頭に（「この1通にまとめました」を先に読んでもらう）
+      const ownerText = [annText, count?.text, actionText, awaitingText].filter(Boolean).join("\n\n");
+      const staffText = [annText, count?.text, awaitingText].filter(Boolean).join("\n\n");
       if (!ownerText) continue;
 
       const common = [
