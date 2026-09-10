@@ -376,6 +376,12 @@ export function initDailyOpsSchedulers(): void {
     const { runNextActionNotifyJob } = await import("./nextActionJob");
     await runTrackedJob("next_action_notify", runNextActionNotifyJob);
   });
+  // 8:35 JST = 23:35 UTC — 公開前の確認を続けている方に「自動（確認なし）にしませんか」（2026-09-10 三上様指示）
+  cron.schedule("35 23 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runAutoModeNudgeJob } = await import("./autoModeNudgeJob");
+    await runTrackedJob("auto_mode_nudge", runAutoModeNudgeJob);
+  });
   // 9:00 JST = 0:00 UTC — 登録したまま止まっている方へのメール案内（LINE未連携の方のみ）
   cron.schedule("0 0 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");

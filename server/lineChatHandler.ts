@@ -2268,6 +2268,23 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       [{ label: "元に戻す", data: `s=metaai&v=${on ? "off" : "on"}` }, ...MENU_HINT],
     )];
   }
+  // ── 「自動（確認なし）にしませんか」のお声がけへの返事（server/autoModeNudgeJob.ts）──
+  if (q.c === "automode") {
+    const { AUTO_MODE_ON_TEXT, AUTO_MODE_KEEP_TEXT } = await import("../shared/autoModeNudge");
+    if (q.v === "on") {
+      await db.updateAutoPostSettings(user.id, { autoPostRequireApproval: false });
+      // アカウント別の上書きが残っていると共通設定が効かないので、そろえる
+      for (const a of (await db.getThreadsAccountsByUserId(user.id)) as any[]) {
+        if (a.autoPostRequireApproval !== null && a.autoPostRequireApproval !== undefined) {
+          await db.updateThreadsAccount(a.id, { autoPostRequireApproval: null } as any).catch(() => {});
+        }
+      }
+      await db.recordAutoModeNudge(user.id, true).catch(() => {});
+      return [textWithQuick(AUTO_MODE_ON_TEXT, [{ label: "元に戻す（確認する）", data: "s=appr&v=on" }, ...MENU_HINT])];
+    }
+    await db.recordAutoModeNudge(user.id, true).catch(() => {});
+    return [textWithQuick(AUTO_MODE_KEEP_TEXT, MENU_HINT)];
+  }
   if (q.s === "appr") {
     const target = await ownedAccountOrNull(user.id, q.a);
     if (q.a && !target) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];

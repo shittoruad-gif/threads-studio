@@ -59,6 +59,9 @@ export const users = mysqlTable("users", {
   // 直近に送った案内の種類と日時（同じ案内を毎日送らないため）
   nextActionLastKey: varchar("nextActionLastKey", { length: 40 }),
   nextActionLastSentAt: timestamp("nextActionLastSentAt"),
+  // 「自動（確認なし）にしませんか」のお声がけ（shared/autoModeNudge.ts）。3回まで・21日おき。
+  autoModeNudgeAt: timestamp("autoModeNudgeAt"),
+  autoModeNudgeCount: int("autoModeNudgeCount").default(0).notNull(),
   // Referral code for referral program
   referralCode: varchar("referralCode", { length: 16 }).unique(),
   // User's credit balance (for referral rewards)

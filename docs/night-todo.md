@@ -73,3 +73,10 @@
   - [ ] 7:40の件数報告に補填の注記が出る
 - 設定・解除は `scripts/ops/set-extra-posts.mts`。
 
+## 2026-09-10 昼（三上様指示：自動にしますかの案内）
+
+- 毎朝8:35 JST `auto_mode_nudge`（server/autoModeNudgeJob.ts）。migration `0082_auto_mode_nudge.sql`（users.autoModeNudgeAt / autoModeNudgeCount）。
+- デプロイ後に確認すること:
+  - [ ] 9/11 8:35 のログ `[AutoModeNudge] 送信 N件 / 対象 M人`。送った相手と理由が出る
+  - [ ] 「自動にする（確認なし）」を押した方の users.autoPostRequireApproval が 0 になり、翌朝の投稿が承認カードなしで pending で作られる
+

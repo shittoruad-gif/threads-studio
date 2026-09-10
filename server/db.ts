@@ -4283,3 +4283,54 @@ export async function recordTermsAgreement(
     } as any)
     .where(eq(users.id, userId));
 }
+
+/** 「自動（確認なし）にしませんか」の対象（LINE連携・案内ON・公開前の確認ON・自動投稿ON） */
+export async function listUsersForAutoModeNudge(): Promise<Array<{ userId: number; lineUserId: string; nudgeCount: number; lastNudgeAt: Date | null }>> {
+  const database = await getDb();
+  if (!database) return [];
+  const rows: any = await database.execute(sql.raw(
+    `SELECT u.\`id\` AS userId, l.\`lineUserId\` AS lineUserId, u.\`autoModeNudgeCount\` AS nudgeCount, u.\`autoModeNudgeAt\` AS lastNudgeAt
+     FROM \`users\` u
+     JOIN \`userLineLinks\` l ON l.\`id\` = (SELECT MIN(l2.\`id\`) FROM \`userLineLinks\` l2 WHERE l2.\`userId\` = u.\`id\`)
+     WHERE u.\`nextActionNotifyEnabled\` = 1 AND u.\`autoPostEnabled\` = 1 AND u.\`autoPostRequireApproval\` = 1
+       AND u.\`autoModeNudgeCount\` < 3`
+  ));
+  return (rows?.[0] ?? []).map((r: any) => ({
+    userId: Number(r.userId), lineUserId: String(r.lineUserId),
+    nudgeCount: Number(r.nudgeCount ?? 0), lastNudgeAt: r.lastNudgeAt ? new Date(r.lastNudgeAt) : null,
+  }));
+}
+
+/** 承認の習慣（自動投稿だけ）：累計・最初の承認日・直近14日の承認／見送り／手直し */
+export async function approvalStatsForUser(userId: number): Promise<{ approvedTotal: number; firstApprovedAt: Date | null; approvedRecent: number; declinedRecent: number; editedRecent: number }> {
+  const database = await getDb();
+  if (!database) return { approvedTotal: 0, firstApprovedAt: null, approvedRecent: 0, declinedRecent: 0, editedRecent: 0 };
+  const uid = Number(userId);
+  const rows: any = await database.execute(sql.raw(
+    `SELECT
+       SUM(\`status\` = 'posted') AS approvedTotal,
+       MIN(CASE WHEN \`status\` = 'posted' THEN \`scheduledAt\` END) AS firstApprovedAt,
+       SUM(\`status\` IN ('posted','pending') AND \`createdAt\` >= DATE_SUB(NOW(), INTERVAL 14 DAY)) AS approvedRecent,
+       SUM(\`status\` = 'canceled' AND \`clientRating\` = 'bad' AND \`createdAt\` >= DATE_SUB(NOW(), INTERVAL 14 DAY)) AS declinedRecent,
+       SUM(\`status\` IN ('posted','pending') AND \`editedByUserAt\` IS NOT NULL AND \`createdAt\` >= DATE_SUB(NOW(), INTERVAL 14 DAY)) AS editedRecent
+     FROM \`scheduledPosts\` WHERE \`userId\` = ${uid} AND \`source\` = 'auto'`
+  ));
+  const r = rows?.[0]?.[0] ?? {};
+  return {
+    approvedTotal: Number(r.approvedTotal ?? 0),
+    firstApprovedAt: r.firstApprovedAt ? new Date(r.firstApprovedAt) : null,
+    approvedRecent: Number(r.approvedRecent ?? 0),
+    declinedRecent: Number(r.declinedRecent ?? 0),
+    editedRecent: Number(r.editedRecent ?? 0),
+  };
+}
+
+/** お声がけを送った記録（count=3 で打ち止め。「このまま確認する」は 3 にする） */
+export async function recordAutoModeNudge(userId: number, stop = false): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  await database.execute(sql.raw(
+    `UPDATE \`users\` SET \`autoModeNudgeAt\` = NOW(), \`autoModeNudgeCount\` = ${stop ? 3 : "`autoModeNudgeCount` + 1"} WHERE \`id\` = ${Number(userId)}`
+  ));
+}
+
