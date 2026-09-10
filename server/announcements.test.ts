@@ -17,10 +17,17 @@ describe("その日のお知らせ", () => {
       expect(Array.from(a.text).length).toBeLessThan(2000);
       // 内部用語を使わない（お客様に見せない言葉）
       for (const ng of ["adminReview", "styleSamples", "postback", "quick", "API", "プロンプト"]) expect(a.text).not.toContain(ng);
-      // 変わった点が「5問」「きょうの1問」「次にやること」の言葉で説明されている
-      expect(a.text).toContain("5問");
-      expect(a.text).toContain("きょうの1問");
-      expect(a.text).toContain("次にやること");
     }
+    // 9/9：変わった点が「5問」「きょうの1問」「次にやること」の言葉で説明されている
+    const a909 = DAILY_ANNOUNCEMENTS.find((a) => a.key === "easy_setup_2026-09-09")!;
+    expect(a909.text).toContain("5問");
+    expect(a909.text).toContain("きょうの1問");
+    expect(a909.text).toContain("次にやること");
+    // 9/11：既存の方が混乱しないよう「変わらない」を先に、戻し方（設定）を必ず書く（2026-09-10 三上様指示）
+    const a911 = DAILY_ANNOUNCEMENTS.find((a) => a.key === "morning_digest_2026-09-11")!;
+    expect(a911.text.indexOf("変わりません")).toBeGreaterThan(-1);
+    expect(a911.text.indexOf("変わりません")).toBeLessThan(a911.text.indexOf("■ 1."));
+    expect(a911.text).toContain("「設定」");
+    expect(a911.text).toContain("7:40");
   });
 });
