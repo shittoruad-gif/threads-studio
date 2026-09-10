@@ -1074,6 +1074,26 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             else if (r.established) console.log(`[AutoPost] account ${account.id} はThreads歴が長いため慣らし運転なし`);
           }
 
+          // ★昨日届かなかった分を今日に足す（自動補填・2026-09-10 三上様指示）。
+          //   品質チェックで3回落ちて枠ごと消えた分は、翌朝の生成で＋1〜2件にして届ける。
+          //   手動の補填（extraPosts*）と合わせて1日＋2件まで。当日補充のときは足さない（朝に足した分と二重になる）。
+          const contractCount = Math.min(getPostCount(eff.autoPostFrequency), maxPerDay);
+          let carried = 0;
+          if (!opts.fillToday) {
+            try {
+              const { carryOverCount, jstDateString } = await import('../shared/accountRamp');
+              const fullAcct: any = await db.getThreadsAccountById(account.id);
+              const alreadyExtra = Math.max(0, postCount - contractCount);
+              carried = carryOverCount(fullAcct, alreadyExtra);
+              if (carried > 0) {
+                postCount += carried;
+                await db.updateThreadsAccount(account.id, { carryDate: jstDateString(0), carryCount: carried } as any);
+                console.log(`[AutoPost] account ${account.id} 自動補填: 昨日届かなかった${fullAcct?.shortfallCount}件のうち${carried}件を今日に足す（→${postCount}件）`);
+              }
+            } catch (e) { console.warn(`[AutoPost] 自動補填の判定に失敗 account=${account.id}: ${(e as Error)?.message}`); }
+          }
+          void contractCount;
+
           // ★当日補充: 今日すでにある分を引いて、残り時間に入る本数だけ作る
           let todayCount = postCount;
           let sameDaySlots: Date[] | null = null;
@@ -1106,6 +1126,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             if (!(e instanceof Error && e.message === '__skip__')) console.error(`[AutoPost] Meta AI呼びかけ投稿の作成に失敗 user=${user.id} account=${account.id}:`, e);
           }
 
+          let accFailed = 0;
           for (let i = 0; i < regularCount; i++) {
             const project = pinnedProject || eligibleProjects[(dayOffset + i) % eligibleProjects.length];
 
@@ -1140,11 +1161,26 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
               purposeIdx = (purposeIdx + 1) % PURPOSES.length;
             } else {
               failed++;
+              accFailed++;
             }
 
             // Small delay between generations to avoid API rate limits
             await new Promise(r => setTimeout(r, 2000));
           }
+
+          // ★落ちた枠の数を記録（翌朝の自動補填に使う）。朝の生成は上書き、当日補充は同じ日なら足す
+          try {
+            const { jstDateString, dateColToJst } = await import('../shared/accountRamp');
+            const today = jstDateString(0);
+            if (!opts.fillToday) {
+              await db.updateThreadsAccount(account.id, { shortfallDate: today, shortfallCount: accFailed } as any);
+            } else if (accFailed > 0) {
+              const cur: any = await db.getThreadsAccountById(account.id);
+              const base = dateColToJst(cur?.shortfallDate) === today ? Number(cur?.shortfallCount ?? 0) : 0;
+              await db.updateThreadsAccount(account.id, { shortfallDate: today, shortfallCount: base + accFailed } as any);
+            }
+            if (accFailed > 0) console.log(`[AutoPost] account ${account.id} 届かなかった枠 ${accFailed}件 → 明日の生成で自動補填`);
+          } catch (e) { console.warn(`[AutoPost] 不足分の記録に失敗 account=${account.id}: ${(e as Error)?.message}`); }
 
         }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { checkHealthClaims, isHealthBusiness } from "../shared/healthClaimGuard";
-import { rampCap, compensationCount, manualExtraPosts } from "../shared/accountRamp";
+import { rampCap, compensationCount, manualExtraPosts, carryOverCount } from "../shared/accountRamp";
 
 describe("健康系の断定ガード", () => {
   it("杖なしで歩ける・痛みなく・ぐっすり・初回1980円を検出して和らげる", () => {
@@ -115,5 +115,14 @@ describe("不妊・妊娠を施術の結果として語らせない（2026-09-09
     expect(manualExtraPosts(null, "2026-09-11").extra).toBe(0);
     // DBから Date で来ても同じ（UTC 15:00 = JST 翌0:00 の境目を跨がない）
     expect(manualExtraPosts({ extraPostsPerDay: 1, extraPostsUntil: new Date("2026-09-16T00:00:00Z") }, "2026-09-16").extra).toBe(1);
+  });
+  it("自動補填：昨日落ちた枠を今日に足す（＋2まで・手動の補填と合わせて）", () => {
+    expect(carryOverCount({ shortfallDate: "2026-09-10", shortfallCount: 1 }, 0, "2026-09-11")).toBe(1);
+    expect(carryOverCount({ shortfallDate: "2026-09-10", shortfallCount: 3 }, 0, "2026-09-11")).toBe(2);
+    expect(carryOverCount({ shortfallDate: "2026-09-10", shortfallCount: 3 }, 1, "2026-09-11")).toBe(1);
+    expect(carryOverCount({ shortfallDate: "2026-09-10", shortfallCount: 3 }, 2, "2026-09-11")).toBe(0);
+    expect(carryOverCount({ shortfallDate: "2026-09-09", shortfallCount: 3 }, 0, "2026-09-11")).toBe(0); // 一昨日の分は持ち越さない
+    expect(carryOverCount({ shortfallDate: new Date("2026-09-10T00:00:00Z"), shortfallCount: 1 }, 0, "2026-09-11")).toBe(1);
+    expect(carryOverCount(null, 0, "2026-09-11")).toBe(0);
   });
 });

@@ -80,3 +80,34 @@ export function manualExtraPosts(
   if (todayJst > until) return { extra: 0, note: "" };
   return { extra: n, note: String(account.extraPostsReason || `届かなかった分の補填（${until.replace(/^\d{4}-/, "").replace("-", "/")}まで1日＋${n}件）`) };
 }
+
+/** JSTの日付（YYYY-MM-DD）。offsetDays=-1 で昨日 */
+export function jstDateString(offsetDays = 0, now: number = Date.now()): string {
+  return new Date(now + 9 * 3600 * 1000 + offsetDays * 86400000).toISOString().slice(0, 10);
+}
+
+/** DBの date 列（Date か文字列）を YYYY-MM-DD（JST）にそろえる */
+export function dateColToJst(v: Date | string | null | undefined): string {
+  if (!v) return "";
+  return v instanceof Date ? new Date(v.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10) : String(v).slice(0, 10);
+}
+
+/** 1日に足せる本数の上限（手動の補填＋自動の繰り越しを合わせて） */
+export const MAX_EXTRA_PER_DAY = 2;
+
+/**
+ * 昨日届かなかった分を今日に足す数（自動補填）。
+ * 昨日の生成で落ちた枠（shortfall）があれば、手動の補填と合わせて1日＋2件まで。
+ */
+export function carryOverCount(
+  account: { shortfallDate?: Date | string | null; shortfallCount?: number | null } | null | undefined,
+  alreadyExtra: number,
+  todayJst: string = jstDateString(0),
+): number {
+  if (!account) return 0;
+  const n = Number(account.shortfallCount ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  const yday = jstDateString(-1, Date.parse(todayJst + "T00:00:00+09:00") + 12 * 3600 * 1000);
+  if (dateColToJst(account.shortfallDate) !== yday) return 0;
+  return Math.max(0, Math.min(n, MAX_EXTRA_PER_DAY - Math.max(0, alreadyExtra)));
+}

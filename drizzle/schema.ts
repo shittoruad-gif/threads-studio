@@ -367,6 +367,11 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   extraPostsReason: varchar("extraPostsReason", { length: 200 }),
   // Meta AI呼びかけ文を7日間使っていない → 送るのをやめた時刻（設定の「再開する」で消える）
   metaAiCallPausedAt: timestamp("metaAiCallPausedAt"),
+  // 届かなかった分の自動補填（2026-09-10）。6時の生成で落ちた枠を shortfall に記録し、翌朝 carry として足す（＋2まで）
+  shortfallDate: date("shortfallDate"),
+  shortfallCount: int("shortfallCount").notNull().default(0),
+  carryDate: date("carryDate"),
+  carryCount: int("carryCount").notNull().default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

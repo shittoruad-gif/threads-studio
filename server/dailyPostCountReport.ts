@@ -16,7 +16,7 @@ const FREQ_COUNT: Record<string, number> = { daily: 1, twice_daily: 2, three_dai
 
 export function buildDailyPostCountMessage(
   dateLabel: string,
-  rows: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number; note?: string }>,
+  rows: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number; note?: string; carryNote?: string }>,
 ): string {
   const lines: string[] = [`昨日の投稿結果（${dateLabel}）`];
   let anyZero = false;
@@ -39,6 +39,7 @@ export function buildDailyPostCountMessage(
     } else {
       lines.push(head);
     }
+    if (r.carryNote) lines.push(`　→ ${r.carryNote}`);
   }
   lines.push("");
   if (anyZero) {
@@ -67,7 +68,7 @@ export async function buildDailyCountTextForUser(
   if (maxPerDay <= 0) return null; // 自動投稿の無いプラン
   const common = await db.getAutoPostSettings(userId);
   const accounts = await db.getThreadsAccountsByUserId(userId);
-  const lines: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number; note?: string }> = [];
+  const lines: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number; note?: string; carryNote?: string }> = [];
   for (const r of rows) {
     const acct: any = (accounts || []).find((a: any) => Number(a.id) === r.accountId);
     const eff = effectiveAccountSettings(common as any, acct);
@@ -82,7 +83,16 @@ export async function buildDailyCountTextForUser(
       if (rc.capped) { entitled = rc.count; note = rc.note; }
       else if (rc.extra) { entitled = rc.count; note = rc.note; }
     } catch { /* そのまま */ }
-    lines.push({ ...r, entitled, note });
+    // 昨日届かなかった分を今日に足していれば、そのことを伝える（自動補填・2026-09-10）
+    let carryNote: string | undefined;
+    try {
+      const { jstDateString, dateColToJst } = await import("../shared/accountRamp");
+      const full: any = acct ? await db.getThreadsAccountById(Number(acct.id)) : null;
+      if (full && dateColToJst(full.carryDate) === jstDateString(0) && Number(full.carryCount) > 0) {
+        carryNote = `昨日届かなかった分のうち${full.carryCount}件を、今日の投稿に足しています`;
+      }
+    } catch { /* 無ければ出さない */ }
+    lines.push({ ...r, entitled, note, carryNote });
   }
   if (lines.length === 0) return null;
   return { text: buildDailyPostCountMessage(dateLabel, lines), accounts: lines.length, zero: lines.filter((l) => l.posted === 0).length };
