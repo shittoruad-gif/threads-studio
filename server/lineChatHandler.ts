@@ -18,7 +18,8 @@ import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 import { contractSummary, type ContractInfo } from "../shared/contractSummary";
-import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord } from "../shared/requestKind";
+import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting } from "../shared/requestKind";
+import { missingAutoPostFields } from "../shared/autoPostRequirements";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
 
@@ -1013,15 +1014,30 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
       `このままだと別の業種の投稿が作られます。「はじめの設定」を押すと前回の答えが入った状態で開くので、` +
       `合わない項目（${(((res as any).mismatchFields as string[]) || []).join("・") || "該当の項目"}）だけ直してください。\n\n`
     : "";
+  // ★投稿づくりに要る項目がまだ空でないか（shared/autoPostRequirements）。
+  //   「まず5問」ではお客さん像と強みが空のまま終わるので、ここを見ずに
+  //   「いま作ってお届けします」「明日から1日◯回」とお伝えすると、
+  //   実際には1本も作られない（2026-09-12 夜間整備でローカルQAにより再現）。
+  let gating: Array<{ id: string; label: string }> = [];
+  let gatingProjectId = "";
+  try {
+    const pj: any = st.projectId ? await db.getProjectById(String(st.projectId)) : null;
+    if (pj) { gating = missingAutoPostFields(pj); gatingProjectId = String(pj.id); }
+  } catch { gating = []; }
+
   // ★「まず5問」で終えた方には、残りを1日1問で足すことを添える
-  //   ★「いま作ります」はThreadsがつながっていて自動投稿のあるプランのときだけ言う。
-  //     つながっていない方に言うと嘘になる（下の分岐で連携をご案内する）。
-  const canMakeNow = accounts.length > 0 && maxPerDay > 0;
+  //   ★「いま作ります」はThreadsがつながっていて自動投稿のあるプランで、
+  //     かつ投稿づくりに要る項目がそろっているときだけ言う。そうでないと嘘になる。
+  const canMakeNow = accounts.length > 0 && maxPerDay > 0 && gating.length === 0;
   const quickNote = st.quick
     ? (canMakeNow
         ? "最初の投稿は、いまこの場で作ってお届けします（少しお待ちください）。\n"
-        : "Threadsがつながると、その場で最初の投稿を作ってお届けします。\n") +
-      "残りの質問は、投稿が動き始めてから「きょうの1問」として少しずつお聞きします。すぐ続けたい方は、評価の直後に出る「設定を1問足す」からどうぞ。\n\n"
+        : gating.length > 0
+          ? "最初の投稿は、このあとの質問にお答えいただいたらすぐお届けします。\n"
+          : "Threadsがつながると、その場で最初の投稿を作ってお届けします。\n") +
+      // ★以前は「投稿が動き始めてから」と添えていたが、投稿づくりに要る項目（お客さん像・強み）が
+      //   空のうちは投稿が動き出さないため、順番が逆になっていた（2026-09-12）。
+      "残りの質問は「きょうの1問」として少しずつお聞きします。すぐ続けたい方は、評価の直後に出る「設定を1問足す」からどうぞ。\n\n"
     : "";
   const head = "ありがとうございました。設定が終わりました。\n内容を直したくなったら、いつでも「お店の情報」から確認・修正できます。\n\n" + quickNote + mismatchNote;
 
@@ -1054,6 +1070,25 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
   const approvalNote = curSettings?.autoPostRequireApproval
     ? "公開する前に、このトークで内容を確認できます。\n"
     : "確認なしでそのまま公開されます（「設定」で公開前の確認に変えられます）。\n";
+  // ★投稿づくりに要る項目が空のときは、「明日から投稿します」と言い切らず、
+  //   何が足りないかを名指しして、その場で答えられるようにする（2026-09-12）。
+  if (gating.length > 0) {
+    return [textWithQuick(
+      head +
+      "最後に1つだけ、お伺いします。\n\n" +
+      "毎日の自動投稿を、いまから始めますか？\n\n" +
+      `始めると、1日${perDay}回、この内容をもとにAIが投稿を作ります。\n` +
+      approvalNote +
+      `\nただ、いまはまだ「${gating.map((g) => g.label).join("」と「")}」が空いています。\n` +
+      `ここが埋まるまでは投稿が作れないので、下の「あと${gating.length}問だけ答える」から続けてお願いします（1問30秒ほどです）。\n` +
+      "あとから「設定」でいつでも切り替えられます。",
+      [
+        { label: `あと${gating.length}問だけ答える`, data: `c=more&p=${gatingProjectId}&f=${gating[0].id}` },
+        { label: "自動投稿を始める", data: "c=setupauto&v=on" },
+        { label: "いまは始めない", data: "c=setupauto&v=off" },
+      ],
+    )];
+  }
   return [textWithQuick(
     head +
     "最後に1つだけ、お伺いします。\n\n" +
@@ -1726,11 +1761,11 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const late = post.scheduledAt && new Date(post.scheduledAt) > now ? null : lateApprovalTime(now.getTime());
     await db.updateScheduledPost(Number(q.i), { status: "pending", ...(late ? { scheduledAt: late.at } : {}) });
     const when = late ? late.label : `${fmtJst(post.scheduledAt)} に`;
-    // ★新規の最初の3本は運営が目を通してから公開する
-    const heldByAdmin = Number((post as any).adminReviewRequired) === 1 && !(post as any).adminReviewAt;
-    const done = heldByAdmin
-      ? "承認ありがとうございます。最初の数回は運営でも内容を確認してから公開しています。確認が終わり次第、公開します。"
-      : `承認しました。${when}公開されます。`;
+    // ★2026-09-10 三上様指示で「承認したらそのまま公開」に変えてある（scheduledPostExecutor）。
+    //   adminReviewRequired は管理画面で運営が参考に読むための印で、公開は止めない。
+    //   ここで「確認が終わり次第、公開します」と伝えると、実際はもう公開予定なのに
+    //   お客様は止まっていると受け取ってしまうため、案内を実際の動きに合わせる。
+    const done = `承認しました。${when}公開されます。`;
     // ★押し間違いに備えて取り消しを用意する（まだ公開前なら戻せる）。
     //   あわせて「先生らしいか」を1タップで聞く（◯✕は翌日以降の切り口と文の好みに効く。
     //   アプリにはあったがLINEに無く、押されていなかった。2026-09-08）
@@ -2823,6 +2858,9 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
 
   // 短い言葉での操作指示・自動応答で答えられなかったときの受け皿。
   if (/(料金|価格|値段|いくら|プラン|課金|支払|請求)/.test(t)) return handlePostback(lineUserId, "s=plan");
+  // ★「投稿を止めてください」を解約の案内に落とさない（下の行の「停止」より先に見る）。
+  //   お休みしたいだけの方に解約手続きの説明が届くのを防ぐ。
+  if (wantsPausePosting(t)) return handlePostback(lineUserId, "m=settings");
   if (/(解約|退会|やめたい|停止|キャンセルしたい)/.test(t)) {
     const base = process.env.APP_BASE_URL || "https://threads-studio.com";
     return [textWithQuick(

@@ -1044,9 +1044,12 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         // ★デモプロジェクト（idが demo_ で始まる架空店舗データ。例:「東京都渋谷区の整体院」）は
         //   自動投稿の対象から除外する。過去にMeta審査用デモユーザーの自動投稿が
         //   本物のThreadsアカウントへ「渋谷区」の投稿を公開してしまった事故の再発防止。
+        // ★必要な項目は shared/autoPostRequirements.ts に一本化してある。
+        //   こことお客様への案内で条件が別々に書かれていると、
+        //   「案内では始まると書いてあるのに1本も作られない」という食い違いが起きる。
+        const { canAutoPost } = await import('../shared/autoPostRequirements');
         const eligibleProjects = allProjects.filter((p) =>
-          !String(p.id).startsWith('demo_') &&
-          p.businessType && p.area && p.target && p.mainProblem && p.strength,
+          !String(p.id).startsWith('demo_') && canAutoPost(p),
         );
         if (eligibleProjects.length === 0) {
           console.log(`[AutoPost] Skipping user ${user.id} - no project with required fields`);
@@ -1072,6 +1075,9 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         //   各アカウントのループで上書きを反映する。
         const { effectiveAccountSettings } = await import('../shared/accountSettings');
         let anyApproval = false;
+        // ★この回で作った分だけを承認カードにする目印（2026-09-12）。
+        //   当日補充を続けて実行した日に、直前の回の分まで混ざって同じカードが何度も届いた。
+        const postIdBefore = await db.getMaxScheduledPostId().catch(() => 0);
 
         // ★本人の実績から「反応が高い時間帯」を取得（データ8件未満はnull＝デフォルト時刻）。
         //   使うほど、その先生の当たり時間に自動で寄っていく。
@@ -1249,7 +1255,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         //   メール内で本文を読み、そのまま承認できる（ログイン不要）。
         if (anyApproval) {
           try {
-            const fresh = await db.getRecentAwaitingApprovalPosts(user.id, 30);
+            const fresh = await db.getRecentAwaitingApprovalPosts(user.id, 30, postIdBefore);
             const owner = fresh.length > 0 ? await db.getUserById(user.id) : null;
             if (fresh.length > 0 && owner?.email) {
               const { sendApprovalDigestEmail } = await import('./approvalEmail');

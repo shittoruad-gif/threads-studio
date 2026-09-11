@@ -3,7 +3,8 @@
  *
  * これまで projects.styleSamples はアプリの入力欄に手で貼る前提で、19店舗中2店舗（Moveact）しか入っていなかった。
  * 本人の投稿がある場合はそれを見本にする方が確実なので、連携時に自動で拾う。
- *  - 対象：連携日より前の本人の投稿（返信を除く・40字以上）。表示数の多い順に最大6件、合計2000字まで
+ *  - 対象：連携日より前の本人の投稿（返信を除く・40字以上）。まず直近6か月（足りなければ1年→全部）に絞り、
+ *    そのなかで表示数の多い順に最大6件、合計2000字まで
  *  - 手で入れた見本がある場合は上書きしない（空のときだけ入れる）
  *  - 話題ではなく文体（口調・絵文字・改行・1文の長さ）を真似る用途。プロンプト側でその旨を指示済み
  */
@@ -21,8 +22,16 @@ export async function collectOwnPostSamples(account: { threadsUserId: string; ac
   const posts: any[] = [];
   for (let i = 0; i < 2 && url; i++) { const r = await get(url); if (r?.error) break; posts.push(...(r.data ?? [])); url = r.paging?.next || ""; }
   const own = posts.filter((p) => !p.is_reply && new Date(p.timestamp).getTime() < connect && Array.from(String(p.text || "")).length >= MIN_LEN);
+  // ★新しい順に並べ直してから選ぶ（2026-09-12）。
+  //   表示数だけで選ぶと、長く置かれているぶん数字が伸びた1年以上前の投稿ばかりが見本になり、
+  //   いまの書き方（香取様の「患者さんからよく聞く言葉→コメント欄」型）が反映されなかった。
+  //   まず直近6か月に絞り、足りなければ1年、それでも足りなければ全部、と広げる。
+  own.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  const DAY = 24 * 60 * 60 * 1000;
+  const within = (days: number) => own.filter((p) => connect - new Date(p.timestamp).getTime() <= days * DAY);
+  const recent = [180, 365].map(within).find((list) => list.length >= MAX_SAMPLES) ?? own;
   const scored: Array<{ text: string; views: number }> = [];
-  for (const p of own.slice(0, 40)) {
+  for (const p of recent.slice(0, 40)) {
     let views = 0;
     try { const r = await get(`${THREADS}/${p.id}/insights?metric=views&access_token=${account.accessToken}`); views = Number(r?.data?.[0]?.values?.[0]?.value ?? r?.data?.[0]?.total_value?.value ?? 0); } catch { views = 0; }
     scored.push({ text: String(p.text).trim(), views });

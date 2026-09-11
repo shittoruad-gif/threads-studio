@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord } from "../shared/requestKind";
+import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting } from "../shared/requestKind";
 import { isFeatureRequest } from "../shared/requestDetect";
 
 /**
@@ -172,5 +172,40 @@ describe("引用の上に一言だけ書かれたお尋ね（#13）", () => {
       "【世界の小波津式🥇】(神経の整体)\n・最上級の認定院セミナー！！\n\n「もう無理…」\n\n" +
       "そんなあなたへ。\n\n🌿 よくなる整体院\n富山県滑川市｜約30年｜延べ3万人以上";
     expect(isPastedContent(pasted)).toBe(true);
+  });
+});
+
+/**
+ * 「投稿を止めてください」は、解約ではなく自動投稿のお休みのご相談。
+ * 2026-09-12 夜間整備のLINE全ボタン確認で、「停止」という言葉だけを見て
+ * 解約の案内に落ちていたのを直した分。
+ */
+describe("投稿をお休みしたいご相談（2026-09-12）", () => {
+  it.each([
+    "投稿を止めてください",
+    "しばらく投稿を停止したいです",
+    "自動投稿をやめてほしい",
+    "配信を少しお休みしたい",
+    "投稿をストップしてください",
+  ])("お休みのご相談として扱う: %s", (t) => {
+    expect(wantsPausePosting(t)).toBe(true);
+  });
+
+  it.each([
+    "解約したい",
+    "退会したいのですが、投稿も止めてください",
+    "料金プランを変更したい",
+    "投稿を作ってください",
+    "今日の投稿を見たい",
+  ])("お休みのご相談にしない: %s", (t) => {
+    expect(wantsPausePosting(t)).toBe(false);
+  });
+
+  it("長い投稿文の貼り付けは巻き込まない", () => {
+    const pasted =
+      "肩の痛みで動かせない方へ。無理に動かすのは止めてください。\n" +
+      "まずは炎症を抑えることが大切です。当院では丁寧にお話を伺います。\n" +
+      "ご相談はプロフィールのリンクからどうぞ。";
+    expect(wantsPausePosting(pasted)).toBe(false);
   });
 });

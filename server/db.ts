@@ -3276,13 +3276,26 @@ export async function getAngleFeedbackStats(userId: number, projectId?: string):
   return stats;
 }
 
+/** いまの投稿IDの最大値（このあと作られる分だけを見分けるための目印） */
+export async function getMaxScheduledPostId(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows: any = await db.execute(sql`SELECT COALESCE(MAX(id), 0) AS maxId FROM scheduledPosts`);
+  return Number((rows as any)[0]?.[0]?.maxId ?? 0);
+}
+
 /**
  * 直近に作成された「承認待ち」投稿を返す（自動投稿の直後案内メール用）。
  * 生成した本人の分だけ・作成時刻で絞るので、過去の未承認分は混ざらない。
+ *
+ * ★afterId を渡すと「その回に作った分」だけになる（2026-09-12）。
+ *   当日補充を続けて実行した日に、同じ承認カードが何度も届いてしまったため
+ *   （香取様に3回届いた）。時刻だけで絞ると直前の回の分まで拾ってしまう。
  */
 export async function getRecentAwaitingApprovalPosts(
   userId: number,
   sinceMinutes: number = 30,
+  afterId?: number,
 ): Promise<ScheduledPost[]> {
   const db = await getDb();
   if (!db) return [];
@@ -3293,6 +3306,7 @@ export async function getRecentAwaitingApprovalPosts(
       eq(scheduledPosts.userId, userId),
       eq(scheduledPosts.status, 'awaiting_approval'),
       gte(scheduledPosts.createdAt, since),
+      ...(typeof afterId === 'number' && afterId > 0 ? [gt(scheduledPosts.id, afterId)] : []),
       // 固定投稿の下書きは専用の流れでカードを出す（通常の承認カードに混ぜない）
       sql`(${scheduledPosts.angle} IS NULL OR ${scheduledPosts.angle} <> 'pinned')`,
     ))
