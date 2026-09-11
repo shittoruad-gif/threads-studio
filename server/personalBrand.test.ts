@@ -40,7 +40,8 @@ describe("個人ブランディングモード: 切り口", () => {
     // 集中検証期間外の時刻で全プールを確認
     const after = Date.parse('2026-09-12T12:00:00+09:00');
     const ids = activeAngles(after, 'store').map(a => a.id);
-    expect(ids).toEqual(POST_ANGLES.map(a => a.id));
+    // 予約導線（リンク先へ促す型）は店舗モードでも外れている（2026-09-11）
+    expect(ids).toEqual(POST_ANGLES.filter(a => a.id !== 'reservation_funnel').map(a => a.id));
     for (const extra of PERSONAL_EXTRA_ANGLES) expect(ids).not.toContain(extra.id);
   });
 

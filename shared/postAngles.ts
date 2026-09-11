@@ -282,15 +282,19 @@ export function pickAngle(
     const safe = pool.filter((a) => !OUTCOME_RISK_ANGLES.includes(a.id));
     if (safe.length > 0) pool = safe;
   }
-  // 希望の切り口は4倍。集中検証期間（8候補）に1つだけ希望があっても 4/12＝約33% で出る
-  const PREFERRED_BOOST = 4;
-  const weights = pool.map((a) => {
+  // ★希望の切り口は、候補の数に関係なく「合計で約35%」出るように重みを合わせる（2026-09-12）。
+  //   以前は固定4倍で、集中検証期間（8候補）では約33%だったが、期間が明けて候補が18になると約19%に落ちていた。
+  const PREFERRED_SHARE = 0.35;
+  const base = pool.map((a) => {
     const s = stats[a.id] ?? { good: 0, bad: 0 };
     // 好み（◯✕）× 結果（実測インプレッション）の掛け合わせ
     const preference = Math.max(0.1, 1 + 0.6 * s.good - 0.5 * s.bad);
-    const boost = preferred.has(a.id) ? PREFERRED_BOOST : 1;
-    return Math.max(0.05, preference * performanceMultiplier(a.id, perf) * boost);
+    return Math.max(0.05, preference * performanceMultiplier(a.id, perf));
   });
+  const prefSum = pool.reduce((sum, a, i) => sum + (preferred.has(a.id) ? base[i] : 0), 0);
+  const otherSum = pool.reduce((sum, a, i) => sum + (preferred.has(a.id) ? 0 : base[i]), 0);
+  const scale = prefSum > 0 && otherSum > 0 ? (PREFERRED_SHARE / (1 - PREFERRED_SHARE)) * (otherSum / prefSum) : 1;
+  const weights = pool.map((a, i) => (preferred.has(a.id) ? base[i] * Math.max(1, scale) : base[i]));
   const total = weights.reduce((sum, w) => sum + w, 0);
   let r = random() * total;
   for (let i = 0; i < pool.length; i++) {

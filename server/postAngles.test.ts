@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {POST_ANGLES, pickAngle, type AnglePerformance, ANGLE_FOCUS, activeAngles, getAngle} from "../shared/postAngles";
+import {POST_ANGLES, pickAngle, type AnglePerformance, ANGLE_FOCUS, activeAngles, getAngle, LINK_PUSH_ANGLES} from "../shared/postAngles";
 
 /** 指定の乱数列を順に返す（重み付き抽選の検証用） */
 function seq(values: number[]): () => number {
@@ -27,7 +27,8 @@ function sample(stats: any, perf: AnglePerformance | undefined, n = 4000): Recor
 describe("切り口の重み付け", () => {
   it("評価も実績も無いときは全切り口がほぼ均等に出る", () => {
     const counts = sample({}, undefined);
-    const values = POST_ANGLES.map((a) => counts[a.id] ?? 0);
+    // 予約導線（リンク先へ促す型）は通常のローテーションから外れている（2026-09-11）
+    const values = POST_ANGLES.filter((a) => !LINK_PUSH_ANGLES.includes(a.id)).map((a) => counts[a.id] ?? 0);
     const min = Math.min(...values);
     const max = Math.max(...values);
     expect(min).toBeGreaterThan(0);
@@ -86,7 +87,7 @@ describe("切り口の集中検証期間（2026-08-29〜09-11）", () => {
   });
 
   it("期間中は8切り口だけが選ばれる", () => {
-    expect(activeAngles(during).map((a) => a.id).sort()).toEqual([...ANGLE_FOCUS.ids].sort());
+    expect(activeAngles(during).map((a) => a.id).sort()).toEqual([...ANGLE_FOCUS.ids].filter((id) => !LINK_PUSH_ANGLES.includes(id)).sort());
     for (let i = 0; i < 200; i++) {
       const a = pickAngle({}, Math.random, undefined, during);
       expect(ANGLE_FOCUS.ids).toContain(a.id);
@@ -94,7 +95,7 @@ describe("切り口の集中検証期間（2026-08-29〜09-11）", () => {
   });
 
   it("期限を過ぎると全切り口に自動復帰する", () => {
-    expect(activeAngles(after).length).toBe(POST_ANGLES.length);
+    expect(activeAngles(after).length).toBe(POST_ANGLES.length - LINK_PUSH_ANGLES.length);
     const seen = new Set<string>();
     for (let i = 0; i < 2000; i++) seen.add(pickAngle({}, Math.random, undefined, after).id);
     expect(seen.size).toBeGreaterThan(ANGLE_FOCUS.ids.length);
