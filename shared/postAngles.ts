@@ -225,9 +225,15 @@ export const ANGLE_FOCUS: { until: string; ids: readonly string[] } = {
  * 持論・失敗談・挑戦の途中経過を加えたプールを使う。
  * ANGLE_FOCUSの集中検証は店舗の実測実験なので個人モードには適用しない。
  */
+/**
+ * 通常の自動投稿から外す切り口（2026-09-11 三上様指示「リンク先へ促すものは入れない」）。
+ * 予約導線（reservation_funnel）は「まずはご相談ください」型で、固定投稿の役割と重なる。
+ */
+export const LINK_PUSH_ANGLES: readonly string[] = ['reservation_funnel'];
+
 export function activeAngles(now: number = Date.now(), mode: string = 'store'): PostAngle[] {
   if (mode === 'personal') {
-    const EXCLUDED = ['local', 'reservation_funnel'];
+    const EXCLUDED = ['local', ...LINK_PUSH_ANGLES];
     return [
       ...POST_ANGLES.filter((a) => !EXCLUDED.includes(a.id)),
       ...PERSONAL_EXTRA_ANGLES,
@@ -236,10 +242,10 @@ export function activeAngles(now: number = Date.now(), mode: string = 'store'): 
   // 期限はJSTの終日まで有効
   const until = Date.parse(ANGLE_FOCUS.until + 'T23:59:59+09:00');
   if (Number.isFinite(until) && now <= until) {
-    const focused = POST_ANGLES.filter((a) => ANGLE_FOCUS.ids.includes(a.id));
+    const focused = POST_ANGLES.filter((a) => ANGLE_FOCUS.ids.includes(a.id) && !LINK_PUSH_ANGLES.includes(a.id));
     if (focused.length > 0) return focused;
   }
-  return POST_ANGLES;
+  return POST_ANGLES.filter((a) => !LINK_PUSH_ANGLES.includes(a.id));
 }
 
 /**

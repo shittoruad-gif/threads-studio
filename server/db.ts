@@ -2993,7 +2993,19 @@ export async function getOverdueAwaitingApprovalPosts(): Promise<ScheduledPost[]
     .where(and(
       eq(scheduledPosts.status, 'awaiting_approval'),
       lte(scheduledPosts.scheduledAt, new Date()),
+      // ★固定投稿の下書きは翌日へスライドしない（2026-09-11：9/4の下書き3件が毎日繰り越され、通常の承認一覧に混ざっていた）
+      sql`(${scheduledPosts.angle} IS NULL OR ${scheduledPosts.angle} <> 'pinned')`,
     ));
+}
+
+/** 7日以上前に作られたまま承認されていない固定投稿の下書きを取り下げる（通常の一覧に混ざり続けないため） */
+export async function cancelStalePinnedDrafts(days: number = 7): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows: any = await db.execute(sql`
+    UPDATE scheduledPosts SET status = 'canceled', errorMessage = '固定投稿の下書きが${sql.raw(String(days))}日以上承認されなかったため取り下げ（固定投稿を作るから作り直せます）'
+    WHERE status = 'awaiting_approval' AND angle = 'pinned' AND createdAt < DATE_SUB(NOW(), INTERVAL ${sql.raw(String(days))} DAY)`);
+  return Number((rows as any)?.[0]?.affectedRows ?? 0);
 }
 
 /** 予約投稿の時刻だけを更新（承認待ちの翌日スライド用） */
@@ -3281,6 +3293,8 @@ export async function getRecentAwaitingApprovalPosts(
       eq(scheduledPosts.userId, userId),
       eq(scheduledPosts.status, 'awaiting_approval'),
       gte(scheduledPosts.createdAt, since),
+      // 固定投稿の下書きは専用の流れでカードを出す（通常の承認カードに混ぜない）
+      sql`(${scheduledPosts.angle} IS NULL OR ${scheduledPosts.angle} <> 'pinned')`,
     ))
     .orderBy(scheduledPosts.scheduledAt);
 }

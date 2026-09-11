@@ -216,7 +216,7 @@ async function withAccountNames(userId: number, posts: any[]): Promise<any[]> {
 async function replyOneWaiting(userId: number, headText?: string, extraQuick: Array<{ label: string; data: string }> = []): Promise<unknown[]> {
   const all = await db.getScheduledPostsByUserId(userId);
   const waiting = all
-    .filter((p: any) => p.status === "awaiting_approval")
+    .filter((p: any) => p.status === "awaiting_approval" && p.angle !== "pinned")
     .sort((a: any, b: any) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
   if (waiting.length === 0) {
     return [textWithQuick((headText ? headText + "\n\n" : "") + "確認をお待ちしている投稿は、これで全部です。おつかれさまでした。", [...extraQuick, ...MENU_HINT])];
@@ -231,8 +231,9 @@ async function replyOneWaiting(userId: number, headText?: string, extraQuick: Ar
 /** 承認待ちの投稿を出す（無ければ次の予定を伝える） */
 async function repliesForPosts(userId: number, mode?: "one" | "all"): Promise<unknown[]> {
   const all = await db.getScheduledPostsByUserId(userId);
+  // 固定投稿の下書きは「固定投稿を作る」の流れで扱う（通常の承認一覧に混ぜない。2026-09-11）
   const waiting = all
-    .filter((p: any) => p.status === "awaiting_approval")
+    .filter((p: any) => p.status === "awaiting_approval" && p.angle !== "pinned")
     .sort((a: any, b: any) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
   if (waiting.length === 0) {
     const next = all

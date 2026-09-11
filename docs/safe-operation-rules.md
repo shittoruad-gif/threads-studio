@@ -100,3 +100,11 @@ Threads側の「健康に関する誤情報」の自動判定にも当たる。
 - `server/nextAction.ts` に `project_almost` を追加し、**足りない項目を名指しして、その1問をその場で聞く**（`c=more&p=…&f=…`）。判定は `isAlmostUsableProject` / `missingRequired`（`server/nextActionAlmost.test.ts` で固定）。
 - 「きょうの1問」の見出しからは「4／20」を外した（最初に「5つだけ」と伝えてあるので、20問の進み具合を見せると案内と食い違う）。
 - **自動投稿の必須条件そのものを減らすかどうかは三上様のご判断**。減らせば5問だけで投稿が始まるが、強みが無い投稿の質は落ちる。今回は案内だけを直した。
+
+## 追記 2026-09-11：通常の投稿に「固定投稿のようなもの」を混ぜない（三上様指示）
+
+- 通常の自動投稿に誘導文（ご相談・ご予約はLINEから 等）を付けない（`autoPostScheduler` includeCta=false。慣らし中だけでなく常に）
+- 予約導線の切り口（reservation_funnel）は通常のローテーションから外す（`shared/postAngles.ts` LINK_PUSH_ANGLES）
+- 固定投稿を引用する週1投稿（quote_boost）は停止
+- 固定投稿の下書き（angle=pinned）は通常の承認カード・承認リマインド・「今日の投稿」に出さない。7日以上承認されなければ取り下げ（`cancelStalePinnedDrafts`）
+

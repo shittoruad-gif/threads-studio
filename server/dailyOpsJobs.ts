@@ -25,6 +25,7 @@ import {
   getOverdueAwaitingApprovalPosts,
   updateScheduledPostTime,
   updateUserLastCommentCheck,
+  cancelStalePinnedDrafts,
 } from "./db";
 import { sendEmail } from "./_core/notification";
 import { sendApprovalDigestEmail } from "./approvalEmail";
@@ -154,6 +155,8 @@ export async function runAnalyticsSnapshotJob(): Promise<void> {
 
 /** ② 承認待ち放置防止ジョブ本体 */
 export async function runApprovalReminderJob(): Promise<void> {
+  // 固定投稿の下書きが7日以上放置されていれば取り下げる（通常の一覧に混ざり続けない。2026-09-11）
+  try { const n = await cancelStalePinnedDrafts(7); if (n > 0) console.log(`[DailyOps] 古い固定投稿の下書きを取り下げ ${n}件`); } catch { /* 無視 */ }
   const overdue = await getOverdueAwaitingApprovalPosts();
   if (overdue.length === 0) {
     console.log("[DailyOps] 期限切れの承認待ちなし");
@@ -389,12 +392,9 @@ export function initDailyOpsSchedulers(): void {
     const { runMorningDigestJob } = await import("./morningDigestJob");
     await runTrackedJob("morning_digest", runMorningDigestJob);
   });
-  // 水曜 11:00 JST = 2:00 UTC — 固定投稿を週1回引用して再露出（当日20時台に予約）
-  cron.schedule("0 2 * * 3", async () => {
-    const { runTrackedJob } = await import("./jobRunner");
-    const { runQuoteBoostJob } = await import("./quoteBoostJob");
-    await runTrackedJob("quote_boost", runQuoteBoostJob);
-  });
+  // （停止）水曜 11:00 の「固定投稿の引用」再露出は、2026-09-11 三上様指示
+  //   「通常の投稿に固定投稿のようなもの・リンク先へ促すものを入れない」により止めた。
+  //   再開するときは quoteBoostJob.ts をここに戻す。
   // 10:00 JST = 1:00 UTC — 今日のMeta AI呼びかけ文を「Threadsアプリで投稿する」ボタン付きでお届け
   //   （APIからの投稿では @meta.ai がメンションにならないため、アプリから出していただく）
   cron.schedule("0 1 * * *", async () => {
