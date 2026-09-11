@@ -58,7 +58,12 @@ export async function rampForAccount(
   // ★運営が決めた補填（期間限定で1日＋n件。2026-09-10 プレステージ様）。慣らし中は掛けない（安全側）。
   const m = manualExtraPosts(account);
   if (m.extra > 0 && !base0.capped) {
-    return { ...base0, count: base0.count + m.extra, extra: true, note: [base0.note, m.note].filter(Boolean).join("／") };
+    // ★1日に足せるのは、連携30日未満は＋1件、それ以降は＋2件まで（慣らしの補填と手動の補填が重なっても増やしすぎない。
+    //   新しいアカウントに1日5件は停止の危険が戻る。2026-09-11 廿日市様）
+    const cap = contract + (base0.days < COMPENSATION_WINDOW_DAYS ? 1 : 2);
+    const count = Math.min(base0.count + m.extra, cap);
+    if (count <= base0.count) return base0;
+    return { ...base0, count, extra: true, note: [base0.note, m.note].filter(Boolean).join("／") };
   }
   return base0;
 }
