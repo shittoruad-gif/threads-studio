@@ -411,9 +411,23 @@ export function initDailyOpsSchedulers(): void {
   // コメント即応：3時間おき（8〜23時JSTのみ＝深夜は通知しない）。
   // 高頻度ジョブなので起動時キャッチアップの対象外（次の回がすぐ来るため。
   // jobRunnerのレジストリには登録しない）。失敗通報はrunTrackedJobが担う。
-  cron.schedule("20 23,2,5,8,11 * * *", async () => {
+  // ★2026-09-11 三上様指示「コメントは返信が早いほうがいい。入ったら即時通知」：3時間おき→15分おき（7:00〜21:45 JST）。
+  //   本当の即時は Threads Webhook（/api/threads/webhook。Meta App Dashboard での登録が必要）。それまでの保険。
+  cron.schedule("*/15 22-23,0-12 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");
     await runTrackedJob("comment_watch", runCommentWatchJob);
+  });
+  // ★承認待ちのまま時刻を過ぎた投稿を、その日の後ろへずらす（30分おき・7:00〜21:30 JST）。2026-09-11 三上様指示
+  cron.schedule("*/30 22-23,0-12 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runAwaitingSlideJob } = await import("./awaitingSlideJob");
+    await runTrackedJob("awaiting_slide", runAwaitingSlideJob);
+  });
+  // 18:00 JST = 9:00 UTC — まだ承認待ちの方へ「今日中に承認すれば今日公開できます」を1通
+  cron.schedule("0 9 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runEveningApprovalReminderJob } = await import("./awaitingSlideJob");
+    await runTrackedJob("evening_approval_reminder", runEveningApprovalReminderJob);
   });
   console.log("[DailyOps] Schedulers initialized (analytics 7:00 / approval 8:00 / next-action 8:30 / onboarding-mail 9:00 / line-nudge 9:10 / ops-digest 9:30 / comments 8:20-20:20 JST)");
 }

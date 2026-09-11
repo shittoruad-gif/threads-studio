@@ -1721,9 +1721,11 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
     if (post.status !== "awaiting_approval") return [textWithQuick("この投稿はすでに確認が終わっています。", MENU_HINT)];
     const now = new Date();
-    const scheduledAt = post.scheduledAt && new Date(post.scheduledAt) > now ? undefined : now;
-    await db.updateScheduledPost(Number(q.i), { status: "pending", ...(scheduledAt ? { scheduledAt } : {}) });
-    const when = scheduledAt ? "まもなく" : `${fmtJst(post.scheduledAt)} に`;
+    // ★時刻を過ぎてからの承認：7〜21時はすぐ、夜は翌朝10時台に（深夜に公開しない。2026-09-11）
+    const { lateApprovalTime } = await import("../shared/publishTiming");
+    const late = post.scheduledAt && new Date(post.scheduledAt) > now ? null : lateApprovalTime(now.getTime());
+    await db.updateScheduledPost(Number(q.i), { status: "pending", ...(late ? { scheduledAt: late.at } : {}) });
+    const when = late ? late.label : `${fmtJst(post.scheduledAt)} に`;
     // ★新規の最初の3本は運営が目を通してから公開する
     const heldByAdmin = Number((post as any).adminReviewRequired) === 1 && !(post as any).adminReviewAt;
     const done = heldByAdmin

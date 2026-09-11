@@ -1443,7 +1443,9 @@ async function startServer() {
 
     // 予約時刻が過去なら直近の実行で公開されるよう現在時刻に寄せる（アプリ内の承認と同じ挙動）
     const now = new Date();
-    const scheduledAt = post.scheduledAt && new Date(post.scheduledAt) > now ? undefined : now;
+    // 時刻を過ぎてからの承認：7〜21時はすぐ、夜は翌朝10時台（shared/publishTiming.ts・2026-09-11）
+    const { lateApprovalTime } = await import('../../shared/publishTiming');
+    const scheduledAt = post.scheduledAt && new Date(post.scheduledAt) > now ? undefined : lateApprovalTime(now.getTime()).at;
     await db.updateScheduledPost(post.id, {
       status: 'pending',
       ...(scheduledAt ? { scheduledAt } : {}),
