@@ -54,6 +54,21 @@ export async function runMorningDigestJob(): Promise<void> {
       const rows = byUser.get(userId);
       const count = rows ? await buildDailyCountTextForUser(userId, rows, dateLabel) : null;
       if (count) parts.push(count.text);
+      // ★昨日、承認待ちのまま1件も公開されなかった方には「承認がないと投稿されない」ことをはっきり伝え、
+      //   承認が手間なら「自動（確認なし）」に切り替えられることを案内する（2026-09-11 三上様指示）
+      const stuck = !!(rows && rows.some((r) => r.posted === 0 && r.awaiting > 0) && !rows.some((r) => r.posted > 0));
+      let stuckText: string | null = null;
+      if (stuck && user.autoPostRequireApproval !== false) {
+        stuckText =
+          "★昨日は、承認待ちのまま1件も公開されませんでした。\n" +
+          "いまの設定では、承認カードで「OK」を押していただかないと投稿は公開されません。お手すきのときに「今日の投稿」から承認をお願いします。\n" +
+          "承認の手間を省きたい場合は「自動にする（確認なし）」を押してください。明日の朝の投稿から、承認なしで予定時刻に公開されます（「設定」からいつでも戻せます）。";
+        buttons.unshift(
+          { label: "今日の投稿", data: "m=posts" },
+          { label: "すべて承認する", data: "a=okall" },
+          { label: "自動にする（確認なし）", data: "c=automode&v=on" },
+        );
+      }
 
       // ② その日のお知らせ（1人1回）
       const t = notifyMap.get(userId);
@@ -96,7 +111,7 @@ export async function runMorningDigestJob(): Promise<void> {
       const awaitingText = awaiting.length > 0 ? `承認をお待ちしている投稿が ${awaiting.length}件 あります。「今日の投稿」から公開できます。` : null;
 
       // ★お知らせがある日は、お知らせを先頭に（「この1通にまとめました」を先に読んでもらう）
-      const ownerText = [annText, count?.text, actionText, awaitingText].filter(Boolean).join("\n\n");
+      const ownerText = [annText, count?.text, stuckText, actionText, awaitingText].filter(Boolean).join("\n\n");
       const staffText = [annText, count?.text, awaitingText].filter(Boolean).join("\n\n");
       // ★特定の方だけへの「もう1通」（shared/personalNotices.ts）。まとめの直後にオーナーLINEへ
       const notices = personalNoticesFor(userId);

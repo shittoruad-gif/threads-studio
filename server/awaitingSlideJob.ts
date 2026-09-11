@@ -32,10 +32,13 @@ export async function runEveningApprovalReminderJob(): Promise<void> {
   const { sql } = await import("drizzle-orm");
   // 今日（JST）に予定があって、まだ承認されていない投稿（固定投稿の下書きは除く）
   const rows: any = ((await d.execute(sql`
-    SELECT userId, COUNT(*) n FROM scheduledPosts
-    WHERE status = 'awaiting_approval' AND (angle IS NULL OR angle <> 'pinned')
-      AND DATE(CONVERT_TZ(scheduledAt,'+00:00','+09:00')) <= DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))
-    GROUP BY userId`)) as any)[0] ?? [];
+    SELECT sp.userId, COUNT(*) n,
+      (SELECT COUNT(*) FROM scheduledPosts p2 WHERE p2.userId = sp.userId AND p2.status = 'posted'
+         AND DATE(CONVERT_TZ(p2.scheduledAt,'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))) postedToday
+    FROM scheduledPosts sp
+    WHERE sp.status = 'awaiting_approval' AND (sp.angle IS NULL OR sp.angle <> 'pinned')
+      AND DATE(CONVERT_TZ(sp.scheduledAt,'+00:00','+09:00')) <= DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))
+    GROUP BY sp.userId`)) as any)[0] ?? [];
   if (rows.length === 0) { console.log("[EveningReminder] 対象なし"); return; }
   const { pushMessages } = await import("./lineNotify");
   let sent = 0;
@@ -47,10 +50,17 @@ export async function runEveningApprovalReminderJob(): Promise<void> {
       if (!user || user.isDemoMode) continue;
       const lineIds = await db.getLineUserIdsForUser(userId);
       if (lineIds.length > 0) {
-        const ok = await pushMessages(lineIds[0], [textWithQuick(
-          `今日の投稿 ${n}件が、まだ承認待ちです。\n「今日の投稿」から「OK」を押していただくと、今日中に公開されます（21時を過ぎた分は明日の10時台に公開）。\n\nお手すきのときで大丈夫です。押されなかった分は、明日の10時台に回して改めてお届けします。`,
-          [{ label: "今日の投稿", data: "m=posts" }, { label: `すべて承認する（${n}件）`, data: "a=okall" }],
-        )]);
+        const none = Number(r.postedToday ?? 0) === 0;
+        const text =
+          `今日の投稿 ${n}件が、まだ承認待ちです。` +
+          (none ? "\n★いまの設定では、承認がないと投稿は公開されません。今日はまだ1件も公開されていません。" : "") +
+          `\n「今日の投稿」から「OK」を押していただくと、今日中に公開されます（21時を過ぎた分は明日の10時台に公開）。\n\n` +
+          `承認の手間を省きたい場合は「自動にする（確認なし）」を押してください。明日の朝の投稿から承認なしで公開されます（「設定」からいつでも戻せます）。`;
+        const ok = await pushMessages(lineIds[0], [textWithQuick(text, [
+          { label: "今日の投稿", data: "m=posts" },
+          { label: `すべて承認する（${n}件）`, data: "a=okall" },
+          { label: "自動にする（確認なし）", data: "c=automode&v=on" },
+        ])]);
         if (ok) sent++;
       } else if (user.email) {
         const posts = (await db.getScheduledPostsByUserId(userId))
