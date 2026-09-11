@@ -857,15 +857,21 @@ async function generateAutoPost(
     //   「痛い場所だけ揉んでも」が入っていた。切り口は毎回違うのに決め台詞が同じ。
     //   ただしこれは程度の問題なので、最後の作り直しでは止めない（枠を捨てない）。
     if (recentPosts.length > 0) {
-      const dup = findRepeatedPhrase(naturalMain, recentPosts);
-      if (dup) {
-        // ★最後の作り直しでも、同じ言い回しは出さない（2026-09-11）。以前は「枠を捨てない」ために公開していたが、
-        //   落ちた枠は翌朝の自動補填で足されるようになったので、同じ内容を届けるより落とすほうを取る。
+      // ★店名・地名・実績の数字は毎回入ってよい言葉なので、比較の前に外す（2026-09-11）。
+      //   みらい整体院様で「金沢市のみらい整体院接骨院」が使い回し扱いになり、5枠すべて落ちた。
+      let idWords: string[] = [];
+      try { const { identityTokens } = await import('../shared/identityGuard'); idWords = identityTokens(project).filter((w) => Array.from(w).length >= 2); } catch { idWords = []; }
+      const strip = (t: string) => idWords.reduce((acc, w) => acc.split(w).join(' '), String(t));
+      const dup = findRepeatedPhrase(strip(naturalMain), recentPosts.map(strip));
+      // ★最後の作り直しでは、長い一致（14文字以上＝文ごと同じ）だけ落とし、短い決め台詞の重なりは記録して通す。
+      //   落とした枠は翌朝の自動補填で足される。
+      if (dup && (!lastAttempt || Array.from(dup).length >= 14)) {
         console.warn(`[AutoPost] 直近の投稿と同じ言い回し「${dup}」→ ${lastAttempt ? '最後の作り直しでも見送り（明日の生成で補填）' : '作り直し'} userId=${userId} projectId=${project.id}`);
         lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex),
           `- 直近の投稿と同じ言い回し「${dup}」を使っている。同じことを言うなら、別の入り方・別の言葉にする。`);
         return false;
       }
+      if (dup) console.log(`[AutoPost] 使い回し「${dup}」が残るが短いため、最後の作り直しは公開へ userId=${userId}`);
     }
 
     // 「。」の直後に絵文字が続く形（「〜しますね。✨」）は人間の投稿に無い機械の癖。
