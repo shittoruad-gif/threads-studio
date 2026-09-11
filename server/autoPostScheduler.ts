@@ -1029,7 +1029,10 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
 
     console.log(`[AutoPost] Processing ${users.length} eligible users`);
 
-    for (const user of users) {
+    // ★2026-09-12 三上様指示：生成を並列化（それまでは1人ずつ順番＝14人40枠で75分）。
+    //   ユーザー単位で並列に走らせ、1人の中では従来どおり順番に作る（同じ日の投稿の重複を避けるため）。
+    //   並列数は AUTO_POST_CONCURRENCY（既定4）。当日補充（onlyUserId）は1。開始を3秒ずつずらしてAPIの瞬間集中を避ける。
+    const processUser = async (user: any): Promise<void> => {
       processed++;
 
       try {
@@ -1037,7 +1040,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         //   完成済みプロジェクト（必須項目埋まっている）だけを対象にし、
         //   日替わりでローテーションして1つ選ぶ（postCount のぶんだけ）。
         const allProjects = await db.getUserProjects(user.id);
-        if (!allProjects || allProjects.length === 0) continue;
+        if (!allProjects || allProjects.length === 0) return;
         // ★デモプロジェクト（idが demo_ で始まる架空店舗データ。例:「東京都渋谷区の整体院」）は
         //   自動投稿の対象から除外する。過去にMeta審査用デモユーザーの自動投稿が
         //   本物のThreadsアカウントへ「渋谷区」の投稿を公開してしまった事故の再発防止。
@@ -1047,12 +1050,12 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         );
         if (eligibleProjects.length === 0) {
           console.log(`[AutoPost] Skipping user ${user.id} - no project with required fields`);
-          continue;
+          return;
         }
 
         // ★複数店舗対応：連携している「すべての有効アカウント」に自動投稿する
         const accounts = await db.getActiveThreadsAccounts(user.id);
-        if (!accounts || accounts.length === 0) continue;
+        if (!accounts || accounts.length === 0) return;
 
         // ★プラン別の「1日あたり自動投稿上限」を適用（料金表示と実態を一致させる）。
         //   フリー等 maxAutoPostsPerDay=0 のプランは自動投稿しない。
@@ -1061,7 +1064,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         const maxPerDay = plan?.features.maxAutoPostsPerDay ?? 0;
         if (maxPerDay <= 0) {
           console.log(`[AutoPost] Skipping user ${user.id} - plan does not allow auto-posting`);
-          continue;
+          return;
         }
         const monthlyCap = plan?.features.maxScheduledPosts ?? -1;
 
@@ -1289,7 +1292,18 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         console.error(`[AutoPost] Error processing user ${user.id}:`, error);
         failed++;
       }
-    }
+    };
+    const concurrency = opts.onlyUserId ? 1 : Math.max(1, Math.min(8, Number(process.env.AUTO_POST_CONCURRENCY || 4)));
+    const queue = [...users];
+    const startedAt = Date.now();
+    await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, async (_, w) => {
+      await new Promise((r) => setTimeout(r, w * 3000));
+      while (queue.length > 0) {
+        const u = queue.shift();
+        if (u) await processUser(u);
+      }
+    }));
+    console.log(`[AutoPost] 並列${concurrency}で${users.length}人を処理（${Math.round((Date.now() - startedAt) / 60000)}分）`);
 
     console.log(`[AutoPost] Complete: ${processed} processed, ${generated} generated, ${failed} failed`);
   } catch (error) {
