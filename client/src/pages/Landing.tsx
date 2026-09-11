@@ -295,7 +295,7 @@ export default function Landing() {
     {
       icon: <Users className="w-10 h-10" />, title: "複数アカウントを一元管理",
       description: "複数のThreadsアカウントを一つのダッシュボードで管理。店舗ごと、ブランドごとにアカウントを使い分けられます。",
-      benefits: ["最大20アカウントまで連携", "アカウント切り替えがスムーズ", "複数店舗・複数ブランドに対応"]
+      benefits: ["プランに応じて最大10アカウントまで連携", "アカウント切り替えがスムーズ", "複数店舗・複数ブランドに対応"]
     },
     {
       icon: <TrendingUp className="w-10 h-10" />, title: "店舗集客に特化",
@@ -554,11 +554,11 @@ export default function Landing() {
           
           <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-5 max-w-6xl mx-auto mb-12">
             {[
-              { name: "無料", price: "￥0", period: "/月", features: ["3プロジェクト", "基本生成機能"], highlight: false },
-              { name: "ライト", price: "￥4,980", period: "/月", features: ["50プロジェクト", "1アカウント", "月30投稿"], highlight: false },
-              { name: "プロ", price: "￥9,800", period: "/月", features: ["無制限プロジェクト", "3アカウント", "月100投稿"], highlight: true },
-              { name: "ビジネス", price: "￥29,800", period: "/月", features: ["複数店舗向け", "10アカウント", "無制限投稿"], highlight: false },
-              { name: "代理店", price: "￥55,000", period: "/月", features: ["代理店向け", "20アカウント", "APIアクセス"], highlight: false },
+              { name: "無料", price: "￥0", period: "/月", features: ["お店の登録 1件", "AI投稿生成 月3回（お試し）"], highlight: false },
+              { name: "ライト", price: "￥4,980", period: "/月", features: ["自動投稿 1日1回", "Threads連携 1アカウント", "AI投稿生成 月10回"], highlight: false },
+              { name: "プロ", price: "￥9,800", period: "/月", features: ["自動投稿 1日3回", "Threads連携 3アカウント", "AI投稿生成 無制限"], highlight: true },
+              { name: "ビジネス", price: "￥29,800", period: "/月", features: ["自動投稿 1日3回", "Threads連携 10アカウント", "お店の登録 50件"], highlight: false },
+              { name: "代理店", price: "￥55,000", period: "/月", features: ["クライアントID 100件まで発行", "発行IDはプロ相当", "クライアント側の課金なし"], highlight: false },
             ].map((plan, i) => (
               <div key={i} className={`rounded-xl p-6 hover-lift ${plan.highlight ? "bg-primary text-white shadow-lg ring-2 ring-primary" : "clean-card"}`}>
                 {plan.highlight && <Badge className="mb-2 bg-white/20 text-white border-white/30">人気</Badge>}

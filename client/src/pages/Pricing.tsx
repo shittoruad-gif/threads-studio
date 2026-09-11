@@ -202,6 +202,8 @@ export default function Pricing() {
   const isCurrentPlan = (planId: string) => {
     return currentSubscription?.planId === planId;
   };
+  // 代理店が発行したアカウント（料金は代理店契約に含まれる）
+  const isAgencyClient = currentSubscription?.planId === 'agency_client';
 
   const canChangePlan = (planId: string) => {
     const currentPlanId = currentSubscription?.planId || 'free';
@@ -343,6 +345,13 @@ export default function Pricing() {
           </div>
         )}
 
+        {/* ★代理店から発行されたアカウントは料金の支払いが不要。プラン変更を促さない（2026-09-11） */}
+        {isAgencyClient && (
+          <div className="max-w-3xl mx-auto mb-8 rounded-xl border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30 p-4 text-sm text-foreground">
+            <p className="font-bold mb-1">このアカウントは、代理店のご契約に含まれています。</p>
+            <p className="text-muted-foreground">料金のお支払いは不要です（プロプラン相当の機能をお使いいただけます）。プランの変更やお支払いについては、IDを発行された代理店様へお問い合わせください。</p>
+          </div>
+        )}
         {/* Plan Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 max-w-7xl mx-auto mb-20">
           {plans.map((plan) => {
@@ -417,9 +426,11 @@ export default function Pricing() {
                   onClick={() => handleSelectPlan(campaignPlan ? campaignPlan.id : plan.id)}
                   // ★フリープランは「現在のプラン」でも押せるようにする。
                   //   登録直後にこの画面へ来た方が、無料のまま先へ進めず行き止まりになっていたため。
-                  disabled={(isCurrentPlan(plan.id) && plan.priceMonthly !== 0) || createCheckout.isPending}
+                  disabled={(isCurrentPlan(plan.id) && plan.priceMonthly !== 0) || createCheckout.isPending || isAgencyClient}
                 >
-                  {isCurrentPlan(plan.id) ? (
+                  {isAgencyClient ? (
+                    '代理店契約に含まれています'
+                  ) : isCurrentPlan(plan.id) ? (
                     plan.priceMonthly === 0 ? 'このまま無料で始める' : '現在のプラン'
                   ) : canChangePlan(plan.id) ? (
                     <>
