@@ -878,6 +878,29 @@ export async function countAccountPostsScheduledToday(accountId: number): Promis
   return Number(row?.n ?? 0);
 }
 
+/**
+ * 今日の「自動投稿」の本数（当日補充の既存数に使う）。
+ * ★手動の下書き（固定投稿など）を数えない。2026-09-11 廿日市様で、9/4から承認待ちのまま毎日翌日へ
+ *   スライドしている固定投稿の下書き3件が「既存」に数えられ、自動投稿が1件しか補充されなかった。
+ */
+export async function countAccountAutoPostsScheduledToday(accountId: number): Promise<number> {
+  const database = await getDb();
+  if (!database) return 0;
+  const [row] = await database
+    .select({ n: sql<number>`COUNT(*)` })
+    .from(scheduledPosts)
+    .where(
+      and(
+        eq(scheduledPosts.threadsAccountId, accountId),
+        sql`${scheduledPosts.source} = 'auto'`,
+        sql`${scheduledPosts.status} IN ('pending', 'awaiting_approval', 'posted', 'processing')`,
+        sql`${scheduledPosts.replyToThreadsId} IS NULL`,
+        sql`DATE(DATE_ADD(${scheduledPosts.scheduledAt}, INTERVAL 9 HOUR)) = DATE(DATE_ADD(NOW(), INTERVAL 9 HOUR))`,
+      ),
+    );
+  return Number(row?.n ?? 0);
+}
+
 export async function countAccountMonthlyUsage(threadsAccountId: number): Promise<number> {
   const db = await getDb();
   if (!db) return 0;

@@ -1146,7 +1146,8 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           let todayCount = postCount;
           let sameDaySlots: Date[] | null = null;
           if (opts.fillToday) {
-            const already = await db.countAccountPostsScheduledToday(account.id).catch(() => 0);
+            // ★自動投稿だけを数える（手動の固定投稿の下書きを「既存」に数えない。2026-09-11 廿日市様）
+            const already = await db.countAccountAutoPostsScheduledToday(account.id).catch(() => 0);
             const shortfall = Math.max(0, postCount - already);
             sameDaySlots = buildSameDaySlots(shortfall, bestHours);
             todayCount = sameDaySlots.length;
@@ -1222,11 +1223,12 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             const today = jstDateString(0);
             if (!opts.fillToday) {
               await db.updateThreadsAccount(account.id, { shortfallDate: today, shortfallCount: accFailed } as any);
-            } else if (accFailed > 0) {
-              const cur: any = await db.getThreadsAccountById(account.id);
-              const base = dateColToJst(cur?.shortfallDate) === today ? Number(cur?.shortfallCount ?? 0) : 0;
-              await db.updateThreadsAccount(account.id, { shortfallDate: today, shortfallCount: base + accFailed } as any);
+            } else {
+              // 当日補充のあとは「今日まだ足りない数」に置き換える（回数の累計にしない。翌朝の自動補填の元になる）
+              const have = await db.countAccountAutoPostsScheduledToday(account.id).catch(() => 0);
+              await db.updateThreadsAccount(account.id, { shortfallDate: today, shortfallCount: Math.max(0, postCount - have) } as any);
             }
+            void dateColToJst;
             if (accFailed > 0) console.log(`[AutoPost] account ${account.id} 届かなかった枠 ${accFailed}件 → 明日の生成で自動補填`);
           } catch (e) { console.warn(`[AutoPost] 不足分の記録に失敗 account=${account.id}: ${(e as Error)?.message}`); }
 
