@@ -199,4 +199,12 @@ describe("使い回し判定の強化（2026-09-11 香取様）", () => {
   it("別の話題なら通る", () => {
     expect(findRepeatedPhrase("土浦市神立の整骨院です。夜21時まで営業しているので、仕事帰りにも通えます。", 直近)).toBeNull();
   });
+
+describe("使い回し判定：店名・地名は外して比べる（2026-09-11 みらい整体院様）", () => {
+  it("店名を外せば、店名だけが共通の2本は使い回しにならない", () => {
+    const strip = (t: string) => t.split("金沢市のみらい整体院接骨院").join(" ");
+    const recent = ["金沢市のみらい整体院接骨院です。今日は骨盤の話。"];
+    expect(findRepeatedPhrase("金沢市のみらい整体院接骨院より。食事の順番を変えるだけで違います。", recent)).not.toBeNull();
+    expect(findRepeatedPhrase(strip("金沢市のみらい整体院接骨院より。食事の順番を変えるだけで違います。"), recent.map(strip))).toBeNull();
+  });
 });
