@@ -215,7 +215,8 @@ export const PLANS: Record<string, PlanConfig> = {
       maxScheduledPosts: -1,
       maxAiGenerations: -1,
       hasPrioritySupport: true,
-      hasApiAccess: true,
+      // ★APIは提供していない（2026-09-11 三上様確認：料金表の「APIアクセス可」は約束違反になるため外した）
+      hasApiAccess: false,
       maxLineLinks: -1,          // 代理店本体は無制限
     },
   },

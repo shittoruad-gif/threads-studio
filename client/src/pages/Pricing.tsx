@@ -80,7 +80,6 @@ const COMPARISON_FEATURES: ComparisonFeature[] = [
     category: 'サポート・その他',
     features: [
       { name: '優先サポート', free: false, light: false, pro: false, business: true, agency: true },
-      { name: 'APIアクセス', free: false, light: false, pro: false, business: false, agency: true },
       { name: '書き出し機能', free: true, light: true, pro: true, business: true, agency: true },
     ],
   },
@@ -108,8 +107,8 @@ const FAQ_ITEMS = [
     answer: 'はい、プラン別に設定されたアカウント数まで連携可能です。ライトは1件、プロは3件、ビジネスは10件、代理店プランは無制限に管理できます。',
   },
   {
-    question: '代理店プランのAPIアクセスとは何ですか？',
-    answer: '代理店プランでは、Threads Studioの機能をAPIで利用できます。自社システムとの連携や、顧客向けのカスタムツール開発が可能です。',
+    question: '代理店プランとは何ですか？',
+    answer: '月額55,000円（税込）で、クライアント用のログインIDを100件まで発行できるプランです。発行したIDはプロプラン相当の機能（自動投稿1日3回・公式LINEでの確認）が使え、クライアント側の課金はありません。提供価格や請求は代理店様が自由に設計できます。',
   },
 ];
 

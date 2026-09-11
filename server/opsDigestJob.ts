@@ -130,6 +130,27 @@ export async function runOpsDigestJob(): Promise<void> {
     lines.push(...freeStuck.slice(0, 5).map((s) => `・${s}`));
   }
 
+  // ★公式LINEの月間枠（2026-09-11 三上様：代理店プランで件数が増えると枠が先に尽きる）。7割を超えたら運営に警告
+  try {
+    const token = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
+    if (token) {
+      const h = { Authorization: `Bearer ${token}` };
+      const q: any = await (await fetch("https://api.line.me/v2/bot/message/quota", { headers: h })).json();
+      const c: any = await (await fetch("https://api.line.me/v2/bot/message/quota/consumption", { headers: h })).json();
+      const limit = Number(q?.value ?? 0); const used = Number(c?.totalUsage ?? 0);
+      if (limit > 0) {
+        const pct = Math.round((used / limit) * 100);
+        lines.push("");
+        lines.push(`【公式LINEの月間枠】${used.toLocaleString()} / ${limit.toLocaleString()}通（${pct}%）`);
+        if (pct >= 70) {
+          lines.push(`　★7割を超えました。上のプランへの変更をご検討ください（LINE Official Account Manager → 料金プラン）`);
+          const { notifyOwner } = await import("./_core/notification");
+          await notifyOwner({ title: `公式LINEの月間枠が${pct}%`, content: `${used}/${limit}通。上のプランへの変更を検討してください。` }).catch(() => undefined);
+        }
+      }
+    }
+  } catch { /* 取れなければ書かない */ }
+
   const { notifyLine } = await import("./_core/notification");
 
   if (lines.length === 0) {

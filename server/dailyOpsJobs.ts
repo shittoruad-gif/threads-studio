@@ -423,6 +423,12 @@ export function initDailyOpsSchedulers(): void {
     const { runAwaitingSlideJob } = await import("./awaitingSlideJob");
     await runTrackedJob("awaiting_slide", runAwaitingSlideJob);
   });
+  // 月曜 9:05 JST = 0:05 UTC — 代理店向け：配下クライアントの週次まとめ（2026-09-11 三上様指示）
+  cron.schedule("5 0 * * 1", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runAgencyWeeklyReportJob } = await import("./agencyReportJob");
+    await runTrackedJob("agency_weekly_report", runAgencyWeeklyReportJob);
+  });
   // 18:00 JST = 9:00 UTC — まだ承認待ちの方へ「今日中に承認すれば今日公開できます」を1通
   cron.schedule("0 9 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");

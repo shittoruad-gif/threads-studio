@@ -52,7 +52,7 @@ describe('Plan Limits', () => {
       expect(plan.features.maxProjects).toBe(-1); // Unlimited
       expect(plan.features.maxThreadsAccounts).toBe(-1); // Unlimited
       expect(plan.features.maxScheduledPosts).toBe(-1); // Unlimited
-      expect(plan.features.hasApiAccess).toBe(true);
+      expect(plan.features.hasApiAccess).toBe(false); // APIは提供していない（2026-09-11）
     });
   });
 

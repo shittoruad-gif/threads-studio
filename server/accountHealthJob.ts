@@ -38,6 +38,7 @@ export async function runAccountHealthJob(): Promise<void> {
           await db.updateThreadsAccount(Number(a.id), { autoPostEnabled: false } as any);
           const targets = await db.getLineUserIdsForUser(Number(a.userId));
           for (const to of targets) await pushMessages(to, [{ type: "text", text: restrictionNoticeForUser(String(a.threadsUsername)) }]);
+          try { const { notifyAgencyOfClientIssue } = await import("./agencyReportJob"); await notifyAgencyOfClientIssue(Number(a.userId), `@${a.threadsUsername} に制限の兆候があり、自動投稿を止めました。ご本人にもLINEでお知らせ済みです。本人確認や異議申立が終わり次第、再開できます。`); } catch { /* 代理店なしなら何もしない */ }
           await notifyOwner({ title: "Threadsアカウントに制限の兆候（自動投稿を停止）", content: `@${a.threadsUsername}（user ${a.userId}）\n${JSON.stringify(me.error).slice(0, 300)}` });
           console.warn(`[AccountHealth] restricted @${a.threadsUsername}: ${JSON.stringify(me.error).slice(0, 200)}`);
         } else {
@@ -60,6 +61,7 @@ export async function runAccountHealthJob(): Promise<void> {
       }
       if (gone >= 2) {
         missing++;
+        try { const { notifyAgencyOfClientIssue } = await import("./agencyReportJob"); await notifyAgencyOfClientIssue(Number(a.userId), `@${a.threadsUsername} で最近公開した投稿のうち${gone}件がThreads上から消えています（スパム判定の可能性）。数日は投稿のペースを落とし、様子を見ることをおすすめします。`); } catch { /* 代理店なし */ }
         await notifyOwner({ title: "公開した投稿がThreads上から消えています（スパム判定の可能性）", content: `@${a.threadsUsername}（user ${a.userId}）直近3日の公開 ${ids.length}件のうち ${gone}件が見つかりません。投稿密度・表現の見直しを。` });
         const targets = await db.getLineUserIdsForUser(Number(a.userId));
         for (const to of targets) await pushMessages(to, [{ type: "text", text: `@${a.threadsUsername} で最近公開した投稿のうち${gone}件が、Threads上から消えています。Threads側の自動判定で消された可能性があります。しばらくは投稿を控えめにし、価格や結果の表現は避けてください。運営でも内容を確認します。` }]);
