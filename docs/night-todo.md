@@ -78,3 +78,9 @@
 - 誘導文の付け足し停止・reservation_funnel 除外・quote_boost 停止・固定投稿下書きの分離（コミット済み）。本番DBでは 1236（よくなる様の引用投稿）と 915・1023〜1025（固定投稿の下書き）を取り下げ済み。
 - デプロイ後に確認：9/12 6時の生成に reservation_funnel が無い・本文末尾に「ご相談は…から」が付いていない・水曜(9/16)に quote_boost が動かない。
 
+## 2026-09-11 昼（三上様：承認が間に合わない先生・コメント即時）
+
+- awaiting_slide（30分おき 7:00〜21:30 JST）・evening_approval_reminder（18:00）・comment_watch 15分おき（7:00〜21:45）・遅い承認は翌朝10時台（shared/publishTiming.ts）。コミット済み、今夜反映。
+- 本当の即時通知は Threads Webhook の登録（Meta App Dashboard、三上様のChromeが必要：callback https://threads-studio.com/api/threads/webhook、verify token は scratchpad/Coolify env THREADS_WEBHOOK_VERIFY_TOKEN、topic Moderate / field replies）。登録されたら comment_watch は保険として15分のまま。
+- デプロイ後に確認：`[AwaitingSlide]` が30分ごとに出る／18:00に `[EveningReminder] 送信` ／comment_watch が15分ごと（API 429 が出ないこと）。
+
