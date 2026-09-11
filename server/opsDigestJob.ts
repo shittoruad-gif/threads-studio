@@ -151,6 +151,25 @@ export async function runOpsDigestJob(): Promise<void> {
     }
   } catch { /* 取れなければ書かない */ }
 
+  // ★サーバーの空きメモリ（コンテナからホストの /proc/meminfo が読める）。15%を切ったら運営へ警告。
+  //   判断基準は docs/scaling-thresholds.md（2026-09-11 三上様「変えた方がいい判断基準を全部入れる」）
+  try {
+    const fs = await import("node:fs");
+    const mi = fs.readFileSync("/proc/meminfo", "utf8");
+    const total = Number(/MemTotal:\s+(\d+)/.exec(mi)?.[1] ?? 0);
+    const avail = Number(/MemAvailable:\s+(\d+)/.exec(mi)?.[1] ?? 0);
+    if (total > 0) {
+      const pct = Math.round((avail / total) * 100);
+      lines.push("");
+      lines.push(`【サーバーの空きメモリ】${Math.round(avail / 1024)}MB / ${Math.round(total / 1024)}MB（空き${pct}%）`);
+      if (pct < 15) {
+        lines.push("　★空きが15%を切りました。docs/scaling-thresholds.md の「VPS」の基準に従って増強を検討してください");
+        const { notifyOwner } = await import("./_core/notification");
+        await notifyOwner({ title: `サーバーの空きメモリが${pct}%`, content: `${Math.round(avail / 1024)}MB / ${Math.round(total / 1024)}MB。判断基準は threads_studio/docs/scaling-thresholds.md` }).catch(() => undefined);
+      }
+    }
+  } catch { /* 読めなければ書かない */ }
+
   const { notifyLine } = await import("./_core/notification");
 
   if (lines.length === 0) {
