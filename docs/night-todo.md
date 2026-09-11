@@ -81,6 +81,6 @@
 ## 2026-09-11 昼（三上様：承認が間に合わない先生・コメント即時）
 
 - awaiting_slide（30分おき 7:00〜21:30 JST）・evening_approval_reminder（18:00）・comment_watch 15分おき（7:00〜21:45）・遅い承認は翌朝10時台（shared/publishTiming.ts）。コミット済み、今夜反映。
-- 本当の即時通知は Threads Webhook の登録（Meta App Dashboard、三上様のChromeが必要：callback https://threads-studio.com/api/threads/webhook、verify token は scratchpad/Coolify env THREADS_WEBHOOK_VERIFY_TOKEN、topic Moderate / field replies）。登録されたら comment_watch は保険として15分のまま。
+- ✅ Threads Webhook 登録済み（2026-09-11 11:00ごろ・三上様のChromeで実施）：Meta App「Threads Studio」(1250891946948510) → ユースケース Threads API → 「ThreadsでWebhook」を追加 → Moderate を Subscribe（callback https://threads-studio.com/api/threads/webhook・検証OK・fields: replies / delete v1.0）。ダッシュボードに Test ボタンは無い。最初の実イベントは `docker logs | grep ThreadsWebhook` で確認。comment_watch（15分）は保険として残す。
 - デプロイ後に確認：`[AwaitingSlide]` が30分ごとに出る／18:00に `[EveningReminder] 送信` ／comment_watch が15分ごと（API 429 が出ないこと）。
 
