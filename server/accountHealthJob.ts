@@ -57,6 +57,12 @@ export async function runAccountHealthJob(): Promise<void> {
       // ★消えた投稿は「失敗（Threads側で削除）」として記録し、翌日以降に同じ警告を繰り返さない
       //   （2026-09-09 比嘉様に3日連続で「投稿が消えています」が届いた）
       if (goneIds.length > 0) {
+        // ★消された投稿が1件でもあれば7日間の冷却期間に入れる（1日1件・自己返信とリンクコメントなし）
+        try {
+          const { COOLDOWN_DAYS, jstDateString } = await import("../shared/accountRamp");
+          await db.updateThreadsAccount(Number(a.id), { cooldownUntil: jstDateString(COOLDOWN_DAYS) } as any);
+          console.warn(`[AccountHealth] @${a.threadsUsername} を冷却期間に（${COOLDOWN_DAYS}日・1日1件）`);
+        } catch { /* 記録できなくても点検は続ける */ }
         try { await d.execute(sql`UPDATE scheduledPosts SET status = 'failed', errorMessage = 'Threads側で削除された（健全性点検で検知・スパム判定の可能性）' WHERE threadsAccountId = ${Number(a.id)} AND status = 'posted' AND publishedThreadsPostId IN (${sql.join(goneIds.map((g) => sql`${g}`), sql`, `)})`); } catch (e) { console.warn(`[AccountHealth] mark removed failed:`, (e as Error)?.message); }
       }
       if (gone >= 2) {

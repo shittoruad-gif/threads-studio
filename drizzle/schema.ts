@@ -38,7 +38,7 @@ export const users = mysqlTable("users", {
   // 投稿にトピックタグ（地域名・悩みワード）を自動でつける（発見性UP）
   autoTopicTag: boolean("autoTopicTag").default(true).notNull(),
   // 追い投稿：自動投稿の約6時間後に、自分の投稿へひとこと返信して再浮上させる
-  autoFollowUpEnabled: boolean("autoFollowUpEnabled").default(true).notNull(),
+  autoFollowUpEnabled: boolean("autoFollowUpEnabled").default(false).notNull(),
   // 「Meta AIに聞く」返信（2026-09-05）。公開直後に自分の投稿へ「@meta.ai ＋質問」を1件返信し、
   // Meta AIの公開回答でスレッドに会話を作る。既定ON（2026-09-06〜。止めたい方はOFF）。
   metaAiAskEnabled: boolean("metaAiAskEnabled").default(true).notNull(),
@@ -374,6 +374,8 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   shortfallCount: int("shortfallCount").notNull().default(0),
   carryDate: date("carryDate"),
   carryCount: int("carryCount").notNull().default(0),
+  // 投稿がThreads側で消された（スパム判定）アカウントの冷却期間。この日まで1日1件・自己返信とリンクコメントなし（2026-09-12）
+  cooldownUntil: date("cooldownUntil"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

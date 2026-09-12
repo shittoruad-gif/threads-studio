@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { checkHealthClaims, isHealthBusiness } from "../shared/healthClaimGuard";
-import { rampCap, compensationCount, manualExtraPosts, carryOverCount } from "../shared/accountRamp";
+import { rampCap, compensationCount, manualExtraPosts, carryOverCount, inCooldown } from "../shared/accountRamp";
 
 describe("健康系の断定ガード", () => {
   it("杖なしで歩ける・痛みなく・ぐっすり・初回1980円を検出して和らげる", () => {
@@ -124,5 +124,11 @@ describe("不妊・妊娠を施術の結果として語らせない（2026-09-09
     expect(carryOverCount({ shortfallDate: "2026-09-09", shortfallCount: 3 }, 0, "2026-09-11")).toBe(0); // 一昨日の分は持ち越さない
     expect(carryOverCount({ shortfallDate: new Date("2026-09-10T00:00:00Z"), shortfallCount: 1 }, 0, "2026-09-11")).toBe(1);
     expect(carryOverCount(null, 0, "2026-09-11")).toBe(0);
+  });
+  it("投稿が消されたアカウントの冷却期間（当日を含む・過ぎたら解除）", () => {
+    expect(inCooldown({ cooldownUntil: "2026-09-19" }, "2026-09-12")).toBe(true);
+    expect(inCooldown({ cooldownUntil: "2026-09-19" }, "2026-09-19")).toBe(true);
+    expect(inCooldown({ cooldownUntil: "2026-09-19" }, "2026-09-20")).toBe(false);
+    expect(inCooldown({ cooldownUntil: null }, "2026-09-12")).toBe(false);
   });
 });

@@ -384,6 +384,14 @@ export async function executePendingPosts() {
             //   （辿り着けない窓口へ誘導しない）。合言葉も業種で出し分け、
             //   来店を伴わない事業者に「予約」「空き状況」と言わせない。
             if (!canReply) throw new Error('__NO_LINE_LINK__'); // 返信権限が無い間は計測コメントを出さない（正常スキップ扱い）
+            // ★リンク付きの自己コメントは1アカウント1日1回まで・冷却期間中は出さない（2026-09-12 スパム判定対策）
+            {
+              const { inCooldown } = await import('../shared/accountRamp');
+              const fullAcct: any = await db.getThreadsAccountById(Number(post.threadsAccountId)).catch(() => null);
+              if (fullAcct && inCooldown(fullAcct)) throw new Error('__NO_LINE_LINK__');
+              const postedToday = await db.countAccountPostsPostedToday(Number(post.threadsAccountId)).catch(() => 99);
+              if (postedToday > 1) { console.log(`[Scheduled Post] inquiry comment skipped for post ${post.id}（本日2件目以降）`); throw new Error('__NO_LINE_LINK__'); }
+            }
             const links = parseProjectLinks((postProject as any)?.links || null);
             const hasLineLink = links.some((l) => l.type === 'line' && !!l.url);
             const commentText = inquiryCommentText(post.id, {

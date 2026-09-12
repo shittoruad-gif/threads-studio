@@ -111,3 +111,12 @@ export function carryOverCount(
   if (dateColToJst(account.shortfallDate) !== yday) return 0;
   return Math.max(0, Math.min(n, MAX_EXTRA_PER_DAY - Math.max(0, alreadyExtra)));
 }
+
+/** 投稿が消されたアカウントの冷却期間（日）。この間は1日1件・自己返信とリンクコメントなし */
+export const COOLDOWN_DAYS = 7;
+
+/** 冷却期間中か（cooldownUntil はJSTの日付・含む） */
+export function inCooldown(account: { cooldownUntil?: Date | string | null } | null | undefined, todayJst: string = jstDateString(0)): boolean {
+  const until = dateColToJst(account?.cooldownUntil);
+  return !!until && todayJst <= until;
+}

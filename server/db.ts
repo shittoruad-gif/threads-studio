@@ -697,6 +697,17 @@ export async function promoteSoftApprovedDuePosts(): Promise<{ promoted: number;
   return { promoted: Number((rows as any)?.[0]?.affectedRows ?? 0), expired: Number((exp as any)?.[0]?.affectedRows ?? 0) };
 }
 
+/** そのアカウントで今日（JST）公開済みのメイン投稿の数（自己返信・引用は除く） */
+export async function countAccountPostsPostedToday(accountId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows: any = await db.execute(sql`
+    SELECT COUNT(*) AS c FROM scheduledPosts
+    WHERE threadsAccountId = ${accountId} AND status = 'posted' AND replyToThreadsId IS NULL AND quotePostId IS NULL
+      AND DATE(CONVERT_TZ(IFNULL(postedAt, scheduledAt),'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
+  return Number((rows as any)?.[0]?.[0]?.c ?? 0);
+}
+
 export async function getPendingScheduledPosts(): Promise<ScheduledPost[]> {
   const db = await getDb();
   if (!db) return [];

@@ -5,7 +5,7 @@
  * を足す。判定は1日キャッシュ。
  */
 import * as db from "./db";
-import { rampCap, rampNote, compensationCount, compensationNote, manualExtraPosts, COMPENSATION_WINDOW_DAYS } from "../shared/accountRamp";
+import { rampCap, rampNote, compensationCount, compensationNote, manualExtraPosts, inCooldown, dateColToJst, COMPENSATION_WINDOW_DAYS } from "../shared/accountRamp";
 
 const ESTABLISHED_DAYS = 30;
 const ESTABLISHED_FOLLOWERS = 100;
@@ -54,6 +54,11 @@ export async function rampForAccount(
   account: { id: number; threadsUserId: string; accessToken: string; createdAt?: Date | string | null; extraPostsPerDay?: number | null; extraPostsUntil?: Date | string | null; extraPostsReason?: string | null },
   contract: number,
 ): Promise<RampDecision> {
+  // ★投稿が消された（スパム判定）アカウントは冷却期間中、1日1件に落とす（2026-09-12）。補填も乗せない
+  if (inCooldown(account as any)) {
+    const until = dateColToJst((account as any).cooldownUntil).replace(/^\d{4}-/, "").replace("-", "/");
+    return { count: 1, capped: true, extra: false, days: 0, note: `投稿が消されたため${until}まで1日1件に抑えています（アカウントを守るため）`, established: false, shortfall: 0 };
+  }
   const base0 = await rampDecision(account, contract);
   // ★運営が決めた補填（期間限定で1日＋n件。2026-09-10 プレステージ様）。慣らし中は掛けない（安全側）。
   const m = manualExtraPosts(account);
