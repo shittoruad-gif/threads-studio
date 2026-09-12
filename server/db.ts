@@ -674,6 +674,21 @@ export async function getPostedAutoPostsByProject(projectId: string, since: Date
     .orderBy(scheduledPosts.postedAt);
 }
 
+/**
+ * 「見送りを押さなければ公開する」設定の方の、予定時刻を過ぎた承認待ちを公開待ちに変える（2026-09-12）。
+ * 固定投稿の下書きは対象外。戻り値は変えた件数。
+ */
+export async function promoteSoftApprovedDuePosts(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows: any = await db.execute(sql`
+    UPDATE scheduledPosts sp JOIN users u ON u.id = sp.userId
+    SET sp.status = 'pending'
+    WHERE sp.status = 'awaiting_approval' AND u.autoPublishIfNoResponse = 1
+      AND (sp.angle IS NULL OR sp.angle <> 'pinned') AND sp.scheduledAt <= NOW()`);
+  return Number((rows as any)?.[0]?.affectedRows ?? 0);
+}
+
 export async function getPendingScheduledPosts(): Promise<ScheduledPost[]> {
   const db = await getDb();
   if (!db) return [];
@@ -2678,6 +2693,7 @@ export async function getAutoPostSettings(userId: number) {
       autoPostEnabled: users.autoPostEnabled,
       autoPostFrequency: users.autoPostFrequency,
       autoPostRequireApproval: users.autoPostRequireApproval,
+      autoPublishIfNoResponse: users.autoPublishIfNoResponse,
       autoTopicTag: users.autoTopicTag,
       autoFollowUpEnabled: users.autoFollowUpEnabled,
       metaAiAskEnabled: users.metaAiAskEnabled,
@@ -2694,7 +2710,7 @@ export async function getAutoPostSettings(userId: number) {
 /**
  * Update user's auto-post settings
  */
-export async function updateAutoPostSettings(userId: number, settings: { autoPostEnabled?: boolean; autoPostFrequency?: "daily" | "twice_daily" | "three_daily"; autoPostRequireApproval?: boolean; autoTopicTag?: boolean; autoFollowUpEnabled?: boolean; metaAiAskEnabled?: boolean; showcaseOptOut?: boolean; postLength?: string }) {
+export async function updateAutoPostSettings(userId: number, settings: { autoPostEnabled?: boolean; autoPostFrequency?: "daily" | "twice_daily" | "three_daily"; autoPostRequireApproval?: boolean; autoPublishIfNoResponse?: boolean; autoTopicTag?: boolean; autoFollowUpEnabled?: boolean; metaAiAskEnabled?: boolean; showcaseOptOut?: boolean; postLength?: string }) {
   const database = await getDb();
   if (!database) return;
 
@@ -2995,6 +3011,8 @@ export async function getOverdueAwaitingApprovalPosts(): Promise<ScheduledPost[]
       lte(scheduledPosts.scheduledAt, new Date()),
       // ★固定投稿の下書きは翌日へスライドしない（2026-09-11：9/4の下書き3件が毎日繰り越され、通常の承認一覧に混ざっていた）
       sql`(${scheduledPosts.angle} IS NULL OR ${scheduledPosts.angle} <> 'pinned')`,
+      // ★「見送りしなければ公開」の方は、ずらさずに公開される（promoteSoftApprovedDuePosts）
+      sql`${scheduledPosts.userId} NOT IN (SELECT id FROM users WHERE autoPublishIfNoResponse = 1)`,
     ));
 }
 

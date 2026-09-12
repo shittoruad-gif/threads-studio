@@ -37,6 +37,7 @@ export async function runEveningApprovalReminderJob(): Promise<void> {
          AND DATE(CONVERT_TZ(p2.scheduledAt,'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))) postedToday
     FROM scheduledPosts sp
     WHERE sp.status = 'awaiting_approval' AND (sp.angle IS NULL OR sp.angle <> 'pinned')
+      AND sp.userId NOT IN (SELECT id FROM users WHERE autoPublishIfNoResponse = 1)
       AND DATE(CONVERT_TZ(sp.scheduledAt,'+00:00','+09:00')) <= DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))
     GROUP BY sp.userId`)) as any)[0] ?? [];
   if (rows.length === 0) { console.log("[EveningReminder] 対象なし"); return; }
@@ -55,10 +56,13 @@ export async function runEveningApprovalReminderJob(): Promise<void> {
           `今日の投稿 ${n}件が、まだ承認待ちです。` +
           (none ? "\n★いまの設定では、承認がないと投稿は公開されません。今日はまだ1件も公開されていません。" : "") +
           `\n「今日の投稿」から「OK」を押していただくと、今日中に公開されます（21時を過ぎた分は明日の10時台に公開）。\n\n` +
-          `承認の手間を省きたい場合は「自動にする（確認なし）」を押してください。明日の朝の投稿から承認なしで公開されます（「設定」からいつでも戻せます）。`;
+          `押す時間がない日が多い場合は、次のどちらかを選べます（「設定」からいつでも戻せます）。\n` +
+          `・「見送りしなければ公開」：カードは届き、「見送る」を押さない限り予定時刻にそのまま公開されます\n` +
+          `・「自動にする（確認なし）」：カードなしで、毎朝の投稿がそのまま公開されます`;
         const ok = await pushMessages(lineIds[0], [textWithQuick(text, [
           { label: "今日の投稿", data: "m=posts" },
           { label: `すべて承認する（${n}件）`, data: "a=okall" },
+          { label: "見送りしなければ公開", data: "s=softappr&v=on" },
           { label: "自動にする（確認なし）", data: "c=automode&v=on" },
         ])]);
         if (ok) sent++;

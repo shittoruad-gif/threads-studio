@@ -102,6 +102,12 @@ export async function executePendingPosts() {
     // Reset posts stuck in processing state
     await resetStuckProcessingPosts();
 
+    // ★「見送りを押さなければ公開する」設定の方は、予定時刻を過ぎた承認待ちをそのまま公開へ（2026-09-12）
+    try {
+      const promoted = await db.promoteSoftApprovedDuePosts();
+      if (promoted > 0) console.log(`[Scheduled Post] 見送りなしのため公開へ: ${promoted}件`);
+    } catch (e) { console.warn(`[Scheduled Post] soft-approval promote failed: ${(e as Error)?.message}`); }
+
     // Get all pending posts that are due
     const posts = await db.getPendingScheduledPosts();
 

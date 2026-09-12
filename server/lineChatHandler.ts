@@ -2369,6 +2369,21 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     await db.recordAutoModeNudge(user.id, true).catch(() => {});
     return [textWithQuick(AUTO_MODE_KEEP_TEXT, MENU_HINT)];
   }
+  // ── 「見送りを押さなければ予定時刻に公開する」（承認ONのまま。忙しくて押せない方向け・2026-09-12）──
+  if (q.s === "softappr") {
+    const on = q.v === "on";
+    await db.updateAutoPostSettings(user.id, { autoPublishIfNoResponse: on, ...(on ? { autoPostRequireApproval: true } : {}) });
+    if (on) {
+      // 直近の承認待ちで予定時刻を過ぎているものは、いま公開待ちにする（この後の実行で公開）
+      try { await db.promoteSoftApprovedDuePosts(); } catch { /* 次の実行で拾う */ }
+    }
+    return [textWithQuick(
+      on
+        ? "「見送りしなければ公開」にしました。\n投稿カードは今までどおり届きます。「見送る」を押さない限り、予定時刻にそのまま公開されます。出したくない投稿だけ「見送る」を押してください。\n\n今日の承認待ちの分も、予定時刻を過ぎたものから順に公開されます。"
+        : "「見送りしなければ公開」をやめました。これからは「OK」を押した投稿だけ公開されます。",
+      [{ label: on ? "元に戻す（OKした分だけ公開）" : "元に戻す（見送りしなければ公開）", data: `s=softappr&v=${on ? "off" : "on"}` }, ...MENU_HINT],
+    )];
+  }
   if (q.s === "appr") {
     const target = await ownedAccountOrNull(user.id, q.a);
     if (q.a && !target) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];

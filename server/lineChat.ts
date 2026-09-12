@@ -491,7 +491,7 @@ export function helpCategoryQuick(cat: string): QuickItem[] {
  *   フリープランは自動投稿そのものが無い（maxPerDay=0）。
  */
 export function settingsQuick(
-  s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; postLength?: string | null; metaAiAskEnabled?: boolean | null },
+  s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; autoPublishIfNoResponse?: boolean | null; postLength?: string | null; metaAiAskEnabled?: boolean | null },
   maxPerDay = 3,
   nextActionNotify = true,
   metaAiPaused = false,
@@ -511,6 +511,9 @@ export function settingsQuick(
   return [
     { label: s.autoPostEnabled ? "自動投稿を止める" : "自動投稿を始める", data: `s=auto&v=${s.autoPostEnabled ? "off" : "on"}` },
     { label: s.autoPostRequireApproval ? "確認なしにする" : "公開前に確認する", data: `s=appr&v=${s.autoPostRequireApproval ? "off" : "on"}` },
+    ...(s.autoPostRequireApproval
+      ? [{ label: s.autoPublishIfNoResponse ? "OKした分だけ公開に戻す" : "見送りしなければ公開", data: `s=softappr&v=${s.autoPublishIfNoResponse ? "off" : "on"}` }]
+      : []),
     { label: "短め にする", data: "s=len&v=short" },
     { label: "長め にする", data: "s=len&v=long" },
     ...(maxPerDay >= 2
@@ -528,7 +531,7 @@ export function settingsQuick(
 }
 
 export function settingsSummary(
-  s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; postLength?: string | null; autoPostFrequency?: string | null; metaAiAskEnabled?: boolean | null },
+  s: { autoPostEnabled?: boolean | null; autoPostRequireApproval?: boolean | null; autoPublishIfNoResponse?: boolean | null; postLength?: string | null; autoPostFrequency?: string | null; metaAiAskEnabled?: boolean | null },
   opts: { maxPerDay?: number; planName?: string; nextActionNotify?: boolean; metaAiPaused?: boolean } = {},
 ): string {
   const notify = opts.nextActionNotify === false
@@ -553,7 +556,7 @@ export function settingsSummary(
     head + "いまの設定です。\n" +
     `・自動投稿：${s.autoPostEnabled ? `ON（1日${actual}回）` : "OFF"}\n` +
     (want > maxPerDay ? `　※ ご利用中のプランの上限は1日${maxPerDay}回です\n` : "") +
-    `・公開前の確認：${s.autoPostRequireApproval ? "する" : "しない"}\n` +
+    `・公開前の確認：${s.autoPostRequireApproval ? (s.autoPublishIfNoResponse ? "する（見送りしなければ予定時刻に公開）" : "する（OKした分だけ公開）") : "しない"}\n` +
     `・投稿の長さ：${len}\n` +
     `・Meta AI呼びかけ投稿：${maxPerDay < 2 ? "プロ・ビジネスプランで使えます（プランを変更するとその日から）" : opts.metaAiPaused && s.metaAiAskEnabled ? "停止中（7日間ご投稿が無かったため。「再開する」で戻せます）" : s.metaAiAskEnabled ? "ON（毎朝10時にLINEで呼びかけ文が届き、ボタンでThreadsアプリから投稿）" : "OFF"}\n` +
     notify + "\n" +

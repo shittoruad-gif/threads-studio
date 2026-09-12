@@ -33,6 +33,8 @@ export const users = mysqlTable("users", {
   autoPostFrequency: mysqlEnum("autoPostFrequency", ["daily", "twice_daily", "three_daily"]).default("daily").notNull(),
   // 自動投稿を「公開前承認」にする（ON: awaiting_approval で作成し、ユーザー承認後に投稿）
   autoPostRequireApproval: boolean("autoPostRequireApproval").default(false).notNull(),
+  // 承認ONのまま「見送りを押さなければ予定時刻に公開する」（忙しくて押せない方向け。2026-09-12）
+  autoPublishIfNoResponse: boolean("autoPublishIfNoResponse").default(false).notNull(),
   // 投稿にトピックタグ（地域名・悩みワード）を自動でつける（発見性UP）
   autoTopicTag: boolean("autoTopicTag").default(true).notNull(),
   // 追い投稿：自動投稿の約6時間後に、自分の投稿へひとこと返信して再浮上させる
