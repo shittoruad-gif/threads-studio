@@ -307,12 +307,26 @@ async function ownedPost(userId: number, postId: number) {
 }
 
 /** 書き直し（AIに指示を渡して作り直す） */
+/**
+ * 直している最中に予定時刻が来て先に公開されないよう、予定が30分以内なら1時間後ろへずらす
+ * （「見送りしなければ公開」が既定になったため。2026-09-12）
+ */
+async function holdForEditing(post: any): Promise<void> {
+  try {
+    const at = post?.scheduledAt ? new Date(post.scheduledAt).getTime() : 0;
+    if (at && at - Date.now() < 30 * 60 * 1000) {
+      await db.updateScheduledPost(Number(post.id), { scheduledAt: new Date(Math.max(at, Date.now()) + 60 * 60 * 1000) } as any);
+    }
+  } catch { /* ずらせなくても直す作業は続ける */ }
+}
+
 async function rewritePost(userId: number, postId: number, instruction: string, one = false): Promise<unknown[]> {
   const post = await ownedPost(userId, postId);
   if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
   if (post.status !== "awaiting_approval") {
     return [textWithQuick("この投稿はすでに確認が終わっています。", MENU_HINT)];
   }
+  await holdForEditing(post);
   try {
     const { invokeLLM } = await import("./_core/llm");
     const res = await invokeLLM({
@@ -2247,6 +2261,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     if (post.status !== "awaiting_approval") {
       return [textWithQuick("この投稿はすでに確認が終わっています。", MENU_HINT)];
     }
+    await holdForEditing(post);
     await db.setLineChatState(lineUserId, "self_edit", JSON.stringify({ i: Number(q.i), o: q.o ? 1 : 0 }));
     return [
       { type: "text", text: "下の全文を長押し→「コピー」して、直したい箇所を変えて、そのまま送り返してください。届いた文にまるごと置き換えます（全文を打ち直す必要はありません）。" },
@@ -2275,6 +2290,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         ],
       )];
     }
+    await holdForEditing(post);
     const items = Object.entries(REWRITE_KINDS).map(([k, v]) => ({ label: v.label, data: `a=rw2&i=${q.i}&k=${k}${q.o ? "&o=1" : ""}` }));
     await db.setLineChatState(lineUserId, "rewrite_free", JSON.stringify({ i: q.i, o: q.o ? 1 : 0 }));
     return [textWithQuick(

@@ -295,9 +295,10 @@ export async function sendApprovalPush(
     .filter((d): d is Date => !!d && !isNaN(d.getTime()))
     .sort((a, b) => a.getTime() - b.getTime())[0];
   const label = !first || jstDate(first) === jstDate(new Date()) ? "今日" : "明日";
+  // ★2026-09-12 既定を「見送りしなければ予定時刻に公開」に変更。押せない日があっても投稿は止まらない
   const tail = posts.length > 1
-    ? "内容を見て、下のボタンを押すだけで終わります。まとめて承認するときは「すべて承認する」を押してください。"
-    : "内容を見て、下のボタンを押すだけで終わります。";
+    ? "内容をご確認ください。「見送る」を押さない限り、予定時刻にそのまま公開されます。直したいときは「書き直す」、出したくないときだけ「見送る」を押してください。"
+    : "内容をご確認ください。「見送る」を押さない限り、予定時刻にそのまま公開されます。直したいときは「書き直す」を押してください。";
   return pushMessage(lineUserId, [
     { type: "text", text: `${label}の投稿が${posts.length}件できました。\n${tail}` },
     buildPostCards(posts as any, { bulk: true }),

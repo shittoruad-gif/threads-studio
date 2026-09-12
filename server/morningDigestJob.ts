@@ -58,7 +58,7 @@ export async function runMorningDigestJob(): Promise<void> {
       //   承認が手間なら「自動（確認なし）」に切り替えられることを案内する（2026-09-11 三上様指示）
       const stuck = !!(rows && rows.some((r) => r.posted === 0 && r.awaiting > 0) && !rows.some((r) => r.posted > 0));
       let stuckText: string | null = null;
-      if (stuck && user.autoPostRequireApproval !== false) {
+      if (stuck && user.autoPostRequireApproval !== false && user.autoPublishIfNoResponse === false) {
         stuckText =
           "★昨日は、承認待ちのまま1件も公開されませんでした。\n" +
           "いまの設定では、承認カードで「OK」を押していただかないと投稿は公開されません。お手すきのときに「今日の投稿」から承認をお願いします。\n" +

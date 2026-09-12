@@ -678,15 +678,23 @@ export async function getPostedAutoPostsByProject(projectId: string, since: Date
  * 「見送りを押さなければ公開する」設定の方の、予定時刻を過ぎた承認待ちを公開待ちに変える（2026-09-12）。
  * 固定投稿の下書きは対象外。戻り値は変えた件数。
  */
-export async function promoteSoftApprovedDuePosts(): Promise<number> {
+export async function promoteSoftApprovedDuePosts(): Promise<{ promoted: number; expired: number }> {
   const db = await getDb();
-  if (!db) return 0;
+  if (!db) return { promoted: 0, expired: 0 };
+  // ★当日（JST）に作った投稿だけを公開へ。前日以前に作られて承認されなかった分は見送り（溜まった分が一度に出るのを防ぐ）
+  const exp: any = await db.execute(sql`
+    UPDATE scheduledPosts sp JOIN users u ON u.id = sp.userId
+    SET sp.status = 'canceled', sp.errorMessage = '承認されないまま日をまたいだため見送り（見送りなし公開は当日分だけ）'
+    WHERE sp.status = 'awaiting_approval' AND u.autoPublishIfNoResponse = 1
+      AND (sp.angle IS NULL OR sp.angle <> 'pinned') AND sp.scheduledAt <= NOW()
+      AND DATE(CONVERT_TZ(sp.createdAt,'+00:00','+09:00')) < DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
   const rows: any = await db.execute(sql`
     UPDATE scheduledPosts sp JOIN users u ON u.id = sp.userId
     SET sp.status = 'pending'
     WHERE sp.status = 'awaiting_approval' AND u.autoPublishIfNoResponse = 1
-      AND (sp.angle IS NULL OR sp.angle <> 'pinned') AND sp.scheduledAt <= NOW()`);
-  return Number((rows as any)?.[0]?.affectedRows ?? 0);
+      AND (sp.angle IS NULL OR sp.angle <> 'pinned') AND sp.scheduledAt <= NOW()
+      AND DATE(CONVERT_TZ(sp.createdAt,'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
+  return { promoted: Number((rows as any)?.[0]?.affectedRows ?? 0), expired: Number((exp as any)?.[0]?.affectedRows ?? 0) };
 }
 
 export async function getPendingScheduledPosts(): Promise<ScheduledPost[]> {
