@@ -18,7 +18,7 @@ import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 import { contractSummary, type ContractInfo } from "../shared/contractSummary";
-import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting } from "../shared/requestKind";
+import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement } from "../shared/requestKind";
 import { missingAutoPostFields } from "../shared/autoPostRequirements";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
@@ -2906,6 +2906,26 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   if (/(使い方|わからない|分からない|ヘルプ|help|教えて)/i.test(t)) return handlePostback(lineUserId, "m=help");
   if (/(投稿.{0,6}(来ない|されない|止ま)|動いてい?ない)/.test(t)) return handlePostback(lineUserId, "m=settings");
   if (/(はじめ|初期|最初).{0,4}(設定|登録)|お店の情報/.test(t)) return handlePostback(lineUserId, "m=setup");
+
+  // ★「明日は臨時休診です」のようなお知らせを、何も受け取っていない返事で終わらせない。
+  //   2026-09-11 に香取様へ「出してほしい話題はそのまま送ってください」とお伝えしているのに、
+  //   短い言い切りの文はご質問にもご依頼にも当たらず、下の一般的な受け皿に落ちていた
+  //   （2026-09-13 夜間整備で実測）。いまできること・できないことをはっきりお返しする。
+  if (looksLikeAnnouncement(t)) {
+    const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+    return [textWithQuick(
+      "お知らせをありがとうございます。\n" +
+      "お送りいただいた文章が、そのまま自動で投稿されることはありません。お手数ですが、次のどちらかでお願いします。\n\n" +
+      "・今日の分に入れる：「今日の投稿」→「書き直す」で、この内容をそのままお伝えください\n" +
+      `・日にちの決まったお知らせ（休診・キャンペーンなど）：アプリの「イベント」に登録していただくと、その日までに何回かお知らせの投稿を作ります（14日前・7日前・3日前・前日・当日のうち、残っている分）\n${base}/events?openExternalBrowser=1\n\n` +
+      "こちらで承ったほうがよろしければ、「担当者に聞く」を押してください。",
+      [
+        { label: "今日の投稿", data: "m=posts" },
+        { label: "担当者に聞く", data: "m=staff" },
+        ...MENU_HINT,
+      ],
+    )];
+  }
 
   return [textWithQuick(
     "ご用件を下から選んでください。ご質問は文章のままお送りいただければ、こちらでお答えします。",

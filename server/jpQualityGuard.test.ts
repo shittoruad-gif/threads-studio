@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   checkNaturalized, hiraganaRatio, endsWithQuestion, countNdesu,
   countEmoji, hasRepeatedEnding, polishPunctuation, findBannedTic, findRepeatedPhrase,
+  findRepeatedHookNumber,
   HIRAGANA_RATIO_MAX, NDESU_MAX,
 } from "../shared/jpQualityGuard";
 
@@ -207,5 +208,50 @@ describe("使い回し判定：店名・地名は外して比べる（2026-09-11
     const recent = ["金沢市のみらい整体院接骨院です。今日は骨盤の話。"];
     expect(findRepeatedPhrase("金沢市のみらい整体院接骨院より。食事の順番を変えるだけで違います。", recent)).not.toBeNull();
     expect(findRepeatedPhrase(strip("金沢市のみらい整体院接骨院より。食事の順番を変えるだけで違います。"), recent.map(strip))).toBeNull();
+  });
+});
+
+/**
+ * 2026-09-13 香取様。「ここ数日は同じ内容でしたので自身で投稿しておりました」という
+ * ご連絡（supportQuestions #30）に対し、9/11 に入れた findRepeatedPhrase（10文字の一致）は
+ * 実際の5本を1件も拾えなかった。一字一句は違うのに、書き出しが毎回「11年」で始まっていた。
+ * 実物をそのまま置いて、再発したら落ちるようにする。
+ */
+describe("書き出しの実績の数字の繰り返し（2026-09-13 香取様）", () => {
+  const 本物 = [
+    "11年勤務して気づいた、スポーツのケガでよくある勘違い3つ。\n痛いのに「これくらい大丈夫」と我慢する。その気持ち、よく分かります。",
+    "「予約は必要ですか？」とよく聞かれます。\n土浦市神立中央の当院は予約優先制です。\n急なケガも対応します。",
+    "茨城県土浦市でスポーツのケガを見て11年。\n痛む場所だけ触っても、根本は変わりません。",
+    "整形外科で11年勤務して分かった、スポーツの怪我で一番大切なこと。\n痛む場所だけでなく、根本原因を見つけることです。",
+    "スポーツのケガは「動くと悪化する」と思われがちです。\n土浦市で外傷専門の私が、早期回復をサポートします。",
+  ];
+
+  it("従来の一致判定では1本も拾えない（この抜けを埋めるための判定）", () => {
+    for (let i = 1; i < 本物.length; i++) {
+      expect(findRepeatedPhrase(本物[i], 本物.slice(0, i))).toBeNull();
+    }
+  });
+
+  it("同じ「11年」で書き出した2本・3本目を拾う", () => {
+    expect(findRepeatedHookNumber(本物[2], [本物[0]])).toBe("11年");
+    expect(findRepeatedHookNumber(本物[3], [本物[0], 本物[2]])).toBe("11年");
+  });
+
+  it("数字で書き出していない投稿は拾わない", () => {
+    expect(findRepeatedHookNumber(本物[1], [本物[0]])).toBeNull();
+    expect(findRepeatedHookNumber(本物[4], 本物.slice(0, 4))).toBeNull();
+  });
+
+  it("違う数字なら通す", () => {
+    expect(findRepeatedHookNumber("開業3年目に見えてきたことがあります。", [本物[0]])).toBeNull();
+  });
+
+  it("書き出しから離れた場所（45字より後ろ）の数字は見ない", () => {
+    const 後ろに数字 = "秋は気圧の変化で体調をくずす方が増えます。寝る前のひと呼吸だけでも違うので、週末の過ごし方をひとつご紹介します。ちなみに私は整形外科で11年勤務していました。";
+    expect(findRepeatedHookNumber(後ろに数字, [本物[0]])).toBeNull();
+  });
+
+  it("直近が無ければ何もしない", () => {
+    expect(findRepeatedHookNumber(本物[0], [])).toBeNull();
   });
 });

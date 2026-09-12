@@ -43,3 +43,35 @@ describe("5問だけ終わっている方の「次にやること」", () => {
     expect(isAlmostUsableProject({ ...fivePlusTarget, id: "demo_shibuya" })).toBe(false);
   });
 });
+
+/**
+ * 2026-09-13 夜間整備の通し確認。5問を終えた直後、LINEでは「設定が終わりました」と申し上げながら、
+ * 同じ画面の進み具合は「□ お店の情報を登録」が未完のまま出ていた。
+ * お客様には「やり直しが要る」と読めてしまうので、見出しに残りの問数を出して言うことを揃える。
+ */
+describe("進み具合の見出しが、本文と食い違わない", () => {
+  const five = {
+    id: "line_x1",
+    businessType: "整体院",
+    area: "岡山県倉敷市玉島",
+    storeName: "からだ整体院 玉島店",
+    mainProblem: "肩こりと腰痛",
+    target: "",
+    strength: "",
+  };
+
+  it("あと2問の方は、残り数が数えられる（見出しの「（あと2問）」の素）", () => {
+    expect(isAlmostUsableProject(five)).toBe(true);
+    expect(missingRequired(five)).toHaveLength(2);
+  });
+
+  it("何も答えていない方は「あと◯問」にしない（ふつうの登録のご案内のまま）", () => {
+    const empty = { id: "line_x2", businessType: "", area: "", mainProblem: "", target: "", strength: "" };
+    expect(isAlmostUsableProject(empty)).toBe(false);
+  });
+
+  it("全部そろっている方は残り0問（見出しに数を出さない）", () => {
+    const full = { ...five, target: "デスクワークの40代女性", strength: "初回に30分かけて説明します" };
+    expect(missingRequired(full)).toHaveLength(0);
+  });
+});

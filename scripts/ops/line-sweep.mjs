@@ -20,6 +20,18 @@ const BUTTONS = [
   's=plan', 's=ng', 's=auto&v=on', 's=auto&v=off', 's=appr&v=on', 's=appr&v=off',
   's=len&v=short', 's=len&v=long',
   'n=on', 'n=off', 'n=pinhow', 'n=pinned',
+  // 2026-09-13 追加。取りこぼしていたボタン。
+  // ★値を取るボタンは、必ず値を付けた形で入れること。前半だけ（'c=st' など）を入れると
+  //   アプリは正しく「うまく受け取れませんでした」と案内を返すので、こちらの書き方の誤りが
+  //   不具合のように見えてしまう（2026-09-13 に一度そう見誤った）。
+  'm=next', 'm=addstaff', 'm=sendq&q=1',
+  'c=addproof', 'c=focus', 'c=ideal', 'c=oneline', 'c=nourl', 'c=pintgt', 'c=proadv',
+  'c=more&p=1', 'c=acct&a=1', 'c=newpj&a=1', 'c=pin&a=1&p=1', 'c=urlk&k=line',
+  's=common', 's=inherit&a=1', 's=acct&a=1',
+  's=metaai&v=on', 's=metaai&v=off',
+  // 「見送りしなければ予定時刻に公開」の戻し方（2026-09-12 の既定変更の逃げ道。押せないと困る）
+  's=softappr&v=off', 's=softappr&v=on',
+  'h=metaai_ask', 'h=metaai_reply',
   // よくあるご質問（HELP_TOPICS の key と揃えること）
   'h=flow', 'h=auto', 'h=ng', 'h=member', 'h=multi', 'h=makepin', 'h=pin', 'h=stop',
 ];

@@ -195,16 +195,60 @@ export async function createPinnedDraft(userId: number, accountId?: number | nul
     const { isPersonalMode, personalModePromptOverride } = await import("../shared/personalBrand");
     const personalOverride = isPersonalMode(project.mode) ? personalModePromptOverride() : "";
 
-    const res: any = await invokeLLM({
-      messages: [{ role: "user", content: prompt + personalOverride + (destination ? "" : NO_DESTINATION_OVERRIDE) }],
-      response_format: pinnedJsonSchema(!!destination) as any,
-    });
-    const raw = res?.choices?.[0]?.message?.content;
-    if (typeof raw !== "string" || !raw.trim()) throw new Error("AI応答が空です");
-    const parsed = JSON.parse(raw);
-    const main = String(parsed.mainPost || "").trim();
-    const cta = String(parsed.cta || "").trim();
-    if (!main) throw new Error("本文が空です");
+    // ★固定投稿には、毎日の投稿にかけている品質検査が1つもかかっていなかった（2026-09-13 夜間整備で検出）。
+    //   実際にこの場で作った1本目に「諦めていませんか？」（決まり文句・人の投稿には出てこない言い方）が入っていた。
+    //   固定投稿はプロフィールの一番上に置きっぱなしになる、いちばん人目に触れる投稿なので、
+    //   毎日の投稿と同じ検査をかける。
+    //   ただし作り直しても直らないときは、お客様を手ぶらで帰さないために、
+    //   機械的に直せるところ（健康表現の言い換え・句読点）だけ整えて下書きとしてお見せする
+    //   （公開はご本人が「これで投稿する」を押したときだけなので、目でも確かめていただける）。
+    const { findBannedTic, checkNaturalized, polishPunctuation } = await import("../shared/jpQualityGuard");
+    const { checkHealthClaims, isHealthBusiness } = await import("../shared/healthClaimGuard");
+    const { findFabricatedNumbers, registeredFactsOf } = await import("../shared/fabricatedNumberGuard");
+    const healthBiz = isHealthBusiness(project.businessType);
+
+    const MAX_TRIES = 3;
+    let main = "";
+    let cta = "";
+    let lastReason = "";
+    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+      const retryNote = lastReason
+        ? `\n\n【前回の下書きで直せなかった点（必ず避けること）】\n- ${lastReason}`
+        : "";
+      const res: any = await invokeLLM({
+        messages: [{ role: "user", content: prompt + personalOverride + (destination ? "" : NO_DESTINATION_OVERRIDE) + retryNote }],
+        response_format: pinnedJsonSchema(!!destination) as any,
+      });
+      const raw = res?.choices?.[0]?.message?.content;
+      if (typeof raw !== "string" || !raw.trim()) throw new Error("AI応答が空です");
+      const parsed = JSON.parse(raw);
+      main = String(parsed.mainPost || "").trim();
+      cta = String(parsed.cta || "").trim();
+      if (!main) throw new Error("本文が空です");
+
+      // 健康表現は、毎日の投稿と同じく機械的に和らげる（言い換えできるので作り直しの理由にはしない）
+      if (healthBiz) {
+        const v = checkHealthClaims(main, { allowPrice: false });
+        if (!v.ok && Array.from(v.text).length >= 60) {
+          console.warn(`[PinnedFlow] healthClaimGuard: ${v.hits.join("・")} を落とした userId=${userId}`);
+          main = v.text;
+        }
+      }
+      main = polishPunctuation(main);
+
+      const reasons: string[] = [];
+      const tic = findBannedTic(main);
+      if (tic) reasons.push(`決まり文句「${tic}」が入っている（人の投稿には出てこない言い方）`);
+      const nat = checkNaturalized(main, main, { allowQuestionEnding: true });
+      if (!nat.ok && !tic) reasons.push(String(nat.reason || "日本語が不自然"));
+      const fab = findFabricatedNumbers(main, registeredFactsOf(project as any));
+      if (fab.length > 0) reasons.push(`お店の情報に無い数字「${fab.map((x: any) => x.text).join("・")}」を書いている`);
+
+      if (reasons.length === 0) break;
+      lastReason = reasons.join(" / ");
+      const lastAttempt = attempt === MAX_TRIES;
+      console.warn(`[PinnedFlow] 固定投稿の品質: ${lastReason} → ${lastAttempt ? "作り直しても直らないため、そのまま下書きとしてお見せする" : "作り直し"} userId=${userId}`);
+    }
     // ★ctaの暴走ガード：指示しても住所・免責の羅列を詰め込むことがある
     //   （氷見様データで528字のctaが出た・2026-09-02）。1行目だけを使い、
     //   長すぎる場合は既定の誘導文に差し替える。

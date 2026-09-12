@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Cookie } from "lucide-react";
 import { Link } from "wouter";
@@ -9,6 +9,7 @@ const COOKIE_CONSENT_KEY = "ts-cookie-consent";
 export function CookieConsent() {
   const { t } = useLang();
   const [show, setShow] = useState(false);
+  const boxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const consent = localStorage.getItem(COOKIE_CONSENT_KEY);
@@ -19,6 +20,30 @@ export function CookieConsent() {
     }
   }, []);
 
+  /**
+   * ★2026-09-13 夜間整備。このお知らせは画面の下に貼り付く（fixed）ので、
+   *   そのままでは下にある操作を覆い隠す。実機幅の確認で、会員登録の
+   *   「同意します」のチェックと「アカウント作成」のボタンが 375×812 でも 375×667 でも
+   *   このお知らせの下に隠れ、一番下までスクロールしても押せない状態だった。
+   *   出ているあいだは同じ高さだけページの下に余白を足して、必ず上へ逃がす。
+   */
+  useEffect(() => {
+    if (!show) return;
+    const apply = () => {
+      const h = boxRef.current?.getBoundingClientRect().height ?? 0;
+      document.body.style.paddingBottom = h > 0 ? `${Math.ceil(h)}px` : "";
+    };
+    apply();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(apply) : null;
+    if (ro && boxRef.current) ro.observe(boxRef.current);
+    window.addEventListener("resize", apply);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", apply);
+      document.body.style.paddingBottom = "";
+    };
+  }, [show]);
+
   const handleAccept = () => {
     localStorage.setItem(COOKIE_CONSENT_KEY, "accepted");
     setShow(false);
@@ -27,11 +52,11 @@ export function CookieConsent() {
   if (!show) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 p-4 animate-in slide-in-from-bottom-5 duration-300">
-      <div className="max-w-3xl mx-auto bg-background border border-border rounded-xl shadow-lg p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+    <div ref={boxRef} className="fixed bottom-0 left-0 right-0 z-50 p-3 sm:p-4 animate-in slide-in-from-bottom-5 duration-300">
+      <div className="max-w-3xl mx-auto bg-background border border-border rounded-xl shadow-lg p-3 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
         <div className="flex items-start gap-3 flex-1">
           <Cookie className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
             {t("当サイトでは、サービスの提供およびユーザー体験の向上のためにCookieを使用しています。サイトの利用を続けることで、")}
             <Link href="/privacy">
               <span className="text-primary hover:underline cursor-pointer">{t("プライバシーポリシー")}</span>
@@ -42,7 +67,7 @@ export function CookieConsent() {
         <Button
           onClick={handleAccept}
           size="sm"
-          className="bg-emerald-600 hover:bg-emerald-700 text-white whitespace-nowrap flex-shrink-0"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white whitespace-nowrap flex-shrink-0 w-full sm:w-auto"
         >
           {t("同意する")}
         </Button>

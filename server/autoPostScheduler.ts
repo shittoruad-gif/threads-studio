@@ -11,7 +11,7 @@ import * as db from "./db";
 import { getPlan } from "../shared/plans";
 import { buildCtaText } from "../shared/autoPostCta";
 import { charBudgetFor, resolveWithAlternation, POST_LENGTHS, trimToBudget } from "../shared/postLength";
-import { checkNaturalized, findBannedTic, findRepeatedPhrase, polishPunctuation } from "../shared/jpQualityGuard";
+import { checkNaturalized, findBannedTic, findRepeatedHookNumber, findRepeatedPhrase, polishPunctuation } from "../shared/jpQualityGuard";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle } from "../shared/postAngles";
@@ -594,7 +594,7 @@ async function generateAutoPost(
       for (const t of own) if (!recentPosts.includes(t)) recentPosts.push(t);
     } catch { /* 取れなくてもこちらの下書きだけで続ける */ }
     const recentNote = recentPosts.length > 0
-      ? `\n\n【直近の投稿（同じ言い回しを繰り返さない）】\n${recentPosts.slice(0, 6).map((p, i) => `${i + 1}. ${String(p).replace(/\s+/g, ' ').slice(0, 90)}`).join('\n')}\n- 上の投稿で使った書き出し・決め台詞・たとえを、そのまま使い回さない。同じことを言うなら、別の入り方・別の言葉にする。\n- 読んだ人が「この前と同じ投稿だ」と感じたら失敗。`
+      ? `\n\n【直近の投稿（同じ言い回しを繰り返さない）】\n${recentPosts.slice(0, 6).map((p, i) => `${i + 1}. ${String(p).replace(/\s+/g, ' ').slice(0, 90)}`).join('\n')}\n- 上の投稿で使った書き出し・決め台詞・たとえを、そのまま使い回さない。同じことを言うなら、別の入り方・別の言葉にする。\n- 読んだ人が「この前と同じ投稿だ」と感じたら失敗。\n- 実績の数字（「◯年」「のべ◯人」など）から書き出さない。上の投稿と同じ数字で入ると、言い回しを変えても同じ投稿に見える。`
       : '';
 
     // ★お手本の癖を「数えた事実」として渡す（2026-09-11）。
@@ -876,6 +876,20 @@ async function generateAutoPost(
         return false;
       }
       if (dup) console.log(`[AutoPost] 使い回し「${dup}」が残るが短いため、最後の作り直しは公開へ userId=${userId}`);
+
+      // ★書き出しが毎回同じ実績の数字（「11年」など）で始まると、言い回しが違っても同じ投稿に見える。
+      //   2026-09-13 香取様の直近5本は findRepeatedPhrase では1件も拾えないのに、3本が「11年」で始まっていた。
+      //   実績の数字は identityTokens で strip されるので、ここでは strip 前の本文を見る。
+      //   枠を捨てないため、最後の作り直しでは止めない（作り直しのヒントとしてだけ使う）。
+      if (!lastAttempt) {
+        const num = findRepeatedHookNumber(naturalMain, recentPosts);
+        if (num) {
+          console.warn(`[AutoPost] 書き出しが直近の投稿と同じ実績の数字「${num}」→ 作り直し userId=${userId} projectId=${project.id}`);
+          lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex),
+            `- 書き出しを直近の投稿と同じ「${num}」で始めている。実績の数字から入らず、別の入り方（お客さんの場面・季節・よくある質問など）にする。`);
+          return false;
+        }
+      }
     }
 
     // 「。」の直後に絵文字が続く形（「〜しますね。✨」）は人間の投稿に無い機械の癖。

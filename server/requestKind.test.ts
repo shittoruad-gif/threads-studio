@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting } from "../shared/requestKind";
+import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement } from "../shared/requestKind";
 import { isFeatureRequest } from "../shared/requestDetect";
 
 /**
@@ -207,5 +207,44 @@ describe("投稿をお休みしたいご相談（2026-09-12）", () => {
       "まずは炎症を抑えることが大切です。当院では丁寧にお話を伺います。\n" +
       "ご相談はプロフィールのリンクからどうぞ。";
     expect(wantsPausePosting(pasted)).toBe(false);
+  });
+});
+
+/**
+ * 2026-09-13 夜間整備。香取様へ「出してほしい話題はそのまま送ってください」とお伝えしているのに、
+ * 「明日は臨時休診です」のような短い言い切りは、ご質問にもご依頼にも当たらず
+ * 「ご用件を下から選んでください」という、何も受け取っていない返事に落ちていた。
+ */
+describe("お店のお知らせを受け取る（2026-09-13）", () => {
+  it.each([
+    "明日は臨時休診です",
+    "本日は都合により休診いたします",
+    "来週の木曜はお休みします",
+    "年末年始は12/30から休業です",
+    "10/5に体験会をします",
+    "今月はキャンペーンをします",
+    "来月から営業時間が変わります",
+  ])("お知らせとして受け取る: %s", (t) => {
+    expect(looksLikeAnnouncement(t)).toBe(true);
+  });
+
+  it.each([
+    // ご依頼は既存の受け皿（classifyRequestKind）に任せる
+    "来週の木曜はお休みなので、そのことを投稿してほしいです",
+    "休診日の投稿を作ってください",
+    // ご質問は自動応答に任せる
+    "休診日は投稿されますか？",
+    // 関係のない文
+    "ありがとうございます",
+    "投稿を止めてください",
+    "料金はいくらですか",
+  ])("お知らせにしない: %s", (t) => {
+    expect(looksLikeAnnouncement(t)).toBe(false);
+  });
+
+  it("長い投稿文の貼り付けは巻き込まない（120字を超えるもの）", () => {
+    const pasted =
+      "秋のお休みのお知らせです。今週は木曜がお休みになります。".repeat(6);
+    expect(looksLikeAnnouncement(pasted)).toBe(false);
   });
 });

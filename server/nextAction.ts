@@ -185,14 +185,22 @@ export async function getSetupSteps(userId: number): Promise<SetupStep[]> {
   let hasPinned = false;
   try { hasPinned = await db.hasGeneratedPinnedPost(userId); } catch { hasPinned = false; }
 
+  // ★「まず5問」を終えた方は、お店の情報が「まだ何も無い」のではなく「あと2問」の状態。
+  //   2026-09-13 の通し確認で、5問を終えた直後に「設定が終わりました」と申し上げた同じ画面で
+  //   「□ お店の情報を登録」が未完のまま出ており、やり直しが要るように読めていた。
+  //   残り何問かを見出しに出して、言っていることを揃える。
+  const almost = usable.length === 0 && (projects || []).some(isAlmostUsableProject);
+  const almostProject = almost ? (projects || []).find(isAlmostUsableProject) : null;
+  const almostLeft = almostProject ? missingRequired(almostProject).length : 0;
+
   const steps: SetupStep[] = [
     { id: "account", label: "アカウント作成", done: true },
     {
       id: "no_project",
-      label: "お店の情報を登録",
+      label: almostLeft > 0 ? `お店の情報を登録（あと${almostLeft}問）` : "お店の情報を登録",
       done: usable.length > 0,
       path: "/ai-counseling",
-      actionLabel: "登録する",
+      actionLabel: almostLeft > 0 ? `あと${almostLeft}問だけ答える` : "登録する",
     },
     {
       id: "no_account",

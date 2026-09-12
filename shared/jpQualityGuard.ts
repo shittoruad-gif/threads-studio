@@ -337,3 +337,42 @@ export function findRepeatedPhrase(
   }
   return best.length >= minChars ? best : null;
 }
+
+// ── 書き出しで同じ実績の数字を繰り返していないか ──────────────────
+/**
+ * 2026-09-13 実測。香取様の直近5本を findRepeatedPhrase にかけたところ、
+ * 1件も拾わなかった（一字一句の一致が無いため）。それでも読む側には同じ投稿に見える：
+ *   「11年勤務して気づいた、スポーツのケガでよくある勘違い3つ。」
+ *   「茨城県土浦市でスポーツのケガを見て11年。痛む場所だけ触っても…」
+ *   「整形外科で11年勤務して分かった、スポーツの怪我で一番大切なこと。」
+ * 言い回しは毎回違うのに、**書き出しが毎回同じ実績の数字（11年）で始まる**。
+ * 数字は fabricatedNumberGuard で登録済みの事実だけに絞ってあるぶん、
+ * 書き出しに出る数字はその方の看板の実績とほぼ一致する。そこで
+ * 「前と同じ数字で入っていないか」だけを見る。言葉の重なりは見ない（業種・地域の
+ * 言葉は毎回出てよいので、token の重なりで測ると誤爆する）。
+ */
+const HOOK_CHARS = 45;
+
+/** 書き出しに出てくる「数字＋単位」（11年・20万人・3つ など）を拾う */
+function hookNumbers(text: string): string[] {
+  const head = plain(text).slice(0, HOOK_CHARS);
+  const hits = head.match(/\d+(?:\.\d+)?(?:万|億|千)?(?:年|ヶ月|カ月|か月|人|名|件|回|つ|割|%|％|位|冊|分|日|週間|時間)/g) ?? [];
+  return Array.from(new Set(hits));
+}
+
+/**
+ * 直近の投稿と同じ実績の数字で書き出していれば、その数字を返す（無ければ null）。
+ * 作り直しのヒント用。枠を捨てないよう、最後の作り直しでは使わない。
+ */
+export function findRepeatedHookNumber(
+  text: string,
+  recentTexts: readonly string[],
+): string | null {
+  const mine = hookNumbers(text);
+  if (mine.length === 0) return null;
+  for (const r of recentTexts) {
+    const theirs = hookNumbers(r);
+    for (const n of mine) if (theirs.includes(n)) return n;
+  }
+  return null;
+}

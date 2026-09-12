@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
+import { findBannedTic, checkNaturalized } from "../shared/jpQualityGuard";
 
 /**
  * 固定投稿のプロンプトに、実測ノウハウ（POST_TYPE_SUPPLEMENTS.pinned）が
@@ -86,5 +87,33 @@ describe("固定投稿プロンプトのノウハウ反映", () => {
       strength: "z",
     } as any);
     expect(daily).not.toContain("固定投稿（プロフィール固定用）の構成ルール");
+  });
+});
+
+/**
+ * 2026-09-13 夜間整備。固定投稿の生成には、毎日の投稿にかけている品質検査が
+ * 1つもかかっていなかった（server/pinnedPostFlow.ts に findBannedTic も checkNaturalized も無かった）。
+ * ローカルQAでその場で作った1本目に、実際に「諦めていませんか？」が入っていた。
+ * 固定投稿はプロフィールの一番上に置きっぱなしになる、いちばん人目に触れる投稿なので、
+ * 同じものが出たら必ず作り直しになるよう、実物を置いておく。
+ */
+describe("固定投稿にも毎日の投稿と同じ品質検査をかける（2026-09-13）", () => {
+  const 実際に出た下書き =
+    "岡山県倉敷市玉島で「朝、腰が重くてなかなか起き上がれない」と感じている方へ。\n\n" +
+    "朝の腰の重さは、年のせいだとか、寝不足のせいだと諦めていませんか？日中の体の使い方が大きく影響していることが多いんです。\n\n" +
+    "当院では、初回に30分かけてカウンセリング。お客様一人ひとりの体の使い方を丁寧に説明し、ご自身の体と向き合うきっかけを見つけていただけます。";
+
+  it("決まり文句「いませんか？」を見つける（これが作り直しの合図になる）", () => {
+    expect(findBannedTic(実際に出た下書き)).toBe("いませんか？");
+    expect(checkNaturalized(実際に出た下書き, 実際に出た下書き, { allowQuestionEnding: true }).ok).toBe(false);
+  });
+
+  it("作り直したあとの実物（決まり文句なし）は通す＝誤って止め続けない", () => {
+    const 直った =
+      "倉敷市玉島で「朝、腰が重くてベッドから起き上がるのがつらい」と感じる方へ。\n\n" +
+      "その腰の重さは、もしかしたら寝ている間の姿勢や、日中のデスクワークでの体の使い方に原因があるかもしれません。\n\n" +
+      "初回に30分かけてあなたの体の使い方を丁寧にカウンセリングし、根本から整えるお手伝いをしています。";
+    expect(findBannedTic(直った)).toBeNull();
+    expect(checkNaturalized(直った, 直った, { allowQuestionEnding: true }).ok).toBe(true);
   });
 });
