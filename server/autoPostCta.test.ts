@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildCtaText } from "../shared/autoPostCta";
 
 const LINE_LINK = JSON.stringify([
-  { id: "line-main", type: "line", label: "公式LINE", url: "https://line.example/abc", isDefault: true },
+  { id: "line-main", type: "line", label: "公式LINE", url: "https://lin.ee/abc123", isDefault: true },
 ]);
 const RESERVE_LINK = JSON.stringify([
   { id: "r", type: "reservation", label: "ネット予約", url: "https://reserve.example/x" },

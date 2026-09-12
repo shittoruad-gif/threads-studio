@@ -3071,14 +3071,23 @@ function replyToRequest(req: "post" | "material" | "pasted", questionId?: number
 async function saveProjectLink(userId: number, projectId: string, kind: string, raw: string): Promise<unknown[]> {
   const pj: any = await db.getProjectById(projectId);
   if (!pj || pj.userId !== userId) return [textWithQuick("お店の情報が見つかりませんでした。", MENU_HINT)];
-  const { parseProjectLinks, LINK_TYPES, pickPinnedDestination } = await import("../shared/projectLinks");
+  const { parseProjectLinks, LINK_TYPES, pickPinnedDestination, normalizeLinkType } = await import("../shared/projectLinks");
   const links = parseProjectLinks(pj.links || null);
-  const typeName = (LINK_TYPES as any)[kind]?.name ?? "ご案内先";
-  const existing = links.find((l) => l.type === kind);
+  // ★選ばれた種類とURLの実体が違えば、URLに合わせて直してから保存する（2026-09-12）。
+  //   例：「Instagram」を選んで広告のLPを貼る → 公式HPとして登録し、その旨をお伝えする
+  const chosenName = (LINK_TYPES as any)[kind]?.name ?? "ご案内先";
+  const fixed = normalizeLinkType({ id: "tmp", type: kind as any, label: chosenName, url: raw });
+  const kindFixed = fixed.type;
+  const typeName = (LINK_TYPES as any)[kindFixed]?.name ?? "ご案内先";
+  const corrected = kindFixed !== kind;
+  const existing = links.find((l) => l.type === kindFixed);
   const next: any[] = existing
-    ? links.map((l) => (l.type === kind ? { ...l, url: raw } : l))
-    : [...links, { id: `${kind}_${Date.now().toString(36)}`, type: kind as any, label: typeName, url: raw, isDefault: true }];
+    ? links.map((l) => (l.type === kindFixed ? { ...l, url: raw } : l))
+    : [...links, { id: `${kindFixed}_${Date.now().toString(36)}`, type: kindFixed as any, label: typeName, url: raw, isDefault: true }];
   await db.updateProject(projectId, { links: JSON.stringify(next) } as any);
+  const correctedNote = corrected
+    ? `\n※ 「${chosenName}」を選ばれましたが、このURLは${chosenName}のものではないため「${typeName}」として登録しました。案内の文も「${typeName}」向けになります。\n`
+    : "";
   // ★2本以上あるときは、どこへご案内するかをお選びいただく。
   //   自動判定だけだと「LINEに集めたいのに予約が選ばれる」ことがある。
   const filled = (next as any[]).filter((l) => !!l.url);
@@ -3086,7 +3095,7 @@ async function saveProjectLink(userId: number, projectId: string, kind: string, 
     const dest = pickPinnedDestination(next as any);
     const nm = (l: any) => (LINK_TYPES as any)[l.type]?.name ?? l.label;
     return [textWithQuick(
-      `${typeName}のURLを登録しました。\n${raw}\n\n` +
+      `${typeName}のURLを登録しました。\n${raw}\n${correctedNote}\n` +
       `ご案内先が${filled.length}つになりました。どこへご案内しますか？\n` +
       "固定投稿のコメント欄と、毎日の投稿の誘導に使われます。" +
       (dest ? `\n（いまは自動で「${nm(dest.link)}」が選ばれています）` : ""),
@@ -3101,7 +3110,7 @@ async function saveProjectLink(userId: number, projectId: string, kind: string, 
     )];
   }
   return [textWithQuick(
-    `${typeName}のURLを登録しました。\n${raw}\n\n` +
+    `${typeName}のURLを登録しました。\n${raw}\n${correctedNote}\n` +
     "毎日の投稿の誘導と、固定投稿のコメント欄のリンクに使われます。",
     [{ label: "別の種類も登録する", data: `c=seturl&p=${projectId}` }, { label: "固定投稿を作る", data: "m=makepin" }, ...MENU_HINT],
   )];

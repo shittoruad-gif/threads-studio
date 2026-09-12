@@ -101,6 +101,41 @@ export const LINK_TYPES_LIST = Object.values(LINK_TYPES);
  * Returns [] for null / empty / malformed input so callers don't need to
  * defensively check.
  */
+/**
+ * URLのドメインから、リンクの種類を推定する（分からなければ null）。
+ * ★2026-09-12 三上様指摘：IG広告代行のLPが「Instagram」として登録され、固定投稿のコメントが
+ *   「ふだんの様子はこちらから↓」になっていた。種類の名前ではなく、URLの実体で判定する。
+ */
+export function inferLinkTypeFromUrl(url: string): ProjectLinkType | null {
+  let host = '';
+  try { host = new URL(String(url).trim()).hostname.toLowerCase().replace(/^www\./, ''); } catch { return null; }
+  const is = (...domains: string[]) => domains.some((d) => host === d || host.endsWith('.' + d));
+  if (is('lin.ee', 'line.me')) return 'line';
+  if (is('instagram.com', 'instagr.am')) return 'instagram';
+  if (is('youtube.com', 'youtu.be')) return 'youtube';
+  if (is('hotpepper.jp', 'airrsv.net', 'reserva.be', 'coubic.com', 'squareup.com', 'calendly.com', 'yoyakul.jp', 'stores.jp', 'lstep.app')) return 'reservation';
+  return null;
+}
+
+/** 種類ごとに「このドメインでなければその種類とは呼べない」もの */
+const STRICT_TYPES: ReadonlyArray<ProjectLinkType> = ['line', 'instagram', 'youtube'];
+
+/**
+ * 登録された種類とURLの実体が食い違っていたら、URLに合わせて直す。
+ * 例：Instagramと登録されたが instagram.com ではない → 推定できれば推定した種類、できなければ「公式HP」。
+ * ラベルが種類名そのまま（「Instagram」など）なら、新しい種類名に置き換える。
+ */
+export function normalizeLinkType(link: ProjectLink): ProjectLink {
+  const inferred = inferLinkTypeFromUrl(link.url);
+  const declared = link.type;
+  const mismatch = STRICT_TYPES.includes(declared) && inferred !== declared;
+  if (!mismatch) return link;
+  const type: ProjectLinkType = inferred ?? 'website';
+  const typeNames = new Set(Object.values(LINK_TYPES).map((t) => t.name));
+  const label = !link.label || typeNames.has(link.label) ? LINK_TYPES[type].name : link.label;
+  return { ...link, type, label };
+}
+
 export function parseProjectLinks(raw: string | null | undefined): ProjectLink[] {
   if (!raw) return [];
   try {
@@ -112,7 +147,7 @@ export function parseProjectLinks(raw: string | null | undefined): ProjectLink[]
       && typeof l.type === 'string'
       && typeof l.label === 'string'
       && typeof l.url === 'string'
-    );
+    ).map(normalizeLinkType);
   } catch {
     return [];
   }
