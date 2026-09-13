@@ -144,6 +144,18 @@
 決定済み。判断待ちは無い。下の順に実装し、テストを付け、`docs/safe-operation-rules.md` 追記 2026-09-13 と一致させる。
 5時までに終わらなければ、終わった分だけをデプロイし、残りを翌夜へ。
 
+**★9/13 日中に R1〜R8 のコードは実装・コミット済み（反映はしていない）。今夜やることは次の4つ。**
+1. `git log --oneline @{u}..HEAD` で日中のコミットを読む（台帳・ルール・R1〜R8 の実装・送信スクリプト）
+2. ローカルQA（port 3100）で `drizzle/0087_daily_cap_approval_record.sql` が当たること、`SHOW COLUMNS FROM scheduledPosts LIKE 'approved%'`、
+   `SHOW COLUMNS FROM threadsAccounts LIKE 'deletedShortfall'` を確認。LINE の a=ok / a=okall で approvedAt・approvedVia が入ることを `handlePostback` 直接呼びで確認
+3. `npx tsc --noEmit -p tsconfig.json`（9/13 日中：エラー0）と `npx vitest run`（9/13 日中：769件通過・失敗0、`server/dailyCap.test.ts` 10件を含む）が変わっていないこと
+4. デプロイ → 本番で 2 の SHOW COLUMNS → 翌 6:00 のログで `今日すでにN件（翌日へ送られた分など）` と `daily cap (` が出ているか、7:40 のまとめで案内OFFの岩根様にも announcements の段落が入る経路になっているか（9/14 はお知らせ無しなので空でよい）
+実装の要点（夜に読み直す用）：`shared/dailyCap.ts`（純関数・文言）／`server/dailyCapCheck.ts`（契約本数→上限）／`server/scheduledPostExecutor.ts`（全アカウント上限・翌日へ送る・R8文言）／
+`server/db.ts`（promoteSoftApprovedDuePosts＝全員見送り＋auto_soft 記録・countAccountAutoPostsPostedToday・deferTodaysAutoPostsBeyond・deletedShortfall・listUserIdsForAnnouncement）／
+`server/accountHealthJob.ts`（R5 定型文・R6 補填・当日の残りを1件に）／`server/morningDigestJob.ts`（R3 案内OFFにも・LINE未連携はメール）／
+`server/autoPostScheduler.ts`（翌日へ送られた分を先に数える・deleted 補填の消化）／`server/accountRampCheck.ts`（reason・deletedShortfall）／
+`server/lineChatHandler.ts`・`server/routers.ts`（approvedAt/approvedVia）。
+
 - [ ] **R1 全アカウントに1日の公開上限。** 上限＝契約本数＋補填分（手動 extraPosts と自動 carry の合計は MAX_EXTRA_PER_DAY=2 まで）。
       `server/scheduledPostExecutor.ts` の ramp cap ブロックを「慣らし・冷却のときだけ」から「全アカウント」に広げる。
       数えるのは自動投稿（source='auto'・自己返信/引用を除く）の当日公開済み。手動投稿は数えない（慣らし・冷却中だけ今までどおり Threads 実測で手動込み）。

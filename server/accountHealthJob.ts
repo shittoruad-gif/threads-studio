@@ -58,20 +58,30 @@ export async function runAccountHealthJob(): Promise<void> {
       //   （2026-09-09 比嘉様に3日連続で「投稿が消えています」が届いた）
       if (goneIds.length > 0) {
         // ★消された投稿が1件でもあれば7日間の冷却期間に入れる（1日1件・自己返信とリンクコメントなし）
+        const { COOLDOWN_DAYS, jstDateString } = await import("../shared/accountRamp");
+        const { deletedPostsNotice, dateJstLabel } = await import("../shared/dailyCap");
+        const until = jstDateString(COOLDOWN_DAYS);
+        // 自社アカウント（しっとる公式・Moveact＝user 78）は補填しない（2026-09-13 R6）
+        const isOwnAccount = Number(a.userId) === 78;
         try {
-          const { COOLDOWN_DAYS, jstDateString } = await import("../shared/accountRamp");
-          await db.updateThreadsAccount(Number(a.id), { cooldownUntil: jstDateString(COOLDOWN_DAYS) } as any);
+          await db.updateThreadsAccount(Number(a.id), { cooldownUntil: until } as any);
           console.warn(`[AccountHealth] @${a.threadsUsername} を冷却期間に（${COOLDOWN_DAYS}日・1日1件）`);
         } catch { /* 記録できなくても点検は続ける */ }
         try { await d.execute(sql`UPDATE scheduledPosts SET status = 'failed', errorMessage = 'Threads側で削除された（健全性点検で検知・スパム判定の可能性）' WHERE threadsAccountId = ${Number(a.id)} AND status = 'posted' AND publishedThreadsPostId IN (${sql.join(goneIds.map((g) => sql`${g}`), sql`, `)})`); } catch (e) { console.warn(`[AccountHealth] mark removed failed:`, (e as Error)?.message); }
-      }
-      if (gone >= 2) {
+        // ★R6：消えた分を補填に積む（冷却明けから1日＋1件で返す）
+        if (!isOwnAccount) { try { await db.addDeletedShortfall(Number(a.id), gone); } catch (e) { console.warn(`[AccountHealth] deletedShortfall failed:`, (e as Error)?.message); } }
+        // ★R5：冷却に入った日は、その日すでに作ってある予定も1件に絞る（残りは翌日の同じ時刻へ）
+        let deferred = 0;
+        try { deferred = await db.deferTodaysAutoPostsBeyond(Number(a.id), 1); } catch (e) { console.warn(`[AccountHealth] defer failed:`, (e as Error)?.message); }
         missing++;
-        try { const { notifyAgencyOfClientIssue } = await import("./agencyReportJob"); await notifyAgencyOfClientIssue(Number(a.userId), `@${a.threadsUsername} で最近公開した投稿のうち${gone}件がThreads上から消えています（スパム判定の可能性）。数日は投稿のペースを落とし、様子を見ることをおすすめします。`); } catch { /* 代理店なし */ }
-        await notifyOwner({ title: "公開した投稿がThreads上から消えています（スパム判定の可能性）", content: `@${a.threadsUsername}（user ${a.userId}）直近3日の公開 ${ids.length}件のうち ${gone}件が見つかりません。投稿密度・表現の見直しを。` });
-        const targets = await db.getLineUserIdsForUser(Number(a.userId));
-        for (const to of targets) await pushMessages(to, [{ type: "text", text: `@${a.threadsUsername} で最近公開した投稿のうち${gone}件が、Threads上から消えています。Threads側の自動判定で消された可能性があります。しばらくは投稿を控えめにし、価格や結果の表現は避けてください。運営でも内容を確認します。` }]);
-        console.warn(`[AccountHealth] @${a.threadsUsername}: ${gone}/${ids.length} posts missing`);
+        try { const { notifyAgencyOfClientIssue } = await import("./agencyReportJob"); await notifyAgencyOfClientIssue(Number(a.userId), `@${a.threadsUsername} で最近公開した投稿のうち${gone}件がThreads上から消えています（スパム判定の可能性）。${dateJstLabel(until)}まで自動投稿を1日1件に抑え、減った分と消えた分はその後に1日1件ずつ補填します。`); } catch { /* 代理店なし */ }
+        await notifyOwner({ title: "公開した投稿がThreads上から消えています（スパム判定の可能性）", content: `@${a.threadsUsername}（user ${a.userId}）直近3日の公開 ${ids.length}件のうち ${gone}件が見つかりません。${dateJstLabel(until)}まで1日1件に抑え、今日の残り${deferred}件を翌日へ送りました。${isOwnAccount ? "自社アカウントのため補填なし。" : `消えた${gone}件は冷却明けから1日1件ずつ補填します。`}お客様へは定型文でお知らせ済み（R5）。` });
+        // ★R5：検知した当日に、承諾済みの定型文でお客様へ（2026-09-13 三上様決定。文面は shared/dailyCap.ts deletedPostsNotice）
+        if (!isOwnAccount) {
+          const targets = await db.getLineUserIdsForUser(Number(a.userId));
+          for (const to of targets) await pushMessages(to, [{ type: "text", text: deletedPostsNotice(String(a.threadsUsername), gone, dateJstLabel(until)) }]);
+        }
+        console.warn(`[AccountHealth] @${a.threadsUsername}: ${gone}/${ids.length} posts missing（冷却〜${until}・翌日へ${deferred}件）`);
       }
     } catch (e) {
       console.error(`[AccountHealth] account ${a.id} check failed:`, e);

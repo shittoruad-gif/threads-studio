@@ -1145,7 +1145,11 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             const { rampForAccount } = await import('./accountRampCheck');
             const r = await rampForAccount(account as any, postCount);
             if (r.capped) { console.log(`[AutoPost] account ${account.id} ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count; }
-            else if (r.extra) { console.log(`[AutoPost] account ${account.id} 補填: ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count; }
+            else if (r.extra) {
+              console.log(`[AutoPost] account ${account.id} 補填: ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count;
+              // ★消えた投稿の補填（R6）は朝の生成で1日1件ずつ消化する
+              if (r.reason === 'deleted' && !opts.fillToday) await db.decrementDeletedShortfall(account.id).catch(() => undefined);
+            }
             else if (r.established) console.log(`[AutoPost] account ${account.id} はThreads歴が長いため慣らし運転なし`);
           }
 
@@ -1168,6 +1172,18 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             } catch (e) { console.warn(`[AutoPost] 自動補填の判定に失敗 account=${account.id}: ${(e as Error)?.message}`); }
           }
           void contractCount;
+
+          // ★R1（2026-09-13）：今日すでに予定・公開されている自動投稿（前日に上限で翌日へ送られた分など）を先に数え、
+          //   新規はその差だけ作る。これが無いと翌日へ送った分と新規が重なって、また上限超えになる。
+          if (!opts.fillToday) {
+            const alreadyToday = await db.countAccountAutoPostsScheduledToday(account.id).catch(() => 0);
+            if (alreadyToday > 0) {
+              const before = postCount;
+              postCount = Math.max(0, postCount - alreadyToday);
+              console.log(`[AutoPost] account ${account.id} 今日すでに${alreadyToday}件（翌日へ送られた分など）→ 新規は${before}→${postCount}件`);
+              if (postCount === 0) continue;
+            }
+          }
 
           // ★当日補充: 今日すでにある分を引いて、残り時間に入る本数だけ作る
           let todayCount = postCount;

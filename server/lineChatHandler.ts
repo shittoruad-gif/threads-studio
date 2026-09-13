@@ -1773,7 +1773,8 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     // ★時刻を過ぎてからの承認：7〜21時はすぐ、夜は翌朝10時台に（深夜に公開しない。2026-09-11）
     const { lateApprovalTime } = await import("../shared/publishTiming");
     const late = post.scheduledAt && new Date(post.scheduledAt) > now ? null : lateApprovalTime(now.getTime());
-    await db.updateScheduledPost(Number(q.i), { status: "pending", ...(late ? { scheduledAt: late.at } : {}) });
+    // ★承認の記録（2026-09-13 R7）：いつ・どの経路で公開に進んだかを残す
+    await db.updateScheduledPost(Number(q.i), { status: "pending", approvedAt: now, approvedVia: "line_one", ...(late ? { scheduledAt: late.at } : {}) } as any);
     const when = late ? late.label : `${fmtJst(post.scheduledAt)} に`;
     // ★2026-09-10 三上様指示で「承認したらそのまま公開」に変えてある（scheduledPostExecutor）。
     //   adminReviewRequired は管理画面で運営が参考に読むための印で、公開は止めない。
@@ -1838,7 +1839,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const pinnedAccts = new Set<number>();
     for (const p of waiting as any[]) {
       const past = !p.scheduledAt || new Date(p.scheduledAt) <= now;
-      await db.updateScheduledPost(Number(p.id), { status: "pending", ...(past ? { scheduledAt: now } : {}) });
+      await db.updateScheduledPost(Number(p.id), { status: "pending", approvedAt: now, approvedVia: "line_all", ...(past ? { scheduledAt: now } : {}) } as any);
       approvedIds.push(Number(p.id));
       if (p.angle === "pinned") { hasPinned = true; if (p.threadsAccountId) pinnedAccts.add(Number(p.threadsAccountId)); }
     }

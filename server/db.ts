@@ -675,26 +675,87 @@ export async function getPostedAutoPostsByProject(projectId: string, since: Date
 }
 
 /**
- * 「見送りを押さなければ公開する」設定の方の、予定時刻を過ぎた承認待ちを公開待ちに変える（2026-09-12）。
+ * 予定時刻を過ぎた承認待ちの扱い（2026-09-12・2026-09-13 R2/R7）。
+ *  - 日をまたいだ承認待ちは、設定に関係なく全員見送り（溜まった分が一度に出るのを防ぐ。翌朝また新しい投稿が届く）
+ *  - 「見送りを押さなければ公開する」設定の方は、当日に作った承認待ちを公開待ちに変える（approvedVia='auto_soft' を記録）
  * 固定投稿の下書きは対象外。戻り値は変えた件数。
  */
 export async function promoteSoftApprovedDuePosts(): Promise<{ promoted: number; expired: number }> {
   const db = await getDb();
   if (!db) return { promoted: 0, expired: 0 };
-  // ★当日（JST）に作った投稿だけを公開へ。前日以前に作られて承認されなかった分は見送り（溜まった分が一度に出るのを防ぐ）
+  // ★R2：前日以前に作られて承認されなかった分は、設定に関係なく見送り（岩根様 9/12：前日分4件＋当日分5件が同じ日に届いた再発防止）
   const exp: any = await db.execute(sql`
-    UPDATE scheduledPosts sp JOIN users u ON u.id = sp.userId
-    SET sp.status = 'canceled', sp.errorMessage = '承認されないまま日をまたいだため見送り（見送りなし公開は当日分だけ）'
-    WHERE sp.status = 'awaiting_approval' AND u.autoPublishIfNoResponse = 1
+    UPDATE scheduledPosts sp
+    SET sp.status = 'canceled', sp.errorMessage = '承認されないまま日をまたいだため見送り（翌朝また新しい投稿が届きます）'
+    WHERE sp.status = 'awaiting_approval'
       AND (sp.angle IS NULL OR sp.angle <> 'pinned') AND sp.scheduledAt <= NOW()
       AND DATE(CONVERT_TZ(sp.createdAt,'+00:00','+09:00')) < DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
   const rows: any = await db.execute(sql`
     UPDATE scheduledPosts sp JOIN users u ON u.id = sp.userId
-    SET sp.status = 'pending'
+    SET sp.status = 'pending', sp.approvedAt = NOW(), sp.approvedVia = 'auto_soft'
     WHERE sp.status = 'awaiting_approval' AND u.autoPublishIfNoResponse = 1
       AND (sp.angle IS NULL OR sp.angle <> 'pinned') AND sp.scheduledAt <= NOW()
       AND DATE(CONVERT_TZ(sp.createdAt,'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
   return { promoted: Number((rows as any)?.[0]?.affectedRows ?? 0), expired: Number((exp as any)?.[0]?.affectedRows ?? 0) };
+}
+
+/** 今日（JST）公開済みの自動投稿の数（自己返信・引用・Meta AI呼びかけを除く）。1日の上限（2026-09-13 R1）の判定に使う */
+export async function countAccountAutoPostsPostedToday(accountId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows: any = await db.execute(sql`
+    SELECT COUNT(*) AS c FROM scheduledPosts
+    WHERE threadsAccountId = ${accountId} AND status = 'posted' AND source = 'auto'
+      AND replyToThreadsId IS NULL AND quotePostId IS NULL AND (angle IS NULL OR angle <> 'meta_ai_call')
+      AND DATE(CONVERT_TZ(IFNULL(postedAt, scheduledAt),'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
+  return Number((rows as any)?.[0]?.[0]?.c ?? 0);
+}
+
+/**
+ * 今日の残りの自動投稿（未公開）を、先頭 keep 件だけ残して翌日の同じ時刻へ送る（2026-09-13 R5：冷却に入った日は1件に絞る）。
+ * 今日すでに公開した分は keep に数える。固定投稿の下書きは対象外。戻り値は送った件数。
+ */
+export async function deferTodaysAutoPostsBeyond(accountId: number, keep: number): Promise<number> {
+  const database = await getDb();
+  if (!database) return 0;
+  const posted = await countAccountAutoPostsPostedToday(accountId);
+  const rows: any = await database.execute(sql`
+    SELECT id, scheduledAt FROM scheduledPosts
+    WHERE threadsAccountId = ${accountId} AND source = 'auto' AND replyToThreadsId IS NULL
+      AND status IN ('pending','awaiting_approval') AND (angle IS NULL OR angle <> 'pinned')
+      AND DATE(CONVERT_TZ(scheduledAt,'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))
+    ORDER BY scheduledAt`);
+  const list: any[] = (rows as any)[0] ?? [];
+  const skip = Math.max(0, keep - posted);
+  const { nextDaySameTime } = await import("../shared/dailyCap");
+  let n = 0;
+  for (const r of list.slice(skip)) {
+    await database.update(scheduledPosts).set({ scheduledAt: nextDaySameTime(r.scheduledAt) }).where(eq(scheduledPosts.id, Number(r.id)));
+    n++;
+  }
+  return n;
+}
+
+/** Threads側で消された投稿の数を補填に積む（2026-09-13 R6） */
+export async function addDeletedShortfall(accountId: number, n: number): Promise<void> {
+  const db = await getDb();
+  if (!db || n <= 0) return;
+  await db.execute(sql`UPDATE threadsAccounts SET deletedShortfall = deletedShortfall + ${n} WHERE id = ${accountId}`);
+}
+
+/** 補填を1日分消化した（R6） */
+export async function decrementDeletedShortfall(accountId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.execute(sql`UPDATE threadsAccounts SET deletedShortfall = GREATEST(deletedShortfall - 1, 0) WHERE id = ${accountId}`);
+}
+
+/** 仕組みの変更のお知らせを届ける相手＝連携アカウントを持つ全員（案内OFF・LINE未連携を問わない。2026-09-13 R3） */
+export async function listUserIdsForAnnouncement(): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows: any = await db.execute(sql`SELECT DISTINCT userId FROM threadsAccounts WHERE isActive = 1`);
+  return ((rows as any)[0] ?? []).map((r: any) => Number(r.userId)).filter((n: number) => Number.isFinite(n) && n > 0);
 }
 
 /** そのアカウントで今日（JST）公開済みのメイン投稿の数（自己返信・引用は除く） */

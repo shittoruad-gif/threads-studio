@@ -32,19 +32,48 @@ export async function runMorningDigestJob(): Promise<void> {
   const notifyMap = new Map(notifyTargets.map((t) => [t.userId, t]));
   const nudgeMap = new Map((await db.listUsersForAutoModeNudge()).map((t) => [t.userId, t]));
   const ann = announcementForToday();
+  // ★仕組みの変更のお知らせは、案内OFF・LINE未連携の方にも届ける（2026-09-13 三上様決定 R3。岩根様が案内OFFで9/13のお知らせ未着だった）
+  const annTargets: number[] = ann ? await db.listUserIdsForAnnouncement().catch(() => [] as number[]) : [];
+  const buildAnnText = async (userId: number, user: any): Promise<string | null> => {
+    if (!ann || !user || user.lastAnnouncementKey === ann.key) return null;
+    // その方に当てはまる段落だけを出す（プラン・公開前の確認・Meta AIの設定で出し分け）
+    const sub = await db.getSubscriptionByUserId(userId).catch(() => null);
+    const plan = getPlan(resolveEffectivePlanId(sub?.planId, sub?.status));
+    return renderAnnouncement(ann, {
+      maxPerDay: Number(plan?.features?.maxAutoPostsPerDay ?? 0),
+      requireApproval: user.autoPostRequireApproval !== false,
+      metaAiEnabled: user.metaAiAskEnabled !== false,
+    });
+  };
 
-  // 送る相手＝昨日の結果がある人 ∪ 案内の対象
-  const userIds = new Set<number>([...Array.from(byUser.keys()), ...notifyTargets.map((t) => t.userId), ...personalNoticeUserIds()]);
+  // 送る相手＝昨日の結果がある人 ∪ 案内の対象 ∪ お知らせの対象（お知らせがある日だけ）
+  const userIds = new Set<number>([...Array.from(byUser.keys()), ...notifyTargets.map((t) => t.userId), ...personalNoticeUserIds(), ...annTargets]);
   const { pushMessages } = await import("./lineNotify");
   let sent = 0;
   let withAction = 0;
 
   for (const userId of Array.from(userIds)) {
     try {
-      const lineIds = await db.getLineUserIdsForUser(userId);
-      if (lineIds.length === 0) continue;
       const user: any = await db.getUserById(userId);
       if (!user || user.isDemoMode) continue;
+      const lineIds = await db.getLineUserIdsForUser(userId);
+      if (lineIds.length === 0) {
+        // ★LINE未連携の方には、お知らせだけメールで（R3。小林様が9/13のお知らせ未着だった）
+        const mailText = await buildAnnText(userId, user);
+        if (mailText && user.email && user.emailVerified && !user.emailOptOut) {
+          try {
+            const { sendEmail } = await import("./_core/notification");
+            const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',sans-serif;font-size:15px;line-height:1.9;color:#222;max-width:640px;margin:0 auto;padding:8px 4px">` +
+              mailText.split("\n").map((l) => (l.trim() === "" ? `<div style="height:8px"></div>` : `<p style="margin:0${l.startsWith("■") ? ";font-weight:700;margin-top:18px" : ""}">${esc(l)}</p>`)).join("") + `</div>`;
+            const subject = `【Threads Studio】${mailText.split("\n")[0].replace(/^【お知らせ】/, "")}`;
+            const ok = await sendEmail({ to: user.email, subject, html });
+            if (ok && ann) await db.recordAnnouncementSent(userId, ann.key).catch(() => {});
+            console.log(`[MorningDigest] お知らせをメールで user=${userId} ${ok ? "送信" : "失敗"}`);
+          } catch (e) { console.warn(`[MorningDigest] お知らせメール失敗 user=${userId}: ${(e as Error)?.message}`); }
+        }
+        continue;
+      }
 
       const parts: string[] = [];
       const buttons: Array<{ label: string; data: string }> = [];
@@ -72,19 +101,9 @@ export async function runMorningDigestJob(): Promise<void> {
         );
       }
 
-      // ② その日のお知らせ（1人1回）
+      // ② その日のお知らせ（1人1回）。案内OFFの方にも出す（R3）。案内OFFで止めるのは③の「次にやること」「自動にしませんか」だけ
       const t = notifyMap.get(userId);
-      let annText: string | null = null;
-      if (ann && t && (t as any).lastAnnouncementKey !== ann.key) {
-        // その方に当てはまる段落だけを出す（プラン・公開前の確認・Meta AIの設定で出し分け）
-        const sub = await db.getSubscriptionByUserId(userId).catch(() => null);
-        const plan = getPlan(resolveEffectivePlanId(sub?.planId, sub?.status));
-        annText = renderAnnouncement(ann, {
-          maxPerDay: Number(plan?.features?.maxAutoPostsPerDay ?? 0),
-          requireApproval: user.autoPostRequireApproval !== false,
-          metaAiEnabled: user.metaAiAskEnabled !== false,
-        });
-      }
+      const annText: string | null = await buildAnnText(userId, user);
 
       // ③ きょうやること1つ（次にやること ＞ 自動にしませんか）
       let actionText: string | null = null;

@@ -76,6 +76,8 @@ async function notifyUserPostFailure(
 // 実際の処理時間より十分長く取り、処理中の投稿を誤って再投入して二重投稿になる
 // レースを避ける。
 const PROCESSING_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+// ★上限で翌日に回したことの LINE 通知は、1アカウント1日1回だけ（同じ日に何件回しても繰り返さない）
+const capNoticeSentOn = new Map<number, string>();
 
 /**
  * Reset stuck processing posts back to pending
@@ -214,31 +216,44 @@ export async function executePendingPosts() {
         // 新規連携のトークンには権限が無いため、返信を伴う処理は出し分ける）
         const canReply = (account as any).hasReplyScope !== false;
 
-        // ★慣らし運転中（連携14日未満）は、ご本人の手動投稿も含めた「今日の合計」で上限を見る。
-        //   2026-09-06 自動3件＋手動2〜3件＝1日5〜6件で新規アカウントが停止された再発防止。
-        //   上限に達していれば、この投稿は公開せず取り消す（翌日の生成で改めて作られる）。
-        if (post.source === 'auto' && !(post as any).replyToThreadsId) {
+        // ★1日の上限（2026-09-13 三上様決定 R1）。全アカウントに「契約本数＋補填分」の上限を掛ける。
+        //   9/12 に Moveact 10件・しっとる公式 8件・滝本様 8件・岩根様 8件が公開された（歴の長いアカウントに上限が無かった）。
+        //   慣らし運転中・冷却中は今までどおり Threads の実測（ご本人の手動投稿を含む）で見る。
+        //   上限を超えた分は見送りにせず翌日の同じ時刻へ送る（翌朝の生成は「翌日へ送られた分」を先に数える）。
+        //   R8：冷却中の通知は「投稿が消されたため◯/◯まで1日1件」（「連携1日目の慣らし運転」と出ていた誤りを直す）。
+        if (post.source === 'auto' && !(post as any).replyToThreadsId && !(post as any).quotePostId) {
           try {
-            const { rampForAccount } = await import('./accountRampCheck');
-            const rc = await rampForAccount({ ...(account as any), accessToken }, 99);
-            if (rc.capped) {
+            const { dailyCapDecision } = await import('./dailyCapCheck');
+            const { nextDaySameTime, cooldownCapNotice, rampCapNotice, dateJstLabel } = await import('../shared/dailyCap');
+            const dc = await dailyCapDecision({ ...(account as any), accessToken }, post.userId);
+            let todayCount = 0;
+            if (dc.strict) {
               const { getThreadsUserPosts } = await import('./threadsApi');
               const recent = await getThreadsUserPosts(accessToken, account.threadsUserId, 25);
               const todayJst = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
-              const todayCount = (recent || []).filter((p: any) => new Date(new Date(p.timestamp).getTime() + 9 * 3600e3).toISOString().slice(0, 10) === todayJst).length;
-              if (todayCount >= rc.count) {
-                await db.updateScheduledPost(post.id, { status: 'canceled', errorMessage: `慣らし運転中の上限（1日${rc.count}件・ご自身の投稿を含む）に達したため見送り` } as any);
-                console.log(`[Scheduled Post] ramp cap: account ${account.id} today=${todayCount} cap=${rc.count} → post ${post.id} canceled`);
+              todayCount = (recent || []).filter((p: any) => new Date(new Date(p.timestamp).getTime() + 9 * 3600e3).toISOString().slice(0, 10) === todayJst).length;
+            } else {
+              todayCount = await db.countAccountAutoPostsPostedToday(account.id);
+            }
+            if (todayCount >= dc.cap) {
+              const at = nextDaySameTime(post.scheduledAt, Date.now());
+              await db.updateScheduledPost(post.id, { scheduledAt: at } as any);
+              console.log(`[Scheduled Post] daily cap (${dc.reason}): account ${account.id} today=${todayCount} cap=${dc.cap} → post ${post.id} moved to ${new Date(at.getTime() + 9 * 3600e3).toISOString().slice(0, 16)} JST`);
+              const todayKey = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+              if (dc.strict && capNoticeSentOn.get(account.id) !== todayKey) {
+                capNoticeSentOn.set(account.id, todayKey);
                 try {
                   const targets = await db.getLineUserIdsForUser(post.userId);
                   const { pushMessages } = await import('./lineNotify');
-                  const { rampDayLabel } = await import('../shared/accountRamp');
-                  for (const to of targets) await pushMessages(to, [{ type: 'text', text: `@${account.threadsUsername} は連携から${rampDayLabel(rc.days)}日目の「慣らし運転」中です。今日はご自身の投稿を含めて${todayCount}件になったため、自動投稿1件を見送りました（上限は1日${rc.count}件）。新しいアカウントで多く投稿すると停止されやすいための安全策です。` }]);
+                  const text = dc.reason === 'cooldown'
+                    ? cooldownCapNotice(String(account.threadsUsername), dateJstLabel(dc.untilJst), todayCount)
+                    : rampCapNotice(String(account.threadsUsername), dc.days, todayCount, dc.cap);
+                  for (const to of targets) await pushMessages(to, [{ type: 'text', text }]);
                 } catch { /* 通知失敗は無視 */ }
-                continue;
               }
+              continue;
             }
-          } catch (e) { console.warn(`[Scheduled Post] ramp cap check skipped: ${(e as Error)?.message}`); }
+          } catch (e) { console.warn(`[Scheduled Post] daily cap check skipped: ${(e as Error)?.message}`); }
         }
 
         let result: { id: string };

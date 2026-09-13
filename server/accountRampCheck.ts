@@ -47,6 +47,8 @@ export interface RampDecision {
   note: string;
   established: boolean;
   shortfall: number;
+  /** 本数を変えた理由（R8：冷却を「慣らし運転」と言わないために区別する） */
+  reason?: "cooldown" | "ramp" | "compensation" | "deleted" | "manual";
 }
 
 /** そのアカウントの今日の本数（contract=契約本数） */
@@ -57,7 +59,7 @@ export async function rampForAccount(
   // ★投稿が消された（スパム判定）アカウントは冷却期間中、1日1件に落とす（2026-09-12）。補填も乗せない
   if (inCooldown(account as any)) {
     const until = dateColToJst((account as any).cooldownUntil).replace(/^\d{4}-/, "").replace("-", "/");
-    return { count: 1, capped: true, extra: false, days: 0, note: `投稿が消されたため${until}まで1日1件に抑えています（アカウントを守るため）`, established: false, shortfall: 0 };
+    return { count: 1, capped: true, extra: false, days: 0, note: `投稿が消されたため${until}まで1日1件に抑えています（アカウントを守るため）`, established: false, shortfall: 0, reason: "cooldown" };
   }
   const base0 = await rampDecision(account, contract);
   // ★運営が決めた補填（期間限定で1日＋n件。2026-09-10 プレステージ様）。慣らし中は掛けない（安全側）。
@@ -68,7 +70,13 @@ export async function rampForAccount(
     const cap = contract + (base0.days < COMPENSATION_WINDOW_DAYS ? 1 : 2);
     const count = Math.min(base0.count + m.extra, cap);
     if (count <= base0.count) return base0;
-    return { ...base0, count, extra: true, note: [base0.note, m.note].filter(Boolean).join("／") };
+    return { ...base0, count, extra: true, reason: "manual", note: [base0.note, m.note].filter(Boolean).join("／") };
+  }
+  // ★Threads側で消された投稿の補填（2026-09-13 三上様決定 R6）。連携30日以内は compensationCount が同じ不足を拾うので、
+  //   30日を過ぎたアカウントだけここで契約＋1件にする。1日消化するごとに autoPostScheduler が deletedShortfall を1減らす。
+  const ds = Number((account as any).deletedShortfall ?? 0);
+  if (ds > 0 && !base0.capped && !base0.extra && base0.days >= COMPENSATION_WINDOW_DAYS) {
+    return { ...base0, count: contract + 1, extra: true, shortfall: ds, reason: "deleted", note: `消えた投稿の補填（あと${ds}件）を1日${contract + 1}件で返しています` };
   }
   return base0;
 }

@@ -2779,10 +2779,13 @@ ${input.commentText}
         // 予約時刻が過去なら、すぐ投稿対象になるよう現在時刻に寄せる
         const now = new Date();
         const scheduledAt = post.scheduledAt && new Date(post.scheduledAt) > now ? undefined : now;
+        // ★承認の記録（2026-09-13 R7）
         await db.updateScheduledPost(input.postId, {
           status: 'pending',
+          approvedAt: now,
+          approvedVia: 'web',
           ...(scheduledAt ? { scheduledAt } : {}),
-        });
+        } as any);
         return { success: true };
       }),
 

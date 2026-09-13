@@ -376,6 +376,9 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   carryCount: int("carryCount").notNull().default(0),
   // 投稿がThreads側で消された（スパム判定）アカウントの冷却期間。この日まで1日1件・自己返信とリンクコメントなし（2026-09-12）
   cooldownUntil: date("cooldownUntil"),
+  // ★Threads側で消された投稿の補填（2026-09-13 三上様決定 R6）。冷却明けから1日＋1件で返し、1件ごとに減らす。
+  //   連携30日以内は compensationCount が同じ不足を拾うので、30日を過ぎたアカウントの分だけここで見る
+  deletedShortfall: int("deletedShortfall").notNull().default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -518,6 +521,10 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   adminReviewRequired: tinyint("adminReviewRequired").default(0).notNull(),
   adminReviewAt: timestamp("adminReviewAt"),
   adminReviewBy: varchar("adminReviewBy", { length: 120 }),
+  // ★承認の記録（2026-09-13 三上様決定 R7）。いつ・どの経路で公開に進んだか。
+  //   line_one=LINE「これで投稿する」／line_all=LINE「すべて承認」／web=アプリの承認／auto_soft=「見送らなければ公開」で自動
+  approvedAt: timestamp("approvedAt"),
+  approvedVia: varchar("approvedVia", { length: 20 }),
   // 公開直後に自分の投稿へ返信する「@meta.ai ＋質問」。無ければ返信しない（shared/metaAiAsk.ts）
   metaAiAskText: text("metaAiAskText"),
   // 引用投稿：この投稿IDを引用して公開する（週1回の固定投稿の再露出。2026-09-07）
