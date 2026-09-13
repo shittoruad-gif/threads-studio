@@ -22,11 +22,14 @@
  *   「今日使う強みは『購入して頂いて』」という無茶な指示になる。
  */
 function looksLikeFragment(s: string): boolean {
-  // 読点・接続で終わる（「〜方に、」「〜ので」「〜して」「〜が」…）
-  if (/[、,，]$/.test(s)) return true;
-  if (/(て|で|に|が|は|を|と|も|や|ば|し|から|ので|けど|けれど)$/.test(s)) return true;
+  // ★末尾の読点だけでは「文の途中」と決めない。
+  //   氷見様の悩みの1行目「…手術を勧められた方、」は、読点で終わっているが1項目として完結している。
+  //   見るのは、読点を取り除いたあとに助詞・接続で終わっているか（「〜方に」「〜ので」「〜して」）。
+  const body = s.replace(/[、,，]+$/, "");
+  if (!body) return true;
+  if (/(て|で|に|が|は|を|と|も|や|ば|し|から|ので|けど|けれど)$/.test(body)) return true;
   // 開いたままの括弧
-  if ((s.match(/[（(]/g) || []).length !== (s.match(/[）)]/g) || []).length) return true;
+  if ((body.match(/[（(]/g) || []).length !== (body.match(/[）)]/g) || []).length) return true;
   return false;
 }
 
@@ -35,15 +38,17 @@ function looksLikeFragment(s: string): boolean {
  * 1つでも「文の途中」の行が混ざっていたら、箇条書きではなく文章とみなして空を返す
  * （＝日替わりの指定はせず、今までどおり全体をそのまま使わせる）。
  *
- * ★読点「、」では分けない。「腰痛や膝の痛み、ケガ（捻挫、肉離れ、突き指）」のような
- *   1項目の中の読点まで切れてしまうため。
+ * ★分けるのは改行だけ。読点「、」や中黒「・」では分けない。
+ *   「腰痛や膝の痛み、ケガ（捻挫、肉離れ、突き指）」「自律神経の乱れ・不眠」のように、
+ *   1項目の中で使われていることの方が多く、切ると意味が欠ける。
+ *   行頭の「・」は箇条書きの印なので、下で取り除く。
  */
 export function splitTopics(text: string | null | undefined): string[] {
   const raw = String(text ?? "");
   if (!raw.trim()) return [];
   const items = raw
-    .split(/\r?\n|[・･]/)
-    .map((s) => s.replace(/^\s*[-–—*●○◯□■▪️✓✔]\s*/, "").replace(/^\s*\d+[.)．）]\s*/, "").trim())
+    .split(/\r?\n/)
+    .map((s) => s.replace(/^\s*[-–—*●○◯□■▪️✓✔・･]\s*/, "").replace(/^\s*\d+[.)．）]\s*/, "").trim())
     .filter((s) => s.length >= 4)
     // 同じものは1つに（前後の空白・記号の違いを無視）
     .filter((s, i, a) => a.findIndex((t) => t.replace(/[\s。、．，!！?？]/g, "") === s.replace(/[\s。、．，!！?？]/g, "")) === i)
