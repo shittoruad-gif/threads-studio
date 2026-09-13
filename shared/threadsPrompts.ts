@@ -128,6 +128,13 @@ export interface ThreadsPromptInput {
   target: string;
   mainProblem: string;
   strength: string;
+  /**
+   * 今日この1本で取り上げる悩み・強み（登録が複数あるときだけ、呼び出し側が日替わりで1つ選んで渡す）。
+   * ★これが無かったため、悩みを3つ登録しているお客様でも毎回いちばん上の1つだけが使われ、
+   *   「ここ数日は同じ内容でした」になっていた（2026-09-14・shared/topicRotation.ts に経緯）。
+   */
+  focusProblem?: string;
+  focusStrength?: string;
   proof?: string;
   link?: string; // 後方互換用 — 新規はlinksを使う
   /**
@@ -1147,6 +1154,8 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
     localTerms: sanitizeForPrompt(input.localTerms, 400),
     target: sanitizeForPrompt(input.target, 300),
     mainProblem: sanitizeForPrompt(input.mainProblem, 300),
+    focusProblem: sanitizeForPrompt(input.focusProblem, 150),
+    focusStrength: sanitizeForPrompt(input.focusStrength, 150),
     strength: sanitizeForPrompt(input.strength, 500),
     proof: sanitizeForPrompt(input.proof, 500),
     usp: sanitizeForPrompt(input.usp, 300),
@@ -1258,6 +1267,8 @@ ${safe.localTerms ? `- 地元での呼び方（事実確認済み。最寄り駅
 - ターゲット：${safe.target}
 - 主な悩み：${safe.mainProblem}
 - 強み/特徴：${safe.strength}
+${safe.focusProblem ? `- ★今日この1本で取り上げる悩み：${safe.focusProblem}（登録された悩みのうち、今日はこれを主題にする。他の悩みは今日は書かない。毎日ちがう悩みを順に扱うための指定）` : ''}
+${safe.focusStrength ? `- ★今日この1本で使う強み：${safe.focusStrength}（登録された強みのうち、今日はこれを使う。他の強みは今日は書かない）` : ''}
 ${safe.usp ? `- USP（独自の強み）：${safe.usp}` : ''}
 ${safe.n1Customer ? `- N1顧客像：${safe.n1Customer}` : ''}
 ${safe.belief ? `- 主張・信念：${safe.belief}（投稿に一貫してにじませる。これと矛盾する内容は書かない。仮想敵型と相性が良い）` : ''}

@@ -17,6 +17,7 @@ import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle } from "../shared/postAngles";
 import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
 import { stripRawUrls } from "../shared/sanitize";
+import { pickRotatingTopic } from "../shared/topicRotation";
 import { invokeLLM } from "./_core/llm";
 import { nanoid } from "nanoid";
 import { approvedLocalTerms } from './localGeo';
@@ -561,6 +562,10 @@ async function generateAutoPost(
       target: project.target,
       mainProblem: project.mainProblem,
       strength: project.strength,
+      // ★登録された悩み・強みが複数あるときは、今日の1本で取り上げるものを日替わりで指定する。
+      //   これが無いと、材料を全部渡していても毎回いちばん上の1つだけが使われる（shared/topicRotation.ts）。
+      focusProblem: pickRotatingTopic(project.mainProblem, postTypeIndex + purposeIndex) || undefined,
+      focusStrength: pickRotatingTopic(project.strength, postTypeIndex) || undefined,
       proof: project.proof || undefined,
       link: project.ctaLink || undefined,
       links: projectLinks.map(l => ({ type: l.type, label: l.label, url: l.url })),
