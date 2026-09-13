@@ -103,6 +103,20 @@
 - [ ] `Follow-up bump scheduled` が出ない／`inquiry comment skipped …（本日2件目以降）` が出る
 - [ ] 7:40の報告で、しっとる公式に「投稿が消されたため9/19まで1日1件」の注記
 
+### 本番に入っているもの（2026-09-14 01:59 時点）
+
+`8fe862b` が稼働中（health 200・起動ログにエラーなし）。migration `0087` 適用ずみを本番DBで確認
+（`scheduledPosts.approvedAt` / `approvedVia` / `threadsAccounts.deletedShortfall`）。
+
+今夜は3回反映した（`925cdd0` → `c9e137e` → `8fe862b`）。2回目・3回目は、
+本番の実データで確かめてから直した分（悩みの日替わり）。
+**`8fe862b` は 01:45 の自動反映で一度ビルドに失敗している**（`vite build` の途中で落ちた。
+直前の `c9e137e` のビルドと重なった時間帯で、ローカルでは同じコミットが通る）。
+自動反映は「新しいコミットが来たときだけ」動く作りなので**失敗しても再挑戦しない**。
+手で `api/v1/deploy` を叩いて入れ直し、01:58 に切り替わった。
+→ **同じことが起きたときは、`/var/log/auto-deploy.log` ではなく
+Coolify の deployments API で `failed` を見ること**（ログには「queued」としか残らない）。
+
 ### 9/14 未明に反映した分の確認（新しい）
 - [ ] 6:00 の生成ログに `[AutoPost] account N daily cap` や `今日すでにN件（翌日へ送られた分など）` が出るか。
       **1人で毎枠**のように出すぎていないか
