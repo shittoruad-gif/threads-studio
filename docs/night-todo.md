@@ -103,6 +103,16 @@
 - [ ] `Follow-up bump scheduled` が出ない／`inquiry comment skipped …（本日2件目以降）` が出る
 - [ ] 7:40の報告で、しっとる公式に「投稿が消されたため9/19まで1日1件」の注記
 
+### 9/14 未明に反映した分の確認（新しい）
+- [ ] 6:00 の生成ログに `[AutoPost] account N daily cap` や `今日すでにN件（翌日へ送られた分など）` が出るか。
+      **1人で毎枠**のように出すぎていないか
+- [ ] 悩みが2行以上ある8名（小西・滝本・小林・三上・氷見・森・香取・梅原の各様）の投稿が、
+      **前日と違う悩み**を扱っているか。とくに香取様（3500）が「11年」＋「痛む場所だけ」から抜けたか
+- [ ] 承認したあと、投稿の履歴に「承認: 9/14 …  LINE（1件ずつ）」が出るか（本番で初めて値が入る）
+- [ ] 固定投稿を「まず5つ」だけの方が押したときに「あと2問だけ答える」が出るか
+- [ ] 7:40 のまとめで、案内OFFの岩根様にも announcements の経路が通っているか（9/14 はお知らせ無しなので空でよい）
+- [ ] Keiro の `follows` に 玉島 `tnt_dbf11acd3ef4461b8157a21f` / 金光 `tnt_f990e5ee575ee176cbcde760` が1件でも入るか
+
 ### 夜の分（9/13）の確認
 - [ ] `[AutoPost] 書き出しが直近の投稿と同じ実績の数字「◯年」→ 作り直し` が出る。
       出すぎ（1人で毎枠）になっていないか。**出ても最後の作り直しでは止めないので、枠は減らない**
@@ -174,7 +184,10 @@ R1〜R8 はすべて済み。**翌朝に見ること**は下の「2026-09-14 朝
       デプロイ後の確認：`https://keiro.s-toru.com/` と `https://line.moveact.net/` が 200／コンテナログに `webhook received before channel secret is set` が **出なくなる**／
       Keiro DB `follows` の tenant `tnt_dbf11acd3ef4461b8157a21f`（玉島）`tnt_f990e5ee575ee176cbcde760`（金光）に翌日以降 1 件でも入る。
       デプロイ前に `docker exec <keiro> node scripts/backup.js` で控えを取る。
-- [ ] 翌朝の点検で、Threads Studio の Moveact 2プロジェクトの `ctaLink` が `lnk_ma_tama_threads` / `lnk_ma_konko_threads` になっていること、
+- [x] Threads Studio の Moveact 2プロジェクトの `ctaLink` は `lnk_ma_tama_threads` / `lnk_ma_konko_threads` で確認ずみ（2026-09-14 未明）。
+      Keiro 側も 玉島 `tnt_dbf11acd3ef4461b8157a21f` / 金光 `tnt_f990e5ee575ee176cbcde760` とも `webhook_last_at` が 9/14 00:09 に更新されており、
+      `webhook received before channel secret is set` は**その 00:09 の4件が最後**（合言葉が入る前に届いた分）。以降は出ていない。
+- [ ] 残るのは翌朝の確認だけ：
       6:00 生成後の「その日1件目のリンクコメント」がこのリンクで出ていることを確認（Keiro の clicks に `_threads` が増える）。
 
 ### ★最優先（2026-09-13 三上様「一日8件投稿やったらあかんやろ」）— 上の R1〜R8 に統合。以下は経緯の記録として残す
