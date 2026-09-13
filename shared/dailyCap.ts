@@ -34,15 +34,21 @@ export function computeDailyCap(i: DailyCapInput): number {
   return Math.max(1, Math.min(i.rampCount + Math.max(0, i.carry), ceiling));
 }
 
-/** 翌日の同じ時刻（JST）。7時より前なら 10:00 に寄せる（深夜に出さない） */
+/**
+ * 翌日の同じ時刻（JST）。7時より前なら 10:00 に寄せる（深夜に出さない）。
+ * ★時刻は予定していた時刻（その方の bestHours）をそのまま使う。日付だけを翌日にする。
+ *   公開が遅れたぶん時刻をずらすと、毎日少しずつ後ろへ流れて、いつもの時間帯から外れてしまう。
+ */
 export function nextDaySameTime(scheduledAt: Date | string | number, now: number = Date.now()): Date {
   const base = new Date(scheduledAt).getTime();
-  const src = Number.isFinite(base) ? Math.max(base, now) : now;
-  const d = new Date(src + JST);
-  const y = d.getUTCFullYear(), m = d.getUTCMonth(), day = d.getUTCDate();
-  let hour = d.getUTCHours(), minute = d.getUTCMinutes();
+  const valid = Number.isFinite(base);
+  // 日付は「予定日と今日の遅い方」の翌日（何日も前の予定でも過去に戻さない）
+  const dateSrc = new Date((valid ? Math.max(base, now) : now) + JST);
+  // 時刻は予定していた時刻（無効なら今の時刻）
+  const timeSrc = new Date((valid ? base : now) + JST);
+  let hour = timeSrc.getUTCHours(), minute = timeSrc.getUTCMinutes();
   if (hour < 7) { hour = 10; minute = 0; }
-  return new Date(Date.UTC(y, m, day + 1, hour, minute) - JST);
+  return new Date(Date.UTC(dateSrc.getUTCFullYear(), dateSrc.getUTCMonth(), dateSrc.getUTCDate() + 1, hour, minute) - JST);
 }
 
 /** YYYY-MM-DD → M月D日 */

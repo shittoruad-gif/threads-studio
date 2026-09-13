@@ -112,7 +112,15 @@ const PINNED_CHAR_BUDGET = 495;
  * @param accountId どのアカウント用に作るか。複数アカウント運用では呼び出し側で
  *   選んでもらってから渡す（省略時は1つ目＝単一アカウント運用向け）。
  */
-export async function createPinnedDraft(userId: number, accountId?: number | null): Promise<PinnedDraft | { error: string }> {
+/** 作れなかったときの返し。needMoreField があれば「あと2問」へご案内できる */
+export interface PinnedDraftError {
+  error: string;
+  /** 足りない項目（'targetRaw' | 'strengthRaw'）。ある場合は「あと2問だけ答える」ボタンを出す */
+  needMoreField?: string;
+  projectId?: string;
+}
+
+export async function createPinnedDraft(userId: number, accountId?: number | null): Promise<PinnedDraft | PinnedDraftError> {
   const accounts = (await db.getThreadsAccountsByUserId(userId).catch(() => [])) || [];
   const active = accounts.filter((a: any) => a.isActive !== false);
   if (active.length === 0) {
@@ -120,11 +128,26 @@ export async function createPinnedDraft(userId: number, accountId?: number | nul
   }
 
   const projects = (await db.getUserProjects(userId).catch(() => [])) || [];
-  const usable = projects.filter((p: any) =>
-    !String(p.id).startsWith("demo_") &&
+  const real = projects.filter((p: any) => !String(p.id).startsWith("demo_"));
+  const usable = real.filter((p: any) =>
     p.businessType && p.area && p.target && p.mainProblem && p.strength,
   );
   if (usable.length === 0) {
+    // ★「はじめの設定」を終えたばかりの方は、まず5つ（業種・場所・店名・お悩み）しか答えていない。
+    //   それなのに「まだお店の情報が登録されていない」「先にはじめの設定を」と返していたため、
+    //   たった今やり終えたことをもう一度やらされる形になっていた（2026-09-14 夜間整備の通し確認）。
+    //   足りないのが「お客さん像」と「強み」だけなら、そう言って、その2問へ直接ご案内する。
+    const started = real.find((p: any) => p.businessType && p.area && p.mainProblem);
+    if (started) {
+      const missing = [!started.target ? "お客さん像" : "", !started.strength ? "強み" : ""].filter(Boolean);
+      return {
+        error:
+          `固定投稿は、お店の「${missing.join("」と「")}」が分かると作れます（あと${missing.length}問・30秒ほど）。\n` +
+          "下の「あと2問だけ答える」からお答えください。答えたら、そのまま固定投稿を作れます。",
+        needMoreField: !started.target ? "targetRaw" : "strengthRaw",
+        projectId: String(started.id),
+      };
+    }
     return { error: "まだ「お店の情報」が登録されていないため、投稿を作れません。先に「はじめの設定」をお願いします。" };
   }
 

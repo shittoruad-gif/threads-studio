@@ -18,7 +18,7 @@ import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 import { contractSummary, type ContractInfo } from "../shared/contractSummary";
-import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement } from "../shared/requestKind";
+import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting } from "../shared/requestKind";
 import { missingAutoPostFields } from "../shared/autoPostRequirements";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
@@ -1703,7 +1703,12 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const { createPinnedDraft } = await import("./pinnedPostFlow");
     const res = await createPinnedDraft(user.id, q.a ? Number(q.a) : null);
     if ("error" in res) {
-      return [textWithQuick(res.error, MENU_HINT)];
+      // ★足りないのが「お客さん像」「強み」だけなら、その2問へ直接ご案内する
+      //   （「はじめの設定をやり直す」ではない。2026-09-14 夜間整備）
+      const more = (res as any).needMoreField && (res as any).projectId
+        ? [{ label: "あと2問だけ答える", data: `c=more&p=${(res as any).projectId}&f=${(res as any).needMoreField}` }]
+        : [];
+      return [textWithQuick(res.error, [...more, ...MENU_HINT])];
     }
     return [
       { type: "text", text: `固定投稿の案ができました（@${res.accountUsername} 用）。内容をご確認ください。` },
@@ -2904,7 +2909,8 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     )];
   }
   if (/(連携|つなぐ|つながらない|アカウントを追加|Threads)/i.test(t)) return handlePostback(lineUserId, "m=connect");
-  if (/(使い方|わからない|分からない|ヘルプ|help|教えて)/i.test(t)) return handlePostback(lineUserId, "m=help");
+  // ★ひらがなで「つかいかた」と送られると、どれにも当たらず受け皿に落ちていた（2026-09-14 夜間整備の通し確認）
+  if (/(使い方|使いかた|つかいかた|わからない|分からない|ヘルプ|help|教えて)/i.test(t)) return handlePostback(lineUserId, "m=help");
   if (/(投稿.{0,6}(来ない|されない|止ま)|動いてい?ない)/.test(t)) return handlePostback(lineUserId, "m=settings");
   if (/(はじめ|初期|最初).{0,4}(設定|登録)|お店の情報/.test(t)) return handlePostback(lineUserId, "m=setup");
 
@@ -2928,11 +2934,21 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     )];
   }
 
+  // ★お礼・あいさつだけの一言に「ご用件を下から選んでください」と返すのは、そっけない。
+  //   AIは呼ばない（お待たせしない）まま、短くお返しする（2026-09-14 夜間整備の通し確認で気づいた）。
+  if (isThanksOrGreeting(t)) {
+    return [textWithQuick(
+      "こちらこそ、ありがとうございます。\nご用のときは、下のメニューからいつでもどうぞ。",
+      MENU_HINT,
+    )];
+  }
+
   return [textWithQuick(
     "ご用件を下から選んでください。ご質問は文章のままお送りいただければ、こちらでお答えします。",
     [{ label: "担当者に聞く", data: "m=staff" }, ...MENU_HINT],
   )];
 }
+
 
 /**
  * 紹介コードらしい文字列か。

@@ -30,10 +30,16 @@ describe("翌日の同じ時刻へ送る", () => {
     const at = jst(2026, 9, 13, 2, 30);
     expect(asJst(nextDaySameTime(at, at))).toBe("2026-09-14T10:00:00.000Z");
   });
-  it("予定時刻が過去なら「今」を起点に翌日", () => {
+  // ★公開が遅れても時刻はずらさない（毎日少しずつ後ろへ流れて、いつもの時間帯から外れるのを防ぐ）
+  it("公開が遅れても、予定していた時刻のまま翌日", () => {
     const sched = jst(2026, 9, 13, 10, 17);
     const now = jst(2026, 9, 13, 14, 0);
-    expect(asJst(nextDaySameTime(sched, now))).toBe("2026-09-14T14:00:00.000Z");
+    expect(asJst(nextDaySameTime(sched, now))).toBe("2026-09-14T10:17:00.000Z");
+  });
+  it("何日も前の予定でも、過去に戻さず「明日」へ送る", () => {
+    const sched = jst(2026, 9, 10, 10, 17);
+    const now = jst(2026, 9, 13, 14, 0);
+    expect(asJst(nextDaySameTime(sched, now))).toBe("2026-09-14T10:17:00.000Z");
   });
 });
 

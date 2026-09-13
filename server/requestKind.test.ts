@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement } from "../shared/requestKind";
+import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting } from "../shared/requestKind";
 import { isFeatureRequest } from "../shared/requestDetect";
 
 /**
@@ -246,5 +246,22 @@ describe("お店のお知らせを受け取る（2026-09-13）", () => {
     const pasted =
       "秋のお休みのお知らせです。今週は木曜がお休みになります。".repeat(6);
     expect(looksLikeAnnouncement(pasted)).toBe(false);
+  });
+});
+
+describe("お礼・あいさつだけの一言（2026-09-14）", () => {
+  it("お礼・あいさつは、短くお返しする側に回す", () => {
+    for (const t of ["ありがとうございます", "ありがとうございました", "ありがとう！", "了解です", "承知しました",
+                     "わかりました", "おはようございます", "こんばんは", "お疲れ様です", "よろしくお願いします"]) {
+      expect(isThanksOrGreeting(t)).toBe(true);
+    }
+  });
+  it("お礼のあとにご用件が続くものは拾わない（ご用件が埋もれる）", () => {
+    expect(isThanksOrGreeting("ありがとうございます。ところで投稿はいつ届きますか？")).toBe(false);
+    expect(isThanksOrGreeting("ありがとうございます、明日は臨時休診です")).toBe(false);
+  });
+  it("ご質問・お知らせは拾わない", () => {
+    expect(isThanksOrGreeting("プロプランは1日何回ですか")).toBe(false);
+    expect(isThanksOrGreeting("明日は休診です")).toBe(false);
   });
 });

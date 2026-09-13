@@ -692,7 +692,9 @@ export async function promoteSoftApprovedDuePosts(): Promise<{ promoted: number;
       AND DATE(CONVERT_TZ(sp.createdAt,'+00:00','+09:00')) < DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
   const rows: any = await db.execute(sql`
     UPDATE scheduledPosts sp JOIN users u ON u.id = sp.userId
-    SET sp.status = 'pending', sp.approvedAt = NOW(), sp.approvedVia = 'auto_soft'
+    -- ★approvedAt は他の場所（LINE・画面）が new Date() で入れる UTC と揃える。
+    --   本番の MySQL は SYSTEM=UTC なので NOW() と同じだが、ローカルQA（JST）では9時間ずれるため明示する。
+    SET sp.status = 'pending', sp.approvedAt = UTC_TIMESTAMP(), sp.approvedVia = 'auto_soft'
     WHERE sp.status = 'awaiting_approval' AND u.autoPublishIfNoResponse = 1
       AND (sp.angle IS NULL OR sp.angle <> 'pinned') AND sp.scheduledAt <= NOW()
       AND DATE(CONVERT_TZ(sp.createdAt,'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);

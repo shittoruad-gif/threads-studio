@@ -71,7 +71,7 @@
 
 ---
 
-## 2026-09-13 未明にデプロイした分（翌朝に見ること）
+## 2026-09-14 朝に見ること（9/13＋9/14 未明の反映分）
 
 昼のうちにコミットだけしてあった4件（承認なし公開・ご案内先URLの判定・スパム判定の精度）と、
 夜間整備で直した5件をまとめて反映。
@@ -139,55 +139,16 @@
 
 ## 前の夜から残っている宿題
 
-### ★★ 2026-09-13 三上様決定「これら全てを今夜アップデートしてください」（7つのルール＋文言バグ）
+### ★★ 2026-09-13 三上様決定の7ルール（R1〜R8）— 2026-09-14 未明に反映ずみ
 
-決定済み。判断待ちは無い。下の順に実装し、テストを付け、`docs/safe-operation-rules.md` 追記 2026-09-13 と一致させる。
-5時までに終わらなければ、終わった分だけをデプロイし、残りを翌夜へ。
+日中にコミットしてあった実装を、ローカルQAのDBで1つずつ実際に動かして確かめたうえで反映した
+（`0087` 適用・`approvedAt`/`approvedVia`・`deletedShortfall` を実データで確認）。
+R1〜R8 はすべて済み。**翌朝に見ること**は下の「2026-09-14 朝に見ること」へ移した。
 
-**★9/13 日中に R1〜R8 のコードは実装・コミット済み（反映はしていない）。今夜やることは次の4つ。**
-1. `git log --oneline @{u}..HEAD` で日中のコミットを読む（台帳・ルール・R1〜R8 の実装・送信スクリプト）
-2. ローカルQA（port 3100）で `drizzle/0087_daily_cap_approval_record.sql` が当たること、`SHOW COLUMNS FROM scheduledPosts LIKE 'approved%'`、
-   `SHOW COLUMNS FROM threadsAccounts LIKE 'deletedShortfall'` を確認。LINE の a=ok / a=okall で approvedAt・approvedVia が入ることを `handlePostback` 直接呼びで確認
-3. `npx tsc --noEmit -p tsconfig.json`（9/13 日中：エラー0）と `npx vitest run`（9/13 日中：769件通過・失敗0、`server/dailyCap.test.ts` 10件を含む）が変わっていないこと
-4. デプロイ → 本番で 2 の SHOW COLUMNS → 翌 6:00 のログで `今日すでにN件（翌日へ送られた分など）` と `daily cap (` が出ているか、7:40 のまとめで案内OFFの岩根様にも announcements の段落が入る経路になっているか（9/14 はお知らせ無しなので空でよい）
-実装の要点（夜に読み直す用）：`shared/dailyCap.ts`（純関数・文言）／`server/dailyCapCheck.ts`（契約本数→上限）／`server/scheduledPostExecutor.ts`（全アカウント上限・翌日へ送る・R8文言）／
-`server/db.ts`（promoteSoftApprovedDuePosts＝全員見送り＋auto_soft 記録・countAccountAutoPostsPostedToday・deferTodaysAutoPostsBeyond・deletedShortfall・listUserIdsForAnnouncement）／
-`server/accountHealthJob.ts`（R5 定型文・R6 補填・当日の残りを1件に）／`server/morningDigestJob.ts`（R3 案内OFFにも・LINE未連携はメール）／
-`server/autoPostScheduler.ts`（翌日へ送られた分を先に数える・deleted 補填の消化）／`server/accountRampCheck.ts`（reason・deletedShortfall）／
-`server/lineChatHandler.ts`・`server/routers.ts`（approvedAt/approvedVia）。
-
-- [ ] **R1 全アカウントに1日の公開上限。** 上限＝契約本数＋補填分（手動 extraPosts と自動 carry の合計は MAX_EXTRA_PER_DAY=2 まで）。
-      `server/scheduledPostExecutor.ts` の ramp cap ブロックを「慣らし・冷却のときだけ」から「全アカウント」に広げる。
-      数えるのは自動投稿（source='auto'・自己返信/引用を除く）の当日公開済み。手動投稿は数えない（慣らし・冷却中だけ今までどおり Threads 実測で手動込み）。
-      超えた分は**見送りにせず翌日の枠へ送る**（scheduledAt を翌日の bestHours 先頭へ・status はそのまま）。翌日の生成は「翌日へ送られた分」を先に数えて新規を減らす。
-      ログ `[Scheduled Post] daily cap: account N today=X cap=Y → post ID moved to <日時>`。LINE通知は出さない（朝のまとめに「昨日の分を今日に回しました」1行）。
-- [ ] **R2 日をまたいだ承認待ちは全員見送り。** `db.promoteSoftApprovedDuePosts` の expire 条件から `u.autoPublishIfNoResponse = 1` を外す（OKした分だけ公開の方も同じ）。
-      固定投稿（angle='pinned'）は対象外のまま。見送り理由「承認されないまま日をまたいだため見送り（翌朝また新しい投稿が届きます）」。
-      香取様（21）の承認待ち5件はこれで整理される。翌朝の生成は残っている承認待ちを数えない（すべて見送り済みになるため）。
-- [ ] **R3 仕組みの変更のお知らせは案内OFFの方にも届ける。** `server/morningDigestJob.ts`：announcements の段落は `notifyEnabled`（案内OFF）に関係なく送る。
-      LINE未連携の方には同文をメール（`email_logs` に残す）。案内OFFで止めるのは「次にやること」「自動にしませんか」だけ。
-      9/13 のお知らせ未着の 岩根様（案内OFF）・小林様（LINE未連携）は 9/13 日中に手動送付済み → `lastAnnouncementKey` を `publish_unless_declined_2026-09-13` に更新して二重送信を防ぐ。
-- [ ] **R4 「今日から」のお知らせは反映確認後に送る（運用ルール・コードは shared/announcements.ts に sendOn の前提を注記）。**
-      `announcementForToday()` は `sendOn` が「デプロイ済みコミットの翌日以降」であることを前提にする旨をコメントに明記。
-      朝の点検 §2 に「Coolify デプロイ記録（GET /api/v1/deployments/applications/<uuid>）で反映を確認してから、お知らせが送られたかを見る」を追記。
-- [ ] **R5 投稿が消されたときの当日連絡を定型化＋冷却に入った日は残りの予定も1件に。**
-      `server/accountHealthJob.ts`：消失検知時の LINE 文面を 9/13 に髙木様へ送った文を型にする（承諾済み定型）。
-      「@X で公開した投稿のうちN件がThreads側で削除されていました。アカウントを守るため MM/DD まで自動投稿を1日1件に抑えます。減った分と消えたN件は、その翌日以降に1日1件ずつ足してお届けします。この期間、ご自身の手動投稿も1日1〜2件に留めてください。」
-      同時に、その日の残りの pending/awaiting（source='auto'）を1件だけ残して翌日以降へ送る（R1 の「翌日へ送る」を使う）。
-- [ ] **R6 消された投稿の補填キュー。** `threadsAccounts` に `deletedShortfall INT DEFAULT 0` を追加（新番号 0087）。
-      `accountHealthJob` が検知した消失件数を加算。冷却で減った分は既存の compensationCount（連携30日以内）が拾うが、30日を超えたアカウントは拾えないので、
-      冷却中に「契約−1」×日数を `deletedShortfall` に加算する。冷却明けから `rampForAccount` が `deletedShortfall > 0` のとき契約＋1件を返し、1件消化ごとに減らす。
-      髙木様（16）：冷却 9/13〜9/20（8日×2件）＋消失3件＝19件 → 9/21 から1日4件。しっとる公式（14）は自社なので補填しない（deletedShortfall を積まない例外＝userId 78）。
-- [ ] **R7 承認の記録。** `scheduledPosts` に `approvedAt TIMESTAMP NULL`・`approvedVia VARCHAR(20) NULL`（'line_one' / 'line_all' / 'web' / 'auto_soft' / 'web_edit'）を追加（0087 に同梱）。
-      書く場所：lineChatHandler `a=ok`・`a=okall`、routers `approve`・`editContent`、db `promoteSoftApprovedDuePosts`（auto_soft）。
-      管理画面の投稿一覧に「承認：9/13 18:13 LINE（1件）」を出す。
-- [ ] **R8 冷却中に止めたときの LINE 文言を直す（9/13 三上様指摘「連携1日目で慣らし運転中」）。**
-      `server/scheduledPostExecutor.ts` の ramp cap 通知：`rc.days === 0 && inCooldown(account)` のときは
-      「@X は投稿が消されたため MM/DD まで1日1件に抑えています（アカウントを守るため）。今日はすでに1件公開したので、この投稿は翌日に回しました。」
-      `server/accountRampCheck.ts` の冷却分岐は `days` を 0 でなく `-1` 等の「慣らしでない」印にするか、`reason: 'cooldown'` を返す。テストに 9/13 の acct14 の事例を入れる。
-- [ ] 上記を `docs/safe-operation-rules.md`「追記 2026-09-13」と一致させ、説明書（shittoru-service-docs / service-catalog manuals.json）の「1日の本数」「確認カード」の記述を合わせる。
-- [ ] デプロイ後の確認：`SHOW COLUMNS FROM scheduledPosts LIKE 'approved%'`／`SHOW COLUMNS FROM threadsAccounts LIKE 'deletedShortfall'`／
-      翌 6:00 の生成ログで「翌日へ送られた分」が数えられているか／7:40 の朝のまとめに案内OFFの方（岩根様）へ announcements が入るか（9/14 は新しいお知らせが無ければ空でよい）。
+夜のあいだに1か所だけ直した：`nextDaySameTime` が「翌日の同じ時刻」ではなく
+「公開が遅れた時刻の翌日」を返していた（10:00 の予定を 10:17 に処理すると翌日 10:17）。
+毎日少しずつ後ろへ流れて、その方の bestHours から外れるので、**時刻は予定どおり・日付だけ翌日**に直した
+（`shared/dailyCap.ts`／テスト2件追加）。
 
 ### 2026-09-13 追加（Moveact 両店の LINE 流入計測・Keiro）
 - [x] **Keiro（keiro-shittoru, Coolify uuid `x10e9syw5oydt9pqw6hqwiij`）を再デプロイする。**（9/14 00:09 済み・控え keiro-2026-09-13T15-07-01-789Z.db・合言葉ヘッダ付き転送で webhook_last_at 更新を確認） GitHub `shittoru-ad/keiro` は push 済み（webhook: KEIRO_FORWARD_TOKEN）。環境変数 `KEIRO_FORWARD_TOKEN` は Coolify に登録済み。
@@ -199,25 +160,25 @@
       6:00 生成後の「その日1件目のリンクコメント」がこのリンクで出ていることを確認（Keiro の clicks に `_threads` が増える）。
 
 ### ★最優先（2026-09-13 三上様「一日8件投稿やったらあかんやろ」）— 上の R1〜R8 に統合。以下は経緯の記録として残す
-- [ ] **1日の上限を全アカウントに掛ける。** いまは公開時の上限チェック（`server/scheduledPostExecutor.ts` の ramp cap）が
+- [x] **1日の上限を全アカウントに掛ける。** いまは公開時の上限チェック（`server/scheduledPostExecutor.ts` の ramp cap）が
       `rc.capped` のとき＝慣らし運転中か冷却中のアカウントにしか効かない。Threads歴の長いアカウントには上限が無く、
       9/12 に Moveact 10件・しっとる公式 8件・滝本様 8件・岩根様 8件が公開された（全体65件／平常38件前後）。
       契約本数＋補填分を上限とし、ご本人の手動投稿も数えて超えた分は公開せず見送る（翌日へ）。
-- [ ] **前日の未確認カードが翌日に残り、当日分と合わせて契約本数を超える枚数が同じ日に届く。** 岩根様 9/12：
+- [x] **前日の未確認カードが翌日に残り、当日分と合わせて契約本数を超える枚数が同じ日に届く。** 岩根様 9/12：
       9/11 の未確認4件＋9/12 の5件＝9件のカードが同日に届き、ご本人が夕方に8件を承認（追い投稿ゼロ・自動公開は未反映・
       8件ともご本人の操作）。生成時に「その日の予定＋残っている確認待ち」で本数を見る。
-- [ ] **消された投稿の補填が自動では積まれない。** 品質で落ちた枠（`shortfallCount`）は補填されるが、
+- [x] **消された投稿の補填が自動では積まれない。** 品質で落ちた枠（`shortfallCount`）は補填されるが、
       公開後に Threads 側で消された分は記録されない。`accountHealthJob` が検知した消失件数を補填キューに積み、
       **冷却明けから1日＋1件ずつ**返す。髙木様（@miraiseitai.diet・3件消失・9/20まで冷却）に文面で約束する内容。
-- [ ] **追い投稿は承認制でない方に承認なしで出ていた。** 滝本様（承認制なし・契約3件）は 9/4〜9/12 の8日間、
+- [x] **追い投稿は承認制でない方に承認なしで出ていた。** 滝本様（承認制なし・契約3件）は 9/4〜9/12 の8日間、
       毎日4〜8件（うち追い投稿1〜4件）。ご本人は3件のつもりで、実際はその倍。岩根様は 9/12 に8件（追い投稿0・繰り越し二重）。
       お客様への説明文は三上様承諾のうえ送付（文面は 9/13 朝の点検チャットに用意）。今後「契約本数の外で出るもの」は作らない。
-- [ ] **承認の記録が残っていない。** 「これで投稿する」「すべて承認」「見送りなし公開（自動）」のどれで公開に至ったかを
+- [x] **承認の記録が残っていない。** 「これで投稿する」「すべて承認」「見送りなし公開（自動）」のどれで公開に至ったかを
       `scheduledPosts` に残す（approvedAt / approvedVia）。9/13 三上様「この人は本当に前日に承認していますか？」に、
       editedByUserAt と公開時刻から推定するしかなかった（岩根様 9/12 の8件中2件は本人の押下か自動かを区別できない）。
-- [ ] 承認待ちが日をまたいで残っているとき、翌日の新規分と合わせた「その日の確認カード」が契約本数を超えないようにする
+- [x] 承認待ちが日をまたいで残っているとき、翌日の新規分と合わせた「その日の確認カード」が契約本数を超えないようにする
       （岩根様 9/12：前日分4件＋当日分5件＝9件のカードが同じ日に届き、夕方に8件承認→その晩にまとめて公開）
-- [ ] 冷却に入った日は、その日すでに作ってある予定も1日1件まで絞る（今朝 acct16 は3件作られた。
+- [x] 冷却に入った日は、その日すでに作ってある予定も1日1件まで絞る（今朝 acct16 は3件作られた。
       公開時の上限で2件はキャンセルされる見込みだが、承認カードだけ届いて公開されないのは分かりにくい）
 
 - [ ] `naturalnessReview` が短い定型（「土浦で11年。」）に3/5を付け続ける。採点基準と生成プロンプトの整合を見る
@@ -228,3 +189,42 @@
 - [ ] 手順書 `docs/runbook-quality-shortfall.md` と `scripts/ops/fill-shortfall.mts` を朝の点検 §2.7 で運用
 - [ ] 代理店：9/15（月）9:05 に `[AgencyReport] 代理店契約なし` が出る／9:30 の社内報告に「公式LINEの月間枠」
 - [ ] 資料台帳・Notionの代理店紹介資料の差し替え（ts-deck の pptx/pdf は再生成ずみ）
+
+---
+
+## 2026-09-14 未明の通し確認で見つけて直した分
+
+ローカルQA（port 3100）で、新しいお客様の目線でひととおり操作した結果。
+
+- [x] **「はじめの設定」を終えた直後に「固定投稿を作る」を押すと、たった今やり終えた設定を
+      もう一度やらされる形になっていた**。固定投稿は業種・場所・お客さん像・お悩み・強みの5つを
+      すべて要る作りなのに、「まず5つ」で埋まるのは業種・場所・お悩みの3つだけ。
+      そのため「まだ『お店の情報』が登録されていないため、投稿を作れません。先に『はじめの設定』を
+      お願いします」と返っていた（お店の情報は登録されているので、事実とも食い違う）。
+      足りないのが「お客さん像」「強み」だけのときは、そう言って**その2問へ直接ご案内する**ようにした
+      （`pinnedPostFlow.ts`・`server/pinnedNeedsMore.test.ts` 5件）。
+      ※必須条件そのものを減らすかは「判断待ち D」のまま。ここでは案内だけを直した。
+- [x] **「まず5つ」の4問目が「そのお客さんは、どんなことで困っていますか？」だった**。
+      お客さん像（targetRaw）は「まず5つ」では聞かないので、「その」が何を指すのか分からない。
+      「お店に来るお客さんは、…」に直した（説明書 threads-setup-manual.html の書き方と一致）。
+      `server/quickQuestions.test.ts` で、聞いていない質問を指す言い方が入らないように固定。
+- [x] **「ありがとうございます」に「ご用件を下から選んでください」と返していた**。
+      お礼・あいさつだけの短い一言は、AIを呼ばないまま短くお返しする（`isThanksOrGreeting`）。
+- [x] **ひらがなの「つかいかた」がどこにも当たらず、受け皿に落ちていた**（「使い方」は通る）。
+- [x] **承認の記録が画面に出ていなかった**（R7の残り）。投稿の履歴に
+      「承認: 2026/09/14 01:26 LINE（1件ずつ）」のように出す（`PostHistory.tsx`）。
+      line_one / line_all / auto_soft / web の4通りを実画面で確認。記録の無い古い投稿には出さない。
+
+### 確認できたこと（問題なし・2026-09-14）
+- 会員登録 → ログイン → 料金プラン → 「このまま無料で始める」／「7日間無料で試す」→ 決済ページ（checkout.gopay.jp）まで、
+  **ポップアップを遮断した状態でも同じタブで進める**。
+- 375px で主要22ページに、ページ全体の横スクロール・JSエラー・空表示なし。
+- LINEのボタン47種すべて応答あり（無反応・「うまく受け取れませんでした」ゼロ）。自由入力12種も的外れなし。
+- 「はじめの設定」は5問を最後まで通せ、確認画面 →「この内容で登録する」→ 次にやること まで正常。
+- `npx tsc --noEmit` エラー0／`npx vitest run` 782件通過・失敗0（9/13 の769件＋今夜の13件）。
+
+### QAスクリプトの直し（誤判定をなくした）
+- 375px のはみ出し判定を、要素ごとではなく**ページ全体が横スクロールするか**で見るようにした。
+  比較表のように `overflow-x:auto` の中で伸びているものは、はみ出しではない。
+- 会員登録の自動操作が、同意チェック（shadcn は `button[role="checkbox"]`。`input` は隠れている）を
+  押せておらず、**アプリ側の不具合のように見えていた**。実際には登録は通る。

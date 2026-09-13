@@ -164,6 +164,21 @@ export default function PostHistory() {
     });
   };
 
+  // ★どうやって公開に至ったかを投稿ごとに残す（2026-09-13 三上様「この人は本当に前日に承認していますか？」R7）。
+  //   これが無かったため、9/12 の8件が本人の操作か自動かを区別できなかった。
+  const approvedLabel = (post: any): string | null => {
+    if (!post?.approvedAt) return null;
+    const via: Record<string, string> = {
+      line_one: 'LINE（1件ずつ）',
+      line_all: 'LINE（すべて承認）',
+      web: 'この画面',
+      auto_soft: '見送りが無かったため自動',
+      web_edit: 'この画面（編集して承認）',
+    };
+    const how = via[String(post.approvedVia || '')] || 'その他';
+    return `${t('承認')}: ${formatDate(post.approvedAt)}　${how}`;
+  };
+
   // キーワード検索（本文の部分一致。過去投稿の再利用・重複チェックに使う）
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -446,6 +461,12 @@ export default function PostHistory() {
                             {post.postedAt && (
                               <p className="text-xs text-green-600">
                                 {t('投稿完了:')} {formatDate(post.postedAt)}
+                              </p>
+                            )}
+
+                            {approvedLabel(post) && (
+                              <p className="text-xs text-muted-foreground">
+                                {approvedLabel(post)}
                               </p>
                             )}
 
