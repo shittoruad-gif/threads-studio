@@ -139,7 +139,45 @@
 
 ## 前の夜から残っている宿題
 
-### ★最優先（2026-09-13 三上様「一日8件投稿やったらあかんやろ」）
+### ★★ 2026-09-13 三上様決定「これら全てを今夜アップデートしてください」（7つのルール＋文言バグ）
+
+決定済み。判断待ちは無い。下の順に実装し、テストを付け、`docs/safe-operation-rules.md` 追記 2026-09-13 と一致させる。
+5時までに終わらなければ、終わった分だけをデプロイし、残りを翌夜へ。
+
+- [ ] **R1 全アカウントに1日の公開上限。** 上限＝契約本数＋補填分（手動 extraPosts と自動 carry の合計は MAX_EXTRA_PER_DAY=2 まで）。
+      `server/scheduledPostExecutor.ts` の ramp cap ブロックを「慣らし・冷却のときだけ」から「全アカウント」に広げる。
+      数えるのは自動投稿（source='auto'・自己返信/引用を除く）の当日公開済み。手動投稿は数えない（慣らし・冷却中だけ今までどおり Threads 実測で手動込み）。
+      超えた分は**見送りにせず翌日の枠へ送る**（scheduledAt を翌日の bestHours 先頭へ・status はそのまま）。翌日の生成は「翌日へ送られた分」を先に数えて新規を減らす。
+      ログ `[Scheduled Post] daily cap: account N today=X cap=Y → post ID moved to <日時>`。LINE通知は出さない（朝のまとめに「昨日の分を今日に回しました」1行）。
+- [ ] **R2 日をまたいだ承認待ちは全員見送り。** `db.promoteSoftApprovedDuePosts` の expire 条件から `u.autoPublishIfNoResponse = 1` を外す（OKした分だけ公開の方も同じ）。
+      固定投稿（angle='pinned'）は対象外のまま。見送り理由「承認されないまま日をまたいだため見送り（翌朝また新しい投稿が届きます）」。
+      香取様（21）の承認待ち5件はこれで整理される。翌朝の生成は残っている承認待ちを数えない（すべて見送り済みになるため）。
+- [ ] **R3 仕組みの変更のお知らせは案内OFFの方にも届ける。** `server/morningDigestJob.ts`：announcements の段落は `notifyEnabled`（案内OFF）に関係なく送る。
+      LINE未連携の方には同文をメール（`email_logs` に残す）。案内OFFで止めるのは「次にやること」「自動にしませんか」だけ。
+      9/13 のお知らせ未着の 岩根様（案内OFF）・小林様（LINE未連携）は 9/13 日中に手動送付済み → `lastAnnouncementKey` を `publish_unless_declined_2026-09-13` に更新して二重送信を防ぐ。
+- [ ] **R4 「今日から」のお知らせは反映確認後に送る（運用ルール・コードは shared/announcements.ts に sendOn の前提を注記）。**
+      `announcementForToday()` は `sendOn` が「デプロイ済みコミットの翌日以降」であることを前提にする旨をコメントに明記。
+      朝の点検 §2 に「Coolify デプロイ記録（GET /api/v1/deployments/applications/<uuid>）で反映を確認してから、お知らせが送られたかを見る」を追記。
+- [ ] **R5 投稿が消されたときの当日連絡を定型化＋冷却に入った日は残りの予定も1件に。**
+      `server/accountHealthJob.ts`：消失検知時の LINE 文面を 9/13 に髙木様へ送った文を型にする（承諾済み定型）。
+      「@X で公開した投稿のうちN件がThreads側で削除されていました。アカウントを守るため MM/DD まで自動投稿を1日1件に抑えます。減った分と消えたN件は、その翌日以降に1日1件ずつ足してお届けします。この期間、ご自身の手動投稿も1日1〜2件に留めてください。」
+      同時に、その日の残りの pending/awaiting（source='auto'）を1件だけ残して翌日以降へ送る（R1 の「翌日へ送る」を使う）。
+- [ ] **R6 消された投稿の補填キュー。** `threadsAccounts` に `deletedShortfall INT DEFAULT 0` を追加（新番号 0087）。
+      `accountHealthJob` が検知した消失件数を加算。冷却で減った分は既存の compensationCount（連携30日以内）が拾うが、30日を超えたアカウントは拾えないので、
+      冷却中に「契約−1」×日数を `deletedShortfall` に加算する。冷却明けから `rampForAccount` が `deletedShortfall > 0` のとき契約＋1件を返し、1件消化ごとに減らす。
+      髙木様（16）：冷却 9/13〜9/20（8日×2件）＋消失3件＝19件 → 9/21 から1日4件。しっとる公式（14）は自社なので補填しない（deletedShortfall を積まない例外＝userId 78）。
+- [ ] **R7 承認の記録。** `scheduledPosts` に `approvedAt TIMESTAMP NULL`・`approvedVia VARCHAR(20) NULL`（'line_one' / 'line_all' / 'web' / 'auto_soft' / 'web_edit'）を追加（0087 に同梱）。
+      書く場所：lineChatHandler `a=ok`・`a=okall`、routers `approve`・`editContent`、db `promoteSoftApprovedDuePosts`（auto_soft）。
+      管理画面の投稿一覧に「承認：9/13 18:13 LINE（1件）」を出す。
+- [ ] **R8 冷却中に止めたときの LINE 文言を直す（9/13 三上様指摘「連携1日目で慣らし運転中」）。**
+      `server/scheduledPostExecutor.ts` の ramp cap 通知：`rc.days === 0 && inCooldown(account)` のときは
+      「@X は投稿が消されたため MM/DD まで1日1件に抑えています（アカウントを守るため）。今日はすでに1件公開したので、この投稿は翌日に回しました。」
+      `server/accountRampCheck.ts` の冷却分岐は `days` を 0 でなく `-1` 等の「慣らしでない」印にするか、`reason: 'cooldown'` を返す。テストに 9/13 の acct14 の事例を入れる。
+- [ ] 上記を `docs/safe-operation-rules.md`「追記 2026-09-13」と一致させ、説明書（shittoru-service-docs / service-catalog manuals.json）の「1日の本数」「確認カード」の記述を合わせる。
+- [ ] デプロイ後の確認：`SHOW COLUMNS FROM scheduledPosts LIKE 'approved%'`／`SHOW COLUMNS FROM threadsAccounts LIKE 'deletedShortfall'`／
+      翌 6:00 の生成ログで「翌日へ送られた分」が数えられているか／7:40 の朝のまとめに案内OFFの方（岩根様）へ announcements が入るか（9/14 は新しいお知らせが無ければ空でよい）。
+
+### ★最優先（2026-09-13 三上様「一日8件投稿やったらあかんやろ」）— 上の R1〜R8 に統合。以下は経緯の記録として残す
 - [ ] **1日の上限を全アカウントに掛ける。** いまは公開時の上限チェック（`server/scheduledPostExecutor.ts` の ramp cap）が
       `rc.capped` のとき＝慣らし運転中か冷却中のアカウントにしか効かない。Threads歴の長いアカウントには上限が無く、
       9/12 に Moveact 10件・しっとる公式 8件・滝本様 8件・岩根様 8件が公開された（全体65件／平常38件前後）。
