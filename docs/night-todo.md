@@ -177,6 +177,15 @@
 - [ ] デプロイ後の確認：`SHOW COLUMNS FROM scheduledPosts LIKE 'approved%'`／`SHOW COLUMNS FROM threadsAccounts LIKE 'deletedShortfall'`／
       翌 6:00 の生成ログで「翌日へ送られた分」が数えられているか／7:40 の朝のまとめに案内OFFの方（岩根様）へ announcements が入るか（9/14 は新しいお知らせが無ければ空でよい）。
 
+### 2026-09-13 追加（Moveact 両店の LINE 流入計測・Keiro）
+- [ ] **Keiro（keiro-shittoru, Coolify uuid `x10e9syw5oydt9pqw6hqwiij`）を再デプロイする。** GitHub `shittoru-ad/keiro` は push 済み（webhook: KEIRO_FORWARD_TOKEN）。環境変数 `KEIRO_FORWARD_TOKEN` は Coolify に登録済み。
+      VPS で `curl -H "Authorization: Bearer $(cat ~/.claude/secrets/coolify.token)" 'http://localhost:8000/api/v1/deploy?uuid=x10e9syw5oydt9pqw6hqwiij&force=true'`（トークンはローカルの secrets から渡す。VPS上に書かない）。
+      デプロイ後の確認：`https://keiro.s-toru.com/` と `https://line.moveact.net/` が 200／コンテナログに `webhook received before channel secret is set` が **出なくなる**／
+      Keiro DB `follows` の tenant `tnt_dbf11acd3ef4461b8157a21f`（玉島）`tnt_f990e5ee575ee176cbcde760`（金光）に翌日以降 1 件でも入る。
+      デプロイ前に `docker exec <keiro> node scripts/backup.js` で控えを取る。
+- [ ] 翌朝の点検で、Threads Studio の Moveact 2プロジェクトの `ctaLink` が `lnk_ma_tama_threads` / `lnk_ma_konko_threads` になっていること、
+      6:00 生成後の「その日1件目のリンクコメント」がこのリンクで出ていることを確認（Keiro の clicks に `_threads` が増える）。
+
 ### ★最優先（2026-09-13 三上様「一日8件投稿やったらあかんやろ」）— 上の R1〜R8 に統合。以下は経緯の記録として残す
 - [ ] **1日の上限を全アカウントに掛ける。** いまは公開時の上限チェック（`server/scheduledPostExecutor.ts` の ramp cap）が
       `rc.capped` のとき＝慣らし運転中か冷却中のアカウントにしか効かない。Threads歴の長いアカウントには上限が無く、
