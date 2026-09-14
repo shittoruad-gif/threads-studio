@@ -717,17 +717,22 @@ function unansweredQuestions(project: any): Array<{ index: number; id: string }>
 function askQuestion(st: CounselingState): unknown[] {
   const qs = questionsFor(st.mode, st.answers, st.quick);
   const q: any = qs[st.step];
-  const total = qs.length;
+  // ★「まず5つ」のときは、先に聞くURLを1問目として数える（2026-09-15）。
+  //   URLの画面だけ「【1／5】」と書いてあり、その次から「【1／4】」に戻っていたので、
+  //   数が減って見えていた（1／5 → 1／4 → 2／4 …）。URLを1つ目として 2／5 から続ける。
+  const urlStep = st.quick ? 1 : 0;
+  const total = qs.length + urlStep;
+  const current = st.step + 1 + urlStep;
   const editing = st.editing !== null && st.editing !== undefined;
   const who = st.accountName ? `${st.accountName} の設定　` : "";
   // ★「きょうの1問」で聞くときは「4／20」を出さない（2026-09-11）。
   //   最初に「5つだけ」とお伝えしてあるので、20問の進み具合を見せると
   //   「5問に直したのに20問と案内される」（9/10 三上様のご指摘）と同じ受け取りになる。
   const head = editing
-    ? `【${who}${st.step + 1}問目を直します】\n${q.prompt}`
+    ? `【${who}${current}問目を直します】\n${q.prompt}`
     : st.moreOne
       ? `【${who}きょうの1問】\n${q.prompt}`
-      : `【${who}${st.step + 1}／${total}】\n${q.prompt}`;
+      : `【${who}${current}／${total}】\n${q.prompt}`;
   const hint = q.helper ? `\n\n${q.helper}` : "";
   // ★例文を必ず出す。アプリ側には出ていたがLINEでは出ておらず、
   //   「どう答えたらいいか分からない」と手が止まる原因になっていた（2026-09-06 津の国や様）。

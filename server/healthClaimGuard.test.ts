@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { checkHealthClaims, isHealthBusiness } from "../shared/healthClaimGuard";
+import { checkHealthClaims, isHealthBusiness, healthClaimRetryHint } from "../shared/healthClaimGuard";
+import { findFabricatedNumbers, fabricatedNumberRetryHint } from "../shared/fabricatedNumberGuard";
 import { rampCap, compensationCount, manualExtraPosts, carryOverCount, inCooldown } from "../shared/accountRamp";
 
 describe("健康系の断定ガード", () => {
@@ -130,5 +131,37 @@ describe("不妊・妊娠を施術の結果として語らせない（2026-09-09
     expect(inCooldown({ cooldownUntil: "2026-09-19" }, "2026-09-19")).toBe(true);
     expect(inCooldown({ cooldownUntil: "2026-09-19" }, "2026-09-20")).toBe(false);
     expect(inCooldown({ cooldownUntil: null }, "2026-09-12")).toBe(false);
+  });
+});
+
+describe("止めた理由を作り直しへ渡す（2026-09-15）", () => {
+  // 2026-09-14 の本番ログ：userId=2907 が「短時間で楽になる約束」で24時間に5回落ち、
+  // 「本文が短くなりすぎたため公開しない」で3枠が消えていた。理由を次の回に渡していなかったため。
+  it("健康ガード：引っかかった型の名前を、次に避けるべきものとして渡す", () => {
+    const v = checkHealthClaims("たった3分で肩こりが楽になります。\n毎日の腰痛の悩みから解放されますよ。");
+    expect(v.ok).toBe(false);
+    const hint = healthClaimRetryHint(v.hits, "many");
+    expect(hint).toContain("短時間で楽になる約束");
+    expect(hint).toContain("言い切らない");
+    expect(hint.startsWith("- ")).toBe(true);
+  });
+  it("健康ガード：短くなりすぎた場合は、書き直しの向きまで伝える", () => {
+    const hint = healthClaimRetryHint(["痛みの消失"], "short");
+    expect(hint).toContain("痛みの消失");
+    expect(hint).toContain("本文が残らない");
+  });
+  it("健康ガード：型名が取れなくても空のヒントにはしない", () => {
+    expect(healthClaimRetryHint([], "many")).toContain("健康の断定");
+  });
+  it("数字ガード：登録に無い数字をそのまま名指しで渡す", () => {
+    // 2026-09-14 本番：userId=2768「9割」／userId=3200「3万人」
+    const fab = findFabricatedNumbers("SNS投稿が続かない人は9割です。", "開業11年／のべ20万人以上");
+    expect(fab.map((f) => f.text).join()).toContain("9割");
+    const hint = fabricatedNumberRetryHint(fab);
+    expect(hint).toContain("9割");
+    expect(hint).toContain("はじめの設定");
+  });
+  it("数字ガード：登録にある数字は止めないので、ヒントも作られない", () => {
+    expect(findFabricatedNumbers("のべ20万人以上を診てきました。", "開業11年／のべ20万人以上")).toEqual([]);
   });
 });

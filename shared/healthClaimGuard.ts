@@ -132,3 +132,22 @@ export function checkHealthClaims(text: string, opts: { allowPrice?: boolean } =
     .trim();
   return { ok: hits.length === 0, hits, text: out, priceMentions: prices.length };
 }
+
+/**
+ * 作り直しのときに生成側へ渡す理由（2026-09-15）。
+ *
+ * このガードは引っかかると公開せず作り直すが、**理由を次の回に渡していなかった**ため、
+ * 同じ言い回しが何度も作られていた（9/14 の本番ログで userId=2907 が「短時間で楽になる約束」で
+ * 24時間に5回・「本文が短くなりすぎたため公開しない」で3枠が消えている）。
+ * ガードは緩めず、生成側に「何が止まったか」を伝えて避けさせる。
+ *
+ * @param reason many=引っかかりが2か所以上 / short=和らげたら本文が短くなりすぎた
+ */
+export function healthClaimRetryHint(hits: string[], reason: "many" | "short"): string {
+  const labels = hits.filter(Boolean).join("／") || "健康の断定";
+  const head = `- 健康の断定・体験談として止まる書き方（${labels}）が入っている。`;
+  const body = reason === "short"
+    ? "その部分を消すと本文が残らないので、効果や結果を軸にせず、施術で何をするか・どんな場面の方に向くかで一本書く。"
+    : "効果・結果・変化を言い切らない。施術で何をするか、どんな場面の方に向くかで書く。";
+  return `${head}${body}`;
+}

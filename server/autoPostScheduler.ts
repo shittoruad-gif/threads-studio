@@ -832,7 +832,7 @@ async function generateAutoPost(
     //   2026-09-06 停止されたアカウントの投稿に「杖なしで歩ける」「痛みなく」「初回1980円」が並んでいた。
     //   言い換え表で機械的に和らげ、価格は1文ごと落とす。空になったら公開しない。
     try {
-      const { checkHealthClaims, isHealthBusiness } = await import('../shared/healthClaimGuard');
+      const { checkHealthClaims, isHealthBusiness, healthClaimRetryHint } = await import('../shared/healthClaimGuard');
       if (isHealthBusiness(project.businessType)) {
         const v = checkHealthClaims(naturalMain, { allowPrice: false });
         if (!v.ok) {
@@ -841,8 +841,20 @@ async function generateAutoPost(
           //   繕って出すより作り直すほうが安全なので、その日は公開しない（翌朝また作られる）。
           //   2026-09-08 @haisaiseikotsuin：公開3件がThreads側で消され、承認待ちの1件も
           //   「症状から解放」「眠りが変わった」「睡眠の質の向上」の3か所が引っかかっていた。
-          if (v.hits.length >= 2) { console.warn('[AutoPost] healthClaimGuard: 引っかかりが多いため公開しない'); return false; }
-          if (Array.from(v.text).length < 60) { console.warn('[AutoPost] healthClaimGuard: 本文が短くなりすぎたため公開しない'); return false; }
+          // ★2026-09-15：止めた理由を次の作り直しへ渡す。渡していなかったので同じ言い回しが
+          //   何度も作られ、userId=2907 は24時間で「短時間で楽になる約束」に5回・
+          //   「本文が短くなりすぎた」で3枠を落としていた。ガードは緩めない。
+          const hcKey = rejectKey(userId, threadsAccountId, postingTimeIndex);
+          if (v.hits.length >= 2) {
+            console.warn(`[AutoPost] healthClaimGuard: 引っかかりが多いため公開しない userId=${userId}`);
+            lastRejectReason.set(hcKey, healthClaimRetryHint(v.hits, 'many'));
+            return false;
+          }
+          if (Array.from(v.text).length < 60) {
+            console.warn(`[AutoPost] healthClaimGuard: 本文が短くなりすぎたため公開しない userId=${userId}`);
+            lastRejectReason.set(hcKey, healthClaimRetryHint(v.hits, 'short'));
+            return false;
+          }
           naturalMain = v.text;
         }
       }
@@ -853,10 +865,12 @@ async function generateAutoPost(
     //   「開業11年・業界歴20年・のべ20万人以上」だけで、根拠の無い数字だった。
     //   「書いていない数字をAIが作らない」はお客様へのお約束なので、機械的に止める。
     try {
-      const { findFabricatedNumbers, registeredFactsOf } = await import('../shared/fabricatedNumberGuard');
+      const { findFabricatedNumbers, registeredFactsOf, fabricatedNumberRetryHint } = await import('../shared/fabricatedNumberGuard');
       const fab = findFabricatedNumbers(naturalMain, registeredFactsOf(project));
       if (fab.length > 0) {
         console.warn(`[AutoPost] fabricatedNumberGuard: 登録に無い数字 ${fab.map((x) => x.text).join('・')} のため公開しない userId=${userId} projectId=${project.id}`);
+        // ★2026-09-15：健康ガードと同じく、止めた理由を次の作り直しへ渡す。
+        lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex), fabricatedNumberRetryHint(fab));
         return false;
       }
     } catch { /* ガード失敗時はそのまま */ }

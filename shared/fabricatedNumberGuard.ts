@@ -60,3 +60,12 @@ export function registeredFactsOf(project: {
     project.area, project.n1Customer, project.catchphrase, project.customerWords]
     .filter(Boolean).join("\n");
 }
+
+/**
+ * 作り直しのときに生成側へ渡す理由（2026-09-15）。
+ * このガードも `healthClaimRetryHint` と同じく、止めた理由を次の回に渡していなかった。
+ */
+export function fabricatedNumberRetryHint(found: FabricatedNumber[]): string {
+  const words = found.map((f) => f.text).filter(Boolean).join("・") || "登録に無い数字";
+  return `- 登録に無い数字「${words}」を書いている。割合・順位・人数は、はじめの設定に書かれている実績の数字だけを使う。無いなら数字を出さずに書く。`;
+}
