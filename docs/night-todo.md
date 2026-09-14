@@ -294,3 +294,43 @@ account 16 は連携 2026-09-01（30日以内は 10/1 まで）なので、9/13 
   比較表のように `overflow-x:auto` の中で伸びているものは、はみ出しではない。
 - 会員登録の自動操作が、同意チェック（shadcn は `button[role="checkbox"]`。`input` は隠れている）を
   押せておらず、**アプリ側の不具合のように見えていた**。実際には登録は通る。
+
+---
+
+## 2026-09-14 追加（Keiro の決済通知が未接続＝最優先・期限あり）
+
+**背景**：UnivaPay の通知の送り先に `keiro.s-toru.com` が登録されておらず、Keiro は一度も決済通知を
+受け取っていない（`payments` 0件）。そのため **初の外部有料契約（洋菓子の店モンテローザ様・
+岡田祐一様 `monteroza966@gmail.com`・プロ月9,800円・初回課金 2026-10-13）が Keiro の DB に存在しない**。
+モンテローザ様の `trial_ends_at` も 2026-10-13 なので、**このままだと課金と同じ日に無料期間が切れて計測が止まる**。
+たきもと様は 2026-10-08 に無料期間満了。
+
+**コードは反映待ち**（`shittoruad-gif/keiro` main の `a506b77` と `ec6c527`。selftest 92件PASS）。
+`keiro-shittoru` は自動反映の対象外なので、**手動デプロイが要る**。
+
+- [ ] **1. 控えを取る**：`docker exec x10e9syw5oydt9pqw6hqwiij-… node scripts/backup.js`
+- [ ] **2. keiro-shittoru を手動デプロイ**（Coolify uuid `x10e9syw5oydt9pqw6hqwiij`）。
+      ⚠️ 同じリポジトリから `keiro`（uuid `fstao1mijd4hgpu67j7yx7xv` = keiro.moveact.net）も動いている。
+      **今夜は keiro-shittoru だけを反映する**（Moveact 側は金曜の会議の範囲）。
+      反映後：`https://keiro.s-toru.com/` が 200／ログに `決済リンクIDを解決しました count=5` が出ること。
+- [ ] **3. 通知の送り先を登録**：`docker exec <keiro-shittoru> node scripts/ensure-webhook.js` で
+      「未登録」を確認 → `node scripts/ensure-webhook.js --apply` で登録 → 一覧が3本になることを確認。
+- [ ] **4. 取りこぼしを拾う**：`node -e` で `reconcile.adoptOrphanSubscriptions(db)` を1回流す
+      （日次でも走るが、今夜のうちに確定させる）。
+      **拾うのはモンテローザ様1件だけが正しい**（本番で予行演習済み・DBは未変更）。
+      でみず様の交通事故4件（16,500円・660,000円×3）は「除外・他事業」になること、
+      でみず様のテナントが `suspended` のままであることを必ず確認する。
+- [ ] **5. 確認**：Keiro の `subscriptions` にモンテローザ様の行（status=active・初回請求 2026-10-13）が入り、
+      運営画面で「ご契約あり」になること。
+
+**なぜ登録だけでは駄目だったか（先に直した理由）**
+- UnivaPay のストアは全事業で共用（Threads Studio・交通事故・Instagram広告・Keiro）。
+  通知の送り先はストア単位でしか設定できないので、登録すると **125件すべての決済通知が Keiro にも届く**。
+  直す前の実装は「知らないメールアドレスの決済」ごとに運営へメールを出すため、**月末（9/30）に100通を超える**。
+- さらに、**メール一致だけでは商品を見分けられない**。でみず鍼灸整骨院の出水様は Keiro のテナントかつ
+  交通事故のお客様で、交通事故の入金で停止中のテナントが復活してしまう。
+  → 決済リンクID（`UNIVAPAY_LINK_URL_*` の5本）で見分けるようにした。
+
+**残る判断（三上様）**：たきもと鍼灸整骨院様の枠は `shittoru.ad+takimoto@gmail.com`（しっとるのメール）で
+作られているため、滝本様ご本人のカードでは紐づかない。「しっとるが持つ」のか「院にご契約いただく」のか。
+無料期間は 2026-10-08 まで。
