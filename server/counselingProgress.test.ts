@@ -53,3 +53,25 @@ describe("はじめの設定の進み具合", () => {
     expect(typeof handler.handleFreeText).toBe("function");
   });
 });
+
+describe("自動応答の知識が、はじめの設定の実物と合っている（2026-09-15）", () => {
+  // アプリの画面（/ai-counseling）は 2026-09-10 から公式LINEと同じ4問に揃っているのに、
+  // 知識だけ「アプリから登録する場合は従来どおり全20問です」のままだった。
+  // お客様に「20問あります」とご案内してしまうと、実物より重く見えて手が止まる。
+  it("アプリの画面が20問だとは書かない", async () => {
+    const { productKnowledge } = await import("../shared/productKnowledge");
+    const k = productKnowledge();
+    expect(k).not.toMatch(/アプリの画面（\/ai-counseling）から登録する場合は、従来どおり全20問/);
+    expect(k).toContain("アプリの画面（/ai-counseling）から登録する場合も同じ4問");
+  });
+
+  it("公式LINEの進み具合（1／5〜5／5）が書いてある", async () => {
+    const { productKnowledge } = await import("../shared/productKnowledge");
+    expect(productKnowledge()).toContain("「1／5」から「5／5」");
+  });
+
+  it("やり直しのときだけ全20問、と分かる", async () => {
+    const { productKnowledge } = await import("../shared/productKnowledge");
+    expect(productKnowledge()).toMatch(/やり直すときだけ、全20問/);
+  });
+});
