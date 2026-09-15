@@ -573,6 +573,14 @@ interface CounselingState {
   quick?: boolean;
   /** 「1日1問」で1問だけ答えて保存する途中（答えたら確認画面を出さずに保存して終わる） */
   moreOne?: boolean;
+  /**
+   * ★自動投稿に足りない必須項目（お客さん像・強み）を埋めている途中（2026-09-16）。
+   *   「次にやること」で「あと2問にお答えください」と案内しておきながら、
+   *   1問答えると `moreOne` でその場で終わっていた。お客様が続けて2問目を送っても
+   *   はじめの設定の続きとして受け取られず、自動応答の的外れな返事になって答えが消えていた
+   *   （2026-09-16 未明の通し確認で再現）。必須が残っているあいだは続けて聞く。
+   */
+  gating?: boolean;
   /** 確認画面から1問だけ直しているとき、その質問番号（0始まり）。直し終えたら確認画面へ戻る。 */
   editing?: number | null;
   /** どのThreadsアカウントの設定か（複数運用時。1つだけなら未設定） */
@@ -977,6 +985,46 @@ async function advanceCounseling(userId: number, lineUserId: string, st: Counsel
     if (!res.ok) return [textWithQuick("保存に失敗しました。時間をおいてもう一度お試しください。", MENU_HINT)];
     const pj: any = await db.getProjectById(st.projectId).catch(() => null);
     const remaining = pj ? unansweredQuestions(pj).length : 0;
+    // ★自動投稿に足りない必須項目を埋めている途中なら、続けて次の1問を聞く（2026-09-16）。
+    //   「あと2問にお答えください」と案内しておきながら1問で終わっていたため、
+    //   続けて送られた2問目が自動応答に流れ、お答えがそのまま消えていた。
+    if (st.gating && pj) {
+      const { missingRequired } = await import("./nextAction");
+      const required = missingRequired(pj);
+      let raw: Record<string, string> = {};
+      try { raw = JSON.parse(pj.counselingResult || "{}")?.rawAnswers ?? {}; } catch { raw = {}; }
+      for (const [k, v] of Object.entries({ businessTypeRaw: pj.businessType, areaRaw: pj.area, storeNameRaw: pj.storeName, targetRaw: pj.target, mainProblemRaw: pj.mainProblem, strengthRaw: pj.strength, uspRaw: pj.usp })) {
+        if (!raw[k] && v) raw[k] = String(v);
+      }
+      const missing = unansweredQuestions(pj);
+      let next: { index: number; id: string } | null = null;
+      if (required.length > 0) {
+        const wanted = required[0].questionId;
+        next = missing.find((m) => m.id === wanted) ?? null;
+        if (!next) {
+          // 列は空なのに、はじめの設定の答えだけ残っている場合も、その項目をそのまま聞く
+          const all = questionsFor(st.mode, raw);
+          const at = all.findIndex((x: any) => String(x.id) === wanted);
+          if (at >= 0) next = { index: at, id: wanted };
+        }
+      }
+      if (next) {
+        const nextSt: CounselingState = {
+          mode: st.mode, step: next.index, answers: raw, projectId: String(pj.id),
+          accountId: null, accountName: null, moreOne: true, gating: true,
+        };
+        await db.setLineChatState(lineUserId, "counseling", JSON.stringify(nextSt));
+        return [
+          { type: "text", text: `ありがとうございます。あと${required.length}問です（${required.map((r) => r.label).join("・")}）。` },
+          ...askQuestion(nextSt),
+        ];
+      }
+      return [textWithQuick(
+        "ありがとうございます。これで自動投稿の準備がそろいました。\n" +
+        "明日の朝から、お店の情報をもとにした投稿が届きます。",
+        [{ label: "次にやること", data: "m=next" }, ...MENU_HINT],
+      )];
+    }
     return [textWithQuick(
       `ありがとうございます。1問追加しました${remaining > 0 ? `（残り ${remaining} 問）` : "（これで全部そろいました）"}。\n` +
       "答えが増えるほど、投稿がお店らしくなります。明日の投稿から反映されます。",
@@ -2204,24 +2252,43 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     // ★どの項目を聞くか指定されていれば、そこから聞く（2026-09-11）。
     //   「次にやること」が「強みだけ空いています」と案内したのに、
     //   別の質問から始まると、聞かれていることと案内が食い違う。
-    if (q.f) {
-      const i = missing.findIndex((m) => m.id === String(q.f));
-      if (i > 0) missing.unshift(...missing.splice(i, 1));
-    }
+    //   ★2026-09-16：指定された項目が「未回答の質問」に入っていないことがある
+    //   （列は空なのに、はじめの設定の答えだけ残っている場合）。そのときも
+    //   **指定された項目をそのまま聞く**（「あと2問です（お客さん像・強み）」と案内して
+    //   口調を聞く、のような食い違いを作らない）。
     let raw: Record<string, string> = {};
     try { raw = JSON.parse(pj.counselingResult || "{}")?.rawAnswers ?? {}; } catch { raw = {}; }
     // 列の値も答えとして持たせる（アプリ側で直した分を消さないため）
     for (const [k, v] of Object.entries({ businessTypeRaw: pj.businessType, areaRaw: pj.area, storeNameRaw: pj.storeName, targetRaw: pj.target, mainProblemRaw: pj.mainProblem, strengthRaw: pj.strength, uspRaw: pj.usp })) {
       if (!raw[k] && v) raw[k] = String(v);
     }
+    if (q.f) {
+      const i = missing.findIndex((m) => m.id === String(q.f));
+      if (i > 0) missing.unshift(...missing.splice(i, 1));
+      if (i < 0) {
+        const all = questionsFor(pj.mode === "personal" ? "personal" : "store", raw);
+        const at = all.findIndex((x: any) => String(x.id) === String(q.f));
+        if (at >= 0) missing.unshift({ index: at, id: String(q.f) });
+      }
+    }
+    // ★自動投稿に足りない必須項目（お客さん像・強み）を埋めにきた方は、
+    //   1問で終わらせず残りの必須も続けて聞く（2026-09-16）。
+    const { missingRequired } = await import("./nextAction");
+    const required = missingRequired(pj);
+    const gating = required.length > 0 && required.some((r) => r.questionId === String(q.f || ""));
     const st: CounselingState = {
       mode: pj.mode === "personal" ? "personal" : "store",
       step: missing[0].index, answers: raw, projectId: String(pj.id), accountId: null, accountName: null,
-      moreOne: true,
+      moreOne: true, ...(gating ? { gating: true } : {}),
     };
     await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
     return [
-      { type: "text", text: `きょうの1問です（残り ${missing.length} 問）。答えるとそのまま保存されます。` },
+      {
+        type: "text",
+        text: gating
+          ? `あと${required.length}問です（${required.map((r) => r.label).join("・")}）。答えるとそのまま保存されます。`
+          : `きょうの1問です（残り ${missing.length} 問）。答えるとそのまま保存されます。`,
+      },
       ...askQuestion(st),
     ];
   }

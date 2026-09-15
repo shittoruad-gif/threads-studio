@@ -55,6 +55,16 @@ export const OUTCOME_PATTERNS: ReadonlyArray<{ re: RegExp; label: string; fix?: 
   { re: /(寝起き|朝)(も|が|は)?[^。\n]{0,6}(スッキリ|すっきり)(し|に|です)[^。\n]*/g, label: "寝起き改善の断定", fix: () => "" },
   { re: /(毎日|ずっと|長年|何年も|慢性的な|慢性の)[^。\n]{0,4}(頭痛|不眠|めまい|しびれ|吐き気|動悸|うつ|パニック|腰痛|肩こり|首こり)[^。\n]{0,14}(悩|苦し|困|つら|辛)[^。\n]*/g, label: "症状名で悩みを呼び込む書き出し", fix: () => "" },
   { re: /(妊娠|出産|授かり)[^。\n]{0,10}(しやすい|できる|できます|につながる|に導く|を叶え)[^。\n]*/g, label: "妊娠しやすさの断定", fix: () => "からだを整えるお手伝いをしています" },
+  // ★2026-09-16：はじめの設定を洗う（scrubSettingText）ために実データを見たところ、
+  //   userId=2907 の「強み・実績」「N1顧客像」に並ぶ体験談の型が、どれも上の型に当たっていなかった。
+  //   そのまま本番で公開もされていた（直近30日の健康系749本のうち6本。すべて同じ方）。
+  //   例：「手術を回避できた」「杖が要らなくなり」「痛みが和らぎ」。
+  //   施術の結果を語る体験談そのものなので、本文でも設定でも落とす。
+  { re: /(杖|歩行器|車椅子|松葉杖)[^。\n]{0,8}(要らなく|いらなく|不要に|外れ|手放)[^。\n]*/g, label: "歩行補助が不要になった体験談", fix: () => "" },
+  { re: /(痛み|しびれ|症状|こり|コリ|張り|だるさ)[^。\n]{0,8}(激減|半減|軽減|和らぎ|やわらぎ|消失)[^。\n]*/g, label: "症状が軽くなった断定", fix: () => "" },
+  { re: /(手術|入院)[^。\n]{0,10}(回避|しなくて済|せずに済|免れ)[^。\n]*/g, label: "手術回避の体験談", fix: () => "" },
+  { re: /(改善|回復)(でき|しまし|へ|に向か|傾向)[^。\n]*/g, label: "改善・回復の断定", fix: () => "" },
+  { re: /(治って|治りまし|治った)[^。\n]*/g, label: "治ったの断定", fix: () => "" },
 ];
 
 export const PRICE_RE = /(初回|お試し|体験|限定|今だけ|キャンペーン)[^。\n]{0,12}?(\d{1,3}(,\d{3})*|\d+)\s*円|(\d{1,3}(,\d{3})*|\d+)\s*円(引き|OFF|オフ)/g;
@@ -150,4 +160,48 @@ export function healthClaimRetryHint(hits: string[], reason: "many" | "short"): 
     ? "その部分を消すと本文が残らないので、効果や結果を軸にせず、施術で何をするか・どんな場面の方に向くかで一本書く。"
     : "効果・結果・変化を言い切らない。施術で何をするか、どんな場面の方に向くかで書く。";
   return `${head}${body}`;
+}
+
+/**
+ * はじめの設定に書かれた文字列から、健康の断定・体験談を**渡す前に**落とす
+ * （2026-09-15 三上様指示「健康表現ガードで引っかかるものは最初から記載しない。
+ * クライアントが設定のところに入れていても同じです」）。
+ *
+ * これまでは本文ができたあとに `checkHealthClaims` で削る後追いだったため、
+ * 「強み・実績」に結果表現を書かれている方は毎回そこから同じ言い回しが出てきて、
+ * 作り直し→枠が消える、を繰り返していた（9/14 userId=2907 が24時間で6回）。
+ *
+ * 価格は落とさない（`allowPrice: true`）。設定に書かれたメニュー料金そのものは事実で、
+ * 投稿に出たときは本文側のガードが1文ごとに落とす。
+ */
+export function scrubSettingText(text: string | null | undefined): { text: string; hits: string[] } {
+  const src = String(text ?? "");
+  if (!src.trim()) return { text: src, hits: [] };
+  const v = checkHealthClaims(src, { allowPrice: true });
+  if (v.ok) return { text: v.text, hits: v.hits };
+  // ★落としたあとに残る「！」だけの行や、行頭に取り残された句読点を片づける。
+  //   はじめの設定は1行1項目で書かれることが多く、文の途中で落とすと
+  //   「！また、日本トップクラスの…」（userId=2907 の強み）のような欠けた行が残る。
+  //   そのまま渡すと生成側が壊れた日本語をお手本にしてしまう。
+  const cleaned = v.text
+    .split("\n")
+    .map((line) => line.replace(/^[\s　]*[、。・！？!?,.／/]+[\s　]*/, ""))
+    .filter((line) => !/^[\s　]*[、。・！？!?,.／/‼]+[\s　]*$/.test(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { text: cleaned, hits: v.hits };
+}
+
+/** 箇条書き（カウンセリングの実績・エピソード等）の各行を洗い、空になった行は落とす */
+export function scrubSettingList(list: readonly string[] | null | undefined): { list: string[]; hits: string[] } {
+  if (!Array.isArray(list)) return { list: [], hits: [] };
+  const hits: string[] = [];
+  const out: string[] = [];
+  for (const item of list) {
+    const r = scrubSettingText(item);
+    for (const h of r.hits) hits.push(h);
+    if (r.text.trim()) out.push(r.text);
+  }
+  return { list: out, hits };
 }

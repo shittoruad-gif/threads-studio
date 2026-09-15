@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkHealthClaims, isHealthBusiness, healthClaimRetryHint } from "../shared/healthClaimGuard";
+import { checkHealthClaims, isHealthBusiness, healthClaimRetryHint, scrubSettingText, scrubSettingList } from "../shared/healthClaimGuard";
 import { findFabricatedNumbers, fabricatedNumberRetryHint } from "../shared/fabricatedNumberGuard";
 import { rampCap, compensationCount, manualExtraPosts, carryOverCount, inCooldown } from "../shared/accountRamp";
 
@@ -163,5 +163,82 @@ describe("止めた理由を作り直しへ渡す（2026-09-15）", () => {
   });
   it("数字ガード：登録にある数字は止めないので、ヒントも作られない", () => {
     expect(findFabricatedNumbers("のべ20万人以上を診てきました。", "開業11年／のべ20万人以上")).toEqual([]);
+  });
+});
+
+/**
+ * 2026-09-16 夜間整備（2026-09-15 三上様指示）。
+ * 「健康表現ガードで引っかかるものに関しては、最初から記載しないようにしてください。
+ *   クライアントが設定のところに入れていても同じです。」
+ *
+ * これまでは本文ができたあとに落とす後追いだったため、「強み・実績」に結果表現を
+ * 書かれている方は毎回そこから同じ言い回しが出てきて、作り直しで枠が消えていた
+ * （9/14 userId=2907 が24時間で6回・うち5回が同じ型）。
+ * 下の文字列はすべて本番の projects に実際に入っているもの。
+ */
+describe("はじめの設定を渡す前に洗う（scrubSettingText）", () => {
+  it("userId=5002・556 の「根本改善にこだわる」を落とし、他の行は残す", () => {
+    const r = scrubSettingText("根本改善にこだわる\n完全予約制でゆったり\n国家資格者による施術");
+    expect(r.hits).toContain("治る・改善の断定");
+    expect(r.text).not.toContain("根本改善");
+    expect(r.text).toContain("完全予約制でゆったり");
+    expect(r.text).toContain("国家資格者による施術");
+  });
+
+  it("userId=2907 の強みから体験談だけを落とし、残った行を壊れた日本語にしない", () => {
+    const r = scrubSettingText(
+      "整体院を開業して30年近く、豊富な経験と様々な実績があり、手術宣告を受けられた方が症状改善したり、杖をついて来られた方の杖がいらなくなったり、自宅での歩行器も不要になったり、施術効果はまさに世界トップクラス！！また、日本トップクラスの整体法を取得、更にMLBメジャーリーグ9名のトレーナーが小波津式を学び、ドイツの有名サッカーチームでも小波津式を学んでいます。",
+    );
+    expect(r.text).not.toContain("症状改善");
+    expect(r.text).not.toContain("杖がいらなく");
+    expect(r.text).toContain("日本トップクラスの整体法を取得");
+    // 落とした残りの「！」が行頭に取り残されない
+    expect(r.text.startsWith("また、")).toBe(true);
+  });
+
+  it("userId=5002 の N1顧客像「不妊の悩み/妊娠出産した」は丸ごと空になる", () => {
+    const r = scrubSettingText("代女性/不妊の悩み/妊娠出産した");
+    expect(r.hits).toContain("不妊・妊娠の結果");
+    expect(r.text).toBe("");
+  });
+
+  it("価格は落とさない（設定に書かれたメニュー料金は事実。本文側のガードが受け持つ）", () => {
+    const r = scrubSettingText("初回お試し1980円\n完全予約制");
+    expect(r.text).toContain("1980円");
+  });
+
+  it("結果表現の無い設定はそのまま（userId=3500 の強み）", () => {
+    const src = "スポーツのケガに強い、夜２１時まで営業、院長の経験豊富、交通事故治療と対応に強い";
+    const r = scrubSettingText(src);
+    expect(r.hits).toEqual([]);
+    expect(r.text).toBe(src);
+  });
+
+  it("箇条書きは、空になった行だけを落とす", () => {
+    const r = scrubSettingList(["国家資格者による施術", "根本改善にこだわる", "夜遅くまで営業"]);
+    expect(r.list).toEqual(["国家資格者による施術", "夜遅くまで営業"]);
+    expect(r.hits).toContain("治る・改善の断定");
+  });
+});
+
+/**
+ * 2026-09-16：上の実データを見ていて分かった取りこぼし。
+ * 直近30日の健康系の公開投稿749本のうち6本（すべて userId=2907）が、
+ * これらの型で**公開まで通っていた**。施術の結果そのものなので本文でも止める。
+ */
+describe("2026-09-16 追加：本番で公開まで通っていた体験談の型", () => {
+  it("「手術を回避できた」を止める", () => {
+    const v = checkHealthClaims("変形性股関節症で手術予定だった方が、2回の施術で手術を回避できました。\n\n八千代で施術をしています。");
+    expect(v.ok).toBe(false);
+    expect(v.hits).toContain("手術回避の体験談");
+    expect(v.text).toContain("八千代で施術をしています。");
+  });
+  it("「杖が要らなくなり」「痛みが和らぎ」を止める", () => {
+    expect(checkHealthClaims("杖が要らなくなり、歩行器も不要になりました。").hits).toContain("歩行補助が不要になった体験談");
+    expect(checkHealthClaims("1回の施術で痛みが和らぎました。").hits).toContain("症状が軽くなった断定");
+  });
+  it("「膝の痛みも治ってました」「健康回復できました」を止める", () => {
+    expect(checkHealthClaims("気がついたら膝の痛みも治ってました。").hits).toContain("治ったの断定");
+    expect(checkHealthClaims("身も心も健康回復できました。").hits).toContain("改善・回復の断定");
   });
 });

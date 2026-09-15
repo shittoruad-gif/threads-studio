@@ -2,6 +2,7 @@
  * Threads投稿生成プロンプトテンプレート
  */
 import { buildAdRegulationsPromptSection } from './adRegulations';
+import { isHealthBusiness, scrubSettingText, scrubSettingList } from './healthClaimGuard';
 
 /**
  * スタイル校正（サンプル投稿選択）の結果。AIに「ユーザはこういう書き方が好き」を伝える。
@@ -188,6 +189,11 @@ export interface ThreadsPromptInput {
    * 渡すと「事実ベース」セクションが格段に具体的になり、捏造抑制効果が上がる。
    */
   counseling?: CounselingLike | null;
+  /**
+   * 健康系のお店で、はじめの設定から結果表現を落としたときに呼ばれる（落とした型の名前）。
+   * 呼び出し側でログに残すためのもの（誰の設定を洗ったかを追えるようにする・2026-09-15）。
+   */
+  onProfileScrub?: (hits: string[]) => void;
   /**
    * Threads特有のマーケティング技法（強い1行目・心理トリガー・〇選等）を
    * フル活用するかどうか。
@@ -1182,12 +1188,67 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
   //   以前はここだけ素通しで、注入対策の対象外だった（2026-09-05 に揃えた）。
   //   長さの上限は実データが切れない余裕を持たせている。
   const safeCounseling = sanitizeCounseling(input.counseling);
+
+  // ★健康系のお店では、はじめの設定に書かれた結果表現を「渡す前に」落とす
+  //   （2026-09-15 三上様指示「健康表現ガードで引っかかるものは最初から記載しない。
+  //   クライアントが設定のところに入れていても同じです」）。
+  //
+  //   これまでは本文ができたあとに checkHealthClaims で削る後追いだった。そのため
+  //   「強み・実績」に結果表現を書かれている方は毎回そこから同じ言い回しが出てきて、
+  //   作り直し → 3回で諦めて枠が消える、を繰り返していた
+  //   （9/14 の本番ログで userId=2907 が24時間に6回・うち5回が同じ「短時間で楽になる約束」）。
+  //
+  //   ★「主な悩み（mainProblem）」だけは洗わない。ここは投稿の主題そのもので、
+  //     「肩こりが楽になりたい方」のような書き方が普通に入る。落とすと題材が無くなり、
+  //     かえって中身のない投稿になる。本文に出たときは公開前のガードが1文ごとに落とす。
+  const scrubbed = (() => {
+    const hits: string[] = [];
+    if (!isHealthBusiness(input.businessType)) return { hits, counseling: safeCounseling };
+    const one = <T extends string | undefined>(v: T): T => {
+      if (!v) return v;
+      const r = scrubSettingText(v);
+      for (const h of r.hits) hits.push(h);
+      return r.text as T;
+    };
+    safe.target = one(safe.target);
+    safe.strength = one(safe.strength);
+    safe.proof = one(safe.proof);
+    safe.usp = one(safe.usp);
+    safe.n1Customer = one(safe.n1Customer);
+    safe.belief = one(safe.belief);
+    safe.catchphrase = one(safe.catchphrase);
+    // お客さんが実際に使った言葉は「そのまま投稿に使う」と指示している最優先の材料なので、
+    // 結果を語る声（「痛みが消えました」等）が入っていると必ず本文に出る。ここで落とす。
+    safe.customerWords = one(safe.customerWords);
+    safe.focusStrength = one(safe.focusStrength);
+    if (!safeCounseling) return { hits, counseling: safeCounseling };
+    const listOf = (v: string[] | undefined) => {
+      if (!v) return v;
+      const r = scrubSettingList(v);
+      for (const h of r.hits) hits.push(h);
+      return r.list;
+    };
+    const c: CounselingLike = {
+      ...safeCounseling,
+      realProofs: listOf(safeCounseling.realProofs),
+      realEpisodes: listOf(safeCounseling.realEpisodes),
+      benefitsDaily: listOf(safeCounseling.benefitsDaily),
+      faq: listOf(safeCounseling.faq),
+    };
+    if (c.brief?.concept?.future) {
+      c.brief = { ...c.brief, concept: { ...c.brief.concept, future: one(c.brief.concept.future) } };
+    }
+    return { hits, counseling: c };
+  })();
+  if (scrubbed.hits.length > 0) input.onProfileScrub?.(scrubbed.hits);
+  const promptCounseling = scrubbed.counseling;
+
   const useThreadsKnowhow = input.counseling?.useThreadsKnowhow !== undefined
     ? input.counseling.useThreadsKnowhow
     : (input.useThreadsKnowhow !== undefined ? input.useThreadsKnowhow : true);
   const systemPrompt = buildSystemPrompt(
-    treeCount, input.postType, input.usp, input.n1Customer, input.purpose, input.tone,
-    safeCounseling, useThreadsKnowhow,
+    treeCount, input.postType, safe.usp, safe.n1Customer, input.purpose, input.tone,
+    promptCounseling, useThreadsKnowhow,
     input.businessType, input.stylePreference,
   );
   

@@ -442,18 +442,17 @@ async function generateAutoPost(
     // ★実績学習：実際に見られた回数（インプレッション）でも重みを補正する。
     //   クライアントが◯✕を押さなくても、結果そのものから伸びる型が増えていく。
     const perf = await db.getAnglePerformanceStats(userId, project.id);
-    // ★健康系のお店の新しいアカウントには、ビフォーアフター・お客様の声を書かせない。
+    // ★健康系のお店には、ビフォーアフター・お客様の声を書かせない。
     //   2026-09-08 @haisaiseikotsuin（整骨院・連携2日目）の公開3件がThreads側で削除された。
     //   消された投稿も承認待ちの投稿も change_story / customer_voice で作られていた。
     //   下流の言い換えで直すより、最初から結果を語らせないほうが安全。
+    //   ★2026-09-15 三上様指示：連携からの日数で外していた（10日目まで）のをやめ、
+    //     健康系のお店は日数にかかわらず常に外す。Threads側の健康の誤情報の判定は
+    //     アカウントが古くなっても消えず、11日目に戻したとたんに結果表現が出ていた。
     let excludeOutcomeAngles = false;
     try {
       const { isHealthBusiness } = await import('../shared/healthClaimGuard');
-      if (isHealthBusiness(project.businessType)) {
-        const { accountAgeDays, RAMP_DAYS_2 } = await import('../shared/accountRamp');
-        const acct: any = await db.getThreadsAccountById(threadsAccountId);
-        excludeOutcomeAngles = accountAgeDays(acct?.createdAt) < RAMP_DAYS_2;
-      }
+      excludeOutcomeAngles = isHealthBusiness(project.businessType);
     } catch { /* 判定できなければ従来どおり */ }
     // ★はじめの設定「どんな投稿を多めに作りましょうか」を切り口の重みに反映（2026-09-08）。
     //   登録してもらっているのに、これまで切り口選びに一切使われていなかった。
@@ -465,7 +464,7 @@ async function generateAutoPost(
     } catch { preferredAngles = []; }
     angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles });
     if (preferredAngles.length) console.log(`[AutoPost] 希望の型を優先 userId=${userId} ${preferredAngles.join('/')} → ${angle.id}`);
-    if (excludeOutcomeAngles) console.log(`[AutoPost] 健康系の新規アカウントのため結果を語る切り口を除外 userId=${userId}`);
+    if (excludeOutcomeAngles) console.log(`[AutoPost] 健康系のお店のため結果を語る切り口を除外 userId=${userId}`);
     // ◯✕が付いた実例をプロンプトに注入して「このお店の好み」を学習させる
     const [liked, disliked] = await Promise.all([
       db.getRatedPostSamples(userId, 'good', 2, project.id),
@@ -566,6 +565,11 @@ async function generateAutoPost(
       //   これが無いと、材料を全部渡していても毎回いちばん上の1つだけが使われる（shared/topicRotation.ts）。
       focusProblem: pickRotatingTopic(project.mainProblem, postTypeIndex + purposeIndex) || undefined,
       focusStrength: pickRotatingTopic(project.strength, postTypeIndex) || undefined,
+      // ★健康系のお店では、はじめの設定に書かれた結果表現を渡す前に落とす（2026-09-15 三上様指示）。
+      //   落としたことはログに残す（誰の設定を洗ったかが分からないと、材料の足りない方に
+      //   気づけない。岩根様のように登録内容そのものが薄い方は朝の報告に載せる）。
+      onProfileScrub: (hits) =>
+        console.log(`[AutoPost] はじめの設定から健康の断定を除外 userId=${userId} projectId=${project.id} ${Array.from(new Set(hits)).join('・')}`),
       proof: project.proof || undefined,
       link: project.ctaLink || undefined,
       links: projectLinks.map(l => ({ type: l.type, label: l.label, url: l.url })),
