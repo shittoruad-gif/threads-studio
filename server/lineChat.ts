@@ -68,7 +68,7 @@ export function fmtJst(v: Date | string | null): string {
  * 本文は全文を載せる（見に行かせない）。1カード=1投稿・最大5件。
  */
 export function buildPostCards(
-  posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null; accountName?: string | null; angle?: string | null }>,
+  posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null; accountName?: string | null; accountEmphasis?: boolean; angle?: string | null }>,
   opts: { one?: boolean; bulk?: boolean } = {},
 ): unknown {
   const suffix = opts.one ? "&o=1" : "";
@@ -85,10 +85,15 @@ export function buildPostCards(
       layout: "vertical",
       spacing: "md",
       contents: [
+        // ★複数アカウントを運用していても「どのアカウントの投稿か」が必ず分かるようにする。
+        //   2026-09-16 梅原様：朝6時のカードだけ名前が無く、接骨院とダイエットの分を取り違えかけた。
+        //   2アカウント以上の方は、押す前に必ず目に入るよう見出しとして大きく出す。
+        ...(p.accountName && p.accountEmphasis ? [{
+          type: "text", text: `@${p.accountName}`, size: "md", color: "#0E8388", weight: "bold", wrap: true,
+        }] : []),
         {
           type: "text",
-          // ★複数アカウントを運用していても「どのアカウントの投稿か」が必ず分かるようにする
-          text: (p.accountName ? `@${p.accountName}　` : "") + `${fmtJst(p.scheduledAt)} 公開予定` + (isCall ? "・Meta AI呼びかけ投稿" : ""),
+          text: (p.accountName && !p.accountEmphasis ? `@${p.accountName}　` : "") + `${fmtJst(p.scheduledAt)} 公開予定` + (isCall ? "・Meta AI呼びかけ投稿" : ""),
           size: "xs", color: "#0E8388", weight: "bold", wrap: true,
         },
         { type: "text", text: (p.postContent || "（本文なし）").slice(0, 900), wrap: true, size: "sm", color: "#13343B" },

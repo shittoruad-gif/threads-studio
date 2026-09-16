@@ -207,7 +207,9 @@ async function withAccountNames(userId: number, posts: any[]): Promise<any[]> {
   try {
     const accounts = await db.getThreadsAccountsByUserId(userId);
     const byId = new Map(accounts.map((a: any) => [a.id, a.threadsUsername]));
-    return posts.map((p) => ({ ...p, accountName: byId.get(p.threadsAccountId) ?? null }));
+    // ★2アカウント以上の方は、カードでアカウント名を見出しとして大きく出す（押す前の取り違え防止）
+    const emphasis = accounts.filter((a: any) => a.isActive !== false).length >= 2;
+    return posts.map((p) => ({ ...p, accountName: byId.get(p.threadsAccountId) ?? null, accountEmphasis: emphasis }));
   } catch {
     return posts;
   }

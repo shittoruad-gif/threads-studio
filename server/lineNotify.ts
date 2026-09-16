@@ -210,6 +210,10 @@ export interface ApprovalPushPost {
   id: number;
   postContent: string | null;
   scheduledAt: Date | string | null;
+  /** どのThreadsアカウントの投稿か。渡さなければ送信直前に補う */
+  threadsAccountId?: number | null;
+  accountName?: string | null;
+  accountEmphasis?: boolean;
 }
 
 function fmtTime(v: Date | string | null): string {
@@ -275,6 +279,33 @@ export function buildApprovalMessages(
 }
 
 /**
+ * 承認カードに載せるアカウント名を補う。
+ * threadsAccountId があって accountName が無いものだけ引き当てる（DBアクセスは1ユーザー分1回）。
+ * 2アカウント以上の方は、カードで名前を見出しとして大きく出す（accountEmphasis）。
+ */
+async function withAccountNamesForPush(posts: ApprovalPushPost[]): Promise<ApprovalPushPost[]> {
+  try {
+    if (posts.every((p) => p.accountName || !p.threadsAccountId)) return posts;
+    const db = await import("./db");
+    const anyId = posts.find((p) => p.threadsAccountId)?.threadsAccountId;
+    if (!anyId) return posts;
+    const one: any = await db.getThreadsAccountById(Number(anyId));
+    if (!one?.userId) return posts;
+    const accounts: any[] = (await db.getThreadsAccountsByUserId(Number(one.userId))) || [];
+    const byId = new Map(accounts.map((a: any) => [a.id, a.threadsUsername]));
+    const emphasis = accounts.filter((a: any) => a.isActive !== false).length >= 2;
+    return posts.map((p) => (p.accountName ? p : {
+      ...p,
+      accountName: p.threadsAccountId ? (byId.get(Number(p.threadsAccountId)) ?? null) : null,
+      accountEmphasis: emphasis,
+    }));
+  } catch (e) {
+    console.warn("[LineNotify] アカウント名の補完に失敗:", (e as Error)?.message);
+    return posts;
+  }
+}
+
+/**
  * 承認依頼を1通のダイジェストで送る。
  * ★2026-09-01: Webビューを開かせず、トーク内のボタン（postback）で
  *   承認・書き直し・見送りまで終わるカードに変更。
@@ -286,6 +317,10 @@ export async function sendApprovalPush(
 ): Promise<boolean> {
   if (!lineNotifyEnabled() || posts.length === 0) return false;
   const { buildPostCards } = await import("./lineChat");
+  // ★「どのアカウントの投稿か」をカードに必ず載せる（2026-09-16 梅原様）。
+  //   朝6時の経路が accountName を渡しておらず、複数アカウントの方が押す前に判別できなかった。
+  //   呼び出し元の書き忘れで再発しないよう、送る直前にここで補う。
+  posts = await withAccountNamesForPush(posts);
   // ★「今日」か「明日」かは予定時刻で決める。
   //   朝6時の定例は当日15/21/22時に置くので「今日」、お申し込み直後の当日補充も「今日」。
   //   以前は常に「明日の投稿」と書いていて、実際には数時間後に公開されていた。

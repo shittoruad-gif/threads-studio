@@ -14,6 +14,7 @@ import { useLang } from "@/i18n";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { AccountSettingsCard } from "@/components/AccountSettingsCard";
+import { getPlan } from "@shared/plans";
 
 export default function Settings() {
   const { user, refresh, logout } = useAuth();
@@ -192,13 +193,20 @@ export default function Settings() {
     setSettingsDirty(false);
   };
 
-  const planLabel = subscription?.planId
-    ? subscription.planId === "pro"
-      ? t("プロプラン")
-      : subscription.planId === "starter"
-        ? "スタータープラン"
-        : "無料プラン"
-    : "無料プラン";
+  // ★プラン名は契約プラン(planId)から引く。以前は "pro" と（存在しない）"starter" 以外を
+  //   すべて「無料プラン」と表示していたため、ライト/モニター価格/セミナー価格/ビジネス/
+  //   代理店の方にも「無料プラン」と出ていた（2026-09-15 お客様からのご指摘）。
+  //   subscription.plan は解約・決済失敗時に free へ落ちる実効プランなので、
+  //   表示には使わず planId から引く（状態は括弧書きで添える）。
+  const planLabel = (() => {
+    const contract = subscription?.planId ? getPlan(subscription.planId) : undefined;
+    if (!contract || contract.id === "free") return t("無料プラン");
+    const name = t(contract.name);
+    if (subscription?.isTrialing) return `${name}（${t("無料お試し中")}）`;
+    if (subscription?.isPaymentPastDue) return `${name}（${t("お支払い確認中")}）`;
+    if (subscription?.status === "canceled") return `${name}（${t("解約済み")}）`;
+    return name;
+  })();
 
   return (
     <div className="max-w-3xl mx-auto">

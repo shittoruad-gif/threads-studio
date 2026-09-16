@@ -195,3 +195,30 @@ describe("Meta AI呼びかけ投稿のカード", () => {
     expect(json).toContain("a=rw&i=10");
   });
 });
+
+describe("承認カードのアカウント名（2026-09-16 梅原様）", () => {
+  const base = { id: 1, postContent: "本文", scheduledAt: new Date("2026-09-16T03:14:00Z") };
+  const texts = (m: any) => m.contents.body.contents.filter((c: any) => c.type === "text").map((c: any) => c.text);
+
+  it("2アカウント以上は、アカウント名を見出しとして別行に出す", () => {
+    const m: any = buildPostCards([{ ...base, accountName: "daigo.sekkotsuin", accountEmphasis: true }]);
+    const t = texts(m);
+    expect(t[0]).toBe("@daigo.sekkotsuin");
+    expect(t[1]).toContain("公開予定");
+    const head = m.contents.body.contents[0];
+    expect(head.size).toBe("md");
+    expect(head.weight).toBe("bold");
+  });
+
+  it("1アカウントのときは、これまでどおり時刻と同じ行に出す", () => {
+    const m: any = buildPostCards([{ ...base, accountName: "daigo.sekkotsuin", accountEmphasis: false }]);
+    const t = texts(m);
+    expect(t[0]).toContain("@daigo.sekkotsuin");
+    expect(t[0]).toContain("公開予定");
+  });
+
+  it("アカウント名が無ければ時刻だけ（従来どおり壊さない）", () => {
+    const m: any = buildPostCards([base]);
+    expect(texts(m)[0]).not.toContain("@");
+  });
+});

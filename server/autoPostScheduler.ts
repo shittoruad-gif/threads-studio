@@ -1329,7 +1329,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                   const { sendApprovalPush } = await import('./lineNotify');
                   const { createApprovalToken } = await import('./approvalToken');
                   const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
-                  const posts = fresh.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt }));
+                  const posts = fresh.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt, threadsAccountId: (p as any).threadsAccountId }));
                   const urlFor = (postId: number) => `${base}/api/post-approval?token=${createApprovalToken(postId, user.id, 'approve')}`;
                   let sentCount = 0;
                   for (const lineId of lineIds) {
