@@ -367,6 +367,27 @@ export function campaignTierForCode(code: string): 'seminar' | 'monitor' {
 }
 
 /**
+ * 料金ページのカード一覧で「現在のプラン」の印を付けるプランIDを返す。
+ * キャンペーン（セミナー価格・モニター価格）はカードとして出していないので、
+ * 対応する通常プランのカードを指す。
+ * ★これが無いと、ご契約中なのにどのカードにも印が付かず、無料の方と同じ画面に見える
+ *   （2026-09-16 梅原様・pro_seminar からのお問い合わせ）。
+ */
+export function currentPlanCardId(planId: string | null | undefined): string | null {
+  if (!planId) return null;
+  const p = PLANS[planId];
+  if (p?.isCampaign) return p.normalCounterpartId ?? planId;
+  return planId;
+}
+
+/** キャンペーン価格の契約なら、画面に添える短い呼び名。通常プラン・未契約なら null。 */
+export function campaignPriceLabel(planId: string | null | undefined): string | null {
+  const p = planId ? PLANS[planId] : undefined;
+  if (!p?.isCampaign) return null;
+  return p.campaignTier === 'seminar' ? 'セミナー価格' : 'モニター価格';
+}
+
+/**
  * 通常プランIDに対応するキャンペーンプランを返す（なければundefined）。
  */
 export function getCampaignCounterpart(

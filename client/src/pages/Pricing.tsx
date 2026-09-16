@@ -11,6 +11,8 @@ import {
   PLANS,
   getCampaignSlotsRemaining,
   getCampaignCounterpart,
+  currentPlanCardId,
+  campaignPriceLabel,
   CAMPAIGN_SLOT_TOTAL,
   ALL_CAMPAIGN_CODES,
 } from '../../../shared/plans';
@@ -199,14 +201,23 @@ export default function Pricing() {
     createCheckout.mutate({ planId });
   };
 
+  // ★セミナー価格・モニター価格で契約中の方にも「現在のプラン」を出す（2026-09-16 梅原様のお問い合わせ）。
+  //   キャンペーンプランはカード一覧に出ない（下の plans で isCampaign を除いている）ため、
+  //   生の planId 比較ではどのカードにも一致せず、ご契約中なのに無料の方と同じ画面に見えていた。
+  //   → 対応する通常プラン（normalCounterpartId）のカードを「現在のプラン」として扱う。
+  const currentCardPlanId = currentPlanCardId(currentSubscription?.planId);
+  const currentCampaignLabel = campaignPriceLabel(currentSubscription?.planId);
+
   const isCurrentPlan = (planId: string) => {
-    return currentSubscription?.planId === planId;
+    return currentCardPlanId === planId;
   };
   // 代理店が発行したアカウント（料金は代理店契約に含まれる）
   const isAgencyClient = currentSubscription?.planId === 'agency_client';
 
   const canChangePlan = (planId: string) => {
-    const currentPlanId = currentSubscription?.planId || 'free';
+    // ★キャンペーン契約中は、対応する通常プランのカードを「今のプラン」として数える
+    //   （pro_seminar の方に、プロのカードで「プラン変更」を出さない）。
+    const currentPlanId = currentCardPlanId || 'free';
     return currentPlanId !== 'free' && currentPlanId !== planId && planId !== 'free';
   };
 
@@ -375,7 +386,7 @@ export default function Pricing() {
                 {isCurrentPlan(plan.id) && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                     <Badge className="bg-blue-500 text-white border-0 px-4">
-                      現在のプラン
+                      {currentCampaignLabel ? `現在のプラン（${currentCampaignLabel}）` : '現在のプラン'}
                     </Badge>
                   </div>
                 )}
@@ -431,7 +442,9 @@ export default function Pricing() {
                   {isAgencyClient ? (
                     '代理店契約に含まれています'
                   ) : isCurrentPlan(plan.id) ? (
-                    plan.priceMonthly === 0 ? 'このまま無料で始める' : '現在のプラン'
+                    plan.priceMonthly === 0
+                      ? 'このまま無料で始める'
+                      : currentCampaignLabel ? `現在のプラン（${currentCampaignLabel}）` : '現在のプラン'
                   ) : canChangePlan(plan.id) ? (
                     <>
                       <RefreshCw className="w-4 h-4 mr-2" />

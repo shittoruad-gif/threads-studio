@@ -72,10 +72,21 @@ export async function rampForAccount(
     if (count <= base0.count) return base0;
     return { ...base0, count, extra: true, reason: "manual", note: [base0.note, m.note].filter(Boolean).join("／") };
   }
-  // ★Threads側で消された投稿の補填（2026-09-13 三上様決定 R6）。連携30日以内は compensationCount が同じ不足を拾うので、
-  //   30日を過ぎたアカウントだけここで契約＋1件にする。1日消化するごとに autoPostScheduler が deletedShortfall を1減らす。
+  // ★Threads側で消された投稿の補填（2026-09-13 三上様決定 R6 / 2026-09-17 R10 で連携30日以内にも掛かるようにした）。
+  //   1日消化するごとに autoPostScheduler が deletedShortfall を1減らす（reason==="deleted" のときだけ）。
+  //   冷却中は上の分岐で先に返しているので、ここへ来るのは冷却が明けたあとだけ。
+  //   慣らし運転中（base0.capped）は増やさない＝アカウントを守る側を優先する。
   const ds = Number((account as any).deletedShortfall ?? 0);
-  if (ds > 0 && !base0.capped && !base0.extra && base0.days >= COMPENSATION_WINDOW_DAYS) {
+  if (ds > 0 && !base0.capped) {
+    if (base0.extra) {
+      // 連携30日以内は compensationCount が同じ不足をすでに1日＋1件で返している
+      //   （消された投稿は status='failed' になり「投稿できた数」から外れるため）。
+      //   本数は増やさないが、ここで消化しておかないと30日を過ぎてから同じ分をもう一度返して二重になる。
+      return { ...base0, shortfall: Math.max(base0.shortfall, ds), reason: "deleted" };
+    }
+    // 慣らしが明けていれば、連携30日以内でも契約＋1件で返す。
+    //   ライトプラン（契約1件）は compensationCount が掛からない（want<2）ので、
+    //   ここで返さないと30日目まで1件も戻らなかった（2026-09-16 梅原様の件で判明）。
     return { ...base0, count: contract + 1, extra: true, shortfall: ds, reason: "deleted", note: `消えた投稿の補填（あと${ds}件）を1日${contract + 1}件で返しています` };
   }
   return base0;

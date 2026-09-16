@@ -18,7 +18,7 @@ import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 import { contractSummary, type ContractInfo } from "../shared/contractSummary";
-import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting } from "../shared/requestKind";
+import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial } from "../shared/requestKind";
 import { missingAutoPostFields } from "../shared/autoPostRequirements";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
@@ -677,7 +677,10 @@ async function offerCounselingResume(
     "\n\nどちらになさいますか？",
     [
       { label: "続きから", data: "c=resume" },
-      { label: "最初からやり直す", data: `c=start&mode=${cs.mode}&fresh=1` },
+      // ★どのアカウントの設定かを必ず引き継ぐ（R9）。ここで落とすと c=start 側で
+      //   accountId なしになり、1件目のお店の情報を黙って上書きしてしまう
+      //   （2026-09-16 梅原様：だいご接骨院の情報がダイエットの内容に置き換わった）。
+      { label: "最初からやり直す", data: `c=start&mode=${cs.mode}&fresh=1${cs.accountId ? `&a=${cs.accountId}` : ""}` },
       { label: "設定はやめる", data: "m=cancel" },
     ],
   )];
@@ -942,7 +945,9 @@ async function advanceCounseling(userId: number, lineUserId: string, st: Counsel
     }
     if (st.step === 0) {
       await db.clearLineChatState(lineUserId);
-      return startCounseling(lineUserId);
+      // ★ここでも accountId を引き継ぐ（R9）。落とすと、もう一度始めたときに
+      //   1件目のお店の情報を上書きしてしまう。
+      return startCounseling(lineUserId, st.accountId ?? null);
     }
     st.step -= 1;
     await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
@@ -1489,6 +1494,18 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     if (!q.fresh) {
       const unfinished = await unfinishedCounseling(lineUserId);
       if (unfinished) return offerCounselingResume(lineUserId, unfinished);
+    }
+    // ★アカウントが2件以上あるのに、どれの設定か分からないまま進めない（R9）。
+    //   ここで進めると下の「既存の1件目」に落ちて、別のお店の情報を黙って上書きする。
+    //   古いボタンや、accountId を引き継ぎ損ねた道から来た場合の最後の受け皿。
+    if (!q.a) {
+      const actives = (await db.getThreadsAccountsByUserId(user.id)).filter((a: any) => a.isActive);
+      if (actives.length >= 2) {
+        return [textWithQuick(
+          "どのアカウントの情報を登録しますか？\nアカウントごとに、別々のお店の情報を登録できます。",
+          actives.slice(0, 10).map((a: any) => ({ label: `@${a.threadsUsername}`, data: `c=acct&a=${a.id}` })),
+        )];
+      }
     }
     await clearCounselingBackup(lineUserId);
     // ★どのお店の情報を書き換えるかを決める。
@@ -2949,6 +2966,17 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   //   「支払い方法は？」のような一般のご質問まで奪わないよう、言葉は絞っている。
   if (/(請求|引き落と)/.test(t) || /(次回|来月|今月|毎月).{0,6}(支払|お支払)/.test(t)) {
     return handlePostback(lineUserId, "s=plan");
+  }
+
+  // ★ご自身のお店を紹介する文章は、ご質問として自動応答に回さない。
+  //   「？」で締めてあると looksLikeQuestion に当たってしまい、
+  //   「こちらはどのようなご質問でしょうか？」としか返せなかった
+  //   （2026-09-15 ご質問 #34 氷見様。ご登録の地域「滑川市」がそのまま入っていた）。
+  {
+    const pjs = ((await db.getUserProjects(user.id)) || []).filter((pj: any) => !String(pj.id).startsWith("demo_"));
+    if (pjs.some((pj: any) => looksLikeOwnPostMaterial(t, pj))) {
+      return replyToRequest("material", null, await stashMaterial(lineUserId, user.id, t));
+    }
   }
 
   if (looksLikeQuestion(t)) {

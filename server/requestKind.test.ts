@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting } from "../shared/requestKind";
+import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, ownPlaceMarkers } from "../shared/requestKind";
 import { isFeatureRequest } from "../shared/requestDetect";
 
 /**
@@ -263,5 +263,46 @@ describe("お礼・あいさつだけの一言（2026-09-14）", () => {
   it("ご質問・お知らせは拾わない", () => {
     expect(isThanksOrGreeting("プロプランは1日何回ですか")).toBe(false);
     expect(isThanksOrGreeting("明日は休診です")).toBe(false);
+  });
+});
+
+describe("ご自身のお店を紹介する文章（2026-09-15 ご質問 #34）", () => {
+  // 氷見様のご登録内容（本番の projects より）
+  const HIMI = { area: "富山県滑川市上小泉1818-1", storeName: "よくなる整体院｜ 富山 自律神経・慢性腰痛専門" };
+
+  it("ご登録の地域・店名から目印を取り出す", () => {
+    expect(ownPlaceMarkers(HIMI)).toEqual(expect.arrayContaining(["富山県", "滑川市", "よくなる整体院"]));
+    // 2文字の目印は、ふつうの文にも当たるので返さない
+    expect(ownPlaceMarkers({ area: "岡山県" })).toEqual(["岡山県"]);
+    expect(ownPlaceMarkers({})).toEqual([]);
+  });
+
+  it("実際に届いた文章を、ご質問ではなく投稿の材料として扱う", () => {
+    const t = "滑川市では、お子様から90代まで触れるだけの小波津式でケアしています😊\n\n施術で不安なことはありますか？";
+    // 飾り・行数・長さで見る従来の判定では拾えない（2行・約52字）
+    expect(isPastedContent(t)).toBe(false);
+    expect(looksLikeOwnPostMaterial(t, HIMI)).toBe(true);
+  });
+
+  it("アプリのことをお尋ねの文章は、これまでどおりご質問として扱う", () => {
+    for (const t of [
+      "滑川市の投稿が今日は届いていません",
+      "よくなる整体院のアカウントを連携したいのですが、やり方を教えてください",
+      "滑川市という地域名を設定から消せますか？",
+    ]) expect(looksLikeOwnPostMaterial(t, HIMI)).toBe(false);
+  });
+
+  it("ご登録の地域・店名が入っていない文章は拾わない", () => {
+    expect(looksLikeOwnPostMaterial("今日はいい天気ですね。何か作ってもらえますか？", HIMI)).toBe(false);
+    expect(looksLikeOwnPostMaterial("滑川市でケアしています", {})).toBe(false);
+  });
+
+  it("引用の上に一言だけ書かれたお尋ねは、これまでどおりご質問として扱う", () => {
+    const t = "このやり方がよくわかりません\n滑川市では、お子様から90代まで触れるだけの小波津式でケアしています";
+    expect(looksLikeOwnPostMaterial(t, HIMI)).toBe(false);
+  });
+
+  it("短い一言は拾わない（ご用件が埋もれる）", () => {
+    expect(looksLikeOwnPostMaterial("滑川市です", HIMI)).toBe(false);
   });
 });

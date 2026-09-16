@@ -62,6 +62,57 @@ export function isPastedContent(t: string): boolean {
   return (t.length >= 150 && lines >= 3) || (t.length >= 120 && decorated) || (t.length >= 60 && lines >= 3 && decorated);
 }
 
+/** アプリのことをお尋ねのときに出てくる言葉（これが入っていれば投稿の材料ではない） */
+const APP_TOPIC_RE =
+  /(投稿|アプリ|設定|アカウント|プラン|ログイン|通知|自動|予約|承認|固定|ピン留め|ピン止め|Threads|スレッズ|LINE|ライン|画面|ボタン|メニュー|操作)/i;
+
+/**
+ * ご登録の「地域」「店名」から、その方ご自身のお店だと分かる目印を取り出す。
+ * 例：「富山県滑川市上小泉1818-1」→ ["富山県", "滑川市"]
+ *     「よくなる整体院｜ 富山 自律神経・慢性腰痛専門」→ ["よくなる整体院"]
+ * 3文字以上のものだけを返す（2文字だと、ふつうの文にも当たってしまう）。
+ */
+export function ownPlaceMarkers(facts: { area?: string | null; storeName?: string | null }): string[] {
+  const out: string[] = [];
+  const area = String(facts.area || "").trim();
+  if (area) {
+    const pref = area.match(/^(東京都|北海道|京都府|大阪府|[^\s]{2,3}県)/);
+    if (pref) out.push(pref[1]);
+    const rest = pref ? area.slice(pref[1].length) : area;
+    const city = rest.match(/^[^\s0-9０-９]{1,6}?[市区町村]/);
+    if (city) out.push(city[0]);
+  }
+  const store = String(facts.storeName || "").trim().split(/[｜|/／\s　]/)[0];
+  if (store) out.push(store);
+  return Array.from(new Set(out.filter((w) => Array.from(w).length >= 3)));
+}
+
+/**
+ * その方ご自身の投稿の材料か（ご登録の内容と突き合わせて判断する）。
+ *
+ * ★お客様は、ご自身のお店を紹介する文章をそのまま送ってこられる。
+ *   投稿文は読み手への問いかけで締めることが多く「？」で終わるため、
+ *   飾り・行数・長さで見る isPastedContent では拾えない短いものがある。
+ *   （2026-09-15 ご質問 #34 氷見様「滑川市では、お子様から90代まで触れるだけの
+ *    小波津式でケアしています😊／施術で不安なことはありますか？」＝2行・約52字。
+ *    自動応答は「こちらはどのようなご質問でしょうか？」としか返せなかった）
+ *   ご登録の地域・店名が入っていて、アプリのことに触れていなければ、
+ *   それはこちらへのご質問ではなく、ご自身のお店の紹介文。
+ */
+export function looksLikeOwnPostMaterial(
+  t: string,
+  facts: { area?: string | null; storeName?: string | null },
+): boolean {
+  const s = String(t || "").trim();
+  if (!s || Array.from(s).length < 15) return false;
+  if (hasLeadingAsk(s)) return false;
+  if (SUPPORT_QUESTION_RE.test(s)) return false;
+  if (APP_TOPIC_RE.test(s)) return false;
+  const markers = ownPlaceMarkers(facts);
+  if (markers.length === 0) return false;
+  return markers.some((w) => s.includes(w));
+}
+
 /**
  * 「ご質問」ではなく「ご依頼」のとき、その種類を返す。
  *
