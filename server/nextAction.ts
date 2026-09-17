@@ -90,7 +90,8 @@ async function accountSteps(userId: number, accounts: any[], usable: any[]): Pro
         id: `acct_posted:${id}`,
         label: `${name}：固定投稿をThreadsに公開する`,
         done: prog.posted,
-        path: "/posts",
+        // ★/posts というページは存在しない（押すと「ページが見つかりません」になっていた）。
+        path: "/post-history?status=awaiting_approval",
         actionLabel: "公開する",
         important: true,
         accountId: id, accountName: name,

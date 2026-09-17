@@ -27,6 +27,20 @@ export default function Login() {
 
   const applyCoupon = trpc.coupon.applyCode.useMutation();
 
+  // 「新規登録」へ寄り道しても、戻り先（?redirect=）と各種コードを落とさない。
+  //   例：公式LINEの「アカウント追加」→ ログイン画面 → 新規登録 → ログイン
+  //       の往復で、最後に目的の画面へ戻れるようにする。
+  const registerHref = (() => {
+    const from = new URLSearchParams(searchParams);
+    const keep = new URLSearchParams();
+    for (const k of ['redirect', 'code', 'coupon', 'ref']) {
+      const v = from.get(k);
+      if (v) keep.set(k, v);
+    }
+    const q = keep.toString();
+    return q ? `/register?${q}` : '/register';
+  })();
+
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: async () => {
       // ログインに成功したら、紹介コードが入力されていれば適用する。
@@ -210,7 +224,7 @@ export default function Login() {
         <CardFooter className="flex flex-col space-y-3">
           <div className="text-sm text-center text-muted-foreground">
             {t('アカウントをお持ちでないですか？')}{' '}
-            <Link href="/register" className="text-primary hover:underline">
+            <Link href={registerHref} className="text-primary hover:underline">
               {t('新規登録')}
             </Link>
           </div>

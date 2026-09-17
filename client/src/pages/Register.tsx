@@ -33,9 +33,20 @@ export default function Register() {
     return (params.get('ref') || '').trim().toUpperCase().slice(0, 16);
   }, []);
 
+  // 登録後のログイン画面にも、戻り先（?redirect=）を引き継ぐ。
+  const redirectParam = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const r = new URLSearchParams(window.location.search).get('redirect') || '';
+    return r.startsWith('/') && !r.startsWith('//') ? r : '';
+  }, []);
+
   const registerMutation = trpc.auth.register.useMutation({
     onSuccess: () => {
-      setLocation('/login?registered=true');
+      setLocation(
+        redirectParam
+          ? `/login?registered=true&redirect=${encodeURIComponent(redirectParam)}`
+          : '/login?registered=true'
+      );
     },
     onError: (err) => {
       setError(err.message);

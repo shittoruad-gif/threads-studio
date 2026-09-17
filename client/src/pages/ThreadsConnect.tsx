@@ -82,10 +82,11 @@ export default function ThreadsConnect() {
     }
   }, [oauthCode, isAuthenticated]);
 
-  const { data: subscription } = trpc.subscription.getStatus.useQuery(
+  const subscriptionQuery = trpc.subscription.getStatus.useQuery(
     undefined,
     { enabled: isAuthenticated }
   );
+  const subscription = subscriptionQuery.data;
 
   const { data: accounts, refetch } = trpc.threads.list.useQuery(
     undefined,
@@ -278,7 +279,10 @@ export default function ThreadsConnect() {
   const maxAccounts = subscription?.plan?.features?.maxThreadsAccounts || 0;
   const canAddMore = maxAccounts === -1 || (accounts?.length || 0) < maxAccounts;
 
-  if (loading || !isAuthenticated) {
+  // ★ご契約プランが読めるまでは画面を出さない。
+  //   読めていない間は maxAccounts が 0 になり、連携できる方にまで
+  //   「プランを選んで連携を始める」（料金ページ行き）を見せてしまうため。
+  if (loading || !isAuthenticated || subscriptionQuery.isPending) {
     return (
       <div className="flex items-center justify-center py-32">
         <div className="text-center">
@@ -291,6 +295,21 @@ export default function ThreadsConnect() {
           ) : (
             <p className="text-muted-foreground text-sm">{t("読み込み中...")}</p>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // プランが取れなかったときも 0 と決めつけない（料金ページへ送ってしまうため）
+  if (subscriptionQuery.isError) {
+    return (
+      <div className="flex items-center justify-center py-32 px-4">
+        <div className="text-center max-w-sm">
+          <p className="text-foreground/80 text-base font-medium">{t("ご契約の内容を読み込めませんでした")}</p>
+          <p className="text-muted-foreground text-sm mt-2">{t("通信が不安定な可能性があります。もう一度お試しください。")}</p>
+          <Button className="mt-4" onClick={() => subscriptionQuery.refetch()}>
+            {t("もう一度読み込む")}
+          </Button>
         </div>
       </div>
     );
