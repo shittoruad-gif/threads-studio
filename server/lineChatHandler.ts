@@ -18,7 +18,7 @@ import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 import { contractSummary, type ContractInfo } from "../shared/contractSummary";
-import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial } from "../shared/requestKind";
+import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, wantsHuman, isShortWish } from "../shared/requestKind";
 import { missingAutoPostFields } from "../shared/autoPostRequirements";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
@@ -3051,6 +3051,21 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
       "こちらこそ、ありがとうございます。\nご用のときは、下のメニューからいつでもどうぞ。",
       MENU_HINT,
     )];
+  }
+
+  // ★「担当者に聞きたい」と打たれた方を、受け皿に落とさない（2026-09-18 夜間整備の通し確認で実測）。
+  //   ボタンには「担当者に聞く」があるのに、同じことを文章で打つと何も起きなかった。
+  if (wantsHuman(t)) return handlePostback(lineUserId, "m=staff");
+
+  // ★「〇〇したい」で終わる短いご要望を、受け皿に落とさない（2026-09-18 夜間整備の通し確認で実測）。
+  //   「投稿の時間を変えたい」「スタッフにも触らせたい」は知識に答えが載っているのに、
+  //   疑問の形でも12字以上でもないため looksLikeQuestion を通らず、
+  //   「ご用件を下から選んでください」で終わっていた。
+  //   ★ここまで来た時点で、ご依頼（requestKind）・料金・解約・連携・使い方などの
+  //     はっきりした行き先はすべて外れているので、自動応答に回して差し支えない。
+  if (isShortWish(t)) {
+    const answered = await autoAnswer(user.id, lineUserId, t);
+    if (answered) return answered;
   }
 
   return [textWithQuick(

@@ -136,6 +136,15 @@ export interface ThreadsPromptInput {
    */
   focusProblem?: string;
   focusStrength?: string;
+  /**
+   * 今日この1本で取り上げるN1顧客像（登録が複数行あるときだけ、呼び出し側が日替わりで1つ選ぶ）。
+   * ★岩根様（userId 5443）のN1顧客像には「園遊会に招待された方へ誂えた」「文化勲章の授賞式に
+   *   参列される方へ」など7行の良い材料が入っているのに、投稿はどれも「敷居が高い」＋「本物の正絹」
+   *   （＝1行しかない悩みと実績）だけを繰り返していた。日替わりの指定が悩みと強みにしか無く、
+   *   N1顧客像は全体をそのまま渡していたため、毎回いちばん上だけが使われていた
+   *   （2026-09-18 夜間整備で実測。30日で✕13本・○1本）。
+   */
+  focusN1?: string;
   proof?: string;
   link?: string; // 後方互換用 — 新規はlinksを使う
   /**
@@ -1162,6 +1171,7 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
     mainProblem: sanitizeForPrompt(input.mainProblem, 300),
     focusProblem: sanitizeForPrompt(input.focusProblem, 150),
     focusStrength: sanitizeForPrompt(input.focusStrength, 150),
+    focusN1: sanitizeForPrompt(input.focusN1, 150),
     strength: sanitizeForPrompt(input.strength, 500),
     proof: sanitizeForPrompt(input.proof, 500),
     usp: sanitizeForPrompt(input.usp, 300),
@@ -1221,6 +1231,7 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
     // 結果を語る声（「痛みが消えました」等）が入っていると必ず本文に出る。ここで落とす。
     safe.customerWords = one(safe.customerWords);
     safe.focusStrength = one(safe.focusStrength);
+    safe.focusN1 = one(safe.focusN1);
     if (!safeCounseling) return { hits, counseling: safeCounseling };
     const listOf = (v: string[] | undefined) => {
       if (!v) return v;
@@ -1332,6 +1343,7 @@ ${safe.focusProblem ? `- ★今日この1本で取り上げる悩み：${safe.fo
 ${safe.focusStrength ? `- ★今日この1本で使う強み：${safe.focusStrength}（登録された強みのうち、今日はこれを使う。他の強みは今日は書かない）` : ''}
 ${safe.usp ? `- USP（独自の強み）：${safe.usp}` : ''}
 ${safe.n1Customer ? `- N1顧客像：${safe.n1Customer}` : ''}
+${safe.focusN1 ? `- ★今日この1本で取り上げるお客様：${safe.focusN1}（N1顧客像のうち、今日はこの方を思い浮かべて書く。他の方は今日は書かない。毎日ちがうお客様を順に扱うための指定）` : ''}
 ${safe.belief ? `- 主張・信念：${safe.belief}（投稿に一貫してにじませる。これと矛盾する内容は書かない。仮想敵型と相性が良い）` : ''}
 ${safe.catchphrase ? `- 口癖・方言・決めゼリフ：${safe.catchphrase}（文体に自然に混ぜてキャラ付けする。毎回・不自然に多用はしない）` : ''}
 ${safe.customerWords ? `- お客さんが実際に使った言葉：${safe.customerWords}（★最優先。この生の言葉をそのまま投稿に1〜2個使う。専門用語より優先）` : ''}

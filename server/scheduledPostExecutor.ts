@@ -147,6 +147,21 @@ export async function executePendingPosts() {
           continue;
         }
 
+        // ★連携を解除されたアカウント（isActive=0）の予約は、公開を試みずに見送る（2026-09-18）。
+        //   連携解除は deleteThreadsAccount が isActive=0 にしてアクセストークンを空にするだけで、
+        //   行は残る。getThreadsAccountById は isActive を見ないため、上の !account をすり抜けて
+        //   空のトークンで公開しに行き、Threads から
+        //   「Invalid OAuth 2.0 Access Token」という、お客様には意味の分からない失敗が返っていた。
+        //   （森様・2026-09-17 の投稿 #1573。別のアカウントにつなぎ替えようと解除された直後だった）
+        if (!account.isActive) {
+          await db.updateScheduledPost(post.id, {
+            status: 'canceled',
+            errorMessage: 'Threadsアカウントの連携が解除されているため見送り',
+          });
+          console.log(`[Scheduled Post] 連携解除ずみのため見送り: post=${post.id} account=${account.id}`);
+          continue;
+        }
+
         // Check token expiration and attempt refresh if expiring soon (within 24 hours)
         let accessToken = account.accessToken;
         const expiresAt = account.tokenExpiresAt ? new Date(account.tokenExpiresAt) : null;

@@ -15,11 +15,26 @@ import { textWithQuick } from "./lineChat";
 import { detectNextAction } from "./nextAction";
 import { buildDailyCountTextForUser, yesterdayLabelJst } from "./dailyPostCountReport";
 import { autoModeNudgePart } from "./autoModeNudgeJob";
-import { announcementForToday, renderAnnouncement } from "../shared/announcements";
+import { announcementApplies, announcementForToday, renderAnnouncement } from "../shared/announcements";
+import { accountAgeDays } from "../shared/accountRamp";
 import { getPlan, resolveEffectivePlanId } from "../shared/plans";
 import { personalNoticesFor, personalNoticeUserIds } from "../shared/personalNotices";
 
 const RESEND_AFTER_DAYS = 1; // 同じ「次にやること」は1日1回まで
+
+/**
+ * いちばん新しく連携したThreadsアカウントの、連携からの経過日数（連携した日＝0）。連携が無ければ null。
+ * 慣らし運転のお知らせのように「連携したばかりの方だけ」へ出す判定に使う（2026-09-18）。
+ */
+async function newestAccountAgeDays(userId: number): Promise<number | null> {
+  try {
+    const accounts = await db.getThreadsAccountsByUserId(userId);
+    const ages = accounts.map((a: any) => accountAgeDays(a?.createdAt)).filter((n) => Number.isFinite(n));
+    return ages.length === 0 ? null : Math.min(...ages);
+  } catch {
+    return null;
+  }
+}
 
 export async function runMorningDigestJob(): Promise<void> {
   const stats = await db.getYesterdayAutoPostStatsByAccount();
@@ -39,11 +54,16 @@ export async function runMorningDigestJob(): Promise<void> {
     // その方に当てはまる段落だけを出す（プラン・公開前の確認・Meta AIの設定で出し分け）
     const sub = await db.getSubscriptionByUserId(userId).catch(() => null);
     const plan = getPlan(resolveEffectivePlanId(sub?.planId, sub?.status));
-    return renderAnnouncement(ann, {
+    const ctx = {
       maxPerDay: Number(plan?.features?.maxAutoPostsPerDay ?? 0),
       requireApproval: user.autoPostRequireApproval !== false,
       metaAiEnabled: user.metaAiAskEnabled !== false,
-    });
+      newestAccountAgeDays: await newestAccountAgeDays(userId),
+    };
+    // ★送る相手が絞られているお知らせは、当てはまらない方には出さない
+    //   （例：慣らし運転の説明は連携から30日以内の方だけ。2026-09-18）
+    if (!announcementApplies(ann, ctx)) return null;
+    return renderAnnouncement(ann, ctx);
   };
 
   // 送る相手＝昨日の結果がある人 ∪ 案内の対象 ∪ お知らせの対象（お知らせがある日だけ）

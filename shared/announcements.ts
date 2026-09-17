@@ -17,6 +17,11 @@ export interface AnnouncementContext {
   requireApproval: boolean;
   /** Meta AI呼びかけ文をONにしている */
   metaAiEnabled: boolean;
+  /**
+   * いちばん新しく連携したThreadsアカウントの、連携からの経過日数（連携した日＝0）。
+   * 連携が1件も無い方は null。慣らし運転のように「連携したばかりの方だけ」に出すお知らせで使う。
+   */
+  newestAccountAgeDays?: number | null;
 }
 
 export interface AnnouncementSection {
@@ -34,6 +39,16 @@ export interface DailyAnnouncement {
   /** 受け取る方に当てはまる段落だけを出す（2026-09-10 三上様指示「各ユーザーに当てはまる内容を」） */
   sections?: AnnouncementSection[];
   tail?: string;
+  /**
+   * 送る相手を絞る。省略＝全員。
+   * 関係のない方に届くと混乱させるお知らせ（例：慣らし運転＝連携したばかりの方だけの話）に使う。
+   */
+  audience?: (ctx: AnnouncementContext) => boolean;
+}
+
+/** このお知らせを、この方に送ってよいか（audience 省略時は全員に送る） */
+export function announcementApplies(a: DailyAnnouncement, ctx: AnnouncementContext): boolean {
+  return a.audience ? a.audience(ctx) : true;
 }
 
 /** その方に当てはまる段落だけを番号を振り直してつなぐ */
@@ -154,6 +169,40 @@ export const DAILY_ANNOUNCEMENTS: readonly DailyAnnouncement[] = [
       },
     ],
     tail: "分からないことがあれば、このLINEに文章で送ってください。",
+  },
+  {
+    // 2026-09-16 に下書き（scripts/ops/announcements/2026-09-16_ramp_notice_draft.txt）、
+    // 2026-09-17 17:31 三上様の○。R4「本番反映の翌日以降」に従い、9/18 未明の反映に対して sendOn は 9/19。
+    // ★連携から30日以内の方だけに送る（慣らし運転・取り戻しの中にいる方。それ以外には関係が無く、混乱させるため）
+    key: "account_ramp_2026-09-19",
+    sendOn: "2026-09-19",
+    audience: (c) => c.newestAccountAgeDays != null && c.newestAccountAgeDays < 30,
+    text:
+      "【お知らせ】はじめの10日間、投稿の本数を抑えています\n\n" +
+      "いつもThreads Studioをご利用いただきありがとうございます。\n" +
+      "「契約は1日3件のはずなのに1件しか出ていない」というお問い合わせをいただきました。\n" +
+      "不具合ではありません。仕組みのご説明をさせてください。\n\n" +
+      "■ なぜ抑えているか\n" +
+      "連携したばかりのThreadsアカウントで、いきなり毎日たくさん投稿すると、\n" +
+      "Meta社の自動判定で「本人確認」や「一時停止」が起きやすいことが分かっています。\n" +
+      "実際に他のお客様のアカウントで停止が起きました（内容に問題はなく、のちにMeta社も誤判定と認めています）。\n" +
+      "そこで、連携してすぐの間は本数を抑えて、少しずつ増やす形にしています。\n\n" +
+      "■ 本数の流れ\n" +
+      "・連携から1〜5日目：1日1件\n" +
+      "・6〜10日目：1日2件\n" +
+      "・11日目から：ご契約どおりの本数\n\n" +
+      "■ 抑えた分は、あとで取り戻します\n" +
+      "11日目からは1日＋1件（1日3件のご契約なら1日4件）でお出しし、\n" +
+      "連携から30日間の合計は、ご契約どおりの本数になります（1日3件なら30日で90件）。\n" +
+      "取り戻しが終わったら、自動でご契約どおりの本数に戻ります。\n\n" +
+      "■ ライトプラン（1日1件）の方\n" +
+      "もともと1日1件ですので、減ることも取り戻しもありません。いつもどおりです。\n\n" +
+      "■ すでにThreadsをお使いだったアカウント\n" +
+      "30日以上前の投稿がある、またはフォロワーが100人以上のアカウントは、\n" +
+      "慣らし運転の対象外です。はじめからご契約どおりの本数でお出ししています。\n\n" +
+      "■ お客様にしていただくことはありません\n" +
+      "日数がたてば自動で戻ります。設定を変える必要もありません。\n\n" +
+      "ご不明な点は、このトークにそのままお送りください。",
   },
 ];
 

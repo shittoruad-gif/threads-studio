@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, ownPlaceMarkers } from "../shared/requestKind";
+import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, ownPlaceMarkers, wantsHuman, isShortWish } from "../shared/requestKind";
 import { isFeatureRequest } from "../shared/requestDetect";
 
 /**
@@ -304,5 +304,62 @@ describe("ご自身のお店を紹介する文章（2026-09-15 ご質問 #34）"
 
   it("短い一言は拾わない（ご用件が埋もれる）", () => {
     expect(looksLikeOwnPostMaterial("滑川市です", HIMI)).toBe(false);
+  });
+});
+
+/**
+ * 2026-09-18 夜間整備の通し確認で実測。
+ * 知識には答えが載っているのに、疑問の形でも12字以上でもない短いご要望が
+ * 「ご用件を下から選んでください」という、何も受け取っていない返事に落ちていた。
+ */
+describe("短いご要望を受け皿に落とさない（2026-09-18）", () => {
+  it.each([
+    "投稿の時間を変えたい",
+    "スタッフにも触らせたい",
+    "もっと関西弁にしたい",
+    "投稿を減らしたい",
+    "別のアカウントにつなぎ替えたい",
+    "領収書がほしい",
+    "文章を短くしたいです",
+  ])("短いご要望として受け取る: %s", (t) => {
+    expect(isShortWish(t)).toBe(true);
+  });
+
+  it.each([
+    "明日は臨時休診です",           // お知らせ（looksLikeAnnouncement が拾う）
+    "ありがとうございます",         // お礼
+    "ログインできません",           // 困りごと（looksLikeQuestion が拾う）
+    "投稿はいつ届きますか？",       // ご質問
+  ])("ご要望ではないものは拾わない: %s", (t) => {
+    expect(isShortWish(t)).toBe(false);
+  });
+
+  it("長い文は拾わない（12字以上は looksLikeQuestion が先に自動応答へ回す）", () => {
+    expect(isShortWish("あ".repeat(41) + "したい")).toBe(false);
+  });
+});
+
+/**
+ * ボタンには「担当者に聞く」があるのに、同じことを文章で打つと何も起きなかった
+ * （2026-09-18 夜間整備の通し確認で実測）。
+ */
+describe("人にお願いしたいご意思（2026-09-18）", () => {
+  it.each([
+    "担当者に聞きたい",
+    "担当の方にお願いします",
+    "人と話したい",
+    "人に聞きたい",
+    "電話で相談したい",
+    "問い合わせたい",
+  ])("担当者へお通しする: %s", (t) => {
+    expect(wantsHuman(t)).toBe(true);
+  });
+
+  it.each([
+    "投稿の時間を変えたい",
+    "ありがとうございます",
+    "固定投稿を作りたい",
+  ])("関係のない文では担当者送りにしない: %s", (t) => {
+    expect(wantsHuman(t)).toBe(false);
   });
 });

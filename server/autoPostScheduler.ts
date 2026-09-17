@@ -565,6 +565,9 @@ async function generateAutoPost(
       //   これが無いと、材料を全部渡していても毎回いちばん上の1つだけが使われる（shared/topicRotation.ts）。
       focusProblem: pickRotatingTopic(project.mainProblem, postTypeIndex + purposeIndex) || undefined,
       focusStrength: pickRotatingTopic(project.strength, postTypeIndex) || undefined,
+      // ★悩み・強みが1行しか無い方でも、N1顧客像に複数行の材料があることがある
+      //   （岩根様＝悩み1行・強みは文の折り返しで取り出せず・N1顧客像に7行。2026-09-18）
+      focusN1: pickRotatingTopic(project.n1Customer, purposeIndex) || undefined,
       // ★健康系のお店では、はじめの設定に書かれた結果表現を渡す前に落とす（2026-09-15 三上様指示）。
       //   落としたことはログに残す（誰の設定を洗ったかが分からないと、材料の足りない方に
       //   気づけない。岩根様のように登録内容そのものが薄い方は朝の報告に載せる）。

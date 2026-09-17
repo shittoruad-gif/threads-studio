@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { announcementForToday, DAILY_ANNOUNCEMENTS, renderAnnouncement } from "../shared/announcements";
+import { announcementApplies, announcementForToday, DAILY_ANNOUNCEMENTS, renderAnnouncement } from "../shared/announcements";
 
 /** 8:30の案内と一緒に、その日だけ全員へ送るお知らせ（2026-09-09） */
 describe("その日のお知らせ", () => {
@@ -49,5 +49,48 @@ describe("その日のお知らせ", () => {
     expect(free).toContain("■ 1. ");
     expect(free).not.toContain("■ 2. ");
     expect(free).toContain("このLINEに文章で送ってください");
+  });
+
+  /** 慣らし運転のお知らせ（2026-09-17 三上様の○・sendOn 9/19）。関係のない方に届かせない */
+  describe("慣らし運転のお知らせ", () => {
+    const ramp = DAILY_ANNOUNCEMENTS.find((a) => a.key === "account_ramp_2026-09-19")!;
+    const ctx = (newestAccountAgeDays: number | null) => ({
+      maxPerDay: 3, requireApproval: false, metaAiEnabled: false, newestAccountAgeDays,
+    });
+
+    it("送る日は9/19（本番反映の翌日以降＝R4）", () => {
+      expect(ramp.sendOn).toBe("2026-09-19");
+      expect(announcementForToday(jst("2026-09-19T07:40:00"))?.key).toBe("account_ramp_2026-09-19");
+      expect(announcementForToday(jst("2026-09-18T07:40:00"))?.key).not.toBe("account_ramp_2026-09-19");
+      expect(announcementForToday(jst("2026-09-20T07:40:00"))?.key).not.toBe("account_ramp_2026-09-19");
+    });
+
+    it("連携から30日以内の方にだけ送る", () => {
+      expect(announcementApplies(ramp, ctx(0))).toBe(true);   // きょう連携した方
+      expect(announcementApplies(ramp, ctx(9))).toBe(true);   // 慣らしの最中
+      expect(announcementApplies(ramp, ctx(29))).toBe(true);  // 取り戻しの最中
+      expect(announcementApplies(ramp, ctx(30))).toBe(false); // 取り戻しが終わった方
+      expect(announcementApplies(ramp, ctx(154))).toBe(false);
+      expect(announcementApplies(ramp, ctx(null))).toBe(false); // 連携が1件も無い方
+    });
+
+    it("お知らせの絞り込みが無いものは、今までどおり全員に送る", () => {
+      const a911 = DAILY_ANNOUNCEMENTS.find((a) => a.key === "morning_digest_2026-09-11")!;
+      expect(announcementApplies(a911, ctx(999))).toBe(true);
+      expect(announcementApplies(a911, ctx(null))).toBe(true);
+    });
+
+    it("お客様がすること・日数・本数・取り戻し・ライトの扱いが書かれている", () => {
+      const t = renderAnnouncement(ramp, ctx(3));
+      expect(t).toContain("1〜5日目：1日1件");
+      expect(t).toContain("6〜10日目：1日2件");
+      expect(t).toContain("11日目から：ご契約どおりの本数");
+      expect(t).toContain("30日間の合計は、ご契約どおりの本数になります");
+      expect(t).toContain("ライトプラン");
+      expect(t).toContain("お客様にしていただくことはありません");
+      // 「不具合ではない」を先に言う（2026-09-10 三上様指示：変わらないことを先に）
+      expect(t.indexOf("不具合ではありません")).toBeLessThan(t.indexOf("■ なぜ抑えているか"));
+      expect(Array.from(t).length).toBeLessThan(2000);
+    });
   });
 });
