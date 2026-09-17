@@ -130,6 +130,21 @@ export default function ThreadsConnect() {
   });
   const [justConnected, setJustConnected] = useState(false);
 
+  // ★LINEの「Threadsアカウントを追加」から来た方向け（?add=1 または ?from=line）。
+  //   この画面は「連携済みアカウントの一覧 → 注意書き」と続くため、追加のボタンが
+  //   画面のいちばん下にあり、スマホでは何度もスクロールしないと出てこなかった。
+  //   （2026-09-17 お客様のご指摘）来た目的が「追加」だと分かっているときは、
+  //   いちばん上に追加ボタンだけのカードを出して、開いてすぐ押せる状態にする。
+  const [wantsAdd] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const q = new URLSearchParams(window.location.search);
+    return q.get('add') === '1' || q.get('from') === 'line';
+  });
+  // 戻ってきたときにブラウザが途中までスクロールを復元することがあるので、先頭に戻す
+  useEffect(() => {
+    if (wantsAdd) window.scrollTo(0, 0);
+  }, [wantsAdd]);
+
   const utils = trpc.useUtils();
   const handleCallback = trpc.threads.handleCallback.useMutation({
     onSuccess: (data) => {
@@ -295,6 +310,59 @@ export default function ThreadsConnect() {
 
   return (
     <div className="max-w-4xl mx-auto">
+      {/* ★「アカウントを追加」目的で来た方に、開いてすぐ押せるボタンを最上部に出す。
+          （LINEのリンク ?add=1／?from=line から来たときだけ。通常の画面は変えない） */}
+      {wantsAdd && !justConnected && (
+        <div className="bg-emerald-50 border-2 border-emerald-300 rounded-xl p-5 mb-6">
+          <p className="text-emerald-900 font-bold text-base sm:text-lg">
+            {t('Threadsアカウントを追加する')}
+          </p>
+          <p className="text-emerald-800 text-xs sm:text-sm mt-1">
+            {t('いま連携しているアカウント')}：{accounts?.length || 0}
+            {maxAccounts === -1 ? ` / ${t('無制限')}` : ` / ${maxAccounts}`}
+          </p>
+          {maxAccounts === 0 ? (
+            <>
+              <Button
+                className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white py-6 text-base"
+                onClick={() => setLocation('/pricing')}
+              >
+                {t('プランを選んで連携を始める')}
+              </Button>
+              <p className="text-emerald-800 text-xs mt-2">
+                {t('ご契約のプランではまだアカウントを連携できません。')}
+              </p>
+            </>
+          ) : canAddMore ? (
+            <>
+              <Button
+                className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white py-6 text-base"
+                onClick={handleAddDifferentAccountClick}
+                disabled={handleCallback.isPending || !authUrlData}
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                {t((accounts?.length || 0) > 0 ? '別のThreadsアカウントを連携' : 'Threadsと連携する')}
+              </Button>
+              <p className="text-emerald-800 text-xs mt-2 leading-relaxed">
+                {t('押すとThreadsのログイン画面が開きます。最後に「許可」を押すと追加できます。')}
+                {(accounts?.length || 0) > 0 && (
+                  <>
+                    {' '}
+                    <a href="#connect-help" className="underline underline-offset-2 font-medium">
+                      {t('別のアカウントが選べないときはこちら')}
+                    </a>
+                  </>
+                )}
+              </p>
+            </>
+          ) : (
+            <p className="text-emerald-900 text-sm mt-3 leading-relaxed">
+              {t('連携できるアカウント数が上限に達しています。追加するには、使っていないアカウントの連携を解除するか、プランのご変更が必要です。')}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="mb-8">
         <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium mb-2">
@@ -665,7 +733,7 @@ export default function ThreadsConnect() {
           「なぜ同じアカウントが出るのか」を先に説明し、方法A/B/Cを提示することで、
           Threads OAuth 特有のはまりどころを回避してもらう。 */}
       {(accounts?.length || 0) > 0 && canAddMore && (
-        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <div id="connect-help" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 scroll-mt-4">
           <div className="flex items-start gap-2 mb-3">
             <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div>

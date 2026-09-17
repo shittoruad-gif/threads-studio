@@ -436,23 +436,31 @@ async function repliesForConnect(userId: number): Promise<unknown[]> {
       ? active.map((a: any, i: number) => `${i + 1}. @${a.threadsUsername}`).join("\n")
       : "（まだありません）";
     const full = max !== -1 && active.length >= max;
+    // ★やることを先、状況をあと。リンクには add=1 を付けて、開いた直後に
+    //   「追加」のボタンが画面のいちばん上に出るようにする（2026-09-17 お客様のご指摘。
+    //   以前は連携済みの一覧と注意書きの下にボタンがあり、探し出せなかった）。
     return [textWithQuick(
-      `いま連携しているThreadsアカウントです。\n\n${list}\n\n` +
-      `ご契約のプラン：${plan?.name ?? "—"}（連携できる上限 ${maxLabel}）\n` +
-      `あと ${rest} 追加できます。\n\n` +
-      (full
-        ? "上限に達しているため、追加するには不要なアカウントの連携を解除するか、上位プランへの変更が必要です。"
-        : "追加する場合は、こちらを開いて「Threadsと連携する」を押してください。\n" +
-          `${base}/threads-connect?openExternalBrowser=1&from=line\n\n` +
-          "※ このリンクは、SafariやChromeなどいつものブラウザで自動的に開きます（Threads側の認証があるため、LINEの中のブラウザでは進めないことがあります）。\n" +
-          "※ もしLINEの中で開いてしまった場合は、画面右下の「…」から「他のブラウザで開く」を選んでください。\n" +
+      full
+        ? `いま連携しているThreadsアカウントです。\n\n${list}\n\n` +
+          `ご契約のプラン：${plan?.name ?? "—"}（連携できる上限 ${maxLabel}）\n\n` +
+          "上限に達しているため、追加するには不要なアカウントの連携を解除するか、上位プランへの変更が必要です。"
+        : "Threadsアカウントを追加します。下のリンクを開くと、画面のいちばん上に追加のボタンが出ます。\n" +
+          `${base}/threads-connect?add=1&openExternalBrowser=1&from=line\n\n` +
+          "【やること】\n" +
+          "1. リンクを開く（ログイン画面が出たら、Threads Studioのメールアドレスとパスワードを入れてください。そのまま追加の画面に進みます）\n" +
+          "2. いちばん上の緑色のボタンを1回押す\n" +
+          "3. Threadsの画面で「許可」を押す\n\n" +
+          `いま連携しているアカウント\n${list}\n\n` +
+          `ご契約のプラン：${plan?.name ?? "—"}（連携できる上限 ${maxLabel}／あと ${rest}）\n\n` +
+          "※ 追加はパソコンからが確実です（スマホではThreadsアプリに横取りされ、うまく進まないことがあります）。\n" +
+          "※ このリンクは、SafariやChromeなどいつものブラウザで自動的に開きます。LINEの中で開いてしまった場合は、画面右下の「…」から「他のブラウザで開く」を選んでください。\n" +
           "※ 追加したいアカウントでThreadsにログインした状態で開くと、そのアカウントがつながります。\n" +
-          "※ 連携が終わったら、画面の「LINEに戻る」からこのトークへ戻れます。"),
+          "※ 連携が終わったら、画面の「LINEに戻る」からこのトークへ戻れます。",
       MENU_HINT,
     )];
   } catch {
     return [textWithQuick(
-      `Threadsアカウントの連携は、こちらから行えます。\n${base}/threads-connect?openExternalBrowser=1&from=line\n\n` +
+      `Threadsアカウントの追加は、こちらから行えます。開くと画面のいちばん上に追加のボタンが出ます。\n${base}/threads-connect?add=1&openExternalBrowser=1&from=line\n\n` +
       "※ いつものブラウザで開きます。LINEの中で開いた場合は、右下の「…」から「他のブラウザで開く」を選んでください。",
       MENU_HINT,
     )];
