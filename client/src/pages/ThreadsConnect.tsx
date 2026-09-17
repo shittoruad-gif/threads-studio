@@ -345,12 +345,24 @@ export default function ThreadsConnect() {
               </Button>
               <p className="text-emerald-800 text-xs mt-2 leading-relaxed">
                 {t('押すとThreadsのログイン画面が開きます。最後に「許可」を押すと追加できます。')}
-                {(accounts?.length || 0) > 0 && (
+                {(accounts?.length || 0) > 0 ? (
                   <>
                     {' '}
                     <a href="#connect-help" className="underline underline-offset-2 font-medium">
                       {t('別のアカウントが選べないときはこちら')}
                     </a>
+                  </>
+                ) : (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      onClick={() => startOAuth('switch')}
+                      disabled={handleCallback.isPending || !authUrlForceData}
+                      className="underline underline-offset-2 font-medium disabled:opacity-50"
+                    >
+                      {t('元のアカウントに戻ってしまうときはこちら')}
+                    </button>
                   </>
                 )}
               </p>
@@ -693,14 +705,35 @@ export default function ThreadsConnect() {
               {t('連携すると、AIで作った投稿をこのアプリから直接投稿・自動投稿できます。')}
             </p>
             {maxAccounts > 0 ? (
-              <Button
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-6"
-                onClick={handleAddDifferentAccountClick}
-                disabled={handleCallback.isPending || !authUrlData}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                {t('Threadsと連携する')}
-              </Button>
+              <>
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-6"
+                  onClick={handleAddDifferentAccountClick}
+                  disabled={handleCallback.isPending || !authUrlData}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  {t('Threadsと連携する')}
+                </Button>
+                {/* ★つなぎ替えの逃げ道（2026-09-17 お客様のご指摘）。
+                    上のボタンは「連携が0件のとき」はThreadsのいまのログイン状態を
+                    そのまま使う。そのため、1アカウントまでのプランの方が
+                    「連携解除 → もう一度連携」で別アカウントに替えようとすると、
+                    ログイン画面が出ないまま必ず元のアカウントに戻ってしまっていた。
+                    Threadsのログイン画面を必ず出す入口を、ここに用意する。 */}
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => startOAuth('switch')}
+                    disabled={handleCallback.isPending || !authUrlForceData}
+                    className="text-sm font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-800 disabled:opacity-50 dark:text-emerald-400"
+                  >
+                    {t('別のアカウントにつなぎ替える（Threadsのログイン画面からやり直す）')}
+                  </button>
+                  <p className="text-muted-foreground/70 text-xs mt-1.5 leading-relaxed">
+                    {t('いま開いているThreadsとは違うアカウントにつなぎたいときは、こちらを押してください。Threadsのログイン画面が必ず出ます。')}
+                  </p>
+                </div>
+              </>
             ) : (
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-6"
