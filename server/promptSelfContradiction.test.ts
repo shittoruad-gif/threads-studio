@@ -25,6 +25,18 @@ const PROMPT_FILES = [
 ];
 
 /**
+ * 「同意を求める確認疑問」の形（語尾の族）。
+ *
+ * BANNED_TIC_PHRASES は「いませんか？」のように**表記が固定**なので、
+ * 「〜になってませんか」「〜で悩んでいませんか」のような同じ形の別表記を
+ * すり抜ける。2026-09-17の週次リサーチで、1行目のお手本が
+ * 「〜ようになってませんか」を良い例として提示しており（threadsPrompts.ts）、
+ * その週に「いませんか？」を含む投稿が2本公開された（id 1498 / 1528）。
+ * 語尾の形でまとめて検出し、お手本に混ざったらここで落とす。
+ */
+const AGREEMENT_QUESTION_RE = /(てませんか|でませんか|ていませんか|でいませんか|と思いませんか|ではありませんか|ませんか？|ませんか\?)/;
+
+/**
  * 「その語を禁じている／避けさせている」ことを示す言葉。
  * この語を含む行でだけ、禁止語をそのまま書いてよい（読み手に何がダメか示すため）。
  */
@@ -74,6 +86,35 @@ describe("プロンプトが禁止語を自分でお手本にしていないか"
       expect(offenders, `禁止語をお手本として書いている行:\n${offenders.join("\n")}`).toEqual([]);
     });
   }
+
+  for (const rel of PROMPT_FILES) {
+    it(`${rel}: 同意を求める確認疑問の形が「禁止と書いていない行」に現れない`, () => {
+      const lines = fs.readFileSync(path.join(ROOT, rel), "utf8").split("\n");
+      const offenders: string[] = [];
+      let underProhibitionHeading = false;
+      lines.forEach((line, i) => {
+        if (isHeading(line)) underProhibitionHeading = isProhibitionHeading(line);
+        if (isCommentLine(line) || underProhibitionHeading || isProhibitionLine(line)) return;
+        if (AGREEMENT_QUESTION_RE.test(line)) offenders.push(`${rel}:${i + 1} → ${line.trim()}`);
+      });
+      expect(offenders, `同意を求める確認疑問をお手本として書いている行:\n${offenders.join("\n")}`).toEqual([]);
+    });
+  }
+
+  it("お客様向けの勝ち筋カード（positiveWinners）が禁止形をお手本にしていない", () => {
+    // ここの shape はお客様が読んで真似る「型」。生成プロンプトには入らないが、
+    // 自社が禁止している形を教えていると、お客様の自由入力や口調登録から
+    // 生成へ回り込む（2026-09-17に reassure_myth の shape を修正）。
+    const src = fs.readFileSync(path.join(ROOT, "shared/positiveWinners.ts"), "utf8");
+    const offenders: string[] = [];
+    src.split("\n").forEach((line, i) => {
+      if (isCommentLine(line) || isProhibitionLine(line)) return;
+      for (const p of BANNED_TIC_PHRASES) {
+        if (line.includes(p)) offenders.push(`positiveWinners.ts:${i + 1} 「${p}」 → ${line.trim()}`);
+      }
+    });
+    expect(offenders, `勝ち筋カードが禁止語をお手本にしている行:\n${offenders.join("\n")}`).toEqual([]);
+  });
 
   it("リライトプロンプトが『足してはいけない言葉』を自分で推奨していない", () => {
     // CRUTCH_WORDS（実は・正直・ぶっちゃけ・ちなみに）は
