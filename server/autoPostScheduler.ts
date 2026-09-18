@@ -444,6 +444,9 @@ async function generateAutoPost(
   try {
     // ★店舗（project）単位で学習：複数店舗ユーザーで別店舗の好みを混ぜない
     const stats = await db.getAngleFeedbackStats(userId, project.id);
+    // ★同じ切り口に偏らない（2026-09-18）。このアカウントの直近12本で使った切り口を渡し、
+    //   まだ出ていない切り口を出やすく・3回以上出た切り口を出にくくする（◯✕の学習はそのまま）。
+    const recentAngles = await db.getRecentAngles(threadsAccountId, 12).catch(() => [] as string[]);
     // ★実績学習：実際に見られた回数（インプレッション）でも重みを補正する。
     //   クライアントが◯✕を押さなくても、結果そのものから伸びる型が増えていく。
     const perf = await db.getAnglePerformanceStats(userId, project.id);
@@ -467,7 +470,7 @@ async function generateAutoPost(
       const cr = project.counselingResult ? JSON.parse(project.counselingResult) : null;
       preferredAngles = preferredAngleIds(cr?.preferredTypes ?? cr?.rawAnswers?.preferredTypesRaw ?? null, { excludeOutcomeAngles });
     } catch { preferredAngles = []; }
-    angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles });
+    angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles });
     if (preferredAngles.length) console.log(`[AutoPost] 希望の型を優先 userId=${userId} ${preferredAngles.join('/')} → ${angle.id}`);
     if (excludeOutcomeAngles) console.log(`[AutoPost] 健康系のお店のため結果を語る切り口を除外 userId=${userId}`);
     // ◯✕が付いた実例をプロンプトに注入して「このお店の好み」を学習させる
@@ -489,8 +492,13 @@ async function generateAutoPost(
   } catch (e) {
     console.error('[AutoPost] angle selection failed (fallback to none):', e);
   }
+  // ★2026-09-18：切り口の指示を「最優先」にし、位置も好みの指示のあと（末尾側）へ移した。
+  //   末尾の共通指示（AUTO_POST_STYLE_ADDENDUM）が「全指示より優先・1行目に数字・伝えることは1つ」と
+  //   宣言していたため、切り口の要件（日常の一場面／学びの話／小ワザの手順）が入る余地が無く、
+  //   モデルは切り口を捨てて「悩み一言→店名→整えます」の定型に逃げていた。
+  //   長さの決まりはそのまま。その枠の中で、切り口の要件を「1行目に数字」より優先させる。
   const angleNote = angle
-    ? `\n\n【今回の切り口（厳守）】\n- 今回は「${angle.label}」の切り口で書くこと：${angle.hint}\n- 毎回同じ書き出し・同じ構成にならないよう、この切り口らしい入り方にする。\n- ★切り口の説明に出てくる例（業種・症状・文言）はこの店とは無関係の説明用サンプル。**例の文言をそのまま投稿に使うことは禁止**。この店の入力情報だけで書く。`
+    ? `\n\n【今回の切り口（最優先・厳守）】\n- 今回は「${angle.label}」の切り口で書くこと：${angle.hint}\n- ★上の「1行目に数字を置く」は「数字・実績」の回だけの決まり。${angle.id === 'number_result' ? '今回はその回なので、1行目は必ず数字から始める。' : '今回はこの切り口の要件を優先し、数字で始めなくてよい。'}\n- ★「悩みを一言→店名→国家資格者が整えます／来てください」の定型は禁止。この切り口の要件が本文に入っていなければ不合格として作り直しになる。\n- 毎回同じ書き出し・同じ構成にならないよう、この切り口らしい入り方にする。\n- ★切り口の説明に出てくる例（業種・症状・文言）はこの店とは無関係の説明用サンプル。**例の文言をそのまま投稿に使うことは禁止**。この店の入力情報だけで書く。`
     : '';
 
   // 投稿の長さ指示（既定は短め。長めは本人が選んだときだけ）
@@ -641,12 +649,13 @@ async function generateAutoPost(
         role: 'user',
         content: promptWithMode + AUTO_POST_STYLE_ADDENDUM
           + seasonContextJST()
-          + angleNote
           + recentNote
           + lengthNote
           + traitsNote
           + (retryHint ? `\n\n【前回の下書きが不合格だった理由（厳守・同じ形にしない）】\n${retryHint}\n- 上の型の締めは書かない。締めは${allowEmoji ? '' : '絵文字なしで、'}この投稿の内容に固有の1文にする。` : '')
           + preferenceNote
+          // ★切り口の指示は好みの指示のあと（末尾に近いほど守られる。2026-09-18）
+          + angleNote
           + (CONVERSATION_POST_TYPES.has(postType) ? CONVERSATION_ENDING_ADDENDUM : '')
           // ★個人モードの上書きは最末尾（末尾の指示が最も遵守されやすい）
           + (personal ? personalModePromptOverride() : ''),
@@ -889,6 +898,28 @@ async function generateAutoPost(
         return false;
       }
     } catch { /* ガード失敗時はそのまま */ }
+
+    // ★切り口が守られたか（shared/angleGuard.ts）。2026-09-18 三上様
+    //   「いろいろなパターンを試せるのが売りなのに、最近の投稿は無難なものばかり」。
+    //   切り口の選択は分散している（週12〜19種類）のに、出来上がりは同じ型に潰れていた
+    //   （三上様のアカウントの直近6本が、切り口が違っても全部「悩み一言→店名→国家資格者が整えます」）。
+    //   ラベルだけ付いて中身が伴っていなかったので、その切り口なら必ず入る印が無ければ作り直す。
+    //   最後の作り直しでは枠を捨てず公開する（既存方針）。ガードは事実を増やさない・緩めない。
+    if (angle) {
+      try {
+        const { checkAngle, angleRetryHint } = await import('../shared/angleGuard');
+        const ac = checkAngle(angle.id, naturalMain);
+        if (!ac.ok) {
+          if (lastAttempt) {
+            console.log(`[AutoPost] angleGuard: ${ac.reason} だが最後の作り直しのため公開へ userId=${userId}`);
+          } else {
+            console.warn(`[AutoPost] angleGuard: ${ac.reason} → 作り直し userId=${userId} projectId=${project.id}`);
+            lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex), angleRetryHint(ac, angle.label));
+            return false;
+          }
+        }
+      } catch (e) { console.warn(`[AutoPost] angleGuard skipped: ${(e as Error)?.message}`); }
+    }
 
     // ★直近の投稿の使い回し（shared/jpQualityGuard.ts の findRepeatedPhrase）。
     //   2026-09-09 香取様が5本続けて「✕ 違う」を付けられた5本すべてに

@@ -3771,6 +3771,25 @@ export async function countAccountAutoPostsSinceConnect(accountId: number): Prom
  *   岩根様は「着物は敷居が高い」＋「本物の正絹」でほぼ同じ内容が2本）。
  *   運営側の取り下げ（評価が付いていない canceled）は含めない。
  */
+/**
+ * アカウントの直近の投稿の切り口（新しい順）。同じ切り口に偏らない抽選に使う（2026-09-18）。
+ * お客様が見送った下書きも数える（断られた切り口をすぐ再び出さない）。
+ */
+export async function getRecentAngles(accountId: number, limit: number = 12): Promise<string[]> {
+  const database = await getDb();
+  if (!database) return [];
+  try {
+    const rows: any = await database.execute(sql`
+      SELECT angle FROM scheduledPosts
+      WHERE threadsAccountId = ${accountId} AND angle IS NOT NULL AND source = 'auto'
+        AND status IN ('posted','pending','awaiting_approval','processing','canceled')
+      ORDER BY id DESC LIMIT ${limit}`);
+    return (((rows as any)[0] ?? []) as any[]).map((r) => String(r.angle || "")).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 export async function getRecentPostContents(accountId: number, limit: number = 10): Promise<string[]> {
   const database = await getDb();
   if (!database) return [];

@@ -266,7 +266,7 @@ export function pickAngle(
   perf?: AnglePerformance,
   now: number = Date.now(),
   mode: string = 'store',
-  opts: { excludeOutcomeAngles?: boolean; preferredAngles?: readonly string[] } = {},
+  opts: { excludeOutcomeAngles?: boolean; preferredAngles?: readonly string[]; recentAngles?: readonly string[] } = {},
 ): PostAngle {
   let pool = activeAngles(now, mode);
   // ★はじめの設定で選んだ「多めに作りたい型」の切り口は、集中検証期間で候補が絞られていても必ず候補に入れる
@@ -285,11 +285,22 @@ export function pickAngle(
   // ★希望の切り口は、候補の数に関係なく「合計で約35%」出るように重みを合わせる（2026-09-12）。
   //   以前は固定4倍で、集中検証期間（8候補）では約33%だったが、期間が明けて候補が18になると約19%に落ちていた。
   const PREFERRED_SHARE = 0.35;
+  // ★同じ切り口に偏らない（2026-09-18 三上様「いろいろなパターンを試せるのが売り」）。
+  //   直近12本で1度も出ていない切り口は2倍出やすく、3回以上出た切り口は半分にする。
+  //   ◯✕と実績の学習はそのまま掛かる（好きな切り口が消えることはない）。
+  //   実測：直近30日で上位3切り口が1アカウントの35〜56%を占めていた。
+  const recentCount = new Map<string, number>();
+  for (const id of opts.recentAngles ?? []) recentCount.set(id, (recentCount.get(id) ?? 0) + 1);
+  const exploration = (id: string): number => {
+    if (recentCount.size === 0) return 1;
+    const c = recentCount.get(id) ?? 0;
+    return c === 0 ? 2.0 : c >= 3 ? 0.5 : 1;
+  };
   const base = pool.map((a) => {
     const s = stats[a.id] ?? { good: 0, bad: 0 };
-    // 好み（◯✕）× 結果（実測インプレッション）の掛け合わせ
+    // 好み（◯✕）× 結果（実測インプレッション）× 偏り防止 の掛け合わせ
     const preference = Math.max(0.1, 1 + 0.6 * s.good - 0.5 * s.bad);
-    return Math.max(0.05, preference * performanceMultiplier(a.id, perf));
+    return Math.max(0.05, preference * performanceMultiplier(a.id, perf) * exploration(a.id));
   });
   const prefSum = pool.reduce((sum, a, i) => sum + (preferred.has(a.id) ? base[i] : 0), 0);
   const otherSum = pool.reduce((sum, a, i) => sum + (preferred.has(a.id) ? 0 : base[i]), 0);

@@ -1,0 +1,203 @@
+/**
+ * 切り口（shared/postAngles.ts）が、出来上がった本文で本当に守られたかを見る検査。
+ *
+ * ★2026-09-18 三上様「いろいろなパターンを試せるのが売りなのに、最近の投稿は無難なものばかり」。
+ *   実データ（直近30日・653本）で確かめると、切り口の**選択**は分散している（週に12〜19種類）のに、
+ *   **出来上がり**は同じ型に収束していた。三上様ご自身のアカウントの直近6本：
+ *     #1584 lesson（気づき・学び）   → 悩み一言→店名→「国家資格者が整えます😊」
+ *     #1577 surprise_fact（意外な事実）→ 悩み一言→店名→「国家資格者が整えます😊」
+ *     #1574 personality（人柄・売り込みゼロの回）→ 悩み一言→店名→「21時まで」→「来てくださいね😊」
+ *   切り口のラベルは付いているが、中身は全部同じ。
+ *
+ *   原因は2つ。
+ *   (1) 末尾の共通指示（AUTO_POST_STYLE_ADDENDUM）が「全指示より優先・50〜100字・1行目に数字・
+ *       伝えることは1つ」と宣言していて、切り口の要件（日常の一場面／学びの話／小ワザの手順）が
+ *       入る余地が無い。モデルは切り口を捨てて最小の定型に逃げる。
+ *   (2) 守られたかを見る検査が無く、ラベルだけ保存されていた。
+ *
+ *   ここは (2)。切り口ごとに「その切り口なら必ず入るはずの印」を1つ以上求め、
+ *   無ければ作り直し（既存の作り直しループ・最大3回。最後の1回は枠を捨てず公開）。
+ *   ガードは事実を増やさない・緩めない。構造だけを見る。
+ *
+ *   ★誤検知の実測（2026-09-18・直近30日の公開投稿653本に当てた結果）は
+ *     server/angleGuard.test.ts の describe「本番の実データで」に固定してある。
+ */
+
+export interface AngleCheck {
+  ok: boolean;
+  /** 落ちた理由（ログ用・短く） */
+  reason?: string;
+  /** 作り直しのときプロンプト末尾に渡す指示（お客様には見せない） */
+  hint?: string;
+  /** 「悩み一言→店名→整えます」の定型に戻っていたか */
+  defaultTemplate?: boolean;
+}
+
+/** 数字（半角・全角）で始まる行か */
+const LEADING_DIGIT = /^[\s「『【（(]*[0-9０-９]/;
+
+/**
+ * 「悩み一言→店名→国家資格者が整えます／来てください」の定型を見つける。
+ * どの切り口でも、この形に戻っていたら切り口は守られていない。
+ */
+const TEMPLATE_RESOLVE = /(整えます|整えていきます|整えていきましょう|ケアします|サポートします|お手伝いします|対応します|ご提案します|寄り添います|お待ちして|来てください|お越しください|ご来店ください|開いて(い)?ます|時まで(開|営業))/;
+const TEMPLATE_PROOF = /(国家資格|施術歴|創業|年の経験|\d+年)/;
+
+export function isDefaultTemplate(text: string): boolean {
+  const t = String(text ?? "");
+  const sentences = t.split(/[。！？!?\n]+/).map((s) => s.trim()).filter(Boolean);
+  if (sentences.length > 5) return false;
+  return TEMPLATE_RESOLVE.test(t) && TEMPLATE_PROOF.test(t);
+}
+
+/** 売り込み・案内の印（人柄の回に入っていたら失格） */
+const SALES_MARK = /(営業時間|時まで|ご予約|予約は|予約を|お待ちして|来てください|お越し|ご来店|初回|円|キャンペーン|徒歩\s*[0-9０-９]|駅から|お気軽に|ご相談ください)/;
+
+/**
+ * 切り口ごとの要件。
+ *   mark : 本文に1つ以上あるべき印（無ければ落とす）
+ *   ban  : 本文にあってはいけない印（あれば落とす）
+ *   hint : 作り直しの指示
+ * 印は「その切り口を書けば自然に入るもの」だけにし、書き方を縛らない。
+ */
+export interface AngleRequirement {
+  mark?: RegExp;
+  ban?: RegExp;
+  /** 1行目に数字（number_result 専用） */
+  leadingDigit?: boolean;
+  /** 「？」のあとに答えの文が続くこと（qa 専用） */
+  questionAndAnswer?: boolean;
+  hint: string;
+}
+
+const NO_TEMPLATE = "「悩みを一言→店名→国家資格者が整えます／来てください」の定型は禁止。";
+
+export const ANGLE_REQUIREMENTS: Record<string, AngleRequirement> = {
+  number_result: {
+    leadingDigit: true,
+    hint: `1行目を数字（年数・回数・人数・期間）から始めてください。入力情報に数字が無ければ、この切り口は使わず「悩みの言語化」から入ってください。${NO_TEMPLATE}`,
+  },
+  aruaru: {
+    mark: /(朝|夜|昼|夕方|帰り|通勤|デスク|パソコン|スマホ|階段|信号|レジ|台所|洗い物|布団|ベッド|会議|運転|抱っこ|買い物|靴|鏡|エレベーター|電車|バス|寝起き|起きた(ら|とき)|気づ(く|け|い)たら|ふと|いつの間にか|終わる頃|週末|月曜|金曜|三日坊主|続かな|ついつい|つい|後回し|サボ|忘れ|ダラダラ|やめちゃ|終わっちゃ)/,
+    hint: `「あるある」の回です。ターゲットの日常に起きる一瞬を、時間帯・場所・動作まで具体的に1つだけ切り取ってください（例の丸写しは禁止）。${NO_TEMPLATE}`,
+  },
+  customer_voice: {
+    mark: /(「[^」\n]{4,}」|『[^』\n]{4,}』|“[^”\n]{4,}”|と言われ|とおっしゃ|と聞かれ|の声|お客様から|よくいただく|嬉しそうに|笑顔に)/,
+    hint: `「お客様の声」の回です。入力情報にある実際の言葉・エピソードを「　」で1つ引用するか、「よくいただく質問」の形にしてください。無い言葉を作らない。${NO_TEMPLATE}`,
+  },
+  behind_scenes: {
+    mark: /(こだわ|理由|なぜ|だから|手順|道具|準備|裏側|選んで|使って|決めて|工夫|あえて)/,
+    hint: `「裏側・こだわり」の回です。なぜその手順・道具・やり方なのかを1つだけ語ってください。${NO_TEMPLATE}`,
+  },
+  misconception: {
+    mark: /(誤解|勘違い|思われがち|思っている人|思って(い)?ませんか|思ってません|実は|じつは|本当は|もったいない|正しくは|違います|逆効果|意味がない|無駄|ではありません|じゃない|だけでは)/,
+    hint: `「よくある誤解」の回です。ターゲットが信じがちな誤解を1つ取り上げ、「実は逆」「それ、もったいない」の形で正してください。${NO_TEMPLATE}`,
+  },
+  qa: {
+    questionAndAnswer: true,
+    hint: `「Q&A」の回です。お客様からよく聞かれる質問を1つ「？」で書き、そのあとに短い答えを続けてください。${NO_TEMPLATE}`,
+  },
+  seasonal: {
+    mark: /(春|夏|秋|冬|梅雨|花粉|寒|暑|冷え|乾燥|衣替え|年末|年始|新年|お盆|連休|台風|残暑|猛暑|季節|時期|この頃|今月|〇月|[0-9０-９]+月)/,
+    hint: `「季節ネタ」の回です。今の季節の体調・生活の変化を1つ書いてから、お店の専門性につなげてください。${NO_TEMPLATE}`,
+  },
+  local: {
+    mark: /(駅|徒歩|町|丁目|商店街|通り|交差点|バス停|沿線|近く|ご近所|地元|周辺|向かい|の角|の前|裏|沿い)/,
+    hint: `「地元ネタ」の回です。入力情報にある駅・町名・目印を使い、できるだけ狭い場所で言い切ってください（無い地名は作らない）。${NO_TEMPLATE}`,
+  },
+  change_story: {
+    mark: /(前は|以前|最初は|だった(の)?が|→|になりまし|ようになっ|変わ(っ|り)|今では|いまでは)/,
+    hint: `「変化の物語」の回です。来店前→来店後の変化を1人分だけ、入力情報にある事実で描いてください。${NO_TEMPLATE}`,
+  },
+  personality: {
+    ban: SALES_MARK,
+    mark: /(僕|私|わたし|自分|スタッフ|先生|今日|昨日|最近|休日|朝|夜|ごはん|コーヒー|家族|子ども|犬|猫|趣味|好き|ハマ|思う|考え|つい|実は)/,
+    hint: `「人柄・日常」の回です。売り込みゼロで、先生・スタッフの小さな日常や考え方をひとこと書いてください。営業時間・予約・来店の案内・徒歩◯分は書かない。${NO_TEMPLATE}`,
+  },
+  lesson: {
+    mark: /(気づ|学ん|学び|分か(っ|り)|わか(っ|り)|痛感|反省|思い知|教わ|失敗|遠回り|後悔|大事だと|大切だと|やっと)/,
+    hint: `「気づき・学び」の回です。仕事の中で得た気づきを、自分の話として1つ書いてください（失敗から学んだことでも可）。${NO_TEMPLATE}`,
+  },
+  pro_tip: {
+    mark: /(([0-9０-９]+|一|二|三|五|十)\s*(秒|分|回|日|セット)|だけで|だけなんです|するだけ|コツ|方法|やり方|ワザ|試して|やってみ|してみて|おすすめは)/,
+    hint: `「プロの小ワザ」の回です。自宅でできる方法を1つ、「1日5分」「10秒」のように時間か回数を添えて具体的に渡してください。効果は断定しない。${NO_TEMPLATE}`,
+  },
+  surprise_fact: {
+    mark: /(実は|じつは|意外|知られて|知って(まし|い)たか|ご存知|ほとんどの|多くの人|驚|本当は|実際は|意外と|あまり知られ|変わりません|戻ります|意味がない|逆効果|だけでは)/,
+    hint: `「意外な事実」の回です。専門家には常識でも一般には意外な事実を1つ、「実は」「意外と」の形で紹介してください（数値・研究を作らない）。${NO_TEMPLATE}`,
+  },
+  reassurance: {
+    mark: /(大丈夫|安心|心配|無理|怖|不安|遅く(は)?ない|問題ありません|ご安心|気にしなくて|せいじゃない|せいではない|敷居|気軽|初めてでも|はじめてでも|誰でも|恥ずかし)/,
+    hint: `「不安をほどく」の回です。お客様が「自分には無理かも」と思っている不安を1つ取り上げ、やさしく解いてください。${NO_TEMPLATE}`,
+  },
+  // 個人ブランディングモードだけの切り口
+  opinion: {
+    mark: /(思う|思います|考え|べき|違う|派|正直|個人的に|持論)/,
+    hint: `「持論・スタンス」の回です。入力情報の持論から1つ選び、理由を1つ添えて自分の意見として言い切ってください。${NO_TEMPLATE}`,
+  },
+  failure_story: {
+    mark: /(失敗|遠回り|後悔|やらか|ミス|うまくいかな|ダメだった|反省|試行錯誤|物足りな|苦労|つまず|迷っ|悩ん|挫折)/,
+    hint: `「失敗談」の回です。入力情報にある自分の失敗・遠回りを1つ正直に書き、学びで締めてください。${NO_TEMPLATE}`,
+  },
+  journey: {
+    mark: /(いま|今|途中|取り組|挑戦|続け|始め|準備中|進めて)/,
+    hint: `「挑戦の途中経過」の回です。いま取り組んでいることを過程のまま見せてください（成果や数字を作らない）。${NO_TEMPLATE}`,
+  },
+  // deep_worry / reservation_funnel は順番を守らせる独自の指示があり、別の検査で見ている。
+  // meta_ai_call / quote_pinned は表示用のラベルで、ここでは見ない。
+};
+
+/**
+ * 本文が切り口の要件を満たしているか。
+ * 要件を定義していない切り口は常に ok（検査しない）。
+ */
+export function checkAngle(angleId: string | null | undefined, text: string): AngleCheck {
+  if (!angleId) return { ok: true };
+  const req = ANGLE_REQUIREMENTS[angleId];
+  if (!req) return { ok: true };
+  const t = String(text ?? "");
+  const template = isDefaultTemplate(t);
+
+  if (req.ban && req.ban.test(t)) {
+    const m = t.match(req.ban)?.[0] ?? "";
+    return { ok: false, reason: `${angleId}: 売り込み「${m}」が入っている`, hint: req.hint, defaultTemplate: template };
+  }
+  if (req.leadingDigit) {
+    const first = t.split(/\r?\n/).map((s) => s.trim()).find(Boolean) ?? "";
+    if (!LEADING_DIGIT.test(first)) {
+      return { ok: false, reason: `${angleId}: 1行目が数字で始まっていない`, hint: req.hint, defaultTemplate: template };
+    }
+    return { ok: true };
+  }
+  if (req.questionAndAnswer) {
+    const i = t.search(/[？?]/);
+    const after = i >= 0 ? t.slice(i + 1).replace(/\s+/g, "") : "";
+    if (i < 0 || after.length < 8) {
+      return { ok: false, reason: `${angleId}: 質問と答えの形になっていない`, hint: req.hint, defaultTemplate: template };
+    }
+    return { ok: true };
+  }
+  if (req.mark && !req.mark.test(t)) {
+    return {
+      ok: false,
+      reason: template ? `${angleId}: 切り口の印が無く、定型に戻っている` : `${angleId}: 切り口の印が無い`,
+      hint: req.hint,
+      defaultTemplate: template,
+    };
+  }
+  // ★印があっても「悩み一言→店名→国家資格者が整えます」の定型に戻っていたら落とす（2026-09-18）。
+  //   ローカルの実生成で、意外な事実の回が「実は」を含みながら中身は定型のままだった（#591）。
+  //   直近30日の本番653本でこの定型に当たるのは4%。三上様が「無難」と呼んだ形そのもの。
+  if (template) {
+    return { ok: false, reason: `${angleId}: 印はあるが定型に戻っている`, hint: req.hint, defaultTemplate: true };
+  }
+  return { ok: true };
+}
+
+/** 作り直しのときプロンプト末尾に渡す一文（既存の retryHint と同じ形） */
+export function angleRetryHint(check: AngleCheck, angleLabel: string): string {
+  const head = check.defaultTemplate
+    ? `- 切り口「${angleLabel}」が守られておらず、「悩み一言→店名→整えます」の定型に戻っていた。`
+    : `- 切り口「${angleLabel}」が守られていなかった。`;
+  return `${head}\n- ${check.hint ?? ""}`;
+}

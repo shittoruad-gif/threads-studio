@@ -101,3 +101,43 @@ describe("切り口の集中検証期間（2026-08-29〜09-11）", () => {
     expect(seen.size).toBeGreaterThan(ANGLE_FOCUS.ids.length);
   });
 });
+
+/**
+ * 2026-09-18 三上様「いろいろなパターンを試せるのが売り」。
+ * 直近30日で上位3切り口が1アカウントの35〜56%を占めていた。
+ * 直近で出ていない切り口を出やすく、続けて出た切り口を出にくくする（◯✕の学習はそのまま）。
+ */
+describe("同じ切り口に偏らない（直近の切り口を渡す）", () => {
+  const T = Date.parse("2026-09-12T12:00:00+09:00");
+  const drawMany = (recent: string[], n = 4000) => {
+    let s = 0;
+    const rand = () => { s = (s + 1 / n) % 1; return s; };
+    const counts: Record<string, number> = {};
+    for (let i = 0; i < n; i++) {
+      const a = pickAngle({}, rand, undefined, T, "store", { recentAngles: recent });
+      counts[a.id] = (counts[a.id] ?? 0) + 1;
+    }
+    return counts;
+  };
+
+  it("直近に3回以上出た切り口は、出ていない切り口の1/4になる", () => {
+    const heavy = "surprise_fact";
+    const fresh = "lesson";
+    const counts = drawMany([heavy, heavy, heavy, "seasonal", "pro_tip"]);
+    // heavy=0.5倍・fresh=2倍 → 比は 1:4
+    expect(counts[fresh] / counts[heavy]).toBeGreaterThan(3.2);
+    expect(counts[fresh] / counts[heavy]).toBeLessThan(4.8);
+  });
+
+  it("直近の切り口が無ければ、これまでどおり均等", () => {
+    const counts = drawMany([]);
+    const values = Object.values(counts);
+    expect(Math.max(...values) - Math.min(...values)).toBeLessThanOrEqual(2);
+  });
+
+  it("◯が付いた好みの切り口は、直近に出ていても消えない", () => {
+    const liked = "personality";
+    const counts = drawMany([liked, liked, liked, liked]);
+    expect(counts[liked]).toBeGreaterThan(0);
+  });
+});
