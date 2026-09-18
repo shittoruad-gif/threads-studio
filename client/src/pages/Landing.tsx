@@ -279,8 +279,8 @@ export default function Landing() {
   const reasons = [
     {
       icon: <Sparkles className="w-10 h-10" />, title: "AIが投稿文を自動生成",
-      description: "テンプレートを選んで情報を入力するだけで、AIが魅力的な投稿文を自動生成。文章作成が苦手な方でも安心です。",
-      benefits: ["投稿作成時間が90%削減", "50種類以上のテンプレート", "業種別に最適化された文章"]
+      description: "お店の情報を登録するだけで、AIが毎日の投稿を自動生成。文章作成が苦手な方でも安心です。",
+      benefits: ["投稿作成時間が90%削減", "20の切り口を日替わりで", "業種別に最適化された文章"]
     },
     {
       icon: <Shield className="w-10 h-10" />, title: "安全フィルターでコンプラ安心",
@@ -299,8 +299,8 @@ export default function Landing() {
     },
     {
       icon: <TrendingUp className="w-10 h-10" />, title: "店舗集客に特化",
-      description: "整体院、美容サロン、飲食店など、店舗集客に特化したテンプレートと機能。業種に合わせた最適な投稿ができます。",
-      benefits: ["業種別テンプレート", "キャンペーン告知に最適", "地域密着型ビジネス向け"]
+      description: "整体院、美容サロン、飲食店など、店舗集客に特化した投稿の型と機能。業種に合わせた最適な投稿ができます。",
+      benefits: ["業種別の投稿の型", "イベント・キャンペーン告知に最適", "地域密着型ビジネス向け"]
     },
     {
       icon: <Zap className="w-10 h-10" />, title: "簡単操作で3分で完成",
@@ -310,9 +310,9 @@ export default function Landing() {
   ];
 
   const faqItems = [
-    { question: "無料プランでどこまで使えますか？", answer: "無料プランでは3プロジェクトまで作成可能で、基本的なAI投稿生成機能をご利用いただけます。予約投稿や複数アカウント管理は有料プランでご利用いただけます。" },
+    { question: "無料プランでどこまで使えますか？", answer: "無料プランではお店の情報を1件登録でき、AI投稿の生成を月3回までお試しいただけます。毎日の自動投稿・予約投稿・複数アカウント管理は有料プラン（7日間無料）でご利用いただけます。" },
     { question: "Threadsアカウントの連携は安全ですか？", answer: "Meta（旧Facebook）の公式OAuth認証を使用しており、お客様のパスワードを当社が保持することはありません。連携はいつでも解除できます。" },
-    { question: "どのような業種に対応していますか？", answer: "整体院、美容サロン、飲食店、エステサロン、ネイルサロン、ジム・フィットネス、歯科医院など、幅広い店舗ビジネスに対応したテンプレートをご用意しています。" },
+    { question: "どのような業種に対応していますか？", answer: "整体院、美容サロン、飲食店、エステサロン、ネイルサロン、ジム・フィットネス、歯科医院など、幅広い店舗ビジネスに対応した投稿の型をご用意しています。" },
     { question: "解約はいつでもできますか？", answer: "はい、ダッシュボードからいつでも解約できます。解約後も契約期間中はサービスをご利用いただけます。7日間の無料トライアル中に解約すれば料金は一切発生せず、解約手数料もかかりません。" },
     { question: "投稿の安全フィルタとは何ですか？", answer: "景品表示法、薬機法、医療広告ガイドラインなどの主要な広告規制に基づき、誇大表現や禁止用語を自動で検出・警告する機能です。安心して投稿を公開できます。" },
   ];
@@ -387,7 +387,7 @@ export default function Landing() {
           </Badge>
           
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 text-white leading-tight scale-in">
-            テンプレートを選んで<br className="hidden sm:block" />情報を入力するだけ。
+            お店の情報を登録するだけ。<br className="hidden sm:block" />あとはAIが毎日投稿。
           </h1>
           <p className="text-lg md:text-xl text-white/80 mb-4 max-w-3xl mx-auto leading-relaxed">
             整体院・美容サロン・飲食店など、店舗集客に特化したThreads投稿を自動生成
@@ -448,7 +448,7 @@ export default function Landing() {
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { icon: <Sparkles className="w-8 h-8" />, title: "AIで投稿作成", desc: "テンプレートを選んで情報を入力するだけで、魅力的な投稿文が自動生成されます", color: "bg-primary/10 text-primary" },
+              { icon: <Sparkles className="w-8 h-8" />, title: "AIで投稿作成", desc: "お店の情報を登録するだけで、毎日の投稿文が自動生成されます", color: "bg-primary/10 text-primary" },
               { icon: <Calendar className="w-8 h-8" />, title: "予約投稿", desc: "最適なタイミングで自動投稿。忙しい時間帯でも投稿を忘れません", color: "bg-blue-50 text-blue-600" },
               { icon: <Shield className="w-8 h-8" />, title: "安全フィルタ", desc: "広告規制や誇大表現を自動でチェック。コンプライアンスを守りながら投稿できます", color: "bg-green-50 text-green-600" },
             ].map((item, i) => (
@@ -499,9 +499,9 @@ export default function Landing() {
           </div>
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             {[
-              { num: "1", title: "テンプレート選択", desc: "業種・目的に合わせたテンプレートを選択" },
-              { num: "2", title: "情報入力", desc: "店舗名、対象、ベネフィットなどを入力" },
-              { num: "3", title: "生成・投稿", desc: "スレッドを生成して即座に投稿または予約" },
+              { num: "1", title: "会員登録", desc: "3分ほどで完了。公式LINEを友だち追加" },
+              { num: "2", title: "5つの質問に答える", desc: "公式LINEのトークで、お店のことを5つだけ（2分）" },
+              { num: "3", title: "届いた投稿にOK", desc: "毎日LINEに届く投稿を確認して押すだけ" },
             ].map((step, i) => (
               <div key={i} className="clean-card rounded-xl p-8 text-center hover-lift">
                 <div className="w-16 h-16 rounded-full bg-primary text-white flex items-center justify-center mx-auto mb-5">

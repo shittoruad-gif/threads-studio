@@ -52,11 +52,11 @@ export function CookieConsent() {
   if (!show) return null;
 
   return (
-    <div ref={boxRef} className="fixed bottom-0 left-0 right-0 z-50 p-3 sm:p-4 animate-in slide-in-from-bottom-5 duration-300">
-      <div className="max-w-3xl mx-auto bg-background border border-border rounded-xl shadow-lg p-3 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+    <div ref={boxRef} className="fixed bottom-0 left-0 right-0 z-50 p-2 sm:p-4 animate-in slide-in-from-bottom-5 duration-300">
+      <div className="max-w-3xl mx-auto bg-background border border-border rounded-xl shadow-lg p-2.5 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
         <div className="flex items-start gap-3 flex-1">
-          <Cookie className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+          <Cookie className="hidden sm:block w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+          <p className="text-[11px] sm:text-sm text-muted-foreground leading-snug sm:leading-relaxed">
             {t("当サイトでは、サービスの提供およびユーザー体験の向上のためにCookieを使用しています。サイトの利用を続けることで、")}
             <Link href="/privacy">
               <span className="text-primary hover:underline cursor-pointer">{t("プライバシーポリシー")}</span>

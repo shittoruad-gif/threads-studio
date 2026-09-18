@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkHealthClaims, isHealthBusiness, healthClaimRetryHint, scrubSettingText, scrubSettingList } from "../shared/healthClaimGuard";
+import { softenMedicalWords, checkHealthClaims, isHealthBusiness, healthClaimRetryHint, scrubSettingText, scrubSettingList } from "../shared/healthClaimGuard";
 import { findFabricatedNumbers, fabricatedNumberRetryHint } from "../shared/fabricatedNumberGuard";
 import { rampCap, compensationCount, manualExtraPosts, carryOverCount, inCooldown } from "../shared/accountRamp";
 
@@ -312,5 +312,20 @@ describe("2026-09-19 追加：原因の断定", () => {
     "原因は一つではないかもしれません",
   ])("和らげた形・否定は通す: %s", (t) => {
     expect(checkHealthClaims(t).hits).not.toContain("原因の断定");
+  });
+});
+
+/**
+ * 2026-09-19 本番の体験ページで「あなたの根本原因、LINEで診断できます」が出た。
+ * 整体院・接骨院が「診断」「治療」と書くのは医師法の観点で避ける言葉。文は落とさず語だけ置き換える。
+ */
+describe("2026-09-19 追加：「診断」「治療」の語の置き換え", () => {
+  it("診断→チェック、治療→施術", () => {
+    expect(softenMedicalWords("あなたの根本原因、LINEで診断できます。")).toBe("あなたの根本原因、LINEでチェックできます。");
+    expect(softenMedicalWords("僕の治療は、マッサージだけではありません。")).toBe("僕の施術は、マッサージだけではありません。");
+  });
+  it("固有の言い方（健康診断・治療院・治療家・治療法）は置き換えない", () => {
+    expect(softenMedicalWords("健康診断で指摘された方へ")).toBe("健康診断で指摘された方へ");
+    expect(softenMedicalWords("金沢の治療院です。治療家として")).toBe("金沢の治療院です。治療家として");
   });
 });

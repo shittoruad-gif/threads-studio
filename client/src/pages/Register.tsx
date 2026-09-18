@@ -42,6 +42,9 @@ export default function Register() {
 
   const registerMutation = trpc.auth.register.useMutation({
     onSuccess: () => {
+      // ★登録の直後にログイン画面でメールを打ち直させない（2026-09-19 お客様目線の通し確認）。
+      //   同じタブの中だけで受け渡す。ログイン画面で読んだら消す。
+      try { sessionStorage.setItem('ts-registered-email', email); } catch { /* 使えなくても登録は進める */ }
       setLocation(
         redirectParam
           ? `/login?registered=true&redirect=${encodeURIComponent(redirectParam)}`

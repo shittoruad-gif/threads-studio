@@ -17,7 +17,15 @@ export default function Login() {
   const searchParams = useSearch();
   const registered = searchParams.includes('registered=true');
 
-  const [email, setEmail] = useState('');
+  // ★登録の直後は、いま登録したメールを入れておく（Register.tsx が sessionStorage に置く。読んだら消す）
+  const [email, setEmail] = useState(() => {
+    if (!registered) return '';
+    try {
+      const v = sessionStorage.getItem('ts-registered-email') || '';
+      sessionStorage.removeItem('ts-registered-email');
+      return v;
+    } catch { return ''; }
+  });
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showRegisteredMessage, setShowRegisteredMessage] = useState(registered);

@@ -2,7 +2,7 @@
  * 朝のまとめ通知（毎朝 7:40 JST・1人1通）。2026-09-10 三上様指示「朝のLINEを2通にまとめる」。
  *
  * それまで朝に別々に届いていた
- *   7:40 昨日の投稿結果（dailyPostCountReport）／8:30 次にやること（nextActionJob）／
+ *   7:40 昨日の投稿結果（dailyPostCountReport）／8:30 次にやること（旧 nextActionJob・2026-09-19 に削除）／
  *   8:35 自動にしませんか（autoModeNudgeJob）／その日のお知らせ（announcements）
  * を、この1通にまとめる。承認カード（6:00）と Meta AI 呼びかけ（10:00）はそのまま。
  *

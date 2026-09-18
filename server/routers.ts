@@ -1983,8 +1983,9 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         try {
           const { isHealthBusiness, checkHealthClaims } = await import('../shared/healthClaimGuard');
           if (isHealthBusiness(input.businessType)) {
-            if (result.mainPost) result.mainPost = checkHealthClaims(String(result.mainPost), { allowPrice: false }).text;
-            if (result.cta) result.cta = checkHealthClaims(String(result.cta), { allowPrice: false }).text;
+            const { softenMedicalWords } = await import('../shared/healthClaimGuard');
+            if (result.mainPost) result.mainPost = softenMedicalWords(checkHealthClaims(String(result.mainPost), { allowPrice: false }).text);
+            if (result.cta) result.cta = softenMedicalWords(checkHealthClaims(String(result.cta), { allowPrice: false }).text);
           }
         } catch { /* 検査に失敗しても見本は返す */ }
 

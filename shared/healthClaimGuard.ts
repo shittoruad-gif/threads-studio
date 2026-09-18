@@ -222,3 +222,17 @@ export function scrubSettingList(list: readonly string[] | null | undefined): { 
   }
   return { list: out, hits };
 }
+
+/**
+ * 医師法・あはき法の観点で、健康系のお店が使わないほうがよい語を、意味を変えずに置き換える（文は落とさない）。
+ *
+ * ★2026-09-19 本番の体験ページで「あなたの根本原因、LINEで診断できます」が出た。整体院・接骨院が「診断」「治療」と
+ *   書くのは医師法の観点で避ける言葉。旧テンプレート経路（shared/generator.ts）には同じ置き換え表があったが、
+ *   毎日の自動投稿と体験ページの経路には無かった。直近30日の健康系548本での出現は「診断」0本・「治療」1本。
+ *   「健康診断」「治療院」「治療家」「治療師」は固有の言い方なので置き換えない。
+ */
+export function softenMedicalWords(text: string): string {
+  return String(text ?? "")
+    .replace(/(?<!健康)診断/g, "チェック")
+    .replace(/治療(?!院|家|師|法)/g, "施術");
+}

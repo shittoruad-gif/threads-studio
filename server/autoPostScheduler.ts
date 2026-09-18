@@ -884,6 +884,16 @@ async function generateAutoPost(
       }
     } catch { /* ガード失敗時はそのまま */ }
 
+    // ★「診断」「治療」の語を置き換える（健康系のみ・文は落とさない。2026-09-19）。
+    //   医師法・あはき法の観点で避ける言葉。旧テンプレート経路にはあった置き換えが、この経路には無かった。
+    try {
+      const { isHealthBusiness, softenMedicalWords } = await import('../shared/healthClaimGuard');
+      if (isHealthBusiness(project.businessType)) {
+        const softened = softenMedicalWords(naturalMain);
+        if (softened !== naturalMain) { console.log(`[AutoPost] 「診断」「治療」を言い換え userId=${userId}`); naturalMain = softened; }
+      }
+    } catch { /* 置き換えに失敗してもそのまま */ }
+
     // ★登録情報に無い数字（割合・順位・人数など）が入っていたら公開しない。
     //   2026-09-08 比嘉先生の当日補充で「3人に1人が知らないこと」が出た。実績は
     //   「開業11年・業界歴20年・のべ20万人以上」だけで、根拠の無い数字だった。

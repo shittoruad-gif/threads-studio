@@ -283,8 +283,8 @@ export default function TryGenerate() {
                         無料お試しは{FREE_TRIAL_LIMIT}回まで体験いただけます
                       </h3>
                       <p className="text-sm text-muted-foreground mb-6">
-                        無料登録すると、回数無制限でAI投稿の生成・保存・自動投稿など
-                        すべての機能をお使いいただけます。
+                        無料登録すると、公式LINEで5つの質問に答えるだけで、あなたのお店の投稿が作れます。
+                        毎日の自動投稿は有料プラン（7日間無料）で始められます。
                       </p>
                       <Link href="/register">
                         <Button size="lg" className="w-full text-base py-6 shadow-lg">
@@ -434,11 +434,11 @@ export default function TryGenerate() {
                       <Sparkles className="w-7 h-7 text-primary" />
                     </div>
                     <h3 className="text-lg md:text-xl font-bold mb-2">
-                      この投稿を保存して自動投稿を始める
+                      無料登録して、あなたのお店で試す
                     </h3>
                     <p className="text-sm text-muted-foreground mb-6">
-                      無料登録すると、投稿の保存・予約投稿・複数アカウント管理など
-                      すべての機能をお使いいただけます
+                      無料登録すると、公式LINEで5つの質問に答えるだけで、あなたのお店の投稿が作れます。
+                      毎日の自動投稿は有料プラン（7日間無料）で始められます
                     </p>
                     <div className="space-y-3">
                       <Link href="/register">
@@ -449,7 +449,7 @@ export default function TryGenerate() {
                         </Button>
                       </Link>
                       <div className="flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />クレジットカード不要</span>
+                        <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />登録はカード不要</span>
                         <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />30秒で完了</span>
                         <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />いつでもキャンセル可能</span>
                       </div>
