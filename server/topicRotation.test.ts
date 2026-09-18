@@ -120,3 +120,44 @@ describe("N1顧客像も日替わりで取り上げる（2026-09-18）", () => {
     expect(pickRotatingTopic("敷居が高いと思われている？", 0)).toBe("");
   });
 });
+
+/**
+ * 2026-09-18 昼。本番データで実測したところ、N1顧客像の指数に purposeIndex だけを使っていたため
+ * 0〜3 の4通りしか取らず、岩根様の7行のうち4行しか回っていなかった。
+ * 指数を postTypeIndex * 4 + purposeIndex（0〜23）にして、7行すべてが回ることを確かめる。
+ */
+describe("N1顧客像の指数は7行すべてを回る（2026-09-18 昼の修正）", () => {
+  const n1 = [
+    "園遊会に招待された方へ誂えた", "文化勲章の授賞式に参列される方へ誂えた", "講演会で登壇された方へ誂えた",
+    "海外訪問へ行かれる際に誂えた", "お茶席の方へ誂えた", "お琴の発表会の方へ誂えた", "同窓会へお出掛けの方へ誂えた",
+  ].join("\n");
+  const PURPOSES = 4, POST_TYPES = 6;
+  const idx = (typeIdx: number, purposeIdx: number) => typeIdx * PURPOSES + purposeIdx;
+
+  it("purposeIndex だけだと4行しか出ない（直す前の姿）", () => {
+    const picks = new Set([0, 1, 2, 3].map((p) => pickRotatingTopic(n1, p)));
+    expect(picks.size).toBe(4);
+  });
+
+  it("組み合わせた指数なら7行すべてが出る", () => {
+    const picks = new Set<string>();
+    let t = 0, p = 0;
+    for (let post = 0; post < 24; post++) {
+      picks.add(pickRotatingTopic(n1, idx(t, p)));
+      t = (t + 1) % POST_TYPES;
+      p = (p + 1) % PURPOSES;
+    }
+    expect(picks.size).toBe(7);
+  });
+
+  it("連続する2本で、同じお客様が続けて出ない", () => {
+    let t = 0, p = 0, prev = "";
+    for (let post = 0; post < 12; post++) {
+      const cur = pickRotatingTopic(n1, idx(t, p));
+      expect(cur).not.toBe(prev);
+      prev = cur;
+      t = (t + 1) % POST_TYPES;
+      p = (p + 1) % PURPOSES;
+    }
+  });
+});
