@@ -98,11 +98,23 @@ async function main() {
   // ── 3. 直近のご質問（自動応答が答えられているか）
   const recent = await get('admin.listQuestions', { limit: 30 });
   const rq = recent?.questions || [];
-  const last24 = rq.filter(x => Date.now() - new Date(x.createdAt).getTime() < 86400000);
+  const all24 = rq.filter(x => Date.now() - new Date(x.createdAt).getTime() < 86400000);
+  // ★「投稿の材料」はご質問ではない（お客様が実績やエピソードを送ってくださったもの）。
+  //   aiConfident=0 で記録されるが、その場で「実績として登録」をお出ししているので、
+  //   「答えられなかったご質問」に混ぜると毎朝の数が実態とずれる（2026-09-19）。
+  const material = all24.filter(x => x.category === '投稿の材料');
+  const last24 = all24.filter(x => x.category !== '投稿の材料');
   const unanswered = last24.filter(x => x.aiConfident !== 1);
   console.log(`\n■ 24時間のご質問: ${last24.length}件（うち自動で答えられなかったもの ${unanswered.length}件）`);
   for (const x of unanswered.slice(0, 5)) {
     console.log(`  ${String(x.question).replace(/\s+/g, ' ').slice(0, 70)}`);
+  }
+  if (material.length > 0) {
+    console.log(`\n■ 24時間に届いた投稿の材料: ${material.length}件（ご質問ではありません）`);
+    for (const x of material.slice(0, 5)) {
+      console.log(`  ${String(x.userName || x.userId || '')} ${String(x.question).replace(/\s+/g, ' ').slice(0, 60)}`);
+    }
+    console.log('  ※「実績として登録」を押していただけたかは、お店の情報の実績欄で確認できます');
   }
   console.log(`  分類の多い順: ${(recent?.categoryCounts || []).slice(0, 5).map(c => `${c.category}(${c.count})`).join(' / ') || 'なし'}`);
 
