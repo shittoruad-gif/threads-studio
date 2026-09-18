@@ -15,6 +15,9 @@ vi.mock("./lineNotify", () => ({ pushLine: vi.fn(), replyLine: vi.fn(), pushLine
 const LINE_USER = "Ugatingtest";
 let project: any;
 let state: any = null;
+// 完了メッセージはプランとThreads連携で分かれる（2026-09-19）。既定は「プロ・連携1件」
+let accounts: any[] = [{ id: 1, isActive: true }];
+let sub: any = { planId: "pro", status: "active" };
 
 // この道で使う分だけ本物らしく振る舞わせ、それ以外は「何もしない」で通す
 vi.mock("./db", () => {
@@ -26,9 +29,9 @@ vi.mock("./db", () => {
     getLineChatStateIgnoringTtl: async () => state,
     setLineChatState: async (_u: string, s: string, d: string) => { state = { state: s, payload: d, ageMin: 0 } as any; },
     clearLineChatState: async () => { state = null; },
-    getThreadsAccountsByUserId: async () => [],
-    getActiveThreadsAccounts: async () => [],
-    getSubscriptionByUserId: async () => ({ planId: "pro", status: "active" }),
+    getThreadsAccountsByUserId: async () => accounts,
+    getActiveThreadsAccounts: async () => accounts,
+    getSubscriptionByUserId: async () => sub,
   };
   // 触るだけで落ちないよう、この道で呼ばれる残りは「何もしない」で埋める
   for (const name of [
@@ -56,6 +59,8 @@ const textOf = (res: any) => (Array.isArray(res) ? res : [res])
 
 describe("あと2問（自動投稿に足りない必須項目）を最後まで受け取る", () => {
   beforeEach(() => {
+    accounts = [{ id: 1, isActive: true }];
+    sub = { planId: "pro", status: "active" };
     state = null;
     project = {
       id: "line_qa1", mode: "store", businessType: "整体院", area: "岡山県倉敷市玉島",
@@ -87,6 +92,25 @@ describe("あと2問（自動投稿に足りない必須項目）を最後まで
     const done = await handler.handleFreeText(LINE_USER, "完全予約制でゆったり見ます");
     expect(project.strength).toBe("完全予約制でゆったり見ます");
     expect(textOf(done)).toContain("自動投稿の準備がそろいました");
+  });
+
+  it("有料プランでもThreads未連携なら「明日の朝から届く」と言わず、アカウント連携を案内する", async () => {
+    accounts = [];
+    project.target = "デスクワークの会社員";
+    await handler.handlePostback(LINE_USER, "c=more&p=line_qa1&f=strengthRaw");
+    const done = await handler.handleFreeText(LINE_USER, "完全予約制でゆったり見ます");
+    expect(textOf(done)).not.toContain("明日の朝から");
+    expect(textOf(done)).toContain("アカウント連携");
+  });
+
+  it("フリープランなら「明日の朝から届く」と言わず、7日間無料の案内で終わる", async () => {
+    sub = null; // 契約なし＝フリープラン
+    project.target = "デスクワークの会社員";
+    await handler.handlePostback(LINE_USER, "c=more&p=line_qa1&f=strengthRaw");
+    const done = await handler.handleFreeText(LINE_USER, "完全予約制でゆったり見ます");
+    expect(textOf(done)).not.toContain("明日の朝から、お店の情報");
+    expect(textOf(done)).toContain("7日間無料");
+    expect(textOf(done)).toContain("/pricing");
   });
 
   it("必須がそろっている方の「きょうの1問」は、これまでどおり1問で終わる", async () => {

@@ -133,6 +133,17 @@ async function main() {
       const s = await call('autoPost.getSettings');
       const accs = await call('threads.list');
       const pjs = await call('project.list');
+      // ★トライアルを有料に持っていくための印（2026-09-19 三上様「フリー／トライアルを有料に」）。
+      //   カード登録つきの7日間トライアル中（trialEndsAt あり）で公開0本のお客様は、価値を一度も見ないまま
+      //   無料期間が終わって解約になりやすい。担当者から早めにお声がけする。
+      //   PROST2026 等の forever_free クーポン契約（trialEndsAt なし）は三上様の指示で対象外（9/19「このクライアントは無視で大丈夫」）。
+      let trialFlag = '';
+      if (u.subscriptionStatus === 'trialing' && u.trialEndsAt) {
+        const hist = (await call('autoPost.getHistory')) || [];
+        const posted = Array.isArray(hist) ? hist.filter((h) => h.status === 'posted').length : 0;
+        const daysLeft = Math.ceil((new Date(u.trialEndsAt).getTime() - Date.now()) / 86400000);
+        if (posted === 0) trialFlag += ` / ★トライアル中で公開0本（残り${daysLeft}日）→担当者からお声がけ`;
+      }
       const FREQ = { daily: '1日1回', twice_daily: '1日2回', three_daily: '1日3回' };
       // ★「未紐づけ」は、お店の情報が複数あるときだけ困りごとになる。
       //   情報が1件しかなければ、アプリはその1件を使うので実害はない
@@ -141,7 +152,7 @@ async function main() {
       const usable = (pjs || []).filter(p => !String(p.id).startsWith('demo_') && p.businessType && p.area && p.target && p.strength);
       const unlinked = (accs || []).filter(a => !a.defaultProjectId).length;
       const risky = unlinked > 0 && (accs || []).length > usable.length;
-      console.log(`  ${String(u.name || '').padEnd(14)} ${plan.padEnd(16)} 自動投稿:${s?.autoPostEnabled ? FREQ[s.autoPostFrequency] || s.autoPostFrequency : 'OFF'} / 公開前確認:${s?.autoPostRequireApproval ? 'する' : 'しない'} / 連携${(accs || []).length}件${risky ? ` (★お店の情報が未紐づけ${unlinked}件・取り違えの恐れ)` : ''}`);
+      console.log(`  ${String(u.name || '').padEnd(14)} ${plan.padEnd(16)} 自動投稿:${s?.autoPostEnabled ? FREQ[s.autoPostFrequency] || s.autoPostFrequency : 'OFF'} / 公開前確認:${s?.autoPostRequireApproval ? 'する' : 'しない'} / 連携${(accs || []).length}件${risky ? ` (★お店の情報が未紐づけ${unlinked}件・取り違えの恐れ)` : ''}${trialFlag}`);
     } catch (err) {
       console.log(`  ${u.name}: 取得できず (${String(err.message).slice(0, 40)})`);
     }

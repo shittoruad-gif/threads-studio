@@ -6,10 +6,7 @@
  * すべてトーク内の往復で完結させる。
  */
 import * as db from "./db";
-import {
-  buildPostCards, textWithQuick, textWithChoices, parsePostback, fmtJst, REWRITE_KINDS,
-  MENU_ITEMS, HELP_TOPICS, helpQuick, settingsQuick, settingsSummary, shouldClearPendingInput,
-} from "./lineChat";
+import { buildPostCards, textWithQuick, textWithChoices, parsePostback, fmtJst, REWRITE_KINDS, MENU_ITEMS, HELP_TOPICS, helpQuick, settingsQuick, settingsSummary, shouldClearPendingInput, planUpgradeExitText } from "./lineChat";
 import { COUNSELING_QUESTIONS, quickQuestions } from "../shared/counseling";
 import { buildCounselingBrief, renderBriefText } from "../shared/counselingBrief";
 import { applyIndustryOverrides } from "../shared/industryProfiles";
@@ -1034,6 +1031,27 @@ async function advanceCounseling(userId: number, lineUserId: string, st: Counsel
           ...askQuestion(nextSt),
         ];
       }
+      // ★「明日の朝から届く」は、自動投稿のあるプランでThreadsがつながっている方にだけ言う（2026-09-19）。
+      //   フリープランの方（自動投稿なし）にも同じ文を返していて、届かない約束になっていた。
+      {
+        const { plan: pl } = await planOf(userId);
+        const perDay = Number(pl?.features?.maxAutoPostsPerDay ?? 0);
+        const linked = (await db.getThreadsAccountsByUserId(userId).catch(() => [])).length > 0;
+        const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+        if (perDay <= 0) {
+          return [textWithQuick(
+            "ありがとうございます。これで投稿づくりの材料がそろいました。\n\n" + planUpgradeExitText(pl?.name ?? "フリープラン", base),
+            [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT],
+          )];
+        }
+        if (!linked) {
+          return [textWithQuick(
+            "ありがとうございます。これで投稿づくりの材料がそろいました。\n" +
+            "あとはThreadsのアカウントをつなぐだけで、翌朝から投稿が届きます。下の「アカウント連携」からどうぞ。",
+            [{ label: "アカウント連携", data: "m=connect" }, ...MENU_HINT],
+          )];
+        }
+      }
       return [textWithQuick(
         "ありがとうございます。これで自動投稿の準備がそろいました。\n" +
         "明日の朝から、お店の情報をもとにした投稿が届きます。",
@@ -1133,11 +1151,9 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
     )];
   }
   if (maxPerDay <= 0) {
+    // ★断りで終わらせず、次の行動（7日間無料→明日の朝6時に1本目）を示す（2026-09-19）
     return [textWithQuick(
-      head +
-      "ご利用中のフリープランでは、毎日の自動投稿はご利用いただけません（手動での作成はお試しいただけます）。\n" +
-      "毎日の自動投稿をご利用になる場合は、プランのご変更をお願いします。\n" +
-      `${base}/pricing?openExternalBrowser=1`,
+      head + planUpgradeExitText(plan?.name ?? "フリープラン", base),
       [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT],
     )];
   }
@@ -1404,11 +1420,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const maxPerDay = Number(plan?.features?.maxAutoPostsPerDay ?? 0);
     if (on && maxPerDay <= 0) {
       const base = process.env.APP_BASE_URL || "https://threads-studio.com";
-      return [textWithQuick(
-        `ご利用中の${plan?.name ?? "プラン"}では、自動投稿はご利用いただけません。\n` +
-        `毎日の自動投稿をご利用になるには、プランのご変更が必要です。\n${base}/pricing?openExternalBrowser=1`,
-        MENU_HINT,
-      )];
+      return [textWithQuick(planUpgradeExitText(plan?.name, base), [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT])];
     }
     await db.updateAutoPostSettings(user.id, { autoPostEnabled: on });
     if (!on) {
@@ -2446,11 +2458,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       const { plan } = await planOf(user.id);
       if ((plan?.features.maxAutoPostsPerDay ?? 0) <= 0) {
         const base = process.env.APP_BASE_URL || "https://threads-studio.com";
-        return [textWithQuick(
-          `ご利用中の${plan?.name ?? "プラン"}では、自動投稿はご利用いただけません。\n` +
-          `毎日の自動投稿をご利用になるには、プランのご変更が必要です。\n${base}/pricing?openExternalBrowser=1`,
-          MENU_HINT,
-        )];
+        return [textWithQuick(planUpgradeExitText(plan?.name, base), [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT])];
       }
     }
     // ★a= があればそのアカウントだけ（複数アカウント運用のアカウント別設定）

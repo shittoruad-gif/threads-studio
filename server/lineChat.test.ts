@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPostCards, parsePostback, textWithQuick, textWithChoices, settingsQuick, settingsSummary, helpQuick, shouldClearPendingInput } from "./lineChat";
+import { buildPostCards, parsePostback, textWithQuick, textWithChoices, settingsQuick, settingsSummary, helpQuick, shouldClearPendingInput, planUpgradeExitText } from "./lineChat";
 
 describe("LINEチャット完結UI", () => {
   it("投稿カードのボタンはすべてpostback（Webビューを開かない）", () => {
@@ -220,5 +220,27 @@ describe("承認カードのアカウント名（2026-09-16 梅原様）", () =>
   it("アカウント名が無ければ時刻だけ（従来どおり壊さない）", () => {
     const m: any = buildPostCards([base]);
     expect(texts(m)[0]).not.toContain("@");
+  });
+});
+
+/**
+ * 2026-09-19 三上様「フリー／トライアルを有料に持っていきたい」。
+ * フリープランの方への文は「自動投稿はご利用いただけません」＋URLの断りで終わっていた。
+ * 断りではなく、次の行動（7日間無料→明日の朝6時に1本目が届く）を示す。
+ */
+describe("フリープランの方への出口の案内", () => {
+  const t = planUpgradeExitText("フリープラン", "https://threads-studio.com");
+  it("「できません」で終わらず、無料期間と明日届くことを書く", () => {
+    expect(t).toContain("7日間無料");
+    expect(t).toContain("明日の朝6時");
+    expect(t).toContain("1本目");
+    expect(t).not.toContain("ご利用いただけません");
+  });
+  it("料金ページへのリンクと、無料期間中の解約が書いてある", () => {
+    expect(t).toContain("/pricing?openExternalBrowser=1");
+    expect(t).toContain("いつでも解約");
+  });
+  it("LINEの1通に収まる", () => {
+    expect(Array.from(t).length).toBeLessThan(500);
   });
 });
