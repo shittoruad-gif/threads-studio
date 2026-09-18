@@ -1976,6 +1976,18 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         if (result.mainPost) result.mainPost = stripRawUrls(result.mainPost);
         if (result.cta) result.cta = stripRawUrls(result.cta);
 
+        // ★体験ページの生成にも、健康系のお店では健康表現の検査を掛ける（2026-09-19）。
+        //   本番の通し確認で、ログイン不要の見本に結果・原因の言い切りがそのまま出ていた。
+        //   毎日の自動投稿と同じ基準（shared/healthClaimGuard.ts）で言い換える。
+        //   見本なので、引っかかりが多くても止めずに言い換えた文を返す。
+        try {
+          const { isHealthBusiness, checkHealthClaims } = await import('../shared/healthClaimGuard');
+          if (isHealthBusiness(input.businessType)) {
+            if (result.mainPost) result.mainPost = checkHealthClaims(String(result.mainPost), { allowPrice: false }).text;
+            if (result.cta) result.cta = checkHealthClaims(String(result.cta), { allowPrice: false }).text;
+          }
+        } catch { /* 検査に失敗しても見本は返す */ }
+
         // Return only the main post and metadata (no saving to DB)
         return {
           title: result.title,
