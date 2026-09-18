@@ -1434,6 +1434,13 @@ async function scheduleMetaAiCallPost(
 }
 
 export async function runAutoPostCatchUpForUser(userId: number, reason: string): Promise<void> {
+  // ★ローカルQA（本番スナップショットのDBを使う）では走らせない。
+  //   はじめの設定を保存した瞬間にここが動くため、QA_SAFE_MODE でも
+  //   実在のお客様あてに投稿の生成・ご案内が動いてしまう（2026-09-18）。
+  if (process.env.QA_SAFE_MODE === '1') {
+    console.log(`[AutoPost] QA_SAFE_MODE のため当日補充は動かしません user=${userId} (${reason})`);
+    return;
+  }
   try {
     const r = await processAutoPostGeneration({ onlyUserId: userId, fillToday: true });
     if (r.processed > 0) {

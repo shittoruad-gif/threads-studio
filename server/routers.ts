@@ -956,10 +956,24 @@ export const appRouter = router({
         }
         try {
           const parsed = JSON.parse(raw);
+          // ★列にしか残っていない内容も「答え」としてお返しする（2026-09-18）。
+          //   古い登録や、別の画面で直した分は rawAnswers に無いことがある。
+          //   そのまま返すと修正画面に出てこず、直せない項目が生まれるうえ、
+          //   保存のときに「空の答え」として扱われてしまう。
+          const { buildPrefillFromSavedProject } = await import('./counselingPrefill');
+          const rawAnswers = buildPrefillFromSavedProject(project as any);
+          // 使わない言葉は projects.ngWords が正（トークで足した分が入る）。
+          // 答えと合わせて、いま効いている全部をお見せする。
+          const words = (s: string) => s.split(/[、,\n]/).map((w) => w.trim()).filter(Boolean);
+          const ng = Array.from(new Set([
+            ...words(rawAnswers.ngListRaw ?? ''),
+            ...words(String((project as any).ngWords || '')),
+          ]));
+          if (ng.length > 0) rawAnswers.ngListRaw = ng.join('、');
           return {
             counseledAt: parsed?.counseledAt ?? null,
             useThreadsKnowhow: useThreadsKnowhow !== false,
-            result: parsed,
+            result: { ...parsed, rawAnswers },
           };
         } catch {
           return {
@@ -1004,6 +1018,12 @@ export const appRouter = router({
         }),
         /** 確認画面で書き換えた「一言でいうと」。空なら回答から下書きする */
         oneLine: z.string().max(120).optional(),
+        /**
+         * 確認画面に出して、直せる状態にしていた質問のid。
+         * ここに入っている項目だけ「空にした＝消したい」として扱う
+         * （お見せしていない項目の登録は触らない）。
+         */
+        askedFields: z.array(z.string()).max(40).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         // 保存処理は server/counselingSave.ts に集約（LINEチャットでの聞き取りと同じ結果にする）
@@ -1014,6 +1034,7 @@ export const appRouter = router({
           mode: input.mode,
           answers: input.answers as any,
           oneLine: input.oneLine ?? '',
+          askedFields: input.askedFields,
         });
         if (!saved.ok) {
           throw new TRPCError({

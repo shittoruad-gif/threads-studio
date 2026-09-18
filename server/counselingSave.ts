@@ -4,6 +4,7 @@
  * まったく同じ保存結果になるようにする（2026-09-01）。
  */
 import * as db from "./db";
+import { isEmptyAnswer } from "../shared/answerText";
 
 export interface CounselingAnswersInput {
   storeNameRaw?: string; businessTypeRaw?: string; areaRaw?: string; targetRaw?: string;
@@ -39,6 +40,14 @@ export async function saveCounselingAnswers(params: {
   answers: CounselingAnswersInput;
   /** お客様が書き換えた「一言でいうと」。無ければ回答から下書きする */
   oneLine?: string;
+  /**
+   * ★今回お客様にお見せして、直せる状態にしていた質問のid（2026-09-18）。
+   *   ここに入っている項目は「空にした・なしと答えた」も答えとして扱い、登録から消す。
+   *   お見せしていない項目（トークの「きょうの1問」など）は、いまの登録に触らない。
+   *   これが無いと、消したはずの内容が列に残り、投稿に出続ける
+   *   （＝直せる項目と直せない項目が生まれる・森様のお問い合わせ）。
+   */
+  askedFields?: string[];
 }): Promise<
   | { ok: true; projectId: string; /** 業種と答えのズレ（あれば本人にも伝える） */ mismatchSummary?: string; mismatchFields?: string[] }
   | { ok: false; reason: string }
@@ -76,27 +85,45 @@ export async function saveCounselingAnswers(params: {
     useThreadsKnowhow: result.useThreadsKnowhow,
     mode: params.mode,
   };
-  if (trimmed(a.businessTypeRaw)) patch.businessType = trimmed(a.businessTypeRaw);
-  if (trimmed(a.areaRaw)) patch.area = trimmed(a.areaRaw);
-  if (trimmed(a.targetRaw)) patch.target = trimmed(a.targetRaw);
-  if (trimmed(a.mainProblemRaw)) patch.mainProblem = trimmed(a.mainProblemRaw);
-  if (trimmed(a.strengthRaw)) patch.strength = trimmed(a.strengthRaw);
-  const storeName = trimmed(a.storeNameRaw);
-  if (storeName && !/^(なし|無し|特になし)$/i.test(storeName)) patch.storeName = storeName;
+  const asked = new Set(params.askedFields ?? []);
+  /**
+   * 答えを列に反映する。
+   *  ・中身のある答え　　　　　　　　→ そのまま入れる
+   *  ・「なし」と答えた／空にした答え → その項目をお見せしていたなら、登録も消す
+   *  ・お聞きしていない項目　　　　　→ いまの登録に触らない
+   * ★「なし」をそのまま列に書かない。以前は projects.strength に「なし」の3文字が入り、
+   *   それが事実としてプロンプトに流れていた。
+   */
+  const put = (column: string, answerId: string, value?: string) => {
+    const v = trimmed(value ?? (a as any)[answerId]);
+    if (v && !isEmptyAnswer(v)) { patch[column] = v; return; }
+    if (asked.has(answerId)) patch[column] = "";
+  };
+  put("businessType", "businessTypeRaw");
+  put("area", "areaRaw");
+  put("target", "targetRaw");
+  put("mainProblem", "mainProblemRaw");
+  put("strength", "strengthRaw");
+  const storeName = isEmptyAnswer(trimmed(a.storeNameRaw)) ? "" : trimmed(a.storeNameRaw);
+  put("storeName", "storeNameRaw");
   if (!project.title || project.title === "マイプロジェクト") patch.title = deriveTitle();
   // ★お客様は確認画面でこの内容を見たうえで「登録する」を押している。
   //   空のときだけ書く作りだと、実績や強みを直したくて設定をやり直しても
   //   画面には新しい内容が出たまま保存されず、案内と中身が食い違う。
   //   いただいた答えが空でなければ、そのまま反映する。
-  if (trimmed(a.uspRaw)) patch.usp = trimmed(a.uspRaw);
-  if (result.realEpisodes.length > 0) patch.n1Customer = result.realEpisodes.join("\n");
-  if (result.realProofs.length > 0) patch.proof = result.realProofs.join("\n");
-  if (result.industryMyths.length > 0) patch.belief = result.industryMyths.join("\n");
+  put("usp", "uspRaw");
+  put("n1Customer", "realEpisodesRaw", result.realEpisodes.join("\n"));
+  put("proof", "realProofsRaw", result.realProofs.join("\n"));
+  put("belief", "industryMythsRaw", result.industryMyths.join("\n"));
   // ★「絶対に書きたくないこと」（Q18）は projects.ngWords に入れないと効かない。
   //   投稿を機械的に検査する enforceNgWords がこの列だけを見ているため、
   //   ここに入れ忘れると「絶対に入れません」という案内が実際には守られない。
-  //   トークで後から足した言葉を消さないよう、既存とあわせて残す。
-  if (result.ngList.length > 0) {
+  //   お見せしていない（askedFields に無い）ときは、トークで後から足した言葉を
+  //   消さないよう既存とあわせて残す。お見せしたときは、いまの全部を見たうえで
+  //   直していただいているので、そのまま入れ替える（1語だけ消す、ができるように）。
+  if (asked.has("ngListRaw")) {
+    patch.ngWords = result.ngList.join("、");
+  } else if (result.ngList.length > 0) {
     const cur = String((project as any).ngWords || "").split(/[、,\n]/).map((w) => w.trim()).filter(Boolean);
     patch.ngWords = Array.from(new Set([...cur, ...result.ngList])).join("、");
   }

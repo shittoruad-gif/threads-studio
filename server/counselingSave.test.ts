@@ -72,6 +72,55 @@ describe("はじめの設定の保存", () => {
     expect(state.patched.ngWords).toBeUndefined();
   });
 
+  // ★2026-09-18 森様のお問い合わせ「修正内容が保存できる部分、できない部分が出来てしまう」。
+  //   確認画面に出してお見せした項目は、空にされたら登録からも消えなければならない。
+  //   消えないと、投稿には前の内容が出続ける（お客様には直せない）。
+  it("画面に出した項目を空にしたら、その登録も消える", async () => {
+    state.project = { id: "p1", userId: 1, title: "ナイト整体院", strength: "古い強み", proof: "古い実績" };
+    state.patched = null;
+    await saveCounselingAnswers({
+      userId: 1, projectId: "p1", mode: "store",
+      answers: { ...ANSWERS, strengthRaw: "", realProofsRaw: "" },
+      askedFields: ["strengthRaw", "realProofsRaw"],
+    });
+    expect(state.patched.strength).toBe("");
+    expect(state.patched.proof).toBe("");
+  });
+
+  it("画面に出していない項目は、空でもいまの登録を消さない", async () => {
+    state.project = { id: "p1", userId: 1, title: "ナイト整体院", strength: "残したい強み", proof: "残したい実績" };
+    state.patched = null;
+    await saveCounselingAnswers({
+      userId: 1, projectId: "p1", mode: "store",
+      answers: { ...ANSWERS, strengthRaw: "", realProofsRaw: "" },
+      askedFields: ["businessTypeRaw"],
+    });
+    expect(state.patched.strength).toBeUndefined();
+    expect(state.patched.proof).toBeUndefined();
+  });
+
+  it("「なし」と答えた項目は、その3文字を登録せずに空にする", async () => {
+    state.project = { id: "p1", userId: 1, title: "ナイト整体院", usp: "古い強み" };
+    state.patched = null;
+    await saveCounselingAnswers({
+      userId: 1, projectId: "p1", mode: "store",
+      answers: { ...ANSWERS, uspRaw: "なし" },
+      askedFields: ["uspRaw"],
+    });
+    expect(state.patched.usp).toBe("");
+  });
+
+  it("使わない言葉は、一覧をお見せしたときだけ入れ替える（1語だけ消せる）", async () => {
+    state.project = { id: "p1", userId: 1, title: "ナイト整体院", ngWords: "必ず治る、完治、格安" };
+    state.patched = null;
+    await saveCounselingAnswers({
+      userId: 1, projectId: "p1", mode: "store",
+      answers: { ...ANSWERS, ngListRaw: "必ず治る、格安" },
+      askedFields: ["ngListRaw"],
+    });
+    expect(state.patched.ngWords).toBe("必ず治る、格安");
+  });
+
   it("他の方のプロジェクトには保存しない", async () => {
     state.project = { id: "p1", userId: 999, title: "よそのお店" };
     state.patched = null;

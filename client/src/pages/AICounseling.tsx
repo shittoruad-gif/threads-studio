@@ -52,6 +52,16 @@ const QUESTION_LABELS: Record<string, string> = {
   useThreadsKnowhow: 'Threadsノウハウの使用',
 };
 
+/**
+ * ★確認・修正画面に必ず並べる項目（2026-09-18 森様のお問い合わせ）。
+ *   画面上部の「AIはこう理解しました」の5行は、この答えから作られている。
+ *   ここが一覧に出ていないと、違うと分かっても直せない
+ *   （＝直せる項目と直せない項目が生まれる）。登録ずみの方には必ず出す。
+ */
+const BRIEF_SOURCE_IDS: string[] = [
+  'targetRaw', 'mainProblemRaw', 'menuRaw', 'strengthRaw', 'benefitsDailyRaw', 'uspRaw',
+];
+
 /** 回答を人が読める表示に整形（選択肢はラベルに変換） */
 function formatAnswerForReview(q: CounselingQuestion, value: string): string {
   const raw = (value ?? '').trim();
@@ -175,8 +185,13 @@ export default function AICounseling() {
   }, [answers, stepIndex, isNew, projectId]);
   // 'questions' = 1問ずつ回答 / 'review' = 全回答の一覧（修正可）
   const [view, setView] = useState<'questions' | 'review'>('questions');
-  // レビューから1問だけ修正中か（修正後はレビューへ戻す）
-  const [editingOne, setEditingOne] = useState(false);
+  // レビューから1問だけ修正中のとき、その質問id（修正後はレビューへ戻す）。
+  // ★番号ではなくidで持つ。一覧に出す項目は「まず4問」より多いので、
+  //   番号で持つと別の質問を開いてしまう。
+  const [editingId, setEditingId] = useState<keyof CounselingAnswers | null>(null);
+  const editingOne = editingId !== null;
+  // 一覧に、まだ答えていない項目まで全部出すか（「ほかの項目も直す」）
+  const [showAllQuestions, setShowAllQuestions] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
   const utils = trpc.useUtils();
@@ -343,8 +358,24 @@ export default function AICounseling() {
   const totalSteps = questions.length;
   const isLast = stepIndex === totalSteps - 1;
   const isFirst = stepIndex === 0;
-  const currentQuestion = questions[stepIndex];
+  // 修正中はその質問、それ以外は「まず4問」の進行中の質問
+  const currentQuestion = (editingId && allQuestions.find((q) => q.id === editingId)) || questions[stepIndex];
   const currentAnswer = answers[currentQuestion.id] ?? '';
+
+  // ★確認・修正画面に並べる項目。
+  //   「まず4問」＋要旨のもとになる項目＋すでに答えのある項目は必ず出す。
+  //   （公式LINEの「きょうの1問」で答えた内容も、ここで直せるようにする）
+  //   残りは「ほかの項目も直す」で開く。はじめての登録では、空欄が並んで
+  //   不安にさせないよう、これまでどおり答えた分だけを出す。
+  const quickIds = new Set(questions.map((q) => String(q.id)));
+  const reviewQuestions = allQuestions.filter((q) => {
+    const id = String(q.id);
+    if (showAllQuestions) return true;
+    if (quickIds.has(id)) return true;
+    if (!isNew && BRIEF_SOURCE_IDS.includes(id)) return true;
+    return Boolean(String(answers[q.id] ?? '').trim());
+  });
+  const hiddenQuestionCount = allQuestions.length - reviewQuestions.length;
 
   const setAnswer = (id: keyof CounselingAnswers, value: string) => {
     setAnswers((prev) => ({ ...prev, [id]: value }));
@@ -374,7 +405,15 @@ export default function AICounseling() {
   });
 
   const handleSave = () => {
-    saveMutation.mutate({ projectId, mode: mode ?? 'store', answers: buildAnswersPayload(answers), oneLine });
+    saveMutation.mutate({
+      projectId,
+      mode: mode ?? 'store',
+      answers: buildAnswersPayload(answers),
+      oneLine,
+      // ★画面に出してお見せした項目だけ「空にした＝消したい」として扱う。
+      //   出していない項目の登録には触らせない（消えた、を作らないため）。
+      askedFields: reviewQuestions.map((q) => String(q.id)),
+    });
   };
 
   // canProceed は現在のレンダーで描画されるボタンの enable/disable 用。
@@ -402,7 +441,7 @@ export default function AICounseling() {
 
     // レビューから1問だけ修正していた場合は、修正を反映してレビューへ戻る。
     if (editingOne) {
-      setEditingOne(false);
+      setEditingId(null);
       setView('review');
       return;
     }
@@ -420,7 +459,7 @@ export default function AICounseling() {
   const handleBack = () => {
     if (editingOne) {
       // 修正中はレビューへ戻る（変更は保持）。
-      setEditingOne(false);
+      setEditingId(null);
       setView('review');
       return;
     }
@@ -435,9 +474,8 @@ export default function AICounseling() {
   };
 
   /** レビューから特定の設問だけ修正する */
-  const editQuestion = (index: number) => {
-    setStepIndex(index);
-    setEditingOne(true);
+  const editQuestion = (id: keyof CounselingAnswers) => {
+    setEditingId(id);
     setView('questions');
   };
 
@@ -535,8 +573,8 @@ export default function AICounseling() {
                 <div>
                   <p className="text-sm font-medium text-emerald-900">AIはこう理解しました</p>
                   <p className="text-xs text-emerald-800/80 mt-0.5">
-                    毎日の投稿は、この内容に沿って作られます。違うところがあれば下の各項目の「修正」から直してください。
-                    {rows.length < 5 && 'ここに出ていない項目は、投稿が動き始めてから公式LINEで1日1問ずつお聞きします。いまのままで投稿は作れます。'}
+                    毎日の投稿は、この内容に沿って作られます。ここはお答えいただいた内容から作られるので、下の各項目を直せばすぐ入れ替わります（時間がたっても勝手には変わりません）。
+                    {rows.length < 5 && '空いている項目は、下の一覧からいま入力できます（公式LINEでも1日1問ずつお聞きします）。いまのままでも投稿は作れます。'}
                   </p>
                 </div>
                 <dl className="space-y-1.5">
@@ -571,12 +609,12 @@ export default function AICounseling() {
           <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3">
             <p className="text-sm font-medium text-emerald-800">入力内容の確認・修正</p>
             <p className="text-xs text-emerald-700 mt-0.5">
-              間違いがあれば各項目の「修正」から直せます。問題なければ下の「保存する」を押してください。
+              間違いがあれば各項目の「修正」から直せます。空にして保存すれば、その項目は登録から消えます。問題なければ下の「保存する」を押してください。
             </p>
           </div>
 
           <div className="space-y-2">
-            {questions.map((q, i) => {
+            {reviewQuestions.map((q, i) => {
               const display = formatAnswerForReview(q, (answers[q.id] as string) ?? '');
               const isEmpty = display === '（未入力）';
               return (
@@ -598,17 +636,28 @@ export default function AICounseling() {
                       variant="ghost"
                       size="sm"
                       className="shrink-0"
-                      aria-label={`${QUESTION_LABELS[q.id] || '項目'}を修正`}
-                      onClick={() => editQuestion(i)}
+                      aria-label={`${QUESTION_LABELS[q.id] || '項目'}を${isEmpty ? '入力' : '修正'}`}
+                      onClick={() => editQuestion(q.id)}
                     >
                       <Pencil className="h-3.5 w-3.5 mr-1" />
-                      修正
+                      {isEmpty ? '入力' : '修正'}
                     </Button>
                   </CardContent>
                 </Card>
               );
             })}
           </div>
+
+          {/* 一覧に出していない項目も、ここから直せるようにする */}
+          {hiddenQuestionCount > 0 && (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setShowAllQuestions(true)}
+            >
+              ほかの項目も見る・直す（残り{hiddenQuestionCount}項目）
+            </Button>
+          )}
 
           {/* 予約・LINE・HP などの誘導先URL（ここでもまとめて修正できる） */}
           {!isNew && projectId && project && (
@@ -627,7 +676,7 @@ export default function AICounseling() {
           <div className="flex items-center gap-2 sticky bottom-2 z-40 bg-background/95 backdrop-blur-sm py-2 -mx-4 px-4 rounded-t-lg">
             <Button
               variant="outline"
-              onClick={() => { setEditingOne(false); setStepIndex(0); setView('questions'); }}
+              onClick={() => { setEditingId(null); setStepIndex(0); setView('questions'); }}
             >
               最初から見直す
             </Button>
