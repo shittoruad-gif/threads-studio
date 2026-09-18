@@ -289,12 +289,17 @@ export async function runCommentWatchJob(): Promise<void> {
           const { pushMessages, sendCommentPush, liffUrl } = await import('./lineNotify');
           const storeName = (fullUser as any).storeName ?? null;
           const items: any[] = [];
+          const { looksLikeSpamComment } = await import('../shared/commentSpam');
           for (const c of newComments.slice(0, 5)) {
             if (!c.id || !c.accountId) continue;
+            // ★勧誘・出会い系には文案を作らない（AIも呼ばない）。2026-09-17 ご質問 #37
+            const spam = looksLikeSpamComment(c.text, c.username ?? null);
             let draft = "";
-            try { draft = await draftCommentReply({ commentText: c.text, commenter: c.username ?? null, parentText: c.parent ?? null, storeName }); } catch { draft = ""; }
-            if (!draft) continue;
-            items.push({ accountId: c.accountId, accountUsername: c.accountUsername, hasReplyScope: !!c.hasReplyScope, commentId: c.id, shortcode: c.shortcode ?? null, commenter: c.username ?? null, commentText: c.text, parentText: c.parent ?? null, draft });
+            if (!spam) {
+              try { draft = await draftCommentReply({ commentText: c.text, commenter: c.username ?? null, parentText: c.parent ?? null, storeName }); } catch { draft = ""; }
+              if (!draft) continue;
+            }
+            items.push({ accountId: c.accountId, accountUsername: c.accountUsername, hasReplyScope: !!c.hasReplyScope, commentId: c.id, shortcode: c.shortcode ?? null, commenter: c.username ?? null, commentText: c.text, parentText: c.parent ?? null, draft, spam });
           }
           if (items.length > 0) {
             const msgs = buildCommentReplyCards(items);

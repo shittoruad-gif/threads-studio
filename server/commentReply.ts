@@ -19,7 +19,10 @@ export interface CommentItem {
   commenter?: string | null;
   commentText: string;
   parentText?: string | null;
+  /** 勧誘・出会い系のときは空でよい（文案は作らない） */
   draft: string;
+  /** 勧誘・出会い系と見分けたか（looksLikeSpamComment） */
+  spam?: boolean;
 }
 
 const RULES =
@@ -49,33 +52,58 @@ export function buildCommentReplyCards(items: CommentItem[]): unknown[] {
   if (items.length === 0) return [];
   const bubbles = items.slice(0, 5).map((it) => {
     const footer: any[] = [];
-    if (it.hasReplyScope) {
-      footer.push({ type: "button", style: "primary", color: "#0E8388", height: "sm",
-        action: { type: "postback", label: "この文で送る", data: `cr=send&a=${it.accountId}&c=${it.commentId}`, displayText: "この文で送る" } });
+    // ★勧誘・出会い系には文案を出さない。返信は相手への反応になり、
+    //   新しいアカウントほど停止の引き金になりやすい（2026-09-17 ご質問 #37）。
+    if (!it.spam) {
+      if (it.hasReplyScope) {
+        footer.push({ type: "button", style: "primary", color: "#0E8388", height: "sm",
+          action: { type: "postback", label: "この文で送る", data: `cr=send&a=${it.accountId}&c=${it.commentId}`, displayText: "この文で送る" } });
+      }
+      if (it.shortcode) {
+        footer.push({ type: "button", style: it.hasReplyScope ? "secondary" : "primary", color: it.hasReplyScope ? undefined : "#0E8388", height: "sm",
+          action: { type: "uri", label: "Threadsアプリで返信する", uri: buildReplyIntentUrl(it.shortcode, it.draft) } });
+      }
+      footer.push({ type: "button", style: "link", height: "sm",
+        action: { type: "postback", label: "文案を作り直す", data: `cr=redo&a=${it.accountId}&c=${it.commentId}`, displayText: "文案を作り直す" } });
     }
-    if (it.shortcode) {
-      footer.push({ type: "button", style: it.hasReplyScope ? "secondary" : "primary", color: it.hasReplyScope ? undefined : "#0E8388", height: "sm",
-        action: { type: "uri", label: "Threadsアプリで返信する", uri: buildReplyIntentUrl(it.shortcode, it.draft) } });
-    }
-    footer.push({ type: "button", style: "link", height: "sm",
-      action: { type: "postback", label: "文案を作り直す", data: `cr=redo&a=${it.accountId}&c=${it.commentId}`, displayText: "文案を作り直す" } });
-    return {
-      type: "bubble", size: "mega",
-      body: { type: "box", layout: "vertical", spacing: "md", contents: [
-        { type: "text", text: `@${it.accountUsername} の投稿にコメント`, size: "xs", color: "#0E8388", weight: "bold", wrap: true },
-        { type: "text", text: `${it.commenter ? `@${it.commenter}：` : ""}${it.commentText.slice(0, 200)}`, size: "sm", color: "#13343B", wrap: true },
-        { type: "separator" },
+    // ★「返信しない」をどのカードにも置く。これが無かったため、返さないと決めた方が
+    //   文章で状況を書いて送るしかなく、担当者送りになっていた（ご質問 #37）。
+    footer.push({ type: "button", style: it.spam ? "primary" : "link", color: it.spam ? "#0E8388" : undefined, height: "sm",
+      action: { type: "postback", label: "返信しない", data: `cr=ignore&a=${it.accountId}&c=${it.commentId}`, displayText: "返信しない" } });
+    const body: any[] = [
+      { type: "text", text: `@${it.accountUsername} の投稿にコメント`, size: "xs", color: "#0E8388", weight: "bold", wrap: true },
+      { type: "text", text: `${it.commenter ? `@${it.commenter}：` : ""}${it.commentText.slice(0, 200)}`, size: "sm", color: "#13343B", wrap: true },
+      { type: "separator" },
+    ];
+    if (it.spam) {
+      body.push(
+        { type: "text", text: "勧誘・出会い系のコメントのようです", size: "xs", color: "#B45309", weight: "bold", wrap: true },
+        { type: "text", text: "返信しないことをおすすめします。返信すると相手への反応になり、アカウントが止められやすくなります。文案もお作りしていません。", size: "sm", color: "#13343B", wrap: true },
+      );
+    } else {
+      body.push(
         { type: "text", text: "返信の文案", size: "xs", color: "#6B7A78" },
         { type: "text", text: it.draft.slice(0, 300), size: "sm", color: "#13343B", wrap: true },
-      ] },
+      );
+    }
+    return {
+      type: "bubble", size: "mega",
+      body: { type: "box", layout: "vertical", spacing: "md", contents: body },
       footer: { type: "box", layout: "vertical", spacing: "sm", contents: footer },
     };
   });
   const flex = { type: "flex", altText: `コメントが${items.length}件届いています。返信の文案つき`, contents: bubbles.length === 1 ? bubbles[0] : { type: "carousel", contents: bubbles } };
+  const normal = items.filter((i) => !i.spam);
+  const spamCount = items.length - normal.length;
   const note = { type: "text", text:
     `コメントが${items.length}件届きました。返信が早いほど、投稿は多くの人に表示されます。\n` +
-    (items.some((i) => i.hasReplyScope) ? "「この文で送る」で、その文のまま返信されます。" : "「Threadsアプリで返信する」を押すと、文章が入った返信画面が開きます。右下の「投稿」を押すだけです。") +
-    "\n文を変えたいときは「文案を作り直す」を押すか、コピーして直してください。" };
+    (normal.length > 0
+      ? (normal.some((i) => i.hasReplyScope) ? "「この文で送る」で、その文のまま返信されます。" : "「Threadsアプリで返信する」を押すと、文章が入った返信画面が開きます。右下の「投稿」を押すだけです。") +
+        "\n文を変えたいときは「文案を作り直す」を押すか、コピーして直してください。"
+      : "") +
+    (spamCount > 0
+      ? `${normal.length > 0 ? "\n\n" : ""}※ ${spamCount}件は勧誘・出会い系のようでしたので、文案はお作りしていません。返信せず「返信しない」を押してください（返さないことで不利になることはありません）。`
+      : "") };
   return [flex, note];
 }
 

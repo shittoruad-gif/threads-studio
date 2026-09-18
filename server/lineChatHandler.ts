@@ -18,7 +18,7 @@ import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 import { contractSummary, type ContractInfo } from "../shared/contractSummary";
-import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, wantsHuman, isShortWish } from "../shared/requestKind";
+import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, looksLikeMaterialOnly, wantsHuman, isShortWish } from "../shared/requestKind";
 import { missingAutoPostFields } from "../shared/autoPostRequirements";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
@@ -1821,13 +1821,34 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     return startStaffHandoff(lineUserId, q.q ? Number(q.q) : undefined);
   }
   // ── コメント返信の1タップ（2026-09-07）──
+  // ★「返信しない」。これが無かったため、返さないと決めた方が文章で状況を書いて送るしかなく、
+  //   自動応答も答えられず担当者送りになっていた（2026-09-17 ご質問 #37 梅原様）。
+  if (q.cr === "ignore") {
+    return [textWithQuick(
+      "承知しました。このコメントには返信しません。\n" +
+      "勧誘や出会い系のコメントは、返信せずそのままにしていただくのがいちばん安全です" +
+      "（返信すると相手への反応になり、アカウントが止められやすくなります）。\n" +
+      "Threadsアプリの投稿からコメントを削除したり、相手を報告・ブロックすることもできます。\n" +
+      "返信しなかったことで、投稿の届き方が悪くなることはありません。",
+      MENU_HINT,
+    )];
+  }
   if (q.cr === "send" && q.a && q.c) {
     const acct: any = await db.getThreadsAccountById(Number(q.a));
     if (!acct || acct.userId !== user.id) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
     if (acct.hasReplyScope === false || acct.hasReplyScope === 0) return [textWithQuick("このアカウントは返信の送信権限がまだありません。「Threadsアプリで返信する」からお願いします。", MENU_HINT)];
     const { draftCommentReply, sendReplyViaApi } = await import("./commentReply");
+    const { looksLikeSpamComment } = await import("../shared/commentSpam");
     const cm: any = await (await fetch(`https://graph.threads.net/v1.0/${encodeURIComponent(String(q.c))}?fields=id,text,username&access_token=${acct.accessToken}`)).json();
     if (!cm?.id) return [textWithQuick("そのコメントが見つかりませんでした（削除された可能性があります）。", MENU_HINT)];
+    // ★勧誘・出会い系には、こちらから返信を送らない（カードが古くても押せてしまうため、ここでも見る）
+    if (looksLikeSpamComment(String(cm.text || ""), cm.username ?? null)) {
+      return [textWithQuick(
+        "このコメントは勧誘・出会い系のようでしたので、返信は送っていません。\n" +
+        "返信すると相手への反応になり、アカウントが止められやすくなります。そのままにしておくのがいちばん安全です。",
+        MENU_HINT,
+      )];
+    }
     const draft = await draftCommentReply({ commentText: String(cm.text || ""), commenter: cm.username ?? null, storeName: (user as any).storeName ?? null });
     const r = await sendReplyViaApi(acct.accessToken, String(cm.id), draft);
     if (r.error) return [textWithQuick(`返信を送れませんでした（${r.error.slice(0, 80)}）。「Threadsアプリで返信する」からお願いします。`, MENU_HINT)];
@@ -1837,16 +1858,19 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const acct: any = await db.getThreadsAccountById(Number(q.a));
     if (!acct || acct.userId !== user.id) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
     const { draftCommentReply, buildCommentReplyCards } = await import("./commentReply");
+    const { looksLikeSpamComment } = await import("../shared/commentSpam");
     const cm: any = await (await fetch(`https://graph.threads.net/v1.0/${encodeURIComponent(String(q.c))}?fields=id,text,username,shortcode&access_token=${acct.accessToken}`)).json();
     if (!cm?.id) return [textWithQuick("そのコメントが見つかりませんでした。", MENU_HINT)];
-    const draft = await draftCommentReply({ commentText: String(cm.text || ""), commenter: cm.username ?? null, storeName: (user as any).storeName ?? null });
-    return buildCommentReplyCards([{ accountId: Number(acct.id), accountUsername: String(acct.threadsUsername), hasReplyScope: !(acct.hasReplyScope === false || acct.hasReplyScope === 0), commentId: String(cm.id), shortcode: cm.shortcode ?? null, commenter: cm.username ?? null, commentText: String(cm.text || ""), draft }]);
+    const spam = looksLikeSpamComment(String(cm.text || ""), cm.username ?? null);
+    const draft = spam ? "" : await draftCommentReply({ commentText: String(cm.text || ""), commenter: cm.username ?? null, storeName: (user as any).storeName ?? null });
+    return buildCommentReplyCards([{ accountId: Number(acct.id), accountUsername: String(acct.threadsUsername), hasReplyScope: !(acct.hasReplyScope === false || acct.hasReplyScope === 0), commentId: String(cm.id), shortcode: cm.shortcode ?? null, commenter: cm.username ?? null, commentText: String(cm.text || ""), draft, spam }]);
   }
   if (q.m === "comments") {
     return [textWithQuick(
       "新しいコメントが届いたときは、このトークに「返信の文案つきカード」をお送りします。\n" +
       "「Threadsアプリで返信する」を押すと文章が入った返信画面が開くので、「投稿」を押すだけです（返信の送信権限があるアカウントは「この文で送る」で即返信）。\n" +
-      "返信が早いほど、投稿は多くの人に表示されます。フォローやいいねの連打は逆効果なので行いません。\n\n" +
+      "返信が早いほど、投稿は多くの人に表示されます。フォローやいいねの連打は逆効果なので行いません。\n" +
+      "勧誘・出会い系のコメントには文案をお作りしません。カードの「返信しない」を押していただければ、それで終わりです（返さないことで不利になることはありません）。\n\n" +
       "コメントへの返信を「送る」ボタンで直接送れるのは、返信の送信権限があるアカウントだけです（Meta社の追加審査の承認後に全員に広がります）。",
       MENU_HINT,
     )];
@@ -2990,8 +3014,19 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   {
     const pjs = ((await db.getUserProjects(user.id)) || []).filter((pj: any) => !String(pj.id).startsWith("demo_"));
     if (pjs.some((pj: any) => looksLikeOwnPostMaterial(t, pj))) {
+      await recordMaterial(user.id, lineUserId, t);
       return replyToRequest("material", null, await stashMaterial(lineUserId, user.id, t));
     }
+  }
+
+  // ★投稿の材料でしかない文章を、自動応答より先に受け止める。
+  //   自動応答は12字以上をすべてご質問として扱うため、材料をお送りいただいても
+  //   「はじめの設定からご自身でご登録ください」と案内して終わり、
+  //   aiConfident=1 のため担当者にも届かず、材料はどこにも残らなかった
+  //   （2026-09-18 夜間整備でローカルQAにて実測）。
+  if (looksLikeMaterialOnly(t)) {
+    await recordMaterial(user.id, lineUserId, t);
+    return replyToRequest("material", null, await stashMaterial(lineUserId, user.id, t));
   }
 
   if (looksLikeQuestion(t)) {
@@ -3131,6 +3166,35 @@ function looksLikeQuestion(t: string): boolean {
  * 送っていただいた文章を「実績として登録」ボタン用に預かる。
  * お店の情報がまだ無い方には出しても意味がないので、その場合は false を返す。
  */
+/**
+ * 送っていただいた投稿の材料を、記録として残す。
+ *
+ * ★「実績として登録」を押していただけないと、stashMaterial の預かりは
+ *   次の文章で上書きされて消える。せっかく書いてくださった材料が
+ *   どこにも残らないのを防ぐため、お問い合わせの記録に残す
+ *   （2026-09-18 にプレステージ様へ材料のご依頼をお送りしており、
+ *    お返事が消える恐れがあった）。
+ *
+ * 担当者への通知（push）は出さない。材料は「困りごと」ではないので、
+ * 通知を飛ばすと本当に困っている方のご連絡が埋もれる（shared/requestKind.ts 冒頭）。
+ * 管理画面の一覧と夜間整備からは見えるので、こちらでお店の情報へ登録できる。
+ */
+async function recordMaterial(userId: number, lineUserId: string, text: string): Promise<void> {
+  try {
+    await db.createSupportQuestion({
+      userId,
+      lineUserId,
+      source: "line",
+      question: text.slice(0, 2000),
+      aiConfident: 0,
+      needsHuman: 0,
+      category: "投稿の材料",
+    });
+  } catch (e) {
+    console.error("[LineChat] 投稿の材料の記録に失敗:", e);
+  }
+}
+
 async function stashMaterial(lineUserId: string, userId: number, text: string): Promise<boolean> {
   try {
     const usable = ((await db.getUserProjects(userId)) || []).filter((pj: any) =>

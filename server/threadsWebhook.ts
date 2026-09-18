@@ -51,9 +51,15 @@ export async function handleReplyEvents(events: ReplyEvent[]): Promise<number> {
       try { if (ev.rootPostId && full?.accessToken) { const r: any = await (await fetch(`https://graph.threads.net/v1.0/${ev.rootPostId}?fields=text&access_token=${full.accessToken}`)).json(); parentText = r?.text ?? null; } } catch { parentText = null; }
       const user: any = await db.getUserById(Number(acct.userId));
       const { draftCommentReply, buildCommentReplyCards } = await import("./commentReply");
-      const draft = await draftCommentReply({ commentText: String(ev.text || ""), commenter: ev.username ?? null, parentText, storeName: user?.storeName ?? null });
-      if (!draft) continue;
-      const msgs = buildCommentReplyCards([{ accountId: Number(acct.id), accountUsername: String(acct.threadsUsername), hasReplyScope: !(full?.hasReplyScope === false || full?.hasReplyScope === 0), commentId: ev.id, shortcode: ev.shortcode ?? null, commenter: ev.username ?? null, commentText: String(ev.text || ""), parentText, draft }]);
+      const { looksLikeSpamComment } = await import("../shared/commentSpam");
+      // ★勧誘・出会い系には文案を作らない（AIも呼ばない）。2026-09-17 ご質問 #37
+      const spam = looksLikeSpamComment(String(ev.text || ""), ev.username ?? null);
+      let draft = "";
+      if (!spam) {
+        draft = await draftCommentReply({ commentText: String(ev.text || ""), commenter: ev.username ?? null, parentText, storeName: user?.storeName ?? null });
+        if (!draft) continue;
+      }
+      const msgs = buildCommentReplyCards([{ accountId: Number(acct.id), accountUsername: String(acct.threadsUsername), hasReplyScope: !(full?.hasReplyScope === false || full?.hasReplyScope === 0), commentId: ev.id, shortcode: ev.shortcode ?? null, commenter: ev.username ?? null, commentText: String(ev.text || ""), parentText, draft, spam }]);
       const { pushMessages } = await import("./lineNotify");
       for (const to of targets) await pushMessages(to, msgs);
       // 3時間おきの巡回と二重にならないよう、確認時刻を進める
