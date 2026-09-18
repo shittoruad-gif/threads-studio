@@ -821,6 +821,10 @@ export const appRouter = router({
 
         const { id, ...updateData } = input;
         await db.updateProject(id, updateData);
+        // ★列を直したら「はじめの設定」の答えと要旨もそろえる（2026-09-18）。
+        //   ここを飛ばすと、画面では直っているのに毎日の投稿は前の内容で作られる。
+        const { syncCounselingFromColumns } = await import('./counselingSync');
+        await syncCounselingFromColumns(id, updateData as Record<string, unknown>);
 
         return { success: true };
       }),
@@ -3913,6 +3917,57 @@ ${input.commentText}
     /** どのお客様が、どの段階で止まっているかの一覧（設定の取りこぼしを見つける） */
     // ★業種と「はじめの設定」の答えがずれているお店の情報（呉服店に整体の選択肢・2026-09-06）。
     //   朝の点検（scripts/ops/daily-check.mjs）が読む。保存時の通知とは別に、既存分を拾う。
+    /**
+     * 「お店の情報」の列と、はじめの設定の答え（counselingResult）の食い違いを直す。
+     *
+     * ★2026-09-18：AI投稿画面の「プロジェクト情報」から直した内容が、
+     *   これまで答え・要旨に反映されておらず、毎日の投稿が古い内容で作られていた。
+     *   以後は project.update が自動でそろえるが、すでにずれている分をここで直す。
+     *   dryRun=true（既定）は、どこがずれているかを見るだけで書き換えない。
+     *
+     * ★答えが空の項目は触らない（お客様が消したものを列から復活させないため）。
+     */
+    syncCounselingAnswers: adminProcedure
+      .input(z.object({ dryRun: z.boolean().default(true), userId: z.number().optional() }))
+      .mutation(async ({ input }) => {
+        const COLS: Record<string, string> = {
+          storeName: 'storeNameRaw', businessType: 'businessTypeRaw', area: 'areaRaw',
+          target: 'targetRaw', mainProblem: 'mainProblemRaw', strength: 'strengthRaw',
+          usp: 'uspRaw', proof: 'realProofsRaw', n1Customer: 'realEpisodesRaw',
+          belief: 'industryMythsRaw', ngWords: 'ngListRaw',
+        };
+        const users = await db.getAllUsers();
+        const out: any[] = [];
+        for (const u of users as any[]) {
+          if (input.userId && u.id !== input.userId) continue;
+          let projects: any[] = [];
+          try { projects = (await db.getProjectsByUserId(u.id)) || []; } catch { continue; }
+          for (const p of projects) {
+            if (String(p.id).startsWith('demo_') || !p.counselingResult) continue;
+            let answers: Record<string, string> = {};
+            try { answers = JSON.parse(p.counselingResult)?.rawAnswers ?? {}; } catch { continue; }
+            const changed: Record<string, string> = {};
+            const fields: string[] = [];
+            for (const [col, ans] of Object.entries(COLS)) {
+              const colVal = String((p as any)[col] ?? '').trim();
+              const ansVal = String(answers[ans] ?? '').trim();
+              // 両方に中身があって食い違うものだけ。列のほうが新しい
+              // （はじめの設定の保存は列と答えを同時に書くので、ずれる＝後から列だけ直した）。
+              if (!colVal || !ansVal || colVal === ansVal) continue;
+              changed[col] = colVal;
+              fields.push(col);
+            }
+            if (fields.length === 0) continue;
+            out.push({ userId: u.id, email: u.email, projectId: p.id, fields });
+            if (!input.dryRun) {
+              const { syncCounselingFromColumns } = await import('./counselingSync');
+              await syncCounselingFromColumns(p.id, changed);
+            }
+          }
+        }
+        return { dryRun: input.dryRun, count: out.length, projects: out };
+      }),
+
     listIndustryMismatches: adminProcedure.query(async () => {
       const { detectProjectIndustryMismatch } = await import('../shared/industryMismatch');
       const users = await db.getAllUsers();

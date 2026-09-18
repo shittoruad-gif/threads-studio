@@ -2150,6 +2150,8 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     let next = cur ? `${cur}\n${material.trim()}` : material.trim();
     if (next.length > MAX) next = next.slice(next.length - MAX).replace(/^[^\n]*\n/, "");
     await db.updateProject(String(pj.id), { proof: next } as any);
+    // 実績は「はじめの設定」の答え（realProofsRaw）でもあるので、そちらにも足す
+    await (await import("./counselingSync")).syncCounselingFromColumns(String(pj.id), { proof: next });
     await db.clearLineChatState(lineUserId);
     return [textWithQuick(
       `実績として登録しました。\n（${String(pj.storeName || pj.title || "お店")}）\n\n` +
@@ -2863,6 +2865,8 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
       const cur = String(project.ngWords || "").split(/[、,\n]/).map((w: string) => w.trim()).filter(Boolean);
       const merged = Array.from(new Set([...cur, ...words]));
       await db.updateProject(project.id, { ngWords: merged.join("、") } as any);
+      // 「絶対に書きたくないこと」の答えにも足す（修正画面と食い違わせない）
+      await (await import("./counselingSync")).syncCounselingFromColumns(project.id, { ngWords: merged.join("、") });
       const who = projects.length >= 2 ? `「${String(project.storeName || project.title || "お店")}」の投稿では、` : "";
       return [textWithQuick(`「${words.join("」「")}」を、使わない言葉として登録しました。${who}以後の投稿では避けます。`, MENU_HINT)];
     } catch {
