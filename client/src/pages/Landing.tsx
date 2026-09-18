@@ -280,7 +280,7 @@ export default function Landing() {
     {
       icon: <Sparkles className="w-10 h-10" />, title: "AIが投稿文を自動生成",
       description: "お店の情報を登録するだけで、AIが毎日の投稿を自動生成。文章作成が苦手な方でも安心です。",
-      benefits: ["投稿作成時間が90%削減", "20の切り口を日替わりで", "業種別に最適化された文章"]
+      benefits: ["投稿作成時間が90%削減", "切り口を日替わりで変える", "業種別に最適化された文章"]
     },
     {
       icon: <Shield className="w-10 h-10" />, title: "安全フィルターでコンプラ安心",
