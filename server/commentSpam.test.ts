@@ -10,7 +10,8 @@ import { buildCommentReplyCards } from "./commentReply";
 describe("勧誘・出会い系のコメントを見分ける", () => {
   it("出会い系・アダルトの誘いは勧誘とみなす", () => {
     for (const t of [
-      "よかったら会いませんか？DMお待ちしてます",
+      "今夜これから会いませんか？DMお待ちしてます",
+      "近くにいるので今から会えませんか",
       "セフレ募集中です🥺",
       "裏垢やってます、見に来てください",
       "パパ活してくれる方いませんか",
@@ -47,6 +48,9 @@ describe("勧誘・出会い系のコメントを見分ける", () => {
       "駐車場はありますか",
       "子どもを連れて行っても大丈夫でしょうか",
       "投資の話ではないのですが、経営の相談にのっていただけますか",
+      // ★お仕事のご挨拶を勧誘扱いしない（2026-09-19）
+      "同じ倉敷で発信されている方なので、一度お会いしませんか",
+      "セミナーでお会いしましたね。ありがとうございました",
     ]) expect(looksLikeSpamComment(t), t).toBe(false);
   });
 });
@@ -55,7 +59,7 @@ describe("勧誘コメントのカード", () => {
   const item = {
     accountId: 1, accountUsername: "daigo_sekkotsu", hasReplyScope: true,
     commentId: "9", shortcode: "abc", commenter: "deai_bot",
-    commentText: "よかったら会いませんか？DMお待ちしてます", draft: "", spam: true,
+    commentText: "今夜これから会いませんか？DMお待ちしてます", draft: "", spam: true,
   };
 
   it("文案も、返信のボタンも出さない", () => {
