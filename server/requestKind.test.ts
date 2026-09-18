@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, ownPlaceMarkers, wantsHuman, isShortWish } from "../shared/requestKind";
+import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, looksLikeMaterialOnly, ownPlaceMarkers, wantsHuman, isShortWish } from "../shared/requestKind";
 import { isFeatureRequest } from "../shared/requestDetect";
 
 /**
@@ -361,5 +361,65 @@ describe("人にお願いしたいご意思（2026-09-18）", () => {
     "固定投稿を作りたい",
   ])("関係のない文では担当者送りにしない: %s", (t) => {
     expect(wantsHuman(t)).toBe(false);
+  });
+});
+
+/**
+ * 材料をお送りいただいても、自動応答が「はじめの設定からご自身でご登録ください」と
+ * 案内して終わり、aiConfident=1 のため担当者にも届かず、材料はどこにも残らなかった
+ * （2026-09-18 夜間整備でローカルQAにて実測）。
+ * 自動応答より先に受け止めるため、条件を厳しくした判定を足した。
+ */
+describe("投稿の材料でしかない文章（2026-09-19）", () => {
+  it("本番のご質問 #3（症例3件）は材料として受け止める", () => {
+    const t =
+      "小学生が足を捻って我慢していたが、当院に来てエコー観察したら骨折があった（整形外科で確定診断）、当院でリハビリを行い問題なくサッカーに復帰\n\n" +
+      "50代男性が急な腰痛で来院、来院時は歩くのがやっとだったが帰る時は歩けるようになり帰宅\n\n" +
+      "大会前に腰を痛めた中学生が無事に最後の大会に出場出来た";
+    expect(looksLikeMaterialOnly(t)).toBe(true);
+  });
+
+  it("採用のお店からのエピソードも材料として受け止める（プレステージ様へお願いした形）", () => {
+    const t =
+      "未経験で入社した20代のスタッフですが、3年で店長になりました。" +
+      "はじめは緊張していたお客様が、いまは指名で通ってくださっています。";
+    expect(looksLikeMaterialOnly(t)).toBe(true);
+  });
+
+  it.each([
+    // 困りごと・操作のお尋ねは、これまでどおり自動応答へ
+    "お客様に投稿が届いていないようなのですが、どうすればいいですか",
+    "施術の実績を登録したいのですが、やり方を教えてください",
+    "来院されたお客様の声を投稿に入れる方法がわかりません",
+    // アプリのことに触れているものも自動応答へ
+    "お客様のエピソードを、はじめの設定に入れておきました",
+    // お尋ねの形のものも自動応答へ
+    "患者様の声をそのまま投稿に使っていただけますか？",
+  ])("ご質問を横取りしない: %s", (t) => {
+    expect(looksLikeMaterialOnly(t)).toBe(false);
+  });
+
+  it("★プレステージ様へお願いした形（番号つきの材料の並び）も受け止める", () => {
+    // 治療院の言葉が1つも入らないため、以前は自動応答が自信をもって取り違えていた
+    // （「理想の投稿を貼る から登録してください」＝文体のお手本のご案内。中身は投稿に使われない）
+    const t =
+      "1.「見学のとき、先輩が優しくて安心した」「未経験でも本当に教えてもらえた」\n" +
+      "2. 他業種から転職して1年で店長になりました。\n" +
+      "3. 技術は入ってから覚えればいい。人柄がいちばん大事だと思っています。";
+    expect(looksLikeMaterialOnly(t)).toBe(true);
+  });
+
+  it("かぎかっこの引用が並ぶものも材料として受け止める", () => {
+    const t = "お客様から「ここに来ると背筋が伸びる」「話を聞いてもらえるのが嬉しい」と言っていただきました。";
+    expect(looksLikeMaterialOnly(t)).toBe(true);
+  });
+
+  it("番号つきでも、アプリのお尋ねなら横取りしない", () => {
+    const t = "1. 投稿が届きません\n2. 連携のやり方がわかりません\n3. プランを変えたいです";
+    expect(looksLikeMaterialOnly(t)).toBe(false);
+  });
+
+  it("短い一言は材料として扱わない", () => {
+    expect(looksLikeMaterialOnly("お客様が喜んでいました")).toBe(false);
   });
 });

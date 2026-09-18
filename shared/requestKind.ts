@@ -136,6 +136,54 @@ export function classifyRequestKind(t: string): "post" | "material" | "pasted" |
 }
 
 /**
+ * 「どう見ても投稿の材料（実績・お客様のエピソード）でしかない」文章か。
+ *
+ * ★自動応答（autoAnswer）は 12字以上の文章をすべてご質問として受け取るため、
+ *   材料をお送りいただいても、AIが自信をもって
+ *   「はじめの設定からご自身でご登録ください」と案内して終わっていた。
+ *   その場合 `aiConfident=1` なので担当者への通知も飛ばず、
+ *   せっかく書いてくださった材料は**どこにも残らない**
+ *   （2026-09-18 夜間整備でローカルQAにて実測。
+ *    9/18 にプレステージ様へ材料のご依頼をお送りしており、
+ *    お返事がそのまま消える恐れがあった）。
+ *
+ *   そこで、自動応答より先に「材料でしかない文章」を受け止め、
+ *   その場で「実績として登録」できるようにする。
+ *
+ * 取りこぼしよりも横取りのほうが害が大きいので、条件は厳しくしてある。
+ *  - classifyRequestKind が "material" と見たもの
+ *  - 困りごと・操作のお尋ねの言葉が無い（SUPPORT_QUESTION_RE）
+ *  - アプリのことに触れていない（APP_TOPIC_RE）
+ *  - 文中に「？」が1つも無い（お尋ねの形をしていない）
+ */
+export function looksLikeMaterialOnly(t: string): boolean {
+  const s = String(t || "").trim();
+  if (!s || Array.from(s).length < 25) return false;
+  if (/[?？]/.test(s)) return false;
+  if (SUPPORT_QUESTION_RE.test(s)) return false;
+  if (APP_TOPIC_RE.test(s)) return false;
+  if (classifyRequestKind(s) === "material") return true;
+  return isMaterialList(s);
+}
+
+/**
+ * 箇条書き・番号つき・かぎかっこの引用が並ぶ「材料の並び」か。
+ *
+ * ★プレステージ様へお願いした形（「入社された方のお話を2〜3」）は、
+ *   来院・施術といった治療院の言葉が1つも入らないため上の判定に当たらず、
+ *   自動応答が **自信をもって取り違えていた**
+ *   （実測：「理想の投稿を貼る から登録してください」＝文体のお手本のご案内。
+ *    お手本に入れても中身は投稿に使われないので、書いてくださった内容が活きない）。
+ *   材料は「並び方」で見分けられるので、形で拾う。
+ */
+function isMaterialList(s: string): boolean {
+  const lines = s.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const numbered = lines.filter((l) => /^([0-9０-９]{1,2}[.．、)）]|[・･\-–—•*]|[①-⑳])\s*\S/.test(l)).length;
+  const quoted = (s.match(/[「『][^」』]{4,}[」』]/g) || []).length;
+  return numbered >= 3 || quoted >= 2;
+}
+
+/**
  * 「今日の投稿をもう一度見たい」というご依頼か。
  *
  * ★以前は「投稿」と「見たい」の間を4字までしか見ておらず、ひらがなの「みたい」も
