@@ -60,6 +60,7 @@ import { UsageProgress } from '@/components/UsageProgress';
 import SetupWizard from '@/components/SetupWizard';
 import { DemoModeBanner } from '@/components/DemoModeBanner';
 import { SetupProgress } from '@/components/SetupProgress';
+import { MaterialDepthNotice } from '@/components/MaterialDepthNotice';
 import { OnboardingStart } from '@/components/OnboardingStart';
 // AIChatWidgetはmarkdownレンダラ（streamdown/shiki）を引き込み重いため遅延ロード
 const AIChatWidget = lazy(() =>
@@ -316,6 +317,12 @@ export default function Dashboard() {
 
         {/* Setup Progress */}
         <SetupProgress />
+
+        {/* ★お店の情報が少ないと、どうしても似た投稿が続く（2026-09-18 三上様指示）。
+            本数にじかにひびく話なので、設定の進み具合のすぐ下に置く。 */}
+        <div className="mb-6">
+          <MaterialDepthNotice />
+        </div>
 
         {/* Trial Banner */}
         {/* 無料プランのまま止まっている人への、プラン選択への導線。

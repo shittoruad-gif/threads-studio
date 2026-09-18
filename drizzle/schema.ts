@@ -379,6 +379,10 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   // ★Threads側で消された投稿の補填（2026-09-13 三上様決定 R6）。冷却明けから1日＋1件で返し、1件ごとに減らす。
   //   連携30日以内は compensationCount が同じ不足を拾うので、30日を過ぎたアカウントの分だけここで見る
   deletedShortfall: int("deletedShortfall").notNull().default(0),
+  // ★材料が尽きて「直近の投稿と同じ言い回し」で書き直した回数（2026-09-18 三上様指示）。
+  //   お客様に追記をお願いするとき、「なぜ必要か」を数えた事実で示すために残す。
+  dupRejectDate: date("dupRejectDate"),
+  dupRejectCount: int("dupRejectCount").notNull().default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -529,6 +533,9 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   metaAiAskText: text("metaAiAskText"),
   // 引用投稿：この投稿IDを引用して公開する（週1回の固定投稿の再露出。2026-09-07）
   quotePostId: varchar("quotePostId", { length: 64 }),
+  // ★契約本数を守るための保証パスで作った投稿（2026-09-18 三上様指示「プロプランは必ず3投稿」）。
+  //   材料が尽きて似た言い回ししか作れなかった枠。捨てずにお届けするが、必ず承認カードにする。
+  materialGuarantee: tinyint("materialGuarantee").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [

@@ -5,6 +5,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { ArrowLeft, ArrowRight, Sparkles, Loader2, Copy, Check, Calendar, Save, Pencil, X, Search, Trash2, Plus, Star, Pin, PinOff, Eye, EyeOff, RotateCcw, FileEdit, Smartphone, Send, Link2, ChevronDown, Settings2, AlertCircle } from 'lucide-react';
 import ThreadsAccountSwitcher from '@/components/ThreadsAccountSwitcher';
 import PageGuide from '@/components/PageGuide';
+import { MaterialDepthNotice } from '@/components/MaterialDepthNotice';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -768,6 +769,10 @@ export default function AIGenerate() {
             </CardContent>
           </Card>
         )}
+
+        {/* ★材料が尽きて投稿が似てきているときのお願い（2026-09-18 三上様指示）。
+            この画面は「お店の情報の確認・修正」への入口があるので、直していただきやすい。 */}
+        {projectId && <div className="mb-6"><MaterialDepthNotice projectId={projectId} /></div>}
 
         {/* カウンセリング済みのとき：内容の確認・修正導線 */}
         <PageGuide steps={[

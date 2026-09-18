@@ -428,6 +428,11 @@ async function generateAutoPost(
   // ★最後の作り直し。ここで落とすとその枠は投稿ゼロで終わるので、
   //   「使い回し」のような程度の問題では止めず、記録だけ残して公開する。
   lastAttempt: boolean = false,
+  // ★保証パス（2026-09-18 三上様指示「プロプランであれば必ず3投稿できるように」）。
+  //   3回作り直しても重複で落ちた枠を捨てないための最後の1回。
+  //   ここでは「同じ言い回し」では止めない（止めると枠がゼロになり、契約本数を割る）。
+  //   ただし似た投稿を黙って公開はしない。必ず承認カードにして、お客様が見送れるようにする。
+  guarantee: boolean = false,
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
   const purpose = PURPOSES[purposeIndex % PURPOSES.length];
@@ -896,9 +901,17 @@ async function generateAutoPost(
       try { const { identityTokens } = await import('../shared/identityGuard'); idWords = identityTokens(project).filter((w) => Array.from(w).length >= 2); } catch { idWords = []; }
       const strip = (t: string) => idWords.reduce((acc, w) => acc.split(w).join(' '), String(t));
       const dup = findRepeatedPhrase(strip(naturalMain), recentPosts.map(strip));
+      // ★書き直した回数を残す（2026-09-18）。お客様に追記をお願いするとき、
+      //   「なぜ必要か」を数えた事実で示すために使う（shared/materialDepth.ts）。
+      if (dup) { try { await db.bumpDupReject(threadsAccountId); } catch { /* 記録できなくても続ける */ } }
+      // ★保証パスでは「同じ言い回し」で落とさない（落とすと契約本数を割る）。
+      //   代わりに materialGuarantee の印を付け、必ず承認カードにしてお客様が見送れるようにする。
+      if (dup && guarantee) {
+        console.warn(`[AutoPost] 保証パス：同じ言い回し「${dup}」が残るが、契約本数を守るためお届けする（承認カードにする） userId=${userId} projectId=${project.id}`);
+      }
       // ★最後の作り直しでは、長い一致（14文字以上＝文ごと同じ）だけ落とし、短い決め台詞の重なりは記録して通す。
       //   落とした枠は翌朝の自動補填で足される。
-      if (dup && (!lastAttempt || Array.from(dup).length >= 14)) {
+      if (dup && !guarantee && (!lastAttempt || Array.from(dup).length >= 14)) {
         console.warn(`[AutoPost] 直近の投稿と同じ言い回し「${dup}」→ ${lastAttempt ? '最後の作り直しでも見送り（明日の生成で補填）' : '作り直し'} userId=${userId} projectId=${project.id}`);
         lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex),
           `- 直近の投稿と同じ言い回し「${dup}」を使っている。同じことを言うなら、別の入り方・別の言葉にする。`);
@@ -910,7 +923,7 @@ async function generateAutoPost(
       //   2026-09-13 香取様の直近5本は findRepeatedPhrase では1件も拾えないのに、3本が「11年」で始まっていた。
       //   実績の数字は identityTokens で strip されるので、ここでは strip 前の本文を見る。
       //   枠を捨てないため、最後の作り直しでは止めない（作り直しのヒントとしてだけ使う）。
-      if (!lastAttempt) {
+      if (!lastAttempt && !guarantee) {
         const num = findRepeatedHookNumber(naturalMain, recentPosts);
         if (num) {
           console.warn(`[AutoPost] 書き出しが直近の投稿と同じ実績の数字「${num}」→ 作り直し userId=${userId} projectId=${project.id}`);
@@ -979,6 +992,10 @@ async function generateAutoPost(
     let adminReviewRequired = false;
     try { adminReviewRequired = (await db.countAccountPublishedAutoPosts(threadsAccountId)) < 3; } catch { adminReviewRequired = false; }
 
+    // ★保証パスで作った投稿は、承認モードOFFのお客様でも必ず承認カードにする（2026-09-18）。
+    //   契約本数は守るが、前と似た投稿を黙って公開はしない。見送るかどうかはお客様が決める。
+    const needsApproval = requireApproval || guarantee;
+
     await db.createScheduledPost({
       userId,
       projectId: project.id,
@@ -986,7 +1003,8 @@ async function generateAutoPost(
       scheduledAt,
       postContent: fullContent,
       // ★承認モードON時は awaiting_approval で作成し、ユーザーが承認するまで投稿しない
-      status: requireApproval ? 'awaiting_approval' : 'pending',
+      status: needsApproval ? 'awaiting_approval' : 'pending',
+      materialGuarantee: guarantee ? 1 : 0,
       adminReviewRequired: adminReviewRequired ? 1 : 0,
       source: 'auto',
       // 使った切り口を記録（◯✕評価と組み合わせて好み学習に使う）
@@ -1248,6 +1266,8 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           }
 
           let accFailed = 0;
+          // ★保証パスでお届けした件数（お客様への説明に使う。materialDepth の facts.guaranteed）
+          let guaranteedHere = 0;
           for (let i = 0; i < regularCount; i++) {
             const project = pinnedProject || eligibleProjects[(dayOffset + i) % eligibleProjects.length];
 
@@ -1273,6 +1293,41 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                 attempt === 3,
               );
               if (!success && attempt < 3) console.log(`[AutoPost] user=${user.id} account=${account.id} slot=${i} 作り直し ${attempt + 1}回目${hint ? '（前回の理由を渡す）' : ''}`);
+            }
+
+            // ★契約本数の保証（2026-09-18 三上様指示「プロプランであれば必ず3投稿できるように」）。
+            //   3回作り直しても書けなかった枠を捨てない。材料が尽きて同じ言い回しへ戻るのが原因なので、
+            //   まだ投稿に使っていない材料を名指しで渡して、もう1回だけ書かせる。
+            //   ここで作った投稿は必ず承認カードになる（黙って似た投稿を公開しない）。
+            if (!success) {
+              try {
+                const { unusedMaterials } = await import('../shared/materialDepth');
+                const recent = await db.getRecentPostContents(account.id, 10).catch(() => [] as string[]);
+                const unused = unusedMaterials(project, recent, 4);
+                const guaranteeHint = [
+                  lastRejectReason.get(rk) ?? '',
+                  unused.length > 0
+                    ? `- まだ投稿に使っていない材料がある。次のどれか1つだけを主役にして書く：\n${unused.map((u) => `  ・${u}`).join('\n')}`
+                    : '- これまでと違う入り方（季節・お客様との会話・よくある質問）から書く。',
+                  '- 直近の投稿に出てきた言葉・決め台詞・実績の数字は使わない。',
+                ].filter(Boolean).join('\n');
+                console.log(`[AutoPost] 保証パス user=${user.id} account=${account.id} slot=${i}（未使用の材料 ${unused.length}件）`);
+                success = await generateAutoPost(
+                  user.id, project, typeIdx, purposeIdx, account.id, i,
+                  eff.autoPostRequireApproval, bestHours, eff.postLength,
+                  sameDaySlots ? sameDaySlots[i] : null,
+                  guaranteeHint, true, true,
+                );
+                if (success) {
+                  guaranteedHere++;
+                  anyApproval = true; // 承認カードを作ったので、まとめの案内を必ず送る
+                  console.log(`[AutoPost] 保証パスでお届け user=${user.id} account=${account.id} slot=${i}（承認カード）`);
+                } else {
+                  console.warn(`[AutoPost] 保証パスでも書けず user=${user.id} account=${account.id} slot=${i} → 明日の生成で補填`);
+                }
+              } catch (e) {
+                console.warn(`[AutoPost] 保証パスに失敗 user=${user.id} account=${account.id} slot=${i}: ${(e as Error)?.message}`);
+              }
             }
             lastRejectReason.delete(rk);
 
@@ -1302,6 +1357,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             }
             void dateColToJst;
             if (accFailed > 0) console.log(`[AutoPost] account ${account.id} 届かなかった枠 ${accFailed}件 → 明日の生成で自動補填`);
+            if (guaranteedHere > 0) console.log(`[AutoPost] account ${account.id} 保証パスでお届け ${guaranteedHere}件（承認カード・お店の情報の追記をお願いする対象）`);
           } catch (e) { console.warn(`[AutoPost] 不足分の記録に失敗 account=${account.id}: ${(e as Error)?.message}`); }
 
         }

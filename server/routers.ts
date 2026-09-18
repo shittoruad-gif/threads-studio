@@ -90,6 +90,41 @@ export const appRouter = router({
       };
     }),
 
+    /**
+     * 「お店の情報を足してください」のお願い（2026-09-18 三上様指示）。
+     * 材料が少ないと投稿がどうしても似てくることを、数えた事実つきでお客様の画面に出す。
+     * 連携アカウントごとに、その日の書き直し回数・届かなかった件数を見る。
+     */
+    materialDepth: protectedProcedure.query(async ({ ctx }) => {
+      const { materialDepthNotice } = await import('../shared/materialDepth');
+      const { jstDateString, dateColToJst } = await import('../shared/accountRamp');
+      const accounts = (await db.getThreadsAccountsByUserId(ctx.user.id).catch(() => [])) as any[];
+      const today = jstDateString(0);
+      const out: any[] = [];
+      for (const a of accounts) {
+        if (!a?.isActive) continue;
+        const projectId = a.defaultProjectId ?? null;
+        const project = projectId ? await db.getProjectById(projectId).catch(() => null) : null;
+        if (!project) continue;
+        const recent = await db.getRecentPostContents(a.id, 24).catch(() => [] as string[]);
+        const guaranteed = await db.countAccountGuaranteedToday(a.id).catch(() => 0);
+        const notice = materialDepthNotice(project, recent, {
+          dupRejects: dateColToJst(a.dupRejectDate) === today ? Number(a.dupRejectCount ?? 0) : 0,
+          shortfall: dateColToJst(a.shortfallDate) === today ? Number(a.shortfallCount ?? 0) : 0,
+          guaranteed,
+        });
+        if (!notice.show) continue;
+        out.push({
+          accountId: a.id,
+          threadsUsername: a.threadsUsername ?? null,
+          projectId,
+          storeName: (project as any).storeName ?? (project as any).title ?? null,
+          ...notice,
+        });
+      }
+      return out;
+    }),
+
     /** 「Threadsでピン留めしました」を記録する（APIでは確認できないため申告制） */
     confirmPinned: protectedProcedure.mutation(async ({ ctx }) => {
       await db.confirmPinnedPost(ctx.user.id);

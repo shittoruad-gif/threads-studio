@@ -752,6 +752,32 @@ export async function decrementDeletedShortfall(accountId: number): Promise<void
   await db.execute(sql`UPDATE threadsAccounts SET deletedShortfall = GREATEST(deletedShortfall - 1, 0) WHERE id = ${accountId}`);
 }
 
+/**
+ * 「直近の投稿と同じ言い回し」で書き直した回数を、その日の分として数える（2026-09-18 三上様指示）。
+ * 日付が変わっていたら1に戻す。お客様へ「なぜお店の情報の追記が要るのか」を
+ * 数えた事実で説明するために使う（shared/materialDepth.ts）。
+ */
+export async function bumpDupReject(accountId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.execute(sql`
+    UPDATE threadsAccounts
+       SET dupRejectCount = IF(dupRejectDate = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00')), dupRejectCount + 1, 1),
+           dupRejectDate  = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))
+     WHERE id = ${accountId}`);
+}
+
+/** その日、材料が尽きたまま本数を守るためお届けした件数（保証パス・2026-09-18） */
+export async function countAccountGuaranteedToday(accountId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows: any = await db.execute(sql`
+    SELECT COUNT(*) AS c FROM scheduledPosts
+    WHERE threadsAccountId = ${accountId} AND materialGuarantee = 1
+      AND DATE(CONVERT_TZ(scheduledAt,'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
+  return Number(((rows as any)[0] ?? [])[0]?.c ?? 0);
+}
+
 /** 仕組みの変更のお知らせを届ける相手＝連携アカウントを持つ全員（案内OFF・LINE未連携を問わない。2026-09-13 R3） */
 export async function listUserIdsForAnnouncement(): Promise<number[]> {
   const db = await getDb();
