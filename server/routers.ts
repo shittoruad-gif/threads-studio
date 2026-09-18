@@ -3930,11 +3930,14 @@ ${input.commentText}
     syncCounselingAnswers: adminProcedure
       .input(z.object({ dryRun: z.boolean().default(true), userId: z.number().optional() }))
       .mutation(async ({ input }) => {
+        // ★1つの欄に1つの答えが入る項目だけを直す。
+        //   実績・お客様の話・考え方・使わない言葉（リストの項目）は、
+        //   列側が古い不具合で崩れていることがあるので、ここでは触らない
+        //   （そちらは repairStrippedNumbers で列のほうを直す）。
         const COLS: Record<string, string> = {
           storeName: 'storeNameRaw', businessType: 'businessTypeRaw', area: 'areaRaw',
           target: 'targetRaw', mainProblem: 'mainProblemRaw', strength: 'strengthRaw',
-          usp: 'uspRaw', proof: 'realProofsRaw', n1Customer: 'realEpisodesRaw',
-          belief: 'industryMythsRaw', ngWords: 'ngListRaw',
+          usp: 'uspRaw',
         };
         const users = await db.getAllUsers();
         const out: any[] = [];
@@ -3963,6 +3966,58 @@ ${input.commentText}
               const { syncCounselingFromColumns } = await import('./counselingSync');
               await syncCounselingFromColumns(p.id, changed);
             }
+          }
+        }
+        return { dryRun: input.dryRun, count: out.length, projects: out };
+      }),
+
+    /**
+     * 古い splitToList の不具合で、列から先頭の数字が落ちた分を直す。
+     *
+     * ★「40代女性／長年の腰痛」が「代女性／長年の腰痛」になって
+     *   projects.n1Customer / proof / belief に残っている（2026-09-18 調査で7名8件）。
+     *   投稿の材料はこの列を見るので、そのままだと数字の無い文が使われ続ける。
+     *   はじめの設定の答えには正しい文が残っているので、答えから列を戻す。
+     *   ★「数字が落ちただけ」と言い切れる項目しか戻さない（内容の書き換えはしない）。
+     */
+    repairStrippedNumbers: adminProcedure
+      .input(z.object({ dryRun: z.boolean().default(true) }))
+      .mutation(async ({ input }) => {
+        const PAIRS: Array<{ col: string; ans: string; sep: string }> = [
+          { col: 'proof', ans: 'realProofsRaw', sep: '\n' },
+          { col: 'n1Customer', ans: 'realEpisodesRaw', sep: '\n' },
+          { col: 'belief', ans: 'industryMythsRaw', sep: '\n' },
+          { col: 'ngWords', ans: 'ngListRaw', sep: '、' },
+        ];
+        const items = (s: string) => String(s || '').split(/\r?\n|、|・|;|；/).map((x) => x.trim()).filter(Boolean);
+        const users = await db.getAllUsers();
+        const out: any[] = [];
+        for (const u of users as any[]) {
+          let projects: any[] = [];
+          try { projects = (await db.getProjectsByUserId(u.id)) || []; } catch { continue; }
+          for (const p of projects) {
+            if (String(p.id).startsWith('demo_') || !p.counselingResult) continue;
+            let answers: Record<string, string> = {};
+            try { answers = JSON.parse(p.counselingResult)?.rawAnswers ?? {}; } catch { continue; }
+            const patch: Record<string, string> = {};
+            const fixed: string[] = [];
+            for (const { col, ans, sep } of PAIRS) {
+              const colItems = items((p as any)[col]);
+              const ansItems = items(answers[ans]);
+              if (colItems.length === 0 || ansItems.length === 0) continue;
+              let changed = false;
+              const repaired = colItems.map((ci) => {
+                const full = ansItems.find((ai) => ai !== ci && ai.endsWith(ci) && /^\d+$/.test(ai.slice(0, ai.length - ci.length)));
+                if (!full) return ci;
+                changed = true;
+                fixed.push(`${col}: 「${ci.slice(0, 24)}」→「${full.slice(0, 24)}」`);
+                return full;
+              });
+              if (changed) patch[col] = repaired.join(sep);
+            }
+            if (fixed.length === 0) continue;
+            out.push({ userId: u.id, email: u.email, projectId: p.id, fixed });
+            if (!input.dryRun) await db.updateProject(p.id, patch as any);
           }
         }
         return { dryRun: input.dryRun, count: out.length, projects: out };

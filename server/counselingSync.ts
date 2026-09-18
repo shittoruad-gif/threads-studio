@@ -14,6 +14,24 @@
  */
 import * as db from "./db";
 
+/**
+ * 列のほうが「先頭の数字」を失っていないかを見る。
+ *
+ * ★2026-09-06 以前の splitToList は「40代女性」を「代女性」にしていた。
+ *   その結果が projects.n1Customer / proof に残っている方が7名いる（2026-09-18 調査）。
+ *   答え側には「40代女性」が正しく残っているので、列をそのまま答えへ写すと数字が消える。
+ *   そういうときは、この項目だけ写さない（別途 admin から列のほうを直す）。
+ */
+export function looksNumberStripped(answer: string, column: string): boolean {
+  const items = (s: string) => (s || "").split(/\r?\n|、|・|;|；/).map((x) => x.trim()).filter(Boolean);
+  const a = items(answer);
+  const c = items(column);
+  if (a.length === 0 || c.length === 0) return false;
+  return c.some((ci) =>
+    a.some((ai) => ai !== ci && ai.endsWith(ci) && /^\d+$/.test(ai.slice(0, ai.length - ci.length))),
+  );
+}
+
 /** 列 → はじめの設定の質問id（同じ内容を指しているものだけ） */
 const COLUMN_TO_ANSWER: Record<string, string> = {
   storeName: "storeNameRaw",
@@ -60,7 +78,13 @@ export async function syncCounselingFromColumns(
       const v = changed[column];
       if (typeof v !== "string") continue;
       const next = v.trim();
-      if ((answers[answerId] ?? "") === next) continue;
+      const now = answers[answerId] ?? "";
+      if (now === next) continue;
+      // 古い不具合で列から数字が落ちている項目は、答えのほうが正しい。上書きしない。
+      if (looksNumberStripped(now, next)) {
+        console.warn(`[Counseling] ${answerId} は列から数字が落ちているため写しません project=${projectId}`);
+        continue;
+      }
       answers[answerId] = next;
       touched = true;
     }

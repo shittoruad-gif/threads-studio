@@ -70,6 +70,25 @@ describe("列の修正を答えにもそろえる", () => {
     expect(state.patched).toBeNull();
   });
 
+  // ★2026-09-06 以前の不具合で、列だけ「40代女性」→「代女性」になっている方が7名いる。
+  //   列を答えへ写すと、正しく残っている数字が消えてしまう。
+  it("列から数字が落ちている項目は、答えを上書きしない", async () => {
+    state.project = {
+      id: "p1", userId: 1,
+      counselingResult: JSON.stringify({
+        counseledAt: 1,
+        rawAnswers: { targetRaw: "産後のママ", realEpisodesRaw: "40代女性／長年の腰痛\n50代男性／五十肩" },
+      }),
+    };
+    await syncCounselingFromColumns("p1", {
+      target: "交通事故の方",
+      n1Customer: "代女性／長年の腰痛\n代男性／五十肩",
+    });
+    const after = JSON.parse(state.patched.counselingResult);
+    expect(after.rawAnswers.targetRaw).toBe("交通事故の方");
+    expect(after.rawAnswers.realEpisodesRaw).toBe("40代女性／長年の腰痛\n50代男性／五十肩");
+  });
+
   it("答えが残っていない古い登録は触らない（メニュー等を消さないため）", async () => {
     state.project = {
       id: "p1", userId: 1,
