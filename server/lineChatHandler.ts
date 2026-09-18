@@ -1412,11 +1412,14 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     }
     await db.updateAutoPostSettings(user.id, { autoPostEnabled: on });
     if (!on) {
+      // ★以前は「その場でお試しの投稿を作ることもできます」と書きながら、そのボタンが無かった
+      //   （2026-09-18 お客様目線の通し確認で発見）。自動投稿OFFのまま作れるのは固定投稿だけなので、
+      //   本当にできることを書き、そのボタンを付ける。
       return [textWithQuick(
         "承知しました。自動投稿は始めずにおきます。\n\n" +
         "始めたくなったら「設定」からいつでもONにできます。\n" +
-        "その場でお試しの投稿を作ることもできます。",
-        [{ label: "やっぱり始める", data: "c=setupauto&v=on" }, ...MENU_HINT],
+        "プロフィールに置く固定投稿（集客の入口になる1本）は、自動投稿がOFFのままでも「固定投稿を作る」から作れます。",
+        [{ label: "やっぱり始める", data: "c=setupauto&v=on" }, { label: "固定投稿を作る", data: "m=makepin" }, ...MENU_HINT.filter((m) => m.data !== "m=makepin")],
       )];
     }
     let s: any = null;
