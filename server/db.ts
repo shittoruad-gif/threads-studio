@@ -296,6 +296,19 @@ export async function createSubscription(data: InsertSubscription): Promise<void
   if (!db) return;
 
   await db.insert(subscriptions).values(data);
+  // ★お支払いが始まった方は「お試し中」ではない（2026-09-19）。
+  //   isDemoMode はデモの生成枠を使い切ったときにしか下りない作りだったため、
+  //   ご契約後も 1 のままの方がいて、朝のまとめ（morningDigestJob）が
+  //   「デモの方」として黙って飛ばしていた。斎藤様（有料・9/16〜）は
+  //   「次にやること」が3日間1通も届かず、Threads未連携のまま止まっていた。
+  await endDemoModeForPaidUser(Number((data as any).userId), String((data as any).status ?? ""));
+}
+
+/** ご契約が始まった（active / trialing）なら、お試し扱いを解除する */
+export async function endDemoModeForPaidUser(userId: number, status: string): Promise<void> {
+  if (!Number.isFinite(userId) || userId <= 0) return;
+  if (status !== "active" && status !== "trialing") return;
+  try { await setUserDemoMode(userId, false); } catch { /* 解除できなくても契約の作成は妨げない */ }
 }
 
 /**
@@ -355,6 +368,11 @@ export async function updateSubscription(
   await db.update(subscriptions)
     .set(data)
     .where(eq(subscriptions.id, subscriptionId));
+  // ★お支払いが始まったら、お試し扱いを解除する（createSubscription と同じ理由・2026-09-19）
+  if (data.status === "active" || data.status === "trialing") {
+    const row = await db.select({ userId: subscriptions.userId }).from(subscriptions).where(eq(subscriptions.id, subscriptionId)).limit(1);
+    if (row[0]?.userId) await endDemoModeForPaidUser(Number(row[0].userId), String(data.status));
+  }
 }
 
 // ============ Job Run Tracking（cron欠落キャッチアップ用） ============

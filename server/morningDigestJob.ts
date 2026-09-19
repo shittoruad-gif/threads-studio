@@ -75,7 +75,19 @@ export async function runMorningDigestJob(): Promise<void> {
   for (const userId of Array.from(userIds)) {
     try {
       const user: any = await db.getUserById(userId);
-      if (!user || user.isDemoMode) continue;
+      if (!user) continue;
+      // ★お試し（デモ）の方には送らない。ただし **お支払いのある方は「お試し」ではない**（2026-09-19）。
+      //   isDemoMode はデモの生成枠を使い切ったときにしか下りない作りで、ご契約後も 1 のまま残る方がいた。
+      //   斎藤様（有料・9/16〜）はここで黙って飛ばされ、「次にやること」が3日間1通も届かないまま
+      //   Threads未連携で止まっていた。契約があるかどうかで判断する。
+      if (user.isDemoMode) {
+        const sub: any = await db.getSubscriptionByUserId(userId).catch(() => null);
+        const paid = !!sub && (sub.status === "active" || sub.status === "trialing") && sub.planId !== "free";
+        if (!paid) continue;
+        // 記録も直しておく（次からは判定を通らない）
+        await db.setUserDemoMode(userId, false).catch(() => undefined);
+        console.warn(`[MorningDigest] user=${userId} は有料契約なのに isDemoMode=1 でした。解除してご案内します`);
+      }
       const lineIds = await db.getLineUserIdsForUser(userId);
       if (lineIds.length === 0) {
         // ★LINE未連携の方には、お知らせだけメールで（R3。小林様が9/13のお知らせ未着だった）
