@@ -3143,15 +3143,19 @@ export async function updateScheduledPostTime(postId: number, scheduledAt: Date)
 
 // ==================== 非表示アイテム（初期プリセット・テンプレ集を隠す） ====================
 
-/** ユーザーの非表示アイテムを種類ごとに返す（{preset:[keys], template:[keys]}） */
-export async function getHiddenItems(userId: number): Promise<{ preset: string[]; template: string[] }> {
+/**
+ * ユーザーの非表示アイテムを種類ごとに返す（{preset:[keys], template:[keys], comment:[ids]}）
+ * comment＝コメント管理の画面で「返信しない（スルー）」を押したコメント（2026-09-19 三上様指示）
+ */
+export async function getHiddenItems(userId: number): Promise<{ preset: string[]; template: string[]; comment: string[] }> {
   const db = await getDb();
-  if (!db) return { preset: [], template: [] };
+  if (!db) return { preset: [], template: [], comment: [] };
   const rows = await db.select().from(hiddenItems).where(eq(hiddenItems.userId, userId));
-  const out: { preset: string[]; template: string[] } = { preset: [], template: [] };
+  const out: { preset: string[]; template: string[]; comment: string[] } = { preset: [], template: [], comment: [] };
   for (const r of rows) {
     if (r.itemType === 'preset') out.preset.push(r.itemKey);
     else if (r.itemType === 'template') out.template.push(r.itemKey);
+    else if (r.itemType === 'comment') out.comment.push(r.itemKey);
   }
   return out;
 }

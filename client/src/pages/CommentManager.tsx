@@ -5,10 +5,11 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, MessageCircle, Send, Sparkles, RefreshCw, User, Copy, Check } from 'lucide-react';
+import { Loader2, MessageCircle, Send, Sparkles, RefreshCw, User, Copy, Check, BellOff, Undo2, ShieldAlert } from 'lucide-react';
 import ThreadsAccountSwitcher, { useThreadsAccount } from '@/components/ThreadsAccountSwitcher';
 import PageGuide from '@/components/PageGuide';
 import { toast } from 'sonner';
+import { looksLikeSpamComment } from '@shared/commentSpam';
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,21 @@ export default function CommentManager() {
   const [selectedReplyIndex, setSelectedReplyIndex] = useState<number>(0);
   const [editedReply, setEditedReply] = useState('');
   const [postedCommentIds, setPostedCommentIds] = useState<Set<string>>(new Set());
+  // ★スルーしたコメント（2026-09-19 三上様指示）。勧誘・出会い系のコメントは来るものなので、
+  //   「返信しない」を押して一覧から消せるようにする。LINEのカードには9/17から同じボタンがある。
+  const [showSkipped, setShowSkipped] = useState(false);
+
+  const { data: hiddenItems } = trpc.hidden.list.useQuery();
+  const skippedCommentIds = new Set((hiddenItems?.comment ?? []).map(String));
+  const utils = trpc.useUtils();
+  const skipCommentMutation = trpc.hidden.hide.useMutation({
+    onSuccess: () => { utils.hidden.list.invalidate(); },
+    onError: (error) => { toast.error(error.message); },
+  });
+  const unskipCommentMutation = trpc.hidden.unhide.useMutation({
+    onSuccess: () => { utils.hidden.list.invalidate(); },
+    onError: (error) => { toast.error(error.message); },
+  });
 
   const {
     data: comments,
@@ -103,6 +119,16 @@ export default function CommentManager() {
     });
   };
 
+  /** 返信しない（スルー）。一覧から消えるだけで、Threads側には何もしない */
+  const handleSkipComment = (comment: any) => {
+    skipCommentMutation.mutate({ itemType: 'comment', itemKey: String(comment.id) });
+    toast.success(t('このコメントには返信しません。一覧から外しました'));
+  };
+
+  const handleUnskipComment = (comment: any) => {
+    unskipCommentMutation.mutate({ itemType: 'comment', itemKey: String(comment.id) });
+  };
+
   const handleCopyReply = async () => {
     try {
       await navigator.clipboard.writeText(editedReply);
@@ -111,6 +137,11 @@ export default function CommentManager() {
       toast.error(t('コピーに失敗しました。ブラウザの権限設定を確認してください。'));
     }
   };
+
+  const skippedCount = (comments ?? []).filter((c: any) => skippedCommentIds.has(String(c.id))).length;
+  const visibleComments = showSkipped
+    ? (comments ?? [])
+    : (comments ?? []).filter((c: any) => !skippedCommentIds.has(String(c.id)));
 
   if (!selectedAccountId) {
     return (
@@ -171,6 +202,7 @@ export default function CommentManager() {
         <>{t('返信したいコメントの')}<b>{t('AI返信を生成')}</b>{t('を押します')}</>,
         <>{t('出てきた候補をタップで選び、必要なら文章を手直しします')}</>,
         <><b>{t('投稿する')}</b>{t('を押すとThreadsに返信されます')}</>,
+        <>{t('勧誘や出会い系のコメントは')}<b>{t('返信しない')}</b>{t('を押してください。一覧から外れます（返信しないことで不利になることはありません）')}</>,
       ]} />
 
       {isLoading ? (
@@ -187,12 +219,27 @@ export default function CommentManager() {
         </Card>
       ) : (
         <div className="grid gap-4">
-          {comments.map((comment: any) => {
+          {/* スルーしたコメントは既定で隠す。押し間違えても、ここから戻せる */}
+          {skippedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowSkipped((v) => !v)}
+              className="self-start text-sm text-muted-foreground underline underline-offset-4"
+            >
+              {showSkipped
+                ? t('返信しないコメントを隠す')
+                : `${t('返信しないことにしたコメント')}（${skippedCount}${t('件')}）${t('を表示')}`}
+            </button>
+          )}
+          {visibleComments.map((comment: any) => {
             const isPosted = postedCommentIds.has(comment.id);
+            const isSkipped = skippedCommentIds.has(String(comment.id));
+            // ★勧誘・出会い系は、LINEのカードと同じ見分け方（shared/commentSpam.ts）
+            const isSpam = !isSkipped && looksLikeSpamComment(String(comment.text || ''), comment.username ?? null);
             return (
               <Card
                 key={comment.id}
-                className={`transition-all ${isPosted ? 'border-green-300 bg-green-50/30' : 'hover:shadow-md'}`}
+                className={`transition-all ${isSkipped ? 'border-muted bg-muted/30 opacity-70' : isPosted ? 'border-green-300 bg-green-50/30' : isSpam ? 'border-amber-300 bg-amber-50/30' : 'hover:shadow-md'}`}
               >
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-4">
@@ -226,25 +273,67 @@ export default function CommentManager() {
                             {t('返信済み')}
                           </Badge>
                         )}
+                        {isSkipped && (
+                          <Badge variant="outline" className="ml-auto shrink-0 text-muted-foreground">
+                            <BellOff className="w-3 h-3 mr-1" />
+                            {t('返信しない')}
+                          </Badge>
+                        )}
                       </div>
 
                       {/* Comment text */}
                       <CardTitle className="text-base font-normal leading-relaxed">
                         {comment.text}
                       </CardTitle>
+
+                      {/* 勧誘・出会い系のときのご案内（LINEのカードと同じ考え方） */}
+                      {isSpam && (
+                        <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2">
+                          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                          <p className="text-sm text-amber-900">
+                            {t('勧誘・出会い系のコメントのようです。返信しないことをおすすめします（返信すると相手への反応になり、アカウントが止められやすくなります）。')}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex flex-col gap-2 shrink-0">
-                      <Button
-                        size="sm"
-                        className="bg-orange-500 hover:bg-orange-600 text-white"
-                        onClick={() => handleOpenReplyDialog(comment)}
-                        disabled={isPosted}
-                        aria-label={`@${comment.username || t('不明')}`}
-                      >
-                        <Sparkles className="w-4 h-4 mr-1" />
-                        {t('AI返信を生成')}
-                      </Button>
+                      {!isSkipped && (
+                        <Button
+                          size="sm"
+                          variant={isSpam ? 'outline' : 'default'}
+                          className={isSpam ? '' : 'bg-orange-500 hover:bg-orange-600 text-white'}
+                          onClick={() => handleOpenReplyDialog(comment)}
+                          disabled={isPosted}
+                          aria-label={`@${comment.username || t('不明')}`}
+                        >
+                          <Sparkles className="w-4 h-4 mr-1" />
+                          {t('AI返信を生成')}
+                        </Button>
+                      )}
+                      {/* ★返信しない（スルー）。Threads側には何もせず、一覧から外すだけ */}
+                      {isSkipped ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleUnskipComment(comment)}
+                          disabled={unskipCommentMutation.isPending}
+                        >
+                          <Undo2 className="w-4 h-4 mr-1" />
+                          {t('元に戻す')}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant={isSpam ? 'default' : 'ghost'}
+                          className={isSpam ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'text-muted-foreground'}
+                          onClick={() => handleSkipComment(comment)}
+                          disabled={isPosted || skipCommentMutation.isPending}
+                        >
+                          <BellOff className="w-4 h-4 mr-1" />
+                          {t('返信しない')}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardHeader>

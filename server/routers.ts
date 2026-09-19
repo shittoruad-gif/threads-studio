@@ -4758,13 +4758,14 @@ ${input.commentText}
   }),
 
   // 非表示アイテム（初期プリセット・投稿テンプレート集で「使わないもの」を隠す）
+  // ★comment＝コメント管理で「返信しない（スルー）」を押したコメント（2026-09-19 三上様指示）
   hidden: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return await db.getHiddenItems(ctx.user.id);
     }),
     hide: protectedProcedure
       .input(z.object({
-        itemType: z.enum(['preset', 'template']),
+        itemType: z.enum(['preset', 'template', 'comment']),
         itemKey: z.string().min(1).max(100),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -4773,7 +4774,7 @@ ${input.commentText}
       }),
     unhide: protectedProcedure
       .input(z.object({
-        itemType: z.enum(['preset', 'template']),
+        itemType: z.enum(['preset', 'template', 'comment']),
         itemKey: z.string().min(1).max(100),
       }))
       .mutation(async ({ ctx, input }) => {
