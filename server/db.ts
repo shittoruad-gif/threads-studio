@@ -26,7 +26,7 @@ import {
   monitorFeedback, MonitorFeedback, InsertMonitorFeedback,
   jobRuns, JobRun,
   followerSnapshots, hitPostArchive, HitPostArchive, cancellationFeedback,
-  hiddenItems, contentInterestSurvey, ContentInterestSurvey,
+  hiddenItems, contentInterestSurvey, ContentInterestSurvey, commentReplyDrafts,
   regionalRefPosts, RegionalRefPost,
   emailLogs, EmailLog, InsertEmailLog
 } from "../drizzle/schema";
@@ -3185,6 +3185,31 @@ export async function addHiddenItem(userId: number, itemType: string, itemKey: s
   await db.insert(hiddenItems)
     .values({ userId, itemType, itemKey })
     .onDuplicateKeyUpdate({ set: { itemKey } }); // no-op update to swallow duplicates
+}
+
+/**
+ * 公式LINEのコメントカードに出した「返信の文案」を、そのまま保存する。
+ * ★「この文で送る」は、必ずこの文だけを送る。送信側で作り直してはいけない
+ *   （作り直すと毎回違う文になり、カードに出した文と違う返信が飛ぶ）。
+ */
+export async function saveCommentReplyDraft(threadsAccountId: number, commentId: string, draft: string): Promise<void> {
+  const db = await getDb();
+  if (!db || !draft) return;
+  await db.insert(commentReplyDrafts)
+    .values({ threadsAccountId, commentId, draft })
+    .onDuplicateKeyUpdate({ set: { draft } });
+}
+
+/** カードに出した文案を取り出す（無ければ null＝そのまま送らない） */
+export async function getCommentReplyDraft(threadsAccountId: number, commentId: string): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(commentReplyDrafts).where(and(
+    eq(commentReplyDrafts.threadsAccountId, threadsAccountId),
+    eq(commentReplyDrafts.commentId, commentId),
+  )).limit(1);
+  const d = rows[0]?.draft;
+  return d ? String(d) : null;
 }
 
 /** 非表示を解除（元に戻す） */

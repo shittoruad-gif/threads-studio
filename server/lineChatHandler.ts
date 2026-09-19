@@ -1872,7 +1872,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     if (acct.hasReplyScope === false || acct.hasReplyScope === 0) return [textWithQuick("このアカウントは返信の送信権限がまだありません。「Threadsアプリで返信する」からお願いします。", MENU_HINT)];
     const { draftCommentReply, sendReplyViaApi } = await import("./commentReply");
     const { looksLikeSpamComment } = await import("../shared/commentSpam");
-    const cm: any = await (await fetch(`https://graph.threads.net/v1.0/${encodeURIComponent(String(q.c))}?fields=id,text,username&access_token=${acct.accessToken}`)).json();
+    const cm: any = await (await fetch(`https://graph.threads.net/v1.0/${encodeURIComponent(String(q.c))}?fields=id,text,username,shortcode&access_token=${acct.accessToken}`)).json();
     if (!cm?.id) return [textWithQuick("そのコメントが見つかりませんでした（削除された可能性があります）。", MENU_HINT)];
     // ★勧誘・出会い系には、こちらから返信を送らない（カードが古くても押せてしまうため、ここでも見る）
     if (looksLikeSpamComment(String(cm.text || ""), cm.username ?? null)) {
@@ -1882,7 +1882,16 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         MENU_HINT,
       )];
     }
-    const draft = await draftCommentReply({ commentText: String(cm.text || ""), commenter: cm.username ?? null, storeName: (user as any).storeName ?? null });
+    // ★カードに出した文案だけを送る。ここで作り直すと、押した文とは別の文が飛ぶ
+    //   （2026-09-19 三上様ご指摘。以前はここで draftCommentReply を呼び直していた）。
+    const draft = await db.getCommentReplyDraft(Number(acct.id), String(cm.id));
+    if (!draft) {
+      // 保存が見つからない（ずいぶん前のカード等）。黙って別の文を送らず、作り直してお見せする。
+      const { buildCommentReplyCards } = await import("./commentReply");
+      const fresh = await draftCommentReply({ commentText: String(cm.text || ""), commenter: cm.username ?? null, storeName: (user as any).storeName ?? null });
+      const cards = await buildCommentReplyCards([{ accountId: Number(acct.id), accountUsername: String(acct.threadsUsername), hasReplyScope: true, commentId: String(cm.id), shortcode: cm.shortcode ?? null, commenter: cm.username ?? null, commentText: String(cm.text || ""), draft: fresh, spam: false }]);
+      return [textWithQuick("このカードの文案が残っていなかったため、まだ返信していません。下の文をご確認のうえ、もう一度「この文で送る」を押してください。", MENU_HINT), ...(cards as any[])];
+    }
     const r = await sendReplyViaApi(acct.accessToken, String(cm.id), draft);
     if (r.error) return [textWithQuick(`返信を送れませんでした（${r.error.slice(0, 80)}）。「Threadsアプリで返信する」からお願いします。`, MENU_HINT)];
     return [textWithQuick(`返信しました。\n\n${draft}`, MENU_HINT)];
@@ -1896,7 +1905,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     if (!cm?.id) return [textWithQuick("そのコメントが見つかりませんでした。", MENU_HINT)];
     const spam = looksLikeSpamComment(String(cm.text || ""), cm.username ?? null);
     const draft = spam ? "" : await draftCommentReply({ commentText: String(cm.text || ""), commenter: cm.username ?? null, storeName: (user as any).storeName ?? null });
-    return buildCommentReplyCards([{ accountId: Number(acct.id), accountUsername: String(acct.threadsUsername), hasReplyScope: !(acct.hasReplyScope === false || acct.hasReplyScope === 0), commentId: String(cm.id), shortcode: cm.shortcode ?? null, commenter: cm.username ?? null, commentText: String(cm.text || ""), draft, spam }]);
+    return (await buildCommentReplyCards([{ accountId: Number(acct.id), accountUsername: String(acct.threadsUsername), hasReplyScope: !(acct.hasReplyScope === false || acct.hasReplyScope === 0), commentId: String(cm.id), shortcode: cm.shortcode ?? null, commenter: cm.username ?? null, commentText: String(cm.text || ""), draft, spam }])) as any[];
   }
   if (q.m === "comments") {
     return [textWithQuick(

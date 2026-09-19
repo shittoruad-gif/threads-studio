@@ -302,7 +302,7 @@ export async function runCommentWatchJob(): Promise<void> {
             items.push({ accountId: c.accountId, accountUsername: c.accountUsername, hasReplyScope: !!c.hasReplyScope, commentId: c.id, shortcode: c.shortcode ?? null, commenter: c.username ?? null, commentText: c.text, parentText: c.parent ?? null, draft, spam });
           }
           if (items.length > 0) {
-            const msgs = buildCommentReplyCards(items);
+            const msgs = await buildCommentReplyCards(items);
             for (const lineId of lineIds) await pushMessages(lineId, msgs);
           } else {
             const previews = newComments.slice(0, 3).map((c) => (c.username ? '@' + c.username + '：' : '') + (c.text || ''));

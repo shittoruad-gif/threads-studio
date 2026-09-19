@@ -59,7 +59,7 @@ export async function handleReplyEvents(events: ReplyEvent[]): Promise<number> {
         draft = await draftCommentReply({ commentText: String(ev.text || ""), commenter: ev.username ?? null, parentText, storeName: user?.storeName ?? null });
         if (!draft) continue;
       }
-      const msgs = buildCommentReplyCards([{ accountId: Number(acct.id), accountUsername: String(acct.threadsUsername), hasReplyScope: !(full?.hasReplyScope === false || full?.hasReplyScope === 0), commentId: ev.id, shortcode: ev.shortcode ?? null, commenter: ev.username ?? null, commentText: String(ev.text || ""), parentText, draft, spam }]);
+      const msgs = await buildCommentReplyCards([{ accountId: Number(acct.id), accountUsername: String(acct.threadsUsername), hasReplyScope: !(full?.hasReplyScope === false || full?.hasReplyScope === 0), commentId: ev.id, shortcode: ev.shortcode ?? null, commenter: ev.username ?? null, commentText: String(ev.text || ""), parentText, draft, spam }]);
       const { pushMessages } = await import("./lineNotify");
       for (const to of targets) await pushMessages(to, msgs);
       // 3時間おきの巡回と二重にならないよう、確認時刻を進める

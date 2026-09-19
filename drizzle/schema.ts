@@ -289,6 +289,25 @@ export const hiddenItems = mysqlTable("hiddenItems", {
 export type HiddenItem = typeof hiddenItems.$inferSelect;
 
 /**
+ * 公式LINEのコメントカードに出した「返信の文案」。
+ * ★「この文で送る」は、必ずここに保存した文だけを送る。
+ *   保存せずに送信側で作り直していたため、カードに出した文と違う文が
+ *   返信されていた（2026-09-19 三上様ご指摘）。
+ */
+export const commentReplyDrafts = mysqlTable("commentReplyDrafts", {
+  id: int("id").autoincrement().primaryKey(),
+  threadsAccountId: int("threadsAccountId").notNull().references(() => threadsAccounts.id, { onDelete: "cascade" }),
+  commentId: varchar("commentId", { length: 64 }).notNull(),
+  draft: text("draft").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().onUpdateNow(),
+}, (table) => [
+  uniqueIndex("uniq_comment_reply_draft").on(table.threadsAccountId, table.commentId),
+]);
+
+export type CommentReplyDraft = typeof commentReplyDrafts.$inferSelect;
+
+/**
  * 契約時（利用開始時）の「興味のあるコンテンツ」アンケート。
  * どんな投稿ネタに興味があるかを把握し、運営の改善・提案に活かす。
  * ユーザーごとに1回（存在＝回答済み）。

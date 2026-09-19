@@ -47,9 +47,23 @@ export function buildReplyIntentUrl(shortcode: string, text: string): string {
   return `https://www.threads.com/intent/post?text=${encodeURIComponent(text)}&reply_post_shortcode=${encodeURIComponent(shortcode)}&openExternalBrowser=1`;
 }
 
-/** LINEのカード（1コメント1枚・最大5枚のカルーセル）＋説明文 */
-export function buildCommentReplyCards(items: CommentItem[]): unknown[] {
+/**
+ * LINEのカード（1コメント1枚・最大5枚のカルーセル）＋説明文。
+ *
+ * ★カードに出した文案は、ここで必ず保存する。「この文で送る」はこの保存分だけを送る。
+ *   以前は送信時にもう一度AIに作らせていたため、カードに出した文とは別の文が
+ *   返信されていた（2026-09-19 三上様ご指摘）。保存をこの1か所に置くことで、
+ *   カードを出すどの経路（webhook・15分ごとの見回り・作り直し）でも取りこぼさない。
+ */
+export async function buildCommentReplyCards(items: CommentItem[]): Promise<unknown[]> {
   if (items.length === 0) return [];
+  const db = await import("./db");
+  for (const it of items) {
+    if (!it.spam && it.draft) {
+      try { await db.saveCommentReplyDraft(Number(it.accountId), String(it.commentId), it.draft); }
+      catch { /* 保存できなくてもカードは出す。送信側は保存が無ければ送らずに作り直す */ }
+    }
+  }
   const bubbles = items.slice(0, 5).map((it) => {
     const footer: any[] = [];
     // ★勧誘・出会い系には文案を出さない。返信は相手への反応になり、
