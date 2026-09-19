@@ -57,12 +57,39 @@ export async function runAccountHealthJob(): Promise<void> {
       // ★消えた投稿は「失敗（Threads側で削除）」として記録し、翌日以降に同じ警告を繰り返さない
       //   （2026-09-09 比嘉様に3日連続で「投稿が消えています」が届いた）
       if (goneIds.length > 0) {
-        // ★消された投稿が1件でもあれば7日間の冷却期間に入れる（1日1件・自己返信とリンクコメントなし）
         const { COOLDOWN_DAYS, jstDateString } = await import("../shared/accountRamp");
-        const { deletedPostsNotice, dateJstLabel } = await import("../shared/dailyCap");
+        const { deletedPostsNotice, singleDeleteAskNotice, dateJstLabel } = await import("../shared/dailyCap");
         const until = jstDateString(COOLDOWN_DAYS);
         // 自社アカウント（しっとる公式・Moveact＝user 78）は補填しない（2026-09-13 R6）
         const isOwnAccount = Number(a.userId) === 78;
+
+        // ★1件だけ消えていたときは、まずご本人に伺ってから決める（2026-09-19 三上様ご判断）。
+        //   健全性点検は「投稿が見つからない」ことしか分からず、ご本人が消したのか Meta が消したのかを
+        //   区別できない。9/12以降の冷却5回のうち3回が「1件だけ」で、そのあと実際に制限を受けた例は0件だった。
+        //   7日以内に2件目が消えたとき（＝すでに伺っている）と、同時に2件以上消えたときは、今までどおり即冷却。
+        const asked = acct.singleDeleteAskedAt ? new Date(acct.singleDeleteAskedAt).getTime() : 0;
+        const askedRecently = asked > 0 && Date.now() - asked < COOLDOWN_DAYS * 86400000;
+        if (goneIds.length === 1 && !askedRecently && !isOwnAccount) {
+          const targets = await db.getLineUserIdsForUser(Number(a.userId));
+          if (targets.length > 0) {
+            await db.updateThreadsAccount(Number(a.id), { singleDeleteAskedAt: new Date(), singleDeletePostId: goneIds[0] } as any);
+            // 消えた1件は記録だけ残す（補填には積まない。お返事が「消していません」のときに積む）
+            try { await d.execute(sql`UPDATE scheduledPosts SET status = 'failed', errorMessage = 'Threads上で見つからない（ご本人に確認中）' WHERE threadsAccountId = ${Number(a.id)} AND status = 'posted' AND publishedThreadsPostId = ${goneIds[0]}`); } catch (e) { console.warn(`[AccountHealth] mark asking failed:`, (e as Error)?.message); }
+            for (const to of targets) {
+              await pushMessages(to, [
+                { type: "text", text: singleDeleteAskNotice(String(a.threadsUsername)),
+                  quickReply: { items: [
+                    { type: "action", action: { type: "postback", label: "自分で消しました", data: `sd=mine&a=${a.id}`, displayText: "自分で消しました" } },
+                    { type: "action", action: { type: "postback", label: "消していません", data: `sd=notmine&a=${a.id}`, displayText: "消していません" } },
+                  ] } },
+              ]);
+            }
+            await notifyOwner({ title: "公開した投稿が1件消えています（ご本人に確認中・冷却はまだ）", content: `@${a.threadsUsername}（user ${a.userId}）直近3日の公開 ${ids.length}件のうち 1件が見つかりません。1件だけのため冷却には入れず、LINEで「ご自身で消されましたか？」と伺いました（2026-09-19 三上様ご判断）。お返事が「消していません」なら、その時点で7日間の冷却に入ります。` });
+            console.warn(`[AccountHealth] @${a.threadsUsername}: 1件消えたためご本人に確認（冷却なし）`);
+            continue;
+          }
+          // LINE未連携の方には伺えないので、今までどおり冷却に入れる
+        }
         try {
           await db.updateThreadsAccount(Number(a.id), { cooldownUntil: until } as any);
           console.warn(`[AccountHealth] @${a.threadsUsername} を冷却期間に（${COOLDOWN_DAYS}日・1日1件）`);

@@ -63,3 +63,31 @@ describe("文言（R8：冷却中を「慣らし運転1日目」と言わない�
     expect(t).toContain("1日1件ずつ足してお届け");
   });
 });
+
+/**
+ * 1件だけ消えたときは、まずご本人に伺う（2026-09-19 三上様ご判断）。
+ * 三上様「投稿が1回消されたぐらいで冷却する必要は本当にあるの？」
+ *  → 9/12以降の冷却5回のうち3回が「1件だけ」で、そのあと実際に制限を受けた例は0件だった。
+ *    健全性点検はご本人が消したのか Meta が消したのかを区別できないため、伺ってから決める。
+ */
+describe("1件だけ消えたときのお伺い（2026-09-19）", () => {
+  it("お伺いの文に、冷却やスパム判定の話を書かない（ご自身で消しただけの方に不安を与えない）", async () => {
+    const { singleDeleteAskNotice } = await import("../shared/dailyCap");
+    const s = singleDeleteAskNotice("test_user");
+    expect(s).toContain("ご自身で削除されましたか");
+    expect(s).not.toContain("スパム");
+    expect(s).not.toContain("1日1件");
+  });
+  it("「消していません」のお答えには、冷却の期間と補填を伝える", async () => {
+    const { singleDeleteConfirmedNotice } = await import("../shared/dailyCap");
+    const s = singleDeleteConfirmedNotice("test_user", "9/26");
+    expect(s).toContain("9/26まで1日1件");
+    expect(s).toContain("足してお届け");
+  });
+  it("「自分で消しました」のお答えには、本数を減らさないと伝える", async () => {
+    const { singleDeleteByOwnerNotice } = await import("../shared/dailyCap");
+    const s = singleDeleteByOwnerNotice("test_user");
+    expect(s).toContain("これまでどおり");
+    expect(s).not.toContain("1日1件");
+  });
+});

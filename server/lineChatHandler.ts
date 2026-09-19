@@ -1832,6 +1832,27 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   if (q.m === "staff") {
     return startStaffHandoff(lineUserId, q.q ? Number(q.q) : undefined);
   }
+  // ── 投稿が1件消えていたときのお伺い（2026-09-19 三上様ご判断）──
+  //   ご本人が消したのか Meta が消したのかは、こちらからは分からない。
+  //   「自分で消した」なら何もしない。「消していない」ならその場で7日間の冷却に入る。
+  if ((q.sd === "mine" || q.sd === "notmine") && q.a) {
+    const acct: any = await db.getThreadsAccountById(Number(q.a));
+    if (!acct || acct.userId !== user.id) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    const { COOLDOWN_DAYS, jstDateString } = await import("../shared/accountRamp");
+    const { singleDeleteByOwnerNotice, singleDeleteConfirmedNotice, dateJstLabel } = await import("../shared/dailyCap");
+    if (q.sd === "mine") {
+      await db.updateThreadsAccount(Number(q.a), { singleDeleteAskedAt: null, singleDeletePostId: null } as any);
+      return [textWithQuick(singleDeleteByOwnerNotice(String(acct.threadsUsername)), MENU_HINT)];
+    }
+    const until = jstDateString(COOLDOWN_DAYS);
+    await db.updateThreadsAccount(Number(q.a), { cooldownUntil: until, singleDeleteAskedAt: null, singleDeletePostId: null } as any);
+    await db.addDeletedShortfall(Number(q.a), 1).catch(() => undefined);
+    let deferred = 0;
+    try { deferred = await db.deferTodaysAutoPostsBeyond(Number(q.a), 1); } catch { /* 絞れなくてもお知らせは返す */ }
+    const { notifyOwner } = await import("./_core/notification");
+    await notifyOwner({ title: "「自分では消していない」とのお答え（冷却に入りました）", content: `@${acct.threadsUsername}（user ${acct.userId}）${dateJstLabel(until)}まで1日1件。今日の残り${deferred}件を翌日へ送りました。` }).catch(() => undefined);
+    return [textWithQuick(singleDeleteConfirmedNotice(String(acct.threadsUsername), dateJstLabel(until)), MENU_HINT)];
+  }
   // ── コメント返信の1タップ（2026-09-07）──
   // ★「返信しない」。これが無かったため、返さないと決めた方が文章で状況を書いて送るしかなく、
   //   自動応答も答えられず担当者送りになっていた（2026-09-17 ご質問 #37 梅原様）。

@@ -1248,10 +1248,13 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           let carried = 0;
           if (!opts.fillToday) {
             try {
-              const { carryOverCount, jstDateString } = await import('../shared/accountRamp');
+              const { carryOverCount, jstDateString, inCooldown } = await import('../shared/accountRamp');
               const fullAcct: any = await db.getThreadsAccountById(account.id);
               const alreadyExtra = Math.max(0, postCount - contractCount);
-              carried = carryOverCount(fullAcct, alreadyExtra);
+              // ★冷却中は足さない（2026-09-19）。冷却の頭打ち（1日1件）を見ずに後から足していたため、
+              //   9/19 朝に香取様（acc21・冷却〜9/25）と しっとる公式（acc14）が2件になった。
+              //   docs/safe-operation-rules.md の「冷却中は補填も乗せない」が守られていなかった。
+              carried = inCooldown(fullAcct) ? 0 : carryOverCount(fullAcct, alreadyExtra);
               if (carried > 0) {
                 postCount += carried;
                 await db.updateThreadsAccount(account.id, { carryDate: jstDateString(0), carryCount: carried } as any);

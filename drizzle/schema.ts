@@ -383,6 +383,10 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   //   お客様に追記をお願いするとき、「なぜ必要か」を数えた事実で示すために残す。
   dupRejectDate: date("dupRejectDate"),
   dupRejectCount: int("dupRejectCount").notNull().default(0),
+  // ★1件だけ消えたときに「ご自身で消されましたか？」と伺った日時（2026-09-19 三上様ご判断）。
+  //   お返事が「消していない」か、7日以内に2件目が消えたときだけ冷却に入る。
+  singleDeleteAskedAt: timestamp("singleDeleteAskedAt"),
+  singleDeletePostId: varchar("singleDeletePostId", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
