@@ -606,6 +606,12 @@ interface CounselingState {
    * URLが来たらページを読んで答えを先に入れ、そのあと質問に進む。「なし」なら、そのまま質問へ。
    */
   awaitingUrl?: boolean;
+  /**
+   * URLを聞いたのに、URLでも「無い」でもない返事が続いた回数。
+   * ★ここで止まると「はじめの設定」に一歩も入れない。3回目からは質問に進む
+   *   （2026-09-20 夜間整備の通し確認で、同じご案内が21回くり返るのを実測）。
+   */
+  urlTries?: number;
   /** ホームページから読み取れた項目のうち、「まず5つ」で聞かない分（保存時にそのまま登録する） */
   webExtras?: Record<string, string>;
   /** 読み取ったホームページのURL */
@@ -833,13 +839,27 @@ async function receiveWebsiteUrl(lineUserId: string, cs: CounselingState, text: 
   const { extractUrl, buildPrefillFromWebsite } = await import("./websitePrefill");
   const url = extractUrl(t);
   if (!url) {
-    if (/^(なし|無い|ない|ありません|スキップ|無し|URLは無い)$/.test(t)) {
+    // ★以前は「なし」「無い」などの一語だけを受けていた。お客様は文章で書かれるので
+    //   「ホームページはありません」「持っていないです」は通らず、同じご案内がくり返された
+    //   （2026-09-20 夜間整備の通し確認で21回。ここで止まると設定に一歩も入れない）。
+    const 無いと言われた =
+      /^(なし|無し|無い|ない|ないです|ありません|ございません|持ってない|持っていない|わかりません|分かりません|スキップ|とばす|飛ばす|URLは無い)[。．、！!？?]*$/.test(t)
+      || /(ホームページ|ＨＰ|HP|サイト|ウェブ|ウエブ|URL|ＵＲＬ)[^。！？\n]{0,10}(ありません|ございません|ないです|無いです|無い|ない|持って(い)?ませ|持って(い)?ない|作って(い)?ませ|作って(い)?ない|やって(い)?ませ)/i.test(t)
+      || /^(持って|作って|使って|やって)(い)?(ませ|ない|なく)/.test(t);
+    const 諦めどき = (cs.urlTries ?? 0) >= 2;
+    if (無いと言われた || 諦めどき) {
       cs.awaitingUrl = false;
+      cs.urlTries = 0;
       await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
-      return [{ type: "text", text: "分かりました。質問でお聞きします。" }, ...askQuestion(cs)];
+      return [
+        { type: "text", text: 無いと言われた ? "分かりました。質問でお聞きします。" : "ホームページの読み取りはとばします。質問でお聞きしますので、そのままお答えください。" },
+        ...askQuestion(cs),
+      ];
     }
+    cs.urlTries = (cs.urlTries ?? 0) + 1;
+    await db.setLineChatState(lineUserId, "counseling", JSON.stringify(cs));
     return [textWithQuick(
-      "URLが見つかりませんでした。\nhttps:// から始まるホームページのアドレスを、そのまま貼ってください。\n\nホームページが無い場合は下の「URLは無い」を押してください。",
+      "URLが見つかりませんでした。\nhttps:// から始まるホームページのアドレスを、そのまま貼ってください。\n\nホームページが無い場合は下の「URLは無い」を押すか、「無い」と送ってください。",
       [{ label: "URLは無い", data: "c=nourl" }],
     )];
   }
@@ -2782,7 +2802,23 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     if (/^(やめる|中止|キャンセル)$/.test(text.trim())) {
       return [textWithQuick("承知しました。中止しました。", MENU_HINT)];
     }
-    return forwardToStaff(user.id, lineUserId, text.slice(0, 2000), st.payload ? Number(st.payload) : undefined);
+    const forwarded = await forwardToStaff(user.id, lineUserId, text.slice(0, 2000), st.payload ? Number(st.payload) : undefined);
+    // ★「担当者に聞く」を押したあとに、投稿の材料そのものを送ってこられることがある。
+    //   2026-09-19 プレステージ様（ご質問 #40）は、こちらがお願いした採用の材料
+    //   （入社された方のお声・入社後の場面・代表のお考え・店舗ごとの雰囲気・数字）を
+    //   すべて書いてくださったのに、担当者への連絡としてだけ残り、
+    //   「実績として登録」が一度も出ないため**投稿には使われないまま**だった。
+    //   担当者へお届けするのは変えず、その場で登録もできるようにする。
+    if (looksLikeMaterialOnly(text) && await stashMaterial(lineUserId, user.id, text)) {
+      forwarded.push(textWithQuick(
+        "いただいた内容は、そのまま「お店の情報」に足せます。\n" +
+        "下の「実績として登録」を押していただくと、明日からの投稿で使えるようになります" +
+        "（登録されていない話をAIが作ることはありません）。\n\n" +
+        "担当者からのお返事は、このままこのトークにお送りします。",
+        [{ label: "実績として登録", data: "c=addproof" }, { label: "お店の情報", data: "m=profile" }, ...MENU_HINT],
+      ));
+    }
+    return forwarded;
   }
 
   // ★入力待ちの途中で「やめる」と打たれたら、その言葉を内容として使わずに抜ける。

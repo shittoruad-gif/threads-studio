@@ -42,45 +42,55 @@ export default function TemplateSelect() {
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Header Navigation */}
-      <header className="absolute top-0 left-0 right-0 z-50 p-4">
-        {/* スマホではロゴ＋ボタン2つが横に並びきらず画面外へはみ出すため折返す */}
+      {/* ★以前は absolute だったため、見出しの「Threads Studio」のバッジに
+          そのまま重なっていた（375px ではボタンが3行になり、文字が二重に見える）。
+          背景の丸（下の absolute inset-0）とは別なので、流れの中に置いても見た目は変わらない。 */}
+      <header className="relative z-50 p-4">
+        {/* ★スマホではロゴ＋ボタン3つが横に並びきらない。
+            折返しはロゴと nav の間にしか無く、nav の中は 1 行のままだったため、
+            375px では「ダッシュボード」が画面の外（右へ170px）に出て押せなかった
+            （2026-09-20 夜間整備で実測）。nav の中も折返し、文字を小さくして収める。 */}
         <div className="container flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <Sparkles className="w-5 h-5 text-primary shrink-0" />
             <span className="font-semibold text-lg truncate">Threads Studio</span>
           </div>
-          <nav className="flex items-center gap-1 sm:gap-3">
+          <nav className="flex flex-wrap items-center justify-end gap-1 sm:gap-3 min-w-0">
             <Button
               variant="ghost"
-              className="text-muted-foreground hover:text-foreground"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground px-2 text-xs sm:px-4 sm:text-sm"
               onClick={() => setLocation('/library')}
             >
-              <Library className="w-4 h-4 mr-2" />
+              <Library className="w-4 h-4 mr-1 sm:mr-2" />
               ライブラリ
             </Button>
             <Button
               variant="ghost"
-              className="text-muted-foreground hover:text-foreground"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground px-2 text-xs sm:px-4 sm:text-sm"
               onClick={() => setLocation('/pricing')}
             >
-              <Crown className="w-4 h-4 mr-2" />
+              <Crown className="w-4 h-4 mr-1 sm:mr-2" />
               料金プラン
             </Button>
             {!loading && (
               isAuthenticated ? (
                 <Button
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 text-xs sm:px-4 sm:text-sm"
                   onClick={() => setLocation('/dashboard')}
                 >
-                  <User className="w-4 h-4 mr-2" />
+                  <User className="w-4 h-4 mr-1 sm:mr-2" />
                   ダッシュボード
                 </Button>
               ) : (
                 <Button
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 text-xs sm:px-4 sm:text-sm"
                   onClick={() => window.location.href = getLoginUrl()}
                 >
-                  <LogIn className="w-4 h-4 mr-2" />
+                  <LogIn className="w-4 h-4 mr-1 sm:mr-2" />
                   ログイン
                 </Button>
               )
