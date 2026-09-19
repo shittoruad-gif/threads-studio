@@ -388,6 +388,12 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   extraPostsReason: varchar("extraPostsReason", { length: 200 }),
   // Meta AI呼びかけ文を7日間使っていない → 送るのをやめた時刻（設定の「再開する」で消える）
   metaAiCallPausedAt: timestamp("metaAiCallPausedAt"),
+  /**
+   * 「このアカウントのお店の情報が登録されていません」とLINEでご案内した日時。
+   * ★アカウントが2つ以上あって紐づけが無いときは、もう一方の情報で文章を作らず止める。
+   *   （2026-09-19 プレステージ様：サロン用のアカウントに求人の投稿が回っていた）
+   */
+  projectMissingNoticeAt: timestamp("projectMissingNoticeAt"),
   // 届かなかった分の自動補填（2026-09-10）。6時の生成で落ちた枠を shortfall に記録し、翌朝 carry として足す（＋2まで）
   shortfallDate: date("shortfallDate"),
   shortfallCount: int("shortfallCount").notNull().default(0),

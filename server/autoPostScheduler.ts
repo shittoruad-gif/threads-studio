@@ -1217,6 +1217,19 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             console.log(`[AutoPost] account ${account.id} の紐付け店舗が対象外のためスキップ`);
             continue;
           }
+          // ★アカウントが2つ以上あるのに、このアカウントのお店の情報が決まっていない。
+          //   ここで下の日替わりローテーションに落ちると、もう一方のお店の情報で
+          //   文章を作ってしまう（2026-09-19 プレステージ様：新しく作ったサロン用の
+          //   アカウントに、先に登録してあった求人の投稿が回っていた）。
+          //   勝手に別の情報で作らず、止めてLINEでご案内する。
+          if (!(account as any).defaultProjectId && accounts.length >= 2) {
+            console.log(`[AutoPost] account ${account.id} はお店の情報が未設定のためスキップ（ご案内を送る）`);
+            try {
+              const { notifyProjectMissing } = await import('./accountProjectNotice');
+              await notifyProjectMissing(user as any, account as any);
+            } catch (e) { console.warn('[AutoPost] 未設定のご案内を送れませんでした', String(e)); }
+            continue;
+          }
 
           // ★このアカウントの実効設定（アカウント別 → 無ければ共通）
           const eff = effectiveAccountSettings(user as any, account as any);
