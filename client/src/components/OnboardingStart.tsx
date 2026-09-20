@@ -63,11 +63,15 @@ export function OnboardingStart() {
             <span className="shrink-0 w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center">2</span>
             <div className="min-w-0 flex-1">
               <p className="font-medium">トークに、この6桁の数字をそのまま送る</p>
-              <div className="mt-2 flex items-center gap-2">
-                <div className="text-3xl font-bold tracking-[0.3em] text-foreground min-w-[9rem]">
+              {/* ★2026-09-21：375px・390pxで「コピー」が画面の右へ20px はみ出して押せなかった。
+                  数字（tracking 0.3em・min-w 9rem）とボタンの合計が、箇条書きの中の幅を超えていたため。
+                  折返せるようにし、数字の字間はスマホだけ詰める。登録直後の全員が通る画面なので、
+                  ここが押せないと連携の最初の一歩で止まる。 */}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div className="text-3xl font-bold tracking-[0.2em] sm:tracking-[0.3em] text-foreground">
                   {code ? code : <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />}
                 </div>
-                <Button size="sm" variant="outline" onClick={copy} disabled={!code}>
+                <Button size="sm" variant="outline" onClick={copy} disabled={!code} className="shrink-0">
                   <Copy className="w-4 h-4 mr-1" />コピー
                 </Button>
               </div>

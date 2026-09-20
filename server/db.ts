@@ -1023,6 +1023,8 @@ export async function countAccountPostsScheduledToday(accountId: number): Promis
  * 今日の「自動投稿」の本数（当日補充の既存数に使う）。
  * ★手動の下書き（固定投稿など）を数えない。2026-09-11 廿日市様で、9/4から承認待ちのまま毎日翌日へ
  *   スライドしている固定投稿の下書き3件が「既存」に数えられ、自動投稿が1件しか補充されなかった。
+ * ★2026-09-21：日をまたいだ承認待ちも数えない。promoteSoftApprovedDuePosts が必ず見送りにするため、
+ *   公開されることはないのに枠だけ埋めてしまい、その日の公開が0件になる（香取様・実測）。
  */
 export async function countAccountAutoPostsScheduledToday(accountId: number): Promise<number> {
   const database = await getDb();
@@ -1037,6 +1039,9 @@ export async function countAccountAutoPostsScheduledToday(accountId: number): Pr
         sql`${scheduledPosts.status} IN ('pending', 'awaiting_approval', 'posted', 'processing')`,
         sql`${scheduledPosts.replyToThreadsId} IS NULL`,
         sql`DATE(DATE_ADD(${scheduledPosts.scheduledAt}, INTERVAL 9 HOUR)) = DATE(DATE_ADD(NOW(), INTERVAL 9 HOUR))`,
+        // ★見送りが決まっている承認待ち（前日以前に作られたもの）は枠に数えない（2026-09-21）
+        sql`(${scheduledPosts.status} <> 'awaiting_approval'
+             OR DATE(DATE_ADD(${scheduledPosts.createdAt}, INTERVAL 9 HOUR)) = DATE(DATE_ADD(NOW(), INTERVAL 9 HOUR)))`,
       ),
     );
   return Number(row?.n ?? 0);

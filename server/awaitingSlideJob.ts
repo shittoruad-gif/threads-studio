@@ -15,10 +15,13 @@ export async function runAwaitingSlideJob(): Promise<void> {
   let moved = 0;
   for (const p of overdue) {
     try {
-      const { at, label } = slideOverdueTime(Date.now());
-      await db.updateScheduledPostTime(p.id, at);
+      const slid = slideOverdueTime(Date.now());
+      // ★19時以降はずらさない（2026-09-21）。翌朝へ送ると、日をまたいだ承認待ちとして
+      //   どのみち見送りになるうえ、朝6時の生成が「今日すでに1件ある」と数えて新規を作らなくなる。
+      if (!slid) { console.log(`[AwaitingSlide] post=${p.id} user=${p.userId} → ずらさない（19時以降。日付が変わったら見送り）`); continue; }
+      await db.updateScheduledPostTime(p.id, slid.at);
       moved++;
-      console.log(`[AwaitingSlide] post=${p.id} user=${p.userId} → ${label}`);
+      console.log(`[AwaitingSlide] post=${p.id} user=${p.userId} → ${slid.label}`);
     } catch (e) {
       console.error(`[AwaitingSlide] post=${p.id} のずらしに失敗:`, e);
     }
