@@ -68,3 +68,63 @@ export function pickRotatingTopic(text: string | null | undefined, index: number
   const i = Number.isFinite(index) ? Math.abs(Math.trunc(index)) : 0;
   return items[i % items.length];
 }
+
+/**
+ * 「信条」「実績」が、直近の投稿ですでに使われているか（2026-09-21）。
+ *
+ * 悩み・強み・N1顧客像は日替わりで回しているのに、信条（belief）と実績（proof）だけは
+ * 回りもせず、しかも信条には「投稿に一貫してにじませる」という強い指示が付いていた。
+ * そのため毎回この2つが本文に出て、重複ガードに弾かれ続ける方が出ていた。
+ *
+ * 香取様（acc21）の実データ：
+ *   信条「痛い場所をマッサージするだけでは良くなりません。昔はマッサージばかりやっていた。」
+ *   実績「整形外科で11年勤務」
+ *   → 直近の投稿は「痛い場所だけ揉んでも、一時的になりがちです」「整形外科で11年勤務して分かった」。
+ *     9/21 は4回とも差し戻され、1日1件のご契約のため公開ゼロになった。
+ *
+ * すでに使われているなら、その日は渡さない（渡さなければ、AIはN1顧客像や強みなど
+ * 別の材料から書くしかなくなる）。ガードは緩めない。
+ *
+ * 判定は findRepeatedPhrase をそのまま使う。ただし比べるのは「設定に書かれた一文」と
+ * 「直近の投稿」なので、投稿どうしを比べるときより短い一致（6文字）でも十分な合図になる。
+ */
+export function usedInRecentPosts(
+  text: string | null | undefined,
+  recentPosts: readonly string[],
+  minChars: number = 6,
+): boolean {
+  const v = String(text ?? "").trim();
+  if (!v || recentPosts.length === 0) return false;
+  // 循環importを避けるため、ここでは require ではなく同じ判定を持つ関数を使う
+  return findRepeatedPhraseForSetting(v, recentPosts, minChars) !== null;
+}
+
+/** usedInRecentPosts 専用の最長一致（jpQualityGuard の findRepeatedPhrase と同じ考え方） */
+function findRepeatedPhraseForSetting(
+  text: string,
+  recentTexts: readonly string[],
+  minChars: number,
+): string | null {
+  const plain = (s: string) =>
+    String(s || "")
+      .replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0))
+      .replace(/[\s　]/g, "")
+      .replace(/[、。！？!?・「」『』（）()…‥~〜\-—:：;；'"”“]/g, "")
+      .replace(/[\uD800-\uDFFF]/g, "");
+  // 漢字・カタカナが2文字以上含まれる一致だけを拾う（「しています」のような機能語で誤爆しない）
+  const meaningful = (hit: string) => (hit.match(/[一-龠々ァ-ヶ]/g) ?? []).length >= 2;
+  const a = Array.from(plain(text));
+  if (a.length < minChars) return null;
+  for (const r of recentTexts) {
+    const b = plain(r);
+    if (b.length < minChars) continue;
+    for (let i = 0; i + minChars <= a.length; i++) {
+      let len = minChars;
+      if (!b.includes(a.slice(i, i + len).join(""))) continue;
+      while (i + len < a.length && b.includes(a.slice(i, i + len + 1).join(""))) len++;
+      const hit = a.slice(i, i + len).join("");
+      if (meaningful(hit)) return hit;
+    }
+  }
+  return null;
+}

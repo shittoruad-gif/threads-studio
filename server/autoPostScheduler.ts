@@ -17,7 +17,7 @@ import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle } from "../shared/postAngles";
 import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
 import { stripRawUrls } from "../shared/sanitize";
-import { pickRotatingTopic } from "../shared/topicRotation";
+import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
 import { invokeLLM } from "./_core/llm";
 import { nanoid } from "nanoid";
 import { approvedLocalTerms } from './localGeo';
@@ -563,6 +563,44 @@ async function generateAutoPost(
       identityWords = identityTokens(project).slice(0, 8);
     } catch { identityWords = []; }
 
+    // ★直近の自分の投稿を、プロンプトを組み立てる前に取る（2026-09-21）。
+    //   信条（belief）・実績（proof）を「今日渡すかどうか」の判断に使うため、
+    //   以前より前へ移した（取り方は変えていない）。
+    let recentPosts: string[] = [];
+    try { recentPosts = await db.getRecentPostContents(threadsAccountId, 10); } catch { recentPosts = []; }
+    // ★ご本人がThreadsアプリから投稿した分も見る（2026-09-11 香取様「同じ内容だったので自分で投稿していた」）。
+    //   こちらの下書きだけでなく、ご本人の直近の投稿とも話題・言い回しを重ねない。1日1回だけ取りに行く。
+    try {
+      const own = await recentOwnThreadsPosts(threadsAccountId);
+      for (const t of own) if (!recentPosts.includes(t)) recentPosts.push(t);
+    } catch { /* 取れなくてもこちらの下書きだけで続ける */ }
+
+    // ★信条と実績が、毎回そのまま投稿に出てしまうのを止める（2026-09-21）。
+    //
+    //   香取様（acc21）の「信条」には「痛い場所をマッサージするだけでは良くなりません。」、
+    //   「実績」には「整形外科で11年勤務」が登録されている。悩み・強み・N1は日替わりで
+    //   回しているのに、この2つだけは回しもせず、しかも信条には
+    //   「投稿に一貫してにじませる」という強い指示が付いていた。
+    //   その結果、毎回この2つが本文に出て、重複ガードに弾かれ続け、
+    //   9/21は4回とも差し戻されて公開ゼロになった（1日1件のご契約のため）。
+    //
+    //   ここでは2つのことをする。ガードは一切緩めない。
+    //    1. 複数行あるときは日替わりで1つだけにする（悩み・強みと同じ扱い）
+    //    2. 直近の投稿がすでにその言い回しを使っているなら、今日は渡さない
+    //       （渡さなければ、AIはN1顧客像や強みなど別の材料から書くしかなくなる）
+    const dropIfRecentlyUsed = (text: string | null | undefined, label: string): string | undefined => {
+      const v = String(text ?? '').trim();
+      if (!v) return undefined;
+      const picked = pickRotatingTopic(v, postTypeIndex + purposeIndex) || v;
+      if (recentPosts.length > 0 && usedInRecentPosts(picked, recentPosts)) {
+        console.log(`[AutoPost] ${label}「${picked.replace(/\s+/g, ' ').slice(0, 30)}」は直近の投稿で使われているため今日は渡さない userId=${userId} projectId=${project.id}`);
+        return undefined;
+      }
+      return picked;
+    };
+    const beliefForToday = dropIfRecentlyUsed((project as any).belief, '信条');
+    const proofForToday = dropIfRecentlyUsed(project.proof, '実績');
+
     const prompt = generateThreadsPrompt({
       storeName: (project as any).storeName || undefined,
       identityTokens: identityWords,
@@ -589,14 +627,14 @@ async function generateAutoPost(
       //   気づけない。岩根様のように登録内容そのものが薄い方は朝の報告に載せる）。
       onProfileScrub: (hits) =>
         console.log(`[AutoPost] はじめの設定から健康の断定を除外 userId=${userId} projectId=${project.id} ${Array.from(new Set(hits)).join('・')}`),
-      proof: project.proof || undefined,
+      proof: proofForToday,
       link: project.ctaLink || undefined,
       links: projectLinks.map(l => ({ type: l.type, label: l.label, url: l.url })),
       postType,
       treeCount: 0,
       usp: project.usp || undefined,
       n1Customer: project.n1Customer || undefined,
-      belief: (project as any).belief || undefined,
+      belief: beliefForToday,
       catchphrase: (project as any).catchphrase || undefined,
       customerWords: (project as any).customerWords || undefined,
       purpose,
@@ -613,14 +651,7 @@ async function generateAutoPost(
     //   切り口は毎回変わっていたのに書き出しの一節だけが同じ投稿が5本続き、
     //   香取様が5本とも「✕ 違う」を付けて4本を見送られた。
     //   お客様が見送られた下書きも含む（断られた切り口をもう一度出さない・2026-09-11）。
-    let recentPosts: string[] = [];
-    try { recentPosts = await db.getRecentPostContents(threadsAccountId, 10); } catch { recentPosts = []; }
-    // ★ご本人がThreadsアプリから投稿した分も見る（2026-09-11 香取様「同じ内容だったので自分で投稿していた」）。
-    //   こちらの下書きだけでなく、ご本人の直近の投稿とも話題・言い回しを重ねない。1日1回だけ取りに行く。
-    try {
-      const own = await recentOwnThreadsPosts(threadsAccountId);
-      for (const t of own) if (!recentPosts.includes(t)) recentPosts.push(t);
-    } catch { /* 取れなくてもこちらの下書きだけで続ける */ }
+    //   ★2026-09-21：recentPosts の取得は、信条・実績の判断に使うため上へ移した。
     const recentNote = recentPosts.length > 0
       ? `\n\n【直近の投稿（同じ言い回しを繰り返さない）】\n${recentPosts.slice(0, 6).map((p, i) => `${i + 1}. ${String(p).replace(/\s+/g, ' ').slice(0, 90)}`).join('\n')}\n- 上の投稿で使った書き出し・決め台詞・たとえを、そのまま使い回さない。同じことを言うなら、別の入り方・別の言葉にする。\n- 読んだ人が「この前と同じ投稿だ」と感じたら失敗。\n- 実績の数字（「◯年」「のべ◯人」など）から書き出さない。上の投稿と同じ数字で入ると、言い回しを変えても同じ投稿に見える。`
       : '';
@@ -1365,8 +1396,14 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                   lastRejectReason.get(rk) ?? '',
                   unused.length > 0
                     ? `- まだ投稿に使っていない材料がある。次のどれか1つだけを主役にして書く：\n${unused.map((u) => `  ・${u}`).join('\n')}`
+                      // ★2026-09-21：材料を渡しても「寝る前5分で翌日が変わるワザ」のような
+                      //   どの店でも書ける一般論に逃げ、自然さ2/5で落ちて枠ゼロになっていた（香取様 acc21）。
+                      //   実際にあった一件を、その場面のまま書かせる。
+                      + '\n- ★一般論・豆知識・「〜のコツ」にしない。上の材料に書かれている'
+                      + '「誰が・どうなって・どうしたか」を、その順番のまま短く書くこと。'
+                      + '材料に無い効果や結果は足さない。'
                     : '- これまでと違う入り方（季節・お客様との会話・よくある質問）から書く。',
-                  '- 直近の投稿に出てきた言葉・決め台詞・実績の数字は使わない。',
+                  '- 直近の投稿に出てきた言葉・決め台詞・実績の数字は使わない。信条（主張）もそのまま書かない。',
                 ].filter(Boolean).join('\n');
                 console.log(`[AutoPost] 保証パス user=${user.id} account=${account.id} slot=${i}（未使用の材料 ${unused.length}件）`);
                 success = await generateAutoPost(

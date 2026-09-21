@@ -1344,7 +1344,7 @@ ${safe.focusStrength ? `- ★今日この1本で使う強み：${safe.focusStren
 ${safe.usp ? `- USP（独自の強み）：${safe.usp}` : ''}
 ${safe.n1Customer ? `- N1顧客像：${safe.n1Customer}` : ''}
 ${safe.focusN1 ? `- ★今日この1本で取り上げるお客様：${safe.focusN1}（N1顧客像のうち、今日はこの方を思い浮かべて書く。他の方は今日は書かない。毎日ちがうお客様を順に扱うための指定）` : ''}
-${safe.belief ? `- 主張・信念：${safe.belief}（投稿に一貫してにじませる。これと矛盾する内容は書かない。仮想敵型と相性が良い）` : ''}
+${safe.belief ? `- 主張・信念：${safe.belief}（★これは「考え方の土台」であって、投稿に書く文ではない。この文言・言い換えを本文にそのまま書かない。矛盾する内容を書かないこと、それだけを守る。この信念を毎回の決め台詞にすると、同じ投稿が並ぶ）` : ''}
 ${safe.catchphrase ? `- 口癖・方言・決めゼリフ：${safe.catchphrase}（文体に自然に混ぜてキャラ付けする。毎回・不自然に多用はしない）` : ''}
 ${safe.customerWords ? `- お客さんが実際に使った言葉：${safe.customerWords}（★最優先。この生の言葉をそのまま投稿に1〜2個使う。専門用語より優先）` : ''}
 ${safe.proof ? `- 実績/証拠：${safe.proof}` : ''}
