@@ -1601,6 +1601,21 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     // ★はじめての登録は「まず5問」で終える（2026-09-08 三上様指示）。
     //   前回の登録内容があるやり直し（prefillKind=saved）や、full=1 の指定があれば従来の全20問。
     const quick = q.quick === "1" || (q.full !== "1" && prefillKind !== "saved");
+
+    // ★先にURLだけ貼ってくださった方の分（setup_url にお預かりしている）。
+    //   もう一度「URLを貼ってください」とは聞かない（2026-09-21 三上様指示）。
+    //   読み取りそのものは receiveWebsiteUrl に任せる＝通常の道と同じ処理になり、
+    //   読めなかったときの「正直にお伝えして質問へ戻す」挙動もそのまま使える。
+    let heldUrl: string | null = null;
+    if (quick) {
+      try {
+        const held = await db.getLineChatState(lineUserId);
+        if (held?.state === "setup_url" && held.payload) {
+          const u = JSON.parse(held.payload) as { url?: string };
+          if (u?.url) heldUrl = String(u.url);
+        }
+      } catch { heldUrl = null; }
+    }
     const st: CounselingState = {
       mode: q.mode, step: 0, answers: {}, projectId, accountId, accountName, quick,
       ...(prefillCount > 0 ? { prefill, prefillSource, prefillKind } : {}),
@@ -1610,6 +1625,14 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     };
     await db.setLineChatState(lineUserId, "counseling", JSON.stringify(st));
     const { prefillIntroText } = await import("./counselingPrefill");
+    if (quick && heldUrl) {
+      // すでにURLをいただいている＝【1／5】は済んでいる。そのまま読み取って2問目へ。
+      return [
+        { type: "text", text: (accountName ? `${accountName} の設定として、` : "") + (q.mode === "personal" ? "「個人にファンをつける」で進めます。" : "「お店の集客」で進めます。") },
+        { type: "text", text: "いただいたURLを読み取ります。残りは4問・2分ほどです。\n終わると、その場で最初の投稿を作ってお届けします。\n\n途中でやめたいときは「やめる」と送ってください。" },
+        ...(await receiveWebsiteUrl(lineUserId, st, heldUrl)),
+      ];
+    }
     if (quick) {
       return [
         { type: "text", text: (accountName ? `${accountName} の設定として、` : "") + (q.mode === "personal" ? "「個人にファンをつける」で進めます。" : "「お店の集客」で進めます。") },
@@ -3046,10 +3069,23 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
         !String(pj.id).startsWith("demo_") && pj.businessType,
       );
       if (usable.length === 0) {
+        // ★お店の情報がまだ無い方がURLを貼られたのは、たいてい「これで設定して」という意味。
+        //   以前はここで「先に『はじめの設定』を」と突き返していて、
+        //   いちばん手間の少ない入口（URLを読んで先に埋める）に届く前に、
+        //   せっかく貼っていただいたURLを捨てていた（2026-09-21 三上様指示で変更）。
+        //   何のための発信かだけは推測せずに伺い、URLはお預かりして設定に持ち越す。
+        await db.setLineChatState(lineUserId, "setup_url", JSON.stringify({ url: only }));
         return [textWithQuick(
           "URLをお送りいただき、ありがとうございます。\n" +
-          "ご案内先として登録するには、先に「はじめの設定」でお店の情報のご登録をお願いします。",
-          [{ label: "はじめの設定", data: "m=setup" }, ...MENU_HINT],
+          `${only}\n\n` +
+          "このページを読んで、業種・地域・店名・強み・メニューを先に入れておきます。\n" +
+          "何のための発信かだけ、選んでください。\n\n" +
+          "・お店の集客：お客様に来てもらうための発信\n" +
+          "・個人にファンをつける：ご自身の名前での発信",
+          [
+            { label: "お店の集客", data: "c=start&mode=store" },
+            { label: "個人にファンをつける", data: "c=start&mode=personal" },
+          ],
         )];
       }
       // 送っていただいたURLは、種類を選んでいただいたら保存できるよう預かっておく

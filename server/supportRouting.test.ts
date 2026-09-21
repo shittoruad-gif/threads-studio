@@ -44,6 +44,36 @@ describe("はじめの設定の入口の案内が、実際に通る道と一致�
 });
 
 /**
+ * 2026-09-21 三上様指示「URLを貼るのが一番手っ取り早い」。
+ * お店の情報がまだ無い方がURLを貼られたとき、以前は
+ * 「先に『はじめの設定』でお店の情報のご登録をお願いします」と突き返していて、
+ * いただいたURLを捨てていた（＝いちばん手間の少ない入口に届かない）。
+ */
+describe("お店の情報が未登録の方が貼ったURLを捨てない", () => {
+  it("突き返すだけの案内が残っていない", () => {
+    expect(handler).not.toContain("ご案内先として登録するには、先に「はじめの設定」でお店の情報のご登録をお願いします。");
+  });
+
+  it("いただいたURLを setup_url にお預かりする", () => {
+    expect(handler).toContain('db.setLineChatState(lineUserId, "setup_url"');
+  });
+
+  it("何のための発信かだけを伺い、そのまま設定に入れる", () => {
+    const i = handler.indexOf('db.setLineChatState(lineUserId, "setup_url"');
+    expect(i).toBeGreaterThan(0);
+    const block = handler.slice(i, i + 900);
+    expect(block).toContain('c=start&mode=store');
+    expect(block).toContain('c=start&mode=personal');
+  });
+
+  it("設定開始時にお預かりしたURLを読み取り、URLを二度聞きしない", () => {
+    expect(handler).toContain('held?.state === "setup_url"');
+    // 読み取りは通常と同じ receiveWebsiteUrl に通す（読めなかったときの正直な案内も共通）
+    expect(handler).toContain("await receiveWebsiteUrl(lineUserId, st, heldUrl)");
+  });
+});
+
+/**
  * お問い合わせはLINEで受ける。お電話では受けない（2026-09-09 三上様指示）。
  */
 describe("お問い合わせの導線", () => {
@@ -67,7 +97,25 @@ describe("「はじめの設定」の案内が経路ごとに正しい", () => {
   it("毎朝の「次にやること」（LINEのボタン）が20問と言わない", () => {
     const s = read("./nextAction.ts");
     expect(s).not.toContain("10〜15分・全20問");
-    expect(s).toContain("最初は5つだけです（URL1つと質問4つ・2分ほど）");
+    expect(s).not.toContain("全20問");
+    // 短く終わることが伝わっている（2026-09-21 に「残りは4問・2分ほど」へ変更）
+    expect(s).toMatch(/残りは4問・2分ほど|最初は5つだけです/);
+  });
+
+  /**
+   * 2026-09-21 三上様指示「URLを貼るのが一番手っ取り早いので、
+   * これがまずクライアントに分かりやすい状態で必ず提示するように」。
+   * お店の情報が未登録の方への最初のご案内で、URLを貼る道がボタンより先に出ていること。
+   */
+  it("お店の情報が未登録の方に、まずURLを貼る道を伝えている", () => {
+    const s = read("./nextAction.ts");
+    const i = s.indexOf('key: "no_project"');
+    expect(i).toBeGreaterThan(0);
+    const block = s.slice(i, i + 1400);
+    expect(block).toContain("ホームページのURL");
+    expect(block).toContain("そのまま貼って");
+    // 「はじめの設定」ボタンの案内より前にURLの話が来ている
+    expect(block.indexOf("ホームページのURL")).toBeLessThan(block.indexOf("buttons:"));
   });
 
   it("ご登録直後のご案内メールが20問と言わない", () => {
