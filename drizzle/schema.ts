@@ -412,6 +412,24 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   //   お返事が「消していない」か、7日以内に2件目が消えたときだけ冷却に入る。
   singleDeleteAskedAt: timestamp("singleDeleteAskedAt"),
   singleDeletePostId: varchar("singleDeletePostId", { length: 64 }),
+  /**
+   * ★投稿が1本も届かなかった日が何日続いているか（2026-09-21 三上様指示）。
+   *   香取様（1日1件のご契約）は、材料が尽きて毎回同じ言い回しに戻り、
+   *   9/20・9/21 と2日続けて1本も作れなかった。黙って翌日に回していたため、
+   *   お客様からは「投稿が来ていません」というお問い合わせになっていた（2度目）。
+   *   2日続いたら、こちらからお詫びし、何を送っていただきたいかを名指しでお願いする。
+   */
+  zeroPostDays: int("zeroPostDays").notNull().default(0),
+  zeroPostDate: date("zeroPostDate"),
+  /** 「この追加情報を送ってください」とお願いした日時（同じお願いを毎日くり返さない） */
+  materialAskedAt: timestamp("materialAskedAt"),
+  /**
+   * ★お詫びの補填（2026-09-21 三上様指示「お詫びで補填するように」）。
+   *   こちらの都合でお届けできなかった本数をためて、1日＋1件ずつ必ずお返しする。
+   *   deletedShortfall（Threadsに消された分）とは分けて持つ。混ぜると
+   *   「スパム判定の可能性」という別の説明がお客様に伝わってしまうため。
+   */
+  apologyShortfall: int("apologyShortfall").notNull().default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

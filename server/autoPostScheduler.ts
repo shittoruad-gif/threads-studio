@@ -1281,6 +1281,8 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
               console.log(`[AutoPost] account ${account.id} 補填: ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count;
               // ★消えた投稿の補填（R6）は朝の生成で1日1件ずつ消化する
               if (r.reason === 'deleted' && !opts.fillToday) await db.decrementDeletedShortfall(account.id).catch(() => undefined);
+              // ★お詫びの補填（2026-09-21）も同じく1日1件ずつ消化する
+              if (r.reason === 'apology' && !opts.fillToday) await db.decrementApologyShortfall(account.id).catch(() => undefined);
             }
             else if (r.established) console.log(`[AutoPost] account ${account.id} はThreads歴が長いため慣らし運転なし`);
           }
@@ -1453,6 +1455,18 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             if (accFailed > 0) console.log(`[AutoPost] account ${account.id} 届かなかった枠 ${accFailed}件 → 明日の生成で自動補填`);
             if (guaranteedHere > 0) console.log(`[AutoPost] account ${account.id} 保証パスでお届け ${guaranteedHere}件（承認カード・お店の情報の追記をお願いする対象）`);
           } catch (e) { console.warn(`[AutoPost] 不足分の記録に失敗 account=${account.id}: ${(e as Error)?.message}`); }
+
+          // ★2日続けて1本も届かなかったら、お詫びして「これを送ってください」とお願いする
+          //   （2026-09-21 三上様指示）。黙って翌日へ回すと、お客様からは
+          //   「投稿が来ていません」というお問い合わせになる（香取様・9/10 と 9/21 の2度）。
+          if (!opts.fillToday) {
+            try {
+              const { runZeroPostCheck } = await import('./zeroPostApology');
+              // 追記のお願いは、そのアカウントが実際に使う「お店の情報」に対して出す
+              const projectForAccount = pinnedProject || eligibleProjects[dayOffset % eligibleProjects.length];
+              await runZeroPostCheck(account.id, user.id, projectForAccount, contractCount);
+            } catch (e) { console.warn(`[AutoPost] 連続ゼロの確認に失敗 account=${account.id}: ${(e as Error)?.message}`); }
+          }
 
         }
 

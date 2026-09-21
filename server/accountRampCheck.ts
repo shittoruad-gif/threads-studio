@@ -48,7 +48,7 @@ export interface RampDecision {
   established: boolean;
   shortfall: number;
   /** 本数を変えた理由（R8：冷却を「慣らし運転」と言わないために区別する） */
-  reason?: "cooldown" | "ramp" | "compensation" | "deleted" | "manual";
+  reason?: "cooldown" | "ramp" | "compensation" | "deleted" | "manual" | "apology";
 }
 
 /** そのアカウントの今日の本数（contract=契約本数） */
@@ -88,6 +88,20 @@ export async function rampForAccount(
     //   ライトプラン（契約1件）は compensationCount が掛からない（want<2）ので、
     //   ここで返さないと30日目まで1件も戻らなかった（2026-09-16 梅原様の件で判明）。
     return { ...base0, count: contract + 1, extra: true, shortfall: ds, reason: "deleted", note: `消えた投稿の補填（あと${ds}件）を1日${contract + 1}件で返しています` };
+  }
+  // ★お詫びの補填（2026-09-21 三上様指示）。こちらの都合でお届けできなかった分を
+  //   1日＋1件で必ずお返しする。冷却中は上の分岐で先に返しているのでここへは来ない。
+  //   慣らし運転中（base0.capped）は増やさない＝アカウントを守る側を優先する。
+  const as = Number((account as any).apologyShortfall ?? 0);
+  if (as > 0 && !base0.capped) {
+    return {
+      ...base0,
+      count: base0.count + 1,
+      extra: true,
+      shortfall: as,
+      reason: "apology",
+      note: `お届けできなかった分の補填（あと${as}件）を1日${base0.count + 1}件でお返ししています`,
+    };
   }
   return base0;
 }

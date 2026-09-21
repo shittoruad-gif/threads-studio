@@ -3103,6 +3103,16 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     return replyToRequest("material", null, await stashMaterial(lineUserId, user.id, t));
   }
 
+  // ★こちらから「この追加情報を送ってください」とお願いした直後は、短いお返事でも材料として受ける
+  //   （2026-09-21 三上様指示）。looksLikeMaterialOnly は「番号つき3行以上」「引用2つ以上」など
+  //   並び方で見分けるので、お願いへの素直なお返事（「夜21時まで開けているので部活帰りの学生が多いです」）は
+  //   通らず、自動応答に横取りされて材料がどこにも残らない。
+  //   ご質問の形をしているものは今までどおり自動応答へ回す（お願いへの返事とは限らないため）。
+  if (!looksLikeQuestion(t) && Array.from(t.trim()).length >= 10 && await askedForMaterialRecently(user.id)) {
+    await recordMaterial(user.id, lineUserId, t);
+    return replyToRequest("material", null, await stashMaterial(lineUserId, user.id, t));
+  }
+
   if (looksLikeQuestion(t)) {
     const answered = await autoAnswer(user.id, lineUserId, t);
     if (answered) return answered;
@@ -3266,6 +3276,25 @@ async function recordMaterial(userId: number, lineUserId: string, text: string):
     });
   } catch (e) {
     console.error("[LineChat] 投稿の材料の記録に失敗:", e);
+  }
+}
+
+/**
+ * こちらから「この追加情報を送ってください」とお願いしたばかりか（2026-09-21 三上様指示）。
+ *
+ * 2日続けて投稿が1本も届かなかった方へ、お詫びと一緒に名指しでお願いを送っている
+ * （server/zeroPostApology.ts）。そのお返事は短い一文のことが多く、
+ * looksLikeMaterialOnly（番号つき3行以上／引用2つ以上）では拾えない。
+ * お願いしてから MATERIAL_ASK_INTERVAL_DAYS の間だけ、材料として受ける窓を開ける。
+ */
+async function askedForMaterialRecently(userId: number): Promise<boolean> {
+  try {
+    const { MATERIAL_ASK_INTERVAL_DAYS } = await import("./zeroPostApology");
+    const accounts = (await db.getThreadsAccountsByUserId(userId)) || [];
+    const limit = Date.now() - MATERIAL_ASK_INTERVAL_DAYS * 86400000;
+    return accounts.some((a: any) => a?.materialAskedAt && new Date(a.materialAskedAt).getTime() >= limit);
+  } catch {
+    return false;
   }
 }
 

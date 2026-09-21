@@ -763,6 +763,23 @@ export async function addDeletedShortfall(accountId: number, n: number): Promise
   await db.execute(sql`UPDATE threadsAccounts SET deletedShortfall = deletedShortfall + ${n} WHERE id = ${accountId}`);
 }
 
+/**
+ * お詫びの補填を積む（2026-09-21 三上様指示「お詫びで補填するように」）。
+ * こちらの都合でお届けできなかった本数。deletedShortfall（Threadsに消された分）とは分けて持つ。
+ */
+export async function addApologyShortfall(accountId: number, n: number): Promise<void> {
+  const db = await getDb();
+  if (!db || n <= 0) return;
+  await db.execute(sql`UPDATE threadsAccounts SET apologyShortfall = apologyShortfall + ${n} WHERE id = ${accountId}`);
+}
+
+/** お詫びの補填を1日分（1件）お返しした */
+export async function decrementApologyShortfall(accountId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.execute(sql`UPDATE threadsAccounts SET apologyShortfall = GREATEST(0, apologyShortfall - 1) WHERE id = ${accountId}`);
+}
+
 /** 補填を1日分消化した（R6） */
 export async function decrementDeletedShortfall(accountId: number): Promise<void> {
   const db = await getDb();
