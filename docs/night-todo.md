@@ -7,6 +7,50 @@
 > 過去の経緯は `git log docs/night-todo.md` から追える。ここには **これからやること** と
 > **忘れると事故になること** だけを残す。
 
+## 今夜（9/21 夜）反映するもの：フォロワー数の日次スナップショット（三上様の承諾ずみ）
+
+コミット済み・**push はまだ**。夜の整備で push → 反映を確認する。
+
+### 何が起きていたか
+`followerSnapshots` テーブルは最初から在るのに、**1件も貯まっていなかった**。
+原因は `server/threadsApi.ts` の `getThreadsUserCounts` が
+`GET /v1.0/{user-id}?fields=followers_count,following_count` を叩いていたこと。
+このフィールドはユーザーノードに存在せず、実測で必ずこう返る：
+
+    {"error":{"message":"Tried accessing nonexisting field (followers_count)","code":100}}
+
+そのため常に0となり、`dailyOpsJobs.snapshotFollowersForUser` の
+`if (followers <= 0) continue;`（0しか取れないアカウントは記録しない）に毎回かかっていた。
+毎朝7:00のジョブ自体は動いていたが、書くものが無かった、という状態。
+
+### 直した内容
+- `server/threadsApi.ts`：取り口を `GET /v1.0/{user-id}/threads_insights?metric=followers_count` に変更
+  （`server/accountRampCheck.ts` が前から使っている、実際に動く方）。
+  戻り値に `ok`（APIから値を取れたか）を足し、**取れての0人**と**取れなくての0**を区別できるようにした。
+  `following_count` は Threads API に相当する指標が無いため 0 のまま。
+- `server/dailyOpsJobs.ts`：`counts.ok` で分岐。取得に失敗したときだけ連携時の保存値へフォールバックし、
+  本当に0人のアカウント（開設直後）は**0として記録する**ようにした。
+- `server/threadsFollowerCount.test.ts`（新規・7件）：`fields=followers_count` へ戻ったら落ちる番人。
+- `scripts/ops/snapshot-followers.mts`（新規）：手で当日分を取る運営用スクリプト。`--dry` で取得のみ。
+
+### 反映を待たずに済ませたこと
+9/21 13時台に `snapshot-followers.mts` を本番DBへ実行し、**22アカウント全件の当日分を記録ずみ**
+（合計フォロワー 3,014・0人が4アカウント）。書いたのは `followerSnapshots` だけで、
+お客様への送信・設定変更は一切していない。
+
+### 今夜やること
+1. push（auto-deploy が5分で拾う）
+2. Coolify の deployments で finished のコミットが origin/main の先頭と一致することを確認
+3. 明朝7:00の `analytics_snapshot` の後、`SELECT capturedOn, COUNT(*) FROM followerSnapshots GROUP BY 1`
+   に **9/22 の行が22件前後で増えている**ことを確認する。増えていなければジョブ側を疑う
+
+### なぜやったか（2026-09-21 三上様）
+「導入前から動かしていた店」と「導入後から動かし始めた店」の違いを出したとき、
+1日あたり表示に 591 対 376 の差が出たが、**フォロワーの記録が無いため原因を説明できなかった**。
+30日ぶん貯まれば、この差がフォロワー資産によるものか投稿の中身によるものかを判定できる。
+
+---
+
 ## 2026-09-21 未明（夜間整備）に直した分
 
 ### 1. 承認待ちの投稿を翌朝へずらしていたため、公開が0件の日ができていた

@@ -133,37 +133,55 @@ export async function getThreadsPostInsights(
 }
 
 /**
- * Get user's followers and following counts from Threads API
- * Note: This is a placeholder implementation as the actual Threads API endpoints may vary
- * @param accessToken - Threads access token
+ * フォロワー数を取得する。
+ *
+ * ★2026-09-21 修正：ユーザーノードに `?fields=followers_count` は存在せず、
+ *   実測で必ず `Tried accessing nonexisting field (followers_count)`（code 100）が返っていた。
+ *   そのため常に0となり、`dailyOpsJobs.snapshotFollowersForUser` の
+ *   「0しか取れないアカウントは記録しない」に毎回かかって、
+ *   followerSnapshots が1件も貯まっていなかった（導入前後の比較にフォロワーを使えなかった原因）。
+ *   正しい取り口は threads_insights の followers_count で、accountRampCheck.ts が既に使っている。
+ *
+ * following_count は Threads API に相当する指標が無いため 0 を返す（従来どおり）。
+ *
+ * `ok` は「APIから値を取れたか」。0人のアカウントは実在する（開設直後）ので、
+ * 取得できての0と、失敗しての0を呼び出し側が区別できるようにしている。
+ *
+ * @param accessToken - Threads access token（必ず復号済みのもの）
  * @param userId - Threads user ID
- * @returns Followers and following counts
  */
 export async function getThreadsUserCounts(
   accessToken: string,
   userId: string
-): Promise<{ followersCount: number; followingCount: number }> {
-  // Placeholder implementation
-  // The actual Threads API may not provide these endpoints yet
-  // This would need to be updated based on the official Threads API documentation
-  
+): Promise<{ followersCount: number; followingCount: number; ok: boolean }> {
   try {
-    const url = `${THREADS_API_BASE_URL}/v1.0/${userId}?fields=followers_count,following_count&access_token=${accessToken}`;
+    const url = `${THREADS_API_BASE_URL}/v1.0/${userId}/threads_insights?metric=followers_count&access_token=${accessToken}`;
     const response = await fetch(url);
+    const data = await response.json();
 
-    if (!response.ok) {
-      // If the API doesn't support these fields yet, return default values
-      return { followersCount: 0, followingCount: 0 };
+    if (!response.ok || data?.error) {
+      console.error(
+        `[Threads] フォロワー数の取得に失敗 user=${userId}: ${JSON.stringify(data?.error ?? response.status).slice(0, 200)}`
+      );
+      return { followersCount: 0, followingCount: 0, ok: false };
     }
 
-    const data = await response.json();
-    return {
-      followersCount: data.followers_count || 0,
-      followingCount: data.following_count || 0,
-    };
+    const metric = (data?.data ?? []).find((d: any) => d?.name === "followers_count") ?? data?.data?.[0];
+    const raw = metric?.total_value?.value ?? metric?.values?.[metric.values.length - 1]?.value;
+    if (raw === undefined || raw === null) {
+      console.error(`[Threads] フォロワー数の形が読めない user=${userId}: ${JSON.stringify(data).slice(0, 200)}`);
+      return { followersCount: 0, followingCount: 0, ok: false };
+    }
+
+    const followers = Number(raw);
+    if (!Number.isFinite(followers) || followers < 0) {
+      return { followersCount: 0, followingCount: 0, ok: false };
+    }
+
+    return { followersCount: followers, followingCount: 0, ok: true };
   } catch (error) {
     console.error("Error fetching Threads user counts:", error);
-    return { followersCount: 0, followingCount: 0 };
+    return { followersCount: 0, followingCount: 0, ok: false };
   }
 }
 

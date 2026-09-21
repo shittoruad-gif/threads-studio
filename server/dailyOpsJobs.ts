@@ -87,11 +87,12 @@ async function snapshotFollowersForUser(userId: number): Promise<void> {
   for (const account of accounts) {
     try {
       const counts = await getThreadsUserCounts(account.accessToken, account.threadsUserId);
-      // API未対応等で0が返るときは、連携時に保存済みの値をフォールバックに使う
-      const followers = counts.followersCount > 0
-        ? counts.followersCount
-        : (account.followersCount ?? 0);
-      if (followers <= 0) continue; // 0しか取れないアカウントは記録しない（グラフを汚さない）
+      // ★2026-09-21：取れての0（開設直後は実在する）と、取れなくての0を区別する。
+      //   以前は区別が無く、取り口の誤り（threadsApi参照）で全件0になり、
+      //   ここで毎回 continue していたため followerSnapshots が空のままだった。
+      //   取得に失敗したときだけ、連携時に保存済みの値をフォールバックに使う。
+      const followers = counts.ok ? counts.followersCount : (account.followersCount ?? -1);
+      if (followers < 0) continue; // 取得も復元もできないときだけ記録しない
       await upsertFollowerSnapshot({
         userId,
         threadsAccountId: account.id,
