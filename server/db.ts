@@ -8,6 +8,7 @@ import {
   threadsAccounts, InsertThreadsAccount, ThreadsAccount,
   projects, InsertProject, Project,
   scheduledPosts, InsertScheduledPost, ScheduledPost,
+  postRejectLog,
   templates, Template,
   userFavorites, InsertUserFavorite,
   userHistoryFavorites, UserHistoryFavorite, InsertUserHistoryFavorite,
@@ -800,6 +801,46 @@ export async function bumpDupReject(accountId: number): Promise<void> {
        SET dupRejectCount = IF(dupRejectDate = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00')), dupRejectCount + 1, 1),
            dupRejectDate  = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))
      WHERE id = ${accountId}`);
+}
+
+/**
+ * 品質ガードで作り直しになった理由をDBに残す（2026-09-22）。
+ * ★本番のログは再デプロイのたびに消えるため、ログでは数えられない。
+ *   夜間整備の「同じ理由で3回落ちて投稿ゼロになった人がいないか」を数えるための印。
+ * 記録に失敗しても投稿の生成は止めない（呼び出し側は待たない）。
+ */
+export async function recordPostReject(r: {
+  userId: number; threadsAccountId: number; guard: string; detail?: string | null; gaveUp?: boolean;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  // 長い理由はそのまま入れると切れるので、数えるのに足りる長さで丸める
+  const detail = r.detail ? String(r.detail).replace(/\s+/g, " ").trim().slice(0, 250) : null;
+  await db.insert(postRejectLog).values({
+    userId: r.userId, threadsAccountId: r.threadsAccountId,
+    guard: r.guard, detail, gaveUp: r.gaveUp ? 1 : 0,
+  });
+}
+
+/**
+ * 直近 n 時間に作り直しで落ちた理由の内訳（夜間整備 §3.45 で数える）。
+ * gaveUp=1 ＝ その枠を捨てた＝お客様に届く本数が1本減ったもの。
+ */
+export async function countPostRejectsSince(hours: number = 24): Promise<Array<{
+  guard: string; threadsAccountId: number; n: number; gaveUp: number;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows: any = await db.execute(sql`
+    SELECT guard, threadsAccountId, COUNT(*) AS n, SUM(gaveUp) AS gaveUp
+      FROM postRejectLog
+     WHERE createdAt >= DATE_SUB(NOW(), INTERVAL ${hours} HOUR)
+     GROUP BY guard, threadsAccountId
+     ORDER BY gaveUp DESC, n DESC`);
+  return ((rows as any)[0] ?? []).map((x: any) => ({
+    guard: String(x.guard), threadsAccountId: Number(x.threadsAccountId),
+    n: Number(x.n), gaveUp: Number(x.gaveUp ?? 0),
+  }));
 }
 
 /** その日、材料が尽きたまま本数を守るためお届けした件数（保証パス・2026-09-18） */

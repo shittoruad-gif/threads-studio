@@ -180,6 +180,35 @@ function findForeignRegionWords(
 const lastRejectReason = new Map<string, string>();
 const rejectKey = (userId: number, accountId: number, slot: number) => `${userId}:${accountId}:${slot}`;
 
+/**
+ * 作り直しの理由を、次の作り直しへ渡すと同時にDBへ残す（2026-09-22）。
+ *
+ * ★ログだけでは数えられない。本番のコンテナは再デプロイのたびに作り直され、
+ *   それ以前のログが全部消える（9/19 20時・9/21 01:16 に実際に起きている）。
+ *   9/22 未明の夜間整備では、6時の生成のログが 09:52 の再デプロイで消えており、
+ *   「同じ理由で3回落ちて投稿ゼロになった人」を1件も数えられなかった。
+ *
+ * 記録に失敗しても投稿の生成は止めない（待たない・例外を投げない）。
+ *
+ * @param guard   どの検査か（数えるときの見出しになる）
+ * @param hint    次の作り直しへ渡す文（これまでどおり lastRejectReason に入る）
+ * @param detail  数えるための短い中身（省略時は hint を丸めて使う）
+ * @param gaveUp  この作り直しで枠を捨てたか（＝お届けが1本減った）
+ */
+function noteReject(
+  guard: string,
+  userId: number,
+  accountId: number,
+  slot: number,
+  hint: string,
+  opts: { detail?: string; gaveUp?: boolean } = {},
+): void {
+  lastRejectReason.set(rejectKey(userId, accountId, slot), hint);
+  void db
+    .recordPostReject({ userId, threadsAccountId: accountId, guard, detail: opts.detail ?? hint, gaveUp: opts.gaveUp })
+    .catch(() => undefined);
+}
+
 export async function naturalizeContent(
   text: string,
   personal: boolean = false,
@@ -817,7 +846,8 @@ async function generateAutoPost(
           naturalMain = beforeNaturalize;
         } else {
           console.warn(`[AutoPost] voiceGuard: ${vAfter.reasons.join('・')}（前も ${vBefore.reasons.join('・') || '決まり文句'}）→ 作り直し userId=${userId}`);
-          lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex), `- 登録した口調と矛盾：${vAfter.reasons.join('／')}`);
+          noteReject('voiceGuard', userId, threadsAccountId, postingTimeIndex,
+            `- 登録した口調と矛盾：${vAfter.reasons.join('／')}`, { detail: vAfter.reasons.join('／'), gaveUp: lastAttempt });
           return false;
         }
       }
@@ -853,7 +883,8 @@ async function generateAutoPost(
           console.warn(`[AutoPost] identityGuard: 最後の作り直しのため署名「${sig}」を足して公開へ userId=${userId} projectId=${project.id}`);
         } else {
           console.warn(`[AutoPost] identityGuard: この店を指す言葉が無い → 作り直し userId=${userId} projectId=${project.id}`);
-          lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex), idv.hint);
+          noteReject('identityGuard', userId, threadsAccountId, postingTimeIndex, idv.hint,
+            { detail: 'この店を指す言葉が無い', gaveUp: lastAttempt });
           return false;
         }
       }
@@ -876,8 +907,9 @@ async function generateAutoPost(
       }
       if (rv && rv.score < minScore) {
         console.warn(`[AutoPost] naturalnessReview: ${rv.score}/5 ${rv.problems.join(' / ')} → 作り直し userId=${userId} projectId=${project.id}`);
-        lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex),
-          rv.problems.length ? rv.problems.map((p) => `- 不自然と判定された箇所：「${p}」`).join('\n') : '- 店主が自分で打った文に見えない（説明文・汎用の締め）');
+        noteReject('naturalnessReview', userId, threadsAccountId, postingTimeIndex,
+          rv.problems.length ? rv.problems.map((p) => `- 不自然と判定された箇所：「${p}」`).join('\n') : '- 店主が自分で打った文に見えない（説明文・汎用の締め）',
+          { detail: `${rv.score}/5 ${rv.problems.join(' / ')}`, gaveUp: lastAttempt });
         return false;
       }
       if (rv) console.log(`[AutoPost] naturalnessReview: ${rv.score}/5 userId=${userId}`);
@@ -899,15 +931,16 @@ async function generateAutoPost(
           // ★2026-09-15：止めた理由を次の作り直しへ渡す。渡していなかったので同じ言い回しが
           //   何度も作られ、userId=2907 は24時間で「短時間で楽になる約束」に5回・
           //   「本文が短くなりすぎた」で3枠を落としていた。ガードは緩めない。
-          const hcKey = rejectKey(userId, threadsAccountId, postingTimeIndex);
           if (v.hits.length >= 2) {
             console.warn(`[AutoPost] healthClaimGuard: 引っかかりが多いため公開しない userId=${userId}`);
-            lastRejectReason.set(hcKey, healthClaimRetryHint(v.hits, 'many'));
+            noteReject('healthClaimGuard', userId, threadsAccountId, postingTimeIndex,
+              healthClaimRetryHint(v.hits, 'many'), { detail: `引っかかりが多い：${v.hits.join('・')}`, gaveUp: lastAttempt });
             return false;
           }
           if (Array.from(v.text).length < 60) {
             console.warn(`[AutoPost] healthClaimGuard: 本文が短くなりすぎたため公開しない userId=${userId}`);
-            lastRejectReason.set(hcKey, healthClaimRetryHint(v.hits, 'short'));
+            noteReject('healthClaimGuard', userId, threadsAccountId, postingTimeIndex,
+              healthClaimRetryHint(v.hits, 'short'), { detail: `本文が短くなりすぎた：${v.hits.join('・')}`, gaveUp: lastAttempt });
             return false;
           }
           naturalMain = v.text;
@@ -935,7 +968,8 @@ async function generateAutoPost(
       if (fab.length > 0) {
         console.warn(`[AutoPost] fabricatedNumberGuard: 登録に無い数字 ${fab.map((x) => x.text).join('・')} のため公開しない userId=${userId} projectId=${project.id}`);
         // ★2026-09-15：健康ガードと同じく、止めた理由を次の作り直しへ渡す。
-        lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex), fabricatedNumberRetryHint(fab));
+        noteReject('fabricatedNumberGuard', userId, threadsAccountId, postingTimeIndex,
+          fabricatedNumberRetryHint(fab), { detail: fab.map((x) => x.text).join('・'), gaveUp: lastAttempt });
         return false;
       }
     } catch { /* ガード失敗時はそのまま */ }
@@ -955,7 +989,8 @@ async function generateAutoPost(
             console.log(`[AutoPost] angleGuard: ${ac.reason} だが最後の作り直しのため公開へ userId=${userId}`);
           } else {
             console.warn(`[AutoPost] angleGuard: ${ac.reason} → 作り直し userId=${userId} projectId=${project.id}`);
-            lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex), angleRetryHint(ac, angle.label));
+            noteReject('angleGuard', userId, threadsAccountId, postingTimeIndex,
+              angleRetryHint(ac, angle.label), { detail: `${angle.label}：${ac.reason}` });
             return false;
           }
         }
@@ -985,8 +1020,9 @@ async function generateAutoPost(
       //   落とした枠は翌朝の自動補填で足される。
       if (dup && !guarantee && (!lastAttempt || Array.from(dup).length >= 14)) {
         console.warn(`[AutoPost] 直近の投稿と同じ言い回し「${dup}」→ ${lastAttempt ? '最後の作り直しでも見送り（明日の生成で補填）' : '作り直し'} userId=${userId} projectId=${project.id}`);
-        lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex),
-          `- 直近の投稿と同じ言い回し「${dup}」を使っている。同じことを言うなら、別の入り方・別の言葉にする。`);
+        noteReject('duplicatePhrase', userId, threadsAccountId, postingTimeIndex,
+          `- 直近の投稿と同じ言い回し「${dup}」を使っている。同じことを言うなら、別の入り方・別の言葉にする。`,
+          { detail: dup, gaveUp: lastAttempt });
         return false;
       }
       if (dup) console.log(`[AutoPost] 使い回し「${dup}」が残るが短いため、最後の作り直しは公開へ userId=${userId}`);
@@ -999,8 +1035,9 @@ async function generateAutoPost(
         const num = findRepeatedHookNumber(naturalMain, recentPosts);
         if (num) {
           console.warn(`[AutoPost] 書き出しが直近の投稿と同じ実績の数字「${num}」→ 作り直し userId=${userId} projectId=${project.id}`);
-          lastRejectReason.set(rejectKey(userId, threadsAccountId, postingTimeIndex),
-            `- 書き出しを直近の投稿と同じ「${num}」で始めている。実績の数字から入らず、別の入り方（お客さんの場面・季節・よくある質問など）にする。`);
+          noteReject('duplicateHookNumber', userId, threadsAccountId, postingTimeIndex,
+            `- 書き出しを直近の投稿と同じ「${num}」で始めている。実績の数字から入らず、別の入り方（お客さんの場面・季節・よくある質問など）にする。`,
+            { detail: num });
           return false;
         }
       }

@@ -981,3 +981,32 @@ export const lineChatStates = mysqlTable("lineChatStates", {
   payload: text("payload"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+
+/**
+ * 品質ガードで作り直しになった理由の記録（2026-09-22）。
+ *
+ * ★なぜDBに持つか：夜間整備の §3.45 は「その日に作り直しで落ちた理由を数える」ことになっているが、
+ *   本番のログは再デプロイのたびに消える（9/19 20時・9/21 01:16 に実際に消えている）。
+ *   9/22 未明の整備では、6時の生成のログが 09:52 の再デプロイで消えており、1件も数えられなかった。
+ *   「同じ理由で3回落ちて投稿ゼロになった人がいないか」は、お客様にその日の投稿が届くかどうかに
+ *   直結するので、ログではなくDBに印を残す（docs/night-todo.md「忘れると事故になること」）。
+ *
+ *   guard    … どの検査で落ちたか（voiceGuard / identityGuard / naturalnessReview /
+ *               healthClaimGuard / fabricatedNumberGuard / angleGuard / duplicatePhrase / duplicateHookNumber）
+ *   detail   … 落ちた中身を短く（「痛い場所だけ揉んでも」「2/5」など）。数えるときの内訳に使う
+ *   gaveUp   … この作り直しでその枠を捨てたか（＝1本減った）。投稿ゼロの追跡に使う
+ */
+export const postRejectLog = mysqlTable("postRejectLog", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  threadsAccountId: int("threadsAccountId").notNull(),
+  guard: varchar("guard", { length: 40 }).notNull(),
+  detail: varchar("detail", { length: 255 }),
+  gaveUp: tinyint("gaveUp").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  index("idx_postRejectLog_created").on(table.createdAt),
+  index("idx_postRejectLog_account").on(table.threadsAccountId, table.createdAt),
+]);
+
+export type PostRejectLog = typeof postRejectLog.$inferSelect;
