@@ -396,6 +396,13 @@ export function zeroPostApologyNotice(
   project: any,
   days: number,
   missed: number,
+  /**
+   * 補填を始められる日のラベル（例「9月26日」）。
+   * ★投稿が消されて1日1件に抑えている期間（冷却中）は補填が乗らないため、
+   *   「これから」と書くと実際の動きと食い違う（2026-09-21 香取様で判明）。
+   *   冷却中のときだけ渡す。ふだんは省略する。
+   */
+  makeupFromLabel?: string | null,
 ): ZeroPostApology {
   const depth = assessMaterialDepth(project);
   // 空欄を優先し、そのうえで効く順。3つまで（多く並べると1つも返ってこない）
@@ -417,8 +424,10 @@ export function zeroPostApologyNotice(
     `\n\n1つだけでも構いません。いただいた内容は、その日のうちにお店の情報へ反映し、` +
     `翌朝の投稿からすぐ使います。「はじめの設定」をやり直していただく必要はありません。\n\n`;
 
-  const makeup =
-    `お届けできなかった${missed}件は、お詫びとして、これから1日1件ずつ通常の本数に足してお届けします。`;
+  const makeup = makeupFromLabel
+    ? `お届けできなかった${missed}件は、お詫びとして、${makeupFromLabel}以降に1日1件ずつ通常の本数に足してお届けします`
+      + `（それまでは、アカウントを守るため投稿を1日1件に抑えている期間のためです）。`
+    : `お届けできなかった${missed}件は、お詫びとして、これから1日1件ずつ通常の本数に足してお届けします。`;
 
   const same = depth.samePair ? `\n\n※ ${depth.samePair}` : '';
 

@@ -103,3 +103,18 @@ describe("お詫びとお願いの文面（香取様の実データ）", () => {
     expect(n.text).not.toMatch(/[#｜]/);
   });
 });
+
+describe("冷却中は「いつから補填するか」を正しく伝える（2026-09-21）", () => {
+  it("冷却中は『◯月◯日以降に』と書く（冷却明けの翌日から補填が乗るため）", () => {
+    const n = zeroPostApologyNotice("shin_honetugi", KATORI, 2, 5, "9月26日");
+    expect(n.text).toContain("9月26日以降に1日1件ずつ");
+    expect(n.text).toContain("1日1件に抑えている期間");
+    expect(n.text).not.toContain("これから1日1件ずつ");
+  });
+
+  it("冷却中でなければ今までどおり「これから」", () => {
+    const n = zeroPostApologyNotice("shin_honetugi", KATORI, 2, 2, null);
+    expect(n.text).toContain("これから1日1件ずつ");
+    expect(n.text).not.toContain("以降に1日1件ずつ");
+  });
+});

@@ -51,6 +51,28 @@ export function canAskForMaterial(
   return now - at >= MATERIAL_ASK_INTERVAL_DAYS * 86400000;
 }
 
+/**
+ * 補填を始められる日のラベル（例「9月26日」）。冷却中でなければ null。
+ *
+ * ★冷却中（投稿が消されて1日1件に抑えている期間）は rampForAccount が先に返すため、
+ *   補填が乗らない。「これから1日1件ずつ」と書くと実際の動きと食い違う
+ *   （2026-09-21 香取様。冷却が 9/25 までで、補填が始まるのは 9/26 から）。
+ */
+export async function makeupFromLabelFor(account: any): Promise<string | null> {
+  try {
+    const { inCooldown } = await import("../shared/accountRamp");
+    if (!inCooldown(account)) return null;
+    const until = dateColToJst(account?.cooldownUntil);
+    if (!until) return null;
+    // 冷却が明けた翌日から補填が乗る
+    const next = new Date(Date.parse(until + "T00:00:00Z") + 86400000).toISOString().slice(0, 10);
+    const { dateJstLabel } = await import("../shared/dailyCap");
+    return dateJstLabel(next) || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function runZeroPostCheck(
   accountId: number,
   userId: number,
@@ -85,7 +107,10 @@ export async function runZeroPostCheck(
 
   const fresh: any = await db.getThreadsAccountById(accountId);
   const missedTotal = Math.max(missedToday, Number(fresh?.apologyShortfall ?? 0));
-  const notice = zeroPostApologyNotice(String(acct.threadsUsername ?? ''), project, days, missedTotal);
+  // ★投稿が消されて1日1件に抑えている期間（冷却中）は補填が乗らない。
+  //   「これから1日1件ずつ」と書くと実際の動きと食い違うので、始められる日をお伝えする。
+  const makeupFrom = await makeupFromLabelFor(fresh ?? acct);
+  const notice = zeroPostApologyNotice(String(acct.threadsUsername ?? ''), project, days, missedTotal, makeupFrom);
 
   // ★送ったあとに記録すると、送信に失敗したときに二度と送れなくなる。
   //   逆に先に記録すると、失敗したとき7日間お願いできない。ここでは「送れたときだけ」記録する。
