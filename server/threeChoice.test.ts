@@ -142,6 +142,19 @@ describe("承認カード（3案のとき）", () => {
     expect(s).not.toContain("すべて承認する");
   });
 
+  it("「1件ずつ」で1枚だけ出すときも、選択肢だと分かる表記のままにする", () => {
+    // ★m=posts&one=1 の経路。1枚だけ見ると選択肢だと分からないので、呼び出し側が明示する。
+    //   ここが「これで投稿する」に戻ると、ほかの案も公開されると思われてしまう。
+    const s = JSON.stringify(buildPostCards(
+      [choicePosts[0]],
+      { one: true, choice: true },
+    ));
+    expect(s).toContain("この案にする");
+    expect(s).not.toContain("これで投稿する");
+    expect(s).not.toContain("公開予定");
+    expect(s).toContain("投稿の案");
+  });
+
   it("選択肢が1件しか残っていなければ、通常の投稿として扱う", () => {
     const s = JSON.stringify(buildPostCards(
       [{ id: 1, postContent: "残り1件", scheduledAt: new Date(), choiceGroupId: g }],

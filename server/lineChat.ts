@@ -69,7 +69,7 @@ export function fmtJst(v: Date | string | null): string {
  */
 export function buildPostCards(
   posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null; accountName?: string | null; accountEmphasis?: boolean; angle?: string | null; choiceGroupId?: string | null }>,
-  opts: { one?: boolean; bulk?: boolean } = {},
+  opts: { one?: boolean; bulk?: boolean; choice?: boolean } = {},
 ): unknown {
   // ★3案からお選びいただく形（shared/threeChoice.ts）。
   //   このカードは元々「複数件＝それぞれ公開する」前提なので、3案をそのまま出すと
@@ -80,8 +80,11 @@ export function buildPostCards(
   for (const p of shown) {
     if (p.choiceGroupId) groupSize.set(p.choiceGroupId, (groupSize.get(p.choiceGroupId) ?? 0) + 1);
   }
+  // ★opts.choice は「1件ずつ」表示のための上書き。
+  //   3案を1枚ずつ出すときは、この1枚だけを見ても選択肢だと分からないため、
+  //   呼び出し側（m=posts&one=1）が明示する。
   const choiceOf = (p: { choiceGroupId?: string | null }) =>
-    Boolean(p.choiceGroupId && (groupSize.get(p.choiceGroupId) ?? 0) > 1);
+    Boolean(p.choiceGroupId && (opts.choice || (groupSize.get(p.choiceGroupId) ?? 0) > 1));
   const indexInGroup = new Map<number, number>();
   {
     const seen = new Map<string, number>();
@@ -121,7 +124,10 @@ export function buildPostCards(
           //   3件とも公開されるように読めてはいけない。
           text: (p.accountName && !p.accountEmphasis ? `@${p.accountName}　` : "")
             + (isChoice
-              ? `${indexInGroup.get(p.id) ?? 1}つ目の案（全${groupSize.get(p.choiceGroupId!) ?? 1}案）`
+              ? (() => {
+                  const total = groupSize.get(p.choiceGroupId!) ?? 1;
+                  return total > 1 ? `${indexInGroup.get(p.id) ?? 1}つ目の案（全${total}案）` : "投稿の案";
+                })()
               : `${fmtJst(p.scheduledAt)} 公開予定`)
             + (isCall ? "・Meta AI呼びかけ投稿" : ""),
           size: "xs", color: "#0E8388", weight: "bold", wrap: true,

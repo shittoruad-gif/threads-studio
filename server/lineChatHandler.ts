@@ -225,7 +225,10 @@ async function replyOneWaiting(userId: number, headText?: string, extraQuick: Ar
   const head = (headText ? headText + "\n\n" : "") +
     (waiting.length === 1 ? "残り1件です。" : `残り${waiting.length}件です。まずこの1件から。`);
   // ★見送り直後の「代わりを作る」など、次のカードの前に押せるボタンを頭の文に付ける
-  return [extraQuick.length > 0 ? textWithQuick(head, extraQuick) : { type: "text", text: head }, buildPostCards([withNames[0]], { one: true })];
+  //   3案のうちの1枚を単独で出すときは、選択肢だと分かる表記のままにする
+  //   （「これで投稿する」に戻ると、ほかの案も公開されると思われてしまう）。
+  const isChoiceOne = Boolean((withNames[0] as any)?.choiceGroupId);
+  return [extraQuick.length > 0 ? textWithQuick(head, extraQuick) : { type: "text", text: head }, buildPostCards([withNames[0]], { one: true, choice: isChoiceOne })];
 }
 
 /** 承認待ちの投稿を出す（無ければ次の予定を伝える） */
@@ -246,6 +249,23 @@ async function repliesForPosts(userId: number, mode?: "one" | "all"): Promise<un
       MENU_HINT,
     )];
   }
+  // ★3案からお選びいただく形（shared/threeChoice.ts）。
+  //   待っているのが同じ枠の選択肢だけなら、「1件ずつ／まとめて／すべて承認する」の
+  //   選択画面を出さずに、そのまま3案のカードをお見せする。
+  //   ここで「すべて承認する」を出すと、選択肢のはずの3件をまとめて承認しようとされる。
+  const groups = new Set(waiting.map((p: any) => p.choiceGroupId).filter(Boolean));
+  const allSameChoice = waiting.length > 1
+    && waiting.every((p: any) => p.choiceGroupId)
+    && groups.size === 1;
+  if (allSameChoice) {
+    const { CHOICE_LEAD_TEXT } = await import("@shared/threeChoice");
+    const names = await withAccountNames(userId, waiting);
+    return [
+      { type: "text", text: CHOICE_LEAD_TEXT },
+      buildPostCards(names as any, { bulk: true }),
+    ];
+  }
+
   // 2件以上あるときは、まとめて見るか1件ずつ確認するかを選べるようにする。
   // （複数アカウント運用だと、まとめて出すとどれを処理したか分からなくなるため）
   if (waiting.length > 1 && !mode) {
@@ -254,14 +274,16 @@ async function repliesForPosts(userId: number, mode?: "one" | "all"): Promise<un
       [
         { label: "1件ずつ確認する", data: "m=posts&one=1" },
         { label: "まとめて見る", data: "m=posts&all=1" },
-        { label: `すべて承認する（${waiting.length}件）`, data: "a=okall" },
+        // ★選択肢（3案）が混ざっているときは「すべて承認する」を出さない
+        ...(groups.size > 0 ? [] : [{ label: `すべて承認する（${waiting.length}件）`, data: "a=okall" }]),
       ],
     )];
   }
   if (mode === "one" || waiting.length === 1) return replyOneWaiting(userId);
   const withNames = await withAccountNames(userId, waiting);
   return [
-    { type: "text", text: `確認をお待ちしている投稿が${waiting.length}件あります。内容を見て、下のボタンを押してください。\n全部そのままでよければ「すべて承認する」で一度に終わります。` },
+    { type: "text", text: `確認をお待ちしている投稿が${waiting.length}件あります。内容を見て、下のボタンを押してください。`
+      + (groups.size > 0 ? "" : "\n全部そのままでよければ「すべて承認する」で一度に終わります。") },
     buildPostCards(withNames as any, { bulk: true }),
   ];
 }
