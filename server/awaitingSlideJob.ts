@@ -72,7 +72,8 @@ export async function runEveningApprovalReminderJob(): Promise<void> {
       } else if (user.email) {
         const posts = (await db.getScheduledPostsByUserId(userId))
           .filter((p: any) => p.status === "awaiting_approval" && p.angle !== "pinned")
-          .map((p: any) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt }));
+          // 3案（choiceGroupId）はメール側で「お選びください」の文面に切り替わる
+          .map((p: any) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt, choiceGroupId: p.choiceGroupId ?? null }));
         if (posts.length > 0) {
           const { sendApprovalDigestEmail } = await import("./approvalEmail");
           await sendApprovalDigestEmail({ to: user.email, userId, posts, overdue: true });

@@ -1594,7 +1594,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
               await sendApprovalDigestEmail({
                 to: owner.email,
                 userId: user.id,
-                posts: fresh.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt })),
+                posts: fresh.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt, choiceGroupId: (p as any).choiceGroupId ?? null })),
               });
               console.log(`[AutoPost] 承認依頼メール送信: user=${user.id} ${fresh.length}件`);
             }

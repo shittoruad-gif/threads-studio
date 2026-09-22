@@ -189,7 +189,8 @@ export async function runApprovalReminderJob(): Promise<void> {
       await sendApprovalDigestEmail({
         to: user.email,
         userId,
-        posts: posts.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt })),
+        // 3案（choiceGroupId）はメール側で「お選びください」の文面に切り替わる
+        posts: posts.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt, choiceGroupId: (p as any).choiceGroupId ?? null })),
         overdue: true,
       });
       console.log(`[DailyOps] 承認リマインド送信: user=${userId} ${posts.length}件`);

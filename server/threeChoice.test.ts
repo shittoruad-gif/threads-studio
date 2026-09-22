@@ -10,7 +10,7 @@
  *     5. 1案が選ばれたら残りを即 canceled
  *     6. 1日の本数では3案を1件として数える
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   shouldOfferChoices,
   newChoiceGroupId,
@@ -169,5 +169,49 @@ describe("お客様にお送りする文面", () => {
 
   it("絵文字を使わない", () => {
     expect(CHOICE_LEAD_TEXT).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
+  });
+});
+
+describe("承認依頼メール（3案のとき）", () => {
+  const g = "ch-21-20260923-abc";
+  const sent: any[] = [];
+
+  it("「3件の投稿」と書かず、選ばれた1件だけが公開されると伝える", async () => {
+    vi.resetModules();
+    vi.doMock("./_core/notification", () => ({ sendEmail: async (m: any) => { sent.push(m); } }));
+    vi.doMock("./approvalToken", () => ({ createApprovalToken: () => "tok" }));
+    const { sendApprovalDigestEmail } = await import("./approvalEmail");
+    await sendApprovalDigestEmail({
+      to: "x@example.test",
+      userId: 3500,
+      posts: [1, 2, 3].map((i) => ({ id: i, postContent: `案${i}`, scheduledAt: new Date(), choiceGroupId: g })),
+    });
+    const mail = sent[0];
+    expect(mail.subject).toContain("3 案");
+    expect(mail.subject).not.toContain("3 件");
+    expect(mail.html).toContain("この案にする");
+    expect(mail.html).toContain("選ばれなかった案は公開しません");
+    expect(mail.html).toContain("押さなければ1件も公開されません");
+    // 「本日ぶんの投稿 3件 を作成しました」に戻っていないこと
+    expect(mail.html).not.toContain("<strong>3件</strong>");
+    vi.doUnmock("./_core/notification");
+    vi.doUnmock("./approvalToken");
+  });
+
+  it("ふつうの承認依頼メールは今までどおり", async () => {
+    vi.resetModules();
+    const sent2: any[] = [];
+    vi.doMock("./_core/notification", () => ({ sendEmail: async (m: any) => { sent2.push(m); } }));
+    vi.doMock("./approvalToken", () => ({ createApprovalToken: () => "tok" }));
+    const { sendApprovalDigestEmail } = await import("./approvalEmail");
+    await sendApprovalDigestEmail({
+      to: "x@example.test",
+      userId: 1,
+      posts: [{ id: 1, postContent: "ふつうの投稿", scheduledAt: new Date() }],
+    });
+    expect(sent2[0].html).toContain("この内容で投稿する");
+    expect(sent2[0].html).not.toContain("この案にする");
+    vi.doUnmock("./_core/notification");
+    vi.doUnmock("./approvalToken");
   });
 });
