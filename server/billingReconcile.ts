@@ -74,6 +74,17 @@ export async function runBillingReconcileJob(): Promise<ReconcileResult> {
 
   for (const row of rows) {
     result.checked += 1;
+
+    // ★解約後の猶予（お支払いずみの期間の終わり）を過ぎていたら、ここで無料に落とす。
+    //   解約した瞬間ではなく期間の終わりで落とす形にしたため、その見張り役が要る
+    //   （2026-09-22 三上様ご判断「解約をしても契約終了までは使える」）。
+    if (row.cancelAtPeriodEnd && row.status === 'active'
+        && row.currentPeriodEnd && new Date(row.currentPeriodEnd).getTime() <= Date.now()) {
+      await db.update(subscriptions).set({ status: 'canceled' }).where(eq(subscriptions.id, row.id));
+      result.updated.push({ subscriptionId: row.id, userId: row.userId, from: 'active', to: 'canceled' });
+      console.log(`[BillingReconcile] sub=${row.id} 解約の猶予期間が終了 → canceled`);
+      continue;
+    }
     let remote: any;
     try {
       remote = await getSubscription(row.univapaySubscriptionId as string);
@@ -89,6 +100,14 @@ export async function runBillingReconcileJob(): Promise<ReconcileResult> {
       continue;
     }
     if (mapped === row.status) continue;
+
+    // ★解約ずみでも、お支払いずみの期間が残っている間は active のままにしておく。
+    //   ここでUnivaPayの canceled をそのまま写すと、期間の途中で投稿が止まってしまう。
+    if (mapped === 'canceled' && row.cancelAtPeriodEnd
+        && row.currentPeriodEnd && new Date(row.currentPeriodEnd).getTime() > Date.now()) {
+      console.log(`[BillingReconcile] sub=${row.id} 解約ずみだが${new Date(row.currentPeriodEnd).toLocaleDateString('ja-JP')}まで利用可のため据え置き`);
+      continue;
+    }
 
     const patch: Record<string, unknown> = { status: mapped };
     const due = remote?.next_payment?.due_date;

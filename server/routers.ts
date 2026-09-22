@@ -3190,13 +3190,29 @@ ${input.commentText}
       const univapayService = await import('./univapay');
       await univapayService.cancelSubscription(subscription.univapaySubscriptionId);
 
-      // Update database
-      await db.updateSubscription(subscription.id, { 
-        status: 'canceled',
-        cancelAtPeriodEnd: true 
-      });
+      // ★お支払いずみの期間が残っていれば、その終わりまでは今までどおり使えるようにする
+      //   （2026-09-22 三上様ご判断）。以前は解約した瞬間に status を canceled にしていて、
+      //   実効プランが無料に落ち、投稿がその場で止まっていた。特定商取引法のページには
+      //   「現在の請求期間の終了まではご利用いただけます」と書いてあり、食い違っていた。
+      //   期間の終わりを過ぎたら、毎日の照合（billingReconcile）が canceled に落とす。
+      const periodEnd = subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd) : null;
+      const stillPaidFor = Boolean(periodEnd && periodEnd.getTime() > Date.now());
 
-      return { success: true };
+      await db.updateSubscription(subscription.id, {
+        status: stillPaidFor ? 'active' : 'canceled',
+        cancelAtPeriodEnd: true,
+        // 解約するなら、予約していたプラン変更も取り消す
+        pendingPlanId: null,
+        pendingPlanEffectiveAt: null,
+      } as any);
+
+      return {
+        success: true,
+        accessUntil: stillPaidFor && periodEnd ? periodEnd.toISOString() : null,
+        message: stillPaidFor && periodEnd
+          ? `解約を受け付けました。お支払いずみの${periodEnd.toLocaleDateString('ja-JP')}までは、これまでどおりお使いいただけます。`
+          : '解約を受け付けました。',
+      };
     }),
 
     // 予約したプラン変更をやめる（次回の請求も今のプランのまま）

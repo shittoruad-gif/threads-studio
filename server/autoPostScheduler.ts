@@ -1233,7 +1233,12 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         // ★プラン別の「1日あたり自動投稿上限」を適用（料金表示と実態を一致させる）。
         //   フリー等 maxAutoPostsPerDay=0 のプランは自動投稿しない。
         const subscription = await db.getSubscriptionByUserId(user.id);
-        const plan = getPlan(subscription?.planId || 'free');
+        // ★契約が生きているかどうかまで見る（2026-09-22）。
+        //   以前は planId だけを見ていたため、解約したあとも・決済が失敗したあとも
+        //   投稿が作られ続けていた。解約は「お支払いずみの期間の終わりまで使える」に
+        //   したので、期間が終われば status が canceled になり、ここで止まる。
+        const { resolveEffectivePlanId } = await import('@shared/plans');
+        const plan = getPlan(resolveEffectivePlanId(subscription?.planId, subscription?.status));
         const maxPerDay = plan?.features.maxAutoPostsPerDay ?? 0;
         if (maxPerDay <= 0) {
           console.log(`[AutoPost] Skipping user ${user.id} - plan does not allow auto-posting`);

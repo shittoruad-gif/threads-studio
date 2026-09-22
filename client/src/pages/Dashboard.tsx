@@ -256,8 +256,8 @@ export default function Dashboard() {
   });
 
   const cancelSubscription = trpc.univapay.cancelSubscription.useMutation({
-    onSuccess: () => {
-      toast.success(t("サブスクリプションを解約しました"));
+    onSuccess: (res) => {
+      toast.success((res as any)?.message ?? t("サブスクリプションを解約しました"));
       utils.subscription.getStatus.invalidate();
     },
     onError: (error) => {
@@ -1104,10 +1104,17 @@ export default function Dashboard() {
               <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-yellow-800 font-medium">{t("解約済み")}</p>
+                  <p className="text-yellow-800 font-medium">
+                    {subscription?.status === 'canceled'
+                      ? t("解約済み")
+                      : subscription?.currentPeriodEnd
+                        ? `${new Date(subscription.currentPeriodEnd).toLocaleDateString('ja-JP')}${t("まではこれまでどおりお使いいただけます")}`
+                        : t("解約を受け付けました")}
+                  </p>
                   <p className="text-yellow-700 text-sm">
-                    {t("現在の請求期間終了後にサブスクリプションが終了します。")}
-                    {t("再度ご利用になる場合は、料金プランから再登録してください。")}
+                    {subscription?.status === 'canceled'
+                      ? t("再度ご利用になる場合は、料金プランから再登録してください。")
+                      : t("お支払いずみの期間が終わるまで、投稿はこれまでどおり続きます。その後は無料プランに切り替わります。再開したくなったら料金プランから再登録してください。")}
                   </p>
                 </div>
               </div>
