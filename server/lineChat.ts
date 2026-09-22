@@ -68,11 +68,35 @@ export function fmtJst(v: Date | string | null): string {
  * 本文は全文を載せる（見に行かせない）。1カード=1投稿・最大5件。
  */
 export function buildPostCards(
-  posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null; accountName?: string | null; accountEmphasis?: boolean; angle?: string | null }>,
+  posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null; accountName?: string | null; accountEmphasis?: boolean; angle?: string | null; choiceGroupId?: string | null }>,
   opts: { one?: boolean; bulk?: boolean } = {},
 ): unknown {
+  // ★3案からお選びいただく形（shared/threeChoice.ts）。
+  //   このカードは元々「複数件＝それぞれ公開する」前提なので、3案をそのまま出すと
+  //   3件とも公開される。選択だと分かる表記にし、「すべて承認する」を出さない。
+  //   一覧（m=posts）では通常の投稿と混ざることがあるので、カードごとに見分ける。
+  const shown = posts.slice(0, 5);
+  const groupSize = new Map<string, number>();
+  for (const p of shown) {
+    if (p.choiceGroupId) groupSize.set(p.choiceGroupId, (groupSize.get(p.choiceGroupId) ?? 0) + 1);
+  }
+  const choiceOf = (p: { choiceGroupId?: string | null }) =>
+    Boolean(p.choiceGroupId && (groupSize.get(p.choiceGroupId) ?? 0) > 1);
+  const indexInGroup = new Map<number, number>();
+  {
+    const seen = new Map<string, number>();
+    for (const p of shown as any[]) {
+      if (!choiceOf(p)) continue;
+      const n = (seen.get(p.choiceGroupId) ?? 0) + 1;
+      seen.set(p.choiceGroupId, n);
+      indexInGroup.set(p.id, n);
+    }
+  }
+  /** 1つでも選択肢が混ざっていたら「すべて承認する」は出さない */
+  const anyChoice = groupSize.size > 0;
   const suffix = opts.one ? "&o=1" : "";
-  const bubbles = posts.slice(0, 5).map((p) => {
+  const bubbles = shown.map((p) => {
+  const isChoice = choiceOf(p);
   // ★Meta AI呼びかけ投稿（angle=meta_ai_call）は、本文の「@meta.ai」が命。
   //   2026-09-06 朝、氷見様・梅原様が「書き直す」を押して普通の宣伝文に変わり、
   //   呼びかけとして公開されなかった。カードで正体を示し、AI書き直しは出さない。
@@ -93,7 +117,13 @@ export function buildPostCards(
         }] : []),
         {
           type: "text",
-          text: (p.accountName && !p.accountEmphasis ? `@${p.accountName}　` : "") + `${fmtJst(p.scheduledAt)} 公開予定` + (isCall ? "・Meta AI呼びかけ投稿" : ""),
+          // ★3案のときは「公開予定」と書かない。選ばれた1件だけが公開されるため、
+          //   3件とも公開されるように読めてはいけない。
+          text: (p.accountName && !p.accountEmphasis ? `@${p.accountName}　` : "")
+            + (isChoice
+              ? `${indexInGroup.get(p.id) ?? 1}つ目の案（全${groupSize.get(p.choiceGroupId!) ?? 1}案）`
+              : `${fmtJst(p.scheduledAt)} 公開予定`)
+            + (isCall ? "・Meta AI呼びかけ投稿" : ""),
           size: "xs", color: "#0E8388", weight: "bold", wrap: true,
         },
         { type: "text", text: (p.postContent || "（本文なし）").slice(0, 900), wrap: true, size: "sm", color: "#13343B" },
@@ -109,7 +139,10 @@ export function buildPostCards(
       spacing: "sm",
       contents: [
         { type: "button", style: "primary", color: "#0E8388", height: "sm",
-          action: { type: "postback", label: "これで投稿する", data: `a=ok&i=${p.id}${suffix}`, displayText: "これで投稿する" } },
+          action: { type: "postback",
+            label: isChoice ? "この案にする" : "これで投稿する",
+            data: `a=ok&i=${p.id}${suffix}`,
+            displayText: isChoice ? "この案にする" : "これで投稿する" } },
         { type: "box", layout: "horizontal", spacing: "sm", contents: [
           // 呼びかけ投稿にはAIの「書き直す」を出さない（普通の宣伝文に変わってしまう）
           ...(isCall ? [] : [{ type: "button", style: "secondary", height: "sm",
@@ -133,7 +166,8 @@ export function buildPostCards(
   // ★2件以上まとめて見るときは「すべて承認する」を足す。
   //   1件ずつ「これで投稿する」を押していくのが手間、というご要望（2026-09-03）。
   //   1件だけのときは出さない（個別ボタンと意味が同じで迷うだけ）。
-  if (opts.bulk && posts.length > 1) {
+  // ★3案では「すべて承認する」を出さない（押されると3件とも公開されてしまう）。
+  if (opts.bulk && posts.length > 1 && !anyChoice) {
     msg.quickReply = {
       items: [
         { type: "action", action: { type: "postback", label: `すべて承認する（${posts.length}件）`, data: "a=okall", displayText: "すべて承認する" } },

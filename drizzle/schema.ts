@@ -592,11 +592,16 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   // ★契約本数を守るための保証パスで作った投稿（2026-09-18 三上様指示「プロプランは必ず3投稿」）。
   //   材料が尽きて似た言い回ししか作れなかった枠。捨てずにお届けするが、必ず承認カードにする。
   materialGuarantee: tinyint("materialGuarantee").default(0).notNull(),
+  // ★3案からお選びいただく形（2026-09-22 三上様指示。shared/threeChoice.ts）。
+  //   同じ印を持つ投稿は「1つの枠に対する選択肢」で、公開されるのは選ばれた1件だけ。
+  //   1日の本数を数えるときも1件として数える。NULL は今までどおりの1件ずつの投稿。
+  choiceGroupId: varchar("choiceGroupId", { length: 40 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [
   index("idx_sp_status_scheduledAt").on(table.status, table.scheduledAt),
   index("idx_sp_userId").on(table.userId),
+  index("idx_scheduledPosts_choiceGroup").on(table.choiceGroupId),
 ]);
 
 export type ScheduledPost = typeof scheduledPosts.$inferSelect;

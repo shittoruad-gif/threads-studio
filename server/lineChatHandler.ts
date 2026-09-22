@@ -1972,12 +1972,25 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const late = post.scheduledAt && new Date(post.scheduledAt) > now ? null : lateApprovalTime(now.getTime());
     // ★承認の記録（2026-09-13 R7）：いつ・どの経路で公開に進んだかを残す
     await db.updateScheduledPost(Number(q.i), { status: "pending", approvedAt: now, approvedVia: "line_one", ...(late ? { scheduledAt: late.at } : {}) } as any);
+    // ★3案からお選びいただいた場合、残りの案を即その場で取り下げる（2026-09-22）。
+    //   これをしないと、選ばれなかった案も予定時刻に公開され、1日3件になる。
+    let choiceCanceled = 0;
+    const choiceGroupId = (post as any).choiceGroupId as string | null | undefined;
+    if (choiceGroupId) {
+      try {
+        choiceCanceled = await db.cancelChoiceSiblings(choiceGroupId, Number(q.i));
+        console.log(`[LineChat] 3案：#${q.i} を選択 → 残り${choiceCanceled}件を見送り（group=${choiceGroupId}）`);
+      } catch (e) { console.error("[LineChat] 3案の残りを取り下げられませんでした:", e); }
+    }
     const when = late ? late.label : `${fmtJst(post.scheduledAt)} に`;
     // ★2026-09-10 三上様指示で「承認したらそのまま公開」に変えてある（scheduledPostExecutor）。
     //   adminReviewRequired は管理画面で運営が参考に読むための印で、公開は止めない。
     //   ここで「確認が終わり次第、公開します」と伝えると、実際はもう公開予定なのに
     //   お客様は止まっていると受け取ってしまうため、案内を実際の動きに合わせる。
-    const done = `承認しました。${when}公開されます。`;
+    const done = choiceGroupId
+      ? `この案にしました。${when}公開されます。`
+        + (choiceCanceled > 0 ? `\n選ばれなかった${choiceCanceled}件は公開しません。` : "")
+      : `承認しました。${when}公開されます。`;
     // ★押し間違いに備えて取り消しを用意する（まだ公開前なら戻せる）。
     //   あわせて「先生らしいか」を1タップで聞く（◯✕は翌日以降の切り口と文の好みに効く。
     //   アプリにはあったがLINEに無く、押されていなかった。2026-09-08）
@@ -2028,8 +2041,22 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const all = await db.getScheduledPostsByUserId(user.id);
     const waiting = all
       .filter((p: any) => p.status === "awaiting_approval")
+      // ★3案（同じ枠の選択肢）は「すべて承認」の対象にしない（2026-09-22）。
+      //   まとめて承認すると3件とも公開される。カードから1案だけ選んでいただく。
+      //   3案ではそもそもこのボタンを出していないが、古いトークからも押せるためここでも守る。
+      .filter((p: any) => !p.choiceGroupId)
       .sort((a: any, b: any) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
-    if (waiting.length === 0) return [textWithQuick("確認をお待ちしている投稿はありません。", MENU_HINT)];
+    if (waiting.length === 0) {
+      const hasChoices = all.some((p: any) => p.status === "awaiting_approval" && p.choiceGroupId);
+      if (hasChoices) {
+        return [textWithQuick(
+          "いまお待ちしているのは、3案からお選びいただく投稿です。\n" +
+          "まとめての承認はできませんので、カードの「この案にする」でお選びください。",
+          [{ label: "投稿を見る", data: "m=posts" }, ...MENU_HINT],
+        )];
+      }
+      return [textWithQuick("確認をお待ちしている投稿はありません。", MENU_HINT)];
+    }
     const now = new Date();
     const approvedIds: number[] = [];
     let hasPinned = false;

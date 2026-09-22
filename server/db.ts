@@ -715,6 +715,9 @@ export async function promoteSoftApprovedDuePosts(): Promise<{ promoted: number;
     --   本番の MySQL は SYSTEM=UTC なので NOW() と同じだが、ローカルQA（JST）では9時間ずれるため明示する。
     SET sp.status = 'pending', sp.approvedAt = UTC_TIMESTAMP(), sp.approvedVia = 'auto_soft'
     WHERE sp.status = 'awaiting_approval' AND u.autoPublishIfNoResponse = 1
+      -- ★3案（choiceGroupId あり）は絶対に自動公開しない（2026-09-22）。
+      --   「見送らなければ公開」のままだと、選択肢として出した3件が3件とも公開される。
+      AND sp.choiceGroupId IS NULL
       AND (sp.angle IS NULL OR sp.angle <> 'pinned') AND sp.scheduledAt <= NOW()
       AND DATE(CONVERT_TZ(sp.createdAt,'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
   return { promoted: Number((rows as any)?.[0]?.affectedRows ?? 0), expired: Number((exp as any)?.[0]?.affectedRows ?? 0) };
@@ -1064,7 +1067,8 @@ export async function countAccountPostsScheduledToday(accountId: number): Promis
   const database = await getDb();
   if (!database) return 0;
   const [row] = await database
-    .select({ n: sql<number>`COUNT(*)` })
+    // ★3案は1件として数える（countAccountAutoPostsScheduledToday と同じ理由）
+    .select({ n: sql<number>`COUNT(DISTINCT COALESCE(${scheduledPosts.choiceGroupId}, CAST(${scheduledPosts.id} AS CHAR)))` })
     .from(scheduledPosts)
     .where(
       and(
@@ -1088,7 +1092,9 @@ export async function countAccountAutoPostsScheduledToday(accountId: number): Pr
   const database = await getDb();
   if (!database) return 0;
   const [row] = await database
-    .select({ n: sql<number>`COUNT(*)` })
+    // ★3案は「1つの枠に対する選択肢」なので1件として数える（2026-09-22 三上様指示）。
+    //   そのまま3件と数えると契約本数を超えたように見え、翌日の生成が止まる。
+    .select({ n: sql<number>`COUNT(DISTINCT COALESCE(${scheduledPosts.choiceGroupId}, CAST(${scheduledPosts.id} AS CHAR)))` })
     .from(scheduledPosts)
     .where(
       and(
@@ -3200,8 +3206,11 @@ export async function getOverdueAwaitingApprovalPosts(): Promise<ScheduledPost[]
       lte(scheduledPosts.scheduledAt, new Date()),
       // ★固定投稿の下書きは翌日へスライドしない（2026-09-11：9/4の下書き3件が毎日繰り越され、通常の承認一覧に混ざっていた）
       sql`(${scheduledPosts.angle} IS NULL OR ${scheduledPosts.angle} <> 'pinned')`,
-      // ★「見送りしなければ公開」の方は、ずらさずに公開される（promoteSoftApprovedDuePosts）
-      sql`${scheduledPosts.userId} NOT IN (SELECT id FROM users WHERE autoPublishIfNoResponse = 1)`,
+      // ★「見送りしなければ公開」の方は、ずらさずに公開される（promoteSoftApprovedDuePosts）。
+      //   ただし3案は自動公開の対象外にしたので、この設定でもリマインドの対象に含める
+      //   （含めないと、選んでいただけないまま黙って日付が変わり、お声がけも無くなる）。
+      sql`(${scheduledPosts.choiceGroupId} IS NOT NULL
+           OR ${scheduledPosts.userId} NOT IN (SELECT id FROM users WHERE autoPublishIfNoResponse = 1))`,
     ));
 }
 
@@ -3942,6 +3951,103 @@ export async function countAccountPublishedAutoPosts(accountId: number): Promise
   const rows: any = await database.execute(sql`
     SELECT COUNT(*) AS n FROM scheduledPosts
     WHERE threadsAccountId = ${accountId} AND source = 'auto' AND status = 'posted' AND replyToThreadsId IS NULL`);
+  return Number((rows as any)[0]?.[0]?.n ?? 0);
+}
+
+/**
+ * 直近 days 日（JST）の「作られた数」と「公開できた数」。
+ * 3案からお選びいただく形（shared/threeChoice.ts）の発動判定に使う。
+ *
+ * ・作られた数 … その日に作られた自動投稿（自己返信・引用・Meta AI呼びかけ・固定投稿は除く）
+ * ・公開できた数 … その日にThreadsへ公開でき、いまも 'posted' のまま残っている数
+ *   （公開後にThreads側で消えたものは健全性点検が 'failed' にするので、ここには入らない）
+ */
+export async function getAccountRecentDayOutcomes(
+  accountId: number,
+  days: number = 3,
+): Promise<Array<{ date: string; created: number; published: number }>> {
+  const database = await getDb();
+  if (!database) return [];
+  const n = Math.max(1, Math.min(30, Math.floor(days)));
+  const rows: any = await database.execute(sql`
+    SELECT d.date,
+           COALESCE(c.created, 0) AS created,
+           COALESCE(p.published, 0) AS published
+    FROM (
+      SELECT DATE(CONVERT_TZ(NOW(),'+00:00','+09:00') - INTERVAL seq DAY) AS date
+      FROM (SELECT 0 AS seq UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3
+            UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7
+            UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11
+            UNION ALL SELECT 12 UNION ALL SELECT 13 UNION ALL SELECT 14 UNION ALL SELECT 15
+            UNION ALL SELECT 16 UNION ALL SELECT 17 UNION ALL SELECT 18 UNION ALL SELECT 19
+            UNION ALL SELECT 20 UNION ALL SELECT 21 UNION ALL SELECT 22 UNION ALL SELECT 23
+            UNION ALL SELECT 24 UNION ALL SELECT 25 UNION ALL SELECT 26 UNION ALL SELECT 27
+            UNION ALL SELECT 28 UNION ALL SELECT 29) s
+      WHERE seq < ${sql.raw(String(n))}
+    ) d
+    LEFT JOIN (
+      SELECT DATE(CONVERT_TZ(createdAt,'+00:00','+09:00')) AS date,
+             COUNT(DISTINCT COALESCE(choiceGroupId, CAST(id AS CHAR))) AS created
+      FROM scheduledPosts
+      WHERE threadsAccountId = ${accountId} AND source = 'auto'
+        AND replyToThreadsId IS NULL AND quotePostId IS NULL
+        AND (angle IS NULL OR angle NOT IN ('meta_ai_call','pinned'))
+        AND createdAt >= DATE_SUB(NOW(), INTERVAL ${sql.raw(String(n + 1))} DAY)
+      GROUP BY 1
+    ) c ON c.date = d.date
+    LEFT JOIN (
+      SELECT DATE(CONVERT_TZ(postedAt,'+00:00','+09:00')) AS date, COUNT(*) AS published
+      FROM scheduledPosts
+      WHERE threadsAccountId = ${accountId} AND source = 'auto' AND status = 'posted'
+        AND replyToThreadsId IS NULL AND quotePostId IS NULL
+        AND postedAt >= DATE_SUB(NOW(), INTERVAL ${sql.raw(String(n + 1))} DAY)
+      GROUP BY 1
+    ) p ON p.date = d.date
+    ORDER BY d.date DESC`);
+  const list: any[] = (rows as any)[0] ?? [];
+  return list.map((r) => ({
+    date: String(r.date).slice(0, 10),
+    created: Number(r.created ?? 0),
+    published: Number(r.published ?? 0),
+  }));
+}
+
+/**
+ * 3案のうち1案が選ばれたので、同じ枠の残りを見送りにする。
+ * ★これが動かないと、3案が3件とも公開される（9/12 の追い投稿事故と同じ筋）。
+ * 戻り値は取り下げた件数。
+ */
+export async function cancelChoiceSiblings(choiceGroupId: string, keepPostId: number): Promise<number> {
+  const database = await getDb();
+  if (!database || !choiceGroupId) return 0;
+  const rows: any = await database.execute(sql`
+    UPDATE scheduledPosts
+    SET status = 'canceled', errorMessage = '3案のうち別の案が選ばれたため見送り'
+    WHERE choiceGroupId = ${choiceGroupId} AND id <> ${keepPostId}
+      AND status IN ('awaiting_approval','pending')`);
+  return Number((rows as any)?.[0]?.affectedRows ?? 0);
+}
+
+/**
+ * 3案の印を外す（3案として成立しなかったとき）。
+ * 印が残ったままだと自動公開の対象から外れ、誰にも選ばれないまま消えてしまう。
+ */
+export async function clearChoiceGroup(choiceGroupId: string): Promise<number> {
+  const database = await getDb();
+  if (!database || !choiceGroupId) return 0;
+  const rows: any = await database.execute(sql`
+    UPDATE scheduledPosts SET choiceGroupId = NULL WHERE choiceGroupId = ${choiceGroupId}`);
+  return Number((rows as any)?.[0]?.affectedRows ?? 0);
+}
+
+/** 同じ枠の3案のうち、まだ選ばれていない（承認待ちの）件数 */
+export async function countChoiceSiblingsAwaiting(choiceGroupId: string, excludePostId?: number): Promise<number> {
+  const database = await getDb();
+  if (!database || !choiceGroupId) return 0;
+  const rows: any = await database.execute(sql`
+    SELECT COUNT(*) AS n FROM scheduledPosts
+    WHERE choiceGroupId = ${choiceGroupId} AND status = 'awaiting_approval'
+      ${excludePostId ? sql`AND id <> ${excludePostId}` : sql``}`);
   return Number((rows as any)[0]?.[0]?.n ?? 0);
 }
 

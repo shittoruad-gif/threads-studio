@@ -2865,7 +2865,16 @@ ${input.commentText}
           approvedVia: 'web',
           ...(scheduledAt ? { scheduledAt } : {}),
         } as any);
-        return { success: true };
+        // ★3案からお選びいただいた場合、残りの案を取り下げる（2026-09-22）。
+        //   LINEだけでなく画面から選ばれることもあるので、ここでも必ず畳む。
+        let choiceCanceled = 0;
+        const groupId = (post as any).choiceGroupId as string | null | undefined;
+        if (groupId) {
+          try {
+            choiceCanceled = await db.cancelChoiceSiblings(groupId, input.postId);
+          } catch (e) { console.error('[Approve] 3案の残りを取り下げられませんでした:', e); }
+        }
+        return { success: true, choiceCanceled };
       }),
 
     // Edit the content of a post that is awaiting approval (then it can be approved).

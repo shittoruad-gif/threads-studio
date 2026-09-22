@@ -14,7 +14,8 @@ import { charBudgetFor, resolveWithAlternation, POST_LENGTHS, trimToBudget } fro
 import { checkNaturalized, findBannedTic, findRepeatedHookNumber, findRepeatedPhrase, polishPunctuation } from "../shared/jpQualityGuard";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
-import { pickAngle } from "../shared/postAngles";
+import { pickAngle, getAngle } from "../shared/postAngles";
+import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM } from "../shared/recruitingPost";
 import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
 import { stripRawUrls } from "../shared/sanitize";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
@@ -462,6 +463,10 @@ async function generateAutoPost(
   //   ここでは「同じ言い回し」では止めない（止めると枠がゼロになり、契約本数を割る）。
   //   ただし似た投稿を黙って公開はしない。必ず承認カードにして、お客様が見送れるようにする。
   guarantee: boolean = false,
+  // ★3案からお選びいただく形（2026-09-22 三上様指示・shared/threeChoice.ts）。
+  //   choiceGroupId を渡すと「1つの枠に対する選択肢」として作る（必ず承認カード）。
+  //   forcedAngleId は3案の切り口を散らすため（同じ材料から3本作ると同じ所へ戻るため）。
+  opts: { choiceGroupId?: string | null; forcedAngleId?: string | null } = {},
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
   const purpose = PURPOSES[purposeIndex % PURPOSES.length];
@@ -499,7 +504,12 @@ async function generateAutoPost(
       const cr = project.counselingResult ? JSON.parse(project.counselingResult) : null;
       preferredAngles = preferredAngleIds(cr?.preferredTypes ?? cr?.rawAnswers?.preferredTypesRaw ?? null, { excludeOutcomeAngles });
     } catch { preferredAngles = []; }
-    angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles });
+    // ★3案では切り口をこちらで指定する（散らさないと、同じ材料から同じ所へ戻る）。
+    //   見つからなければ今までどおり重み付き選択に落とす。
+    const forced = opts.forcedAngleId ? getAngle(opts.forcedAngleId) : undefined;
+    angle = forced
+      ?? pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles });
+    if (forced) console.log(`[AutoPost] 3案：切り口を指定 account=${threadsAccountId} → ${forced.id}`);
     if (preferredAngles.length) console.log(`[AutoPost] 希望の型を優先 userId=${userId} ${preferredAngles.join('/')} → ${angle.id}`);
     if (excludeOutcomeAngles) console.log(`[AutoPost] 健康系のお店のため結果を語る切り口を除外 userId=${userId}`);
     // ◯✕が付いた実例をプロンプトに注入して「このお店の好み」を学習させる
@@ -717,6 +727,9 @@ async function generateAutoPost(
           // ★切り口の指示は好みの指示のあと（末尾に近いほど守られる。2026-09-18）
           + angleNote
           + (CONVERSATION_POST_TYPES.has(postType) ? CONVERSATION_ENDING_ADDENDUM : '')
+          // ★求人（採用）の投稿を、集客と同じ型で書かせない（shared/recruitingPost.ts・2026-09-23）。
+          //   プレステージ様は2晩続けて naturalnessReview で3回落ち、枠を捨てていた。
+          + (looksLikeRecruiting(project) ? RECRUITING_POST_ADDENDUM : '')
           // ★個人モードの上書きは最末尾（末尾の指示が最も遵守されやすい）
           + (personal ? personalModePromptOverride() : ''),
       }],
@@ -1103,7 +1116,8 @@ async function generateAutoPost(
 
     // ★保証パスで作った投稿は、承認モードOFFのお客様でも必ず承認カードにする（2026-09-18）。
     //   契約本数は守るが、前と似た投稿を黙って公開はしない。見送るかどうかはお客様が決める。
-    const needsApproval = requireApproval || guarantee;
+    // ★3案は必ず承認カード。押されなければ1件も公開しない（shared/threeChoice.ts）。
+    const needsApproval = requireApproval || guarantee || Boolean(opts.choiceGroupId);
 
     await db.createScheduledPost({
       userId,
@@ -1113,6 +1127,8 @@ async function generateAutoPost(
       postContent: fullContent,
       // ★承認モードON時は awaiting_approval で作成し、ユーザーが承認するまで投稿しない
       status: needsApproval ? 'awaiting_approval' : 'pending',
+      // 3案の印（同じ枠の選択肢。選ばれた1件以外は公開しない）
+      choiceGroupId: opts.choiceGroupId ?? null,
       materialGuarantee: guarantee ? 1 : 0,
       adminReviewRequired: adminReviewRequired ? 1 : 0,
       source: 'auto',
@@ -1400,7 +1416,58 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           let accFailed = 0;
           // ★保証パスでお届けした件数（お客様への説明に使う。materialDepth の facts.guaranteed）
           let guaranteedHere = 0;
-          for (let i = 0; i < regularCount; i++) {
+
+          // ★3案からお選びいただく形（2026-09-22 三上様指示・shared/threeChoice.ts）。
+          //   2日続けて公開に至らなかったアカウントは、最初の枠だけ1案ではなく3案を作る。
+          //   3案は「1つの枠に対する選択肢」で、公開されるのは選ばれた1件だけ。契約本数は増やさない。
+          let startIndex = 0;
+          if (!opts.fillToday && regularCount > 0) {
+            try {
+              const { decideChoiceMode } = await import('./threeChoiceMode');
+              const decision = await decideChoiceMode(account.id, eff.autoPostRequireApproval);
+              console.log(`[AutoPost] 3案の判定 account=${account.id}: ${decision.note}`);
+              if (decision.on) {
+                const { newChoiceGroupId, CHOICE_ANGLE_IDS, CHOICE_COUNT } = await import('../shared/threeChoice');
+                const { jstDateString } = await import('../shared/accountRamp');
+                const groupId = newChoiceGroupId(account.id, jstDateString(0));
+                const project = pinnedProject || eligibleProjects[dayOffset % eligibleProjects.length];
+                let made = 0;
+                for (let k = 0; k < CHOICE_COUNT; k++) {
+                  // 枠は1つなので作り直しは2回まで（時間を掛けすぎない）
+                  let ok = false;
+                  const rk = rejectKey(user.id, account.id, 100 + k);
+                  lastRejectReason.delete(rk);
+                  for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
+                    ok = await generateAutoPost(
+                      user.id, project, typeIdx, purposeIdx, account.id, 0,
+                      true, bestHours, eff.postLength, null,
+                      lastRejectReason.get(rk) ?? null, attempt === 2, false,
+                      { choiceGroupId: groupId, forcedAngleId: CHOICE_ANGLE_IDS[k] },
+                    );
+                  }
+                  lastRejectReason.delete(rk);
+                  if (ok) { made++; generated++; }
+                  await new Promise((r) => setTimeout(r, 2000));
+                }
+                if (made >= 2) {
+                  startIndex = 1;               // 最初の枠は3案で埋まった
+                  anyApproval = true;           // 承認カードを必ずお送りする
+                  console.log(`[AutoPost] 3案をご用意 account=${account.id} ${made}案（group=${groupId}）`);
+                } else {
+                  // ★1案しか作れなかったときは印を外し、今までどおりの1件として扱う。
+                  //   印が残ったままだと「選択肢」とみなされ、自動公開の対象から外れたまま
+                  //   誰にも選ばれずに消える（「見送らなければ公開」の方で起きる）。
+                  const cleared = await db.clearChoiceGroup(groupId).catch(() => 0);
+                  if (made === 1) { startIndex = 1; anyApproval = true; }
+                  console.warn(`[AutoPost] 3案を作れず account=${account.id}（${made}案・印を${cleared}件外した）→ 通常の1件として扱う`);
+                }
+              }
+            } catch (e) {
+              console.warn(`[AutoPost] 3案の判定・作成に失敗 account=${account.id}: ${(e as Error)?.message}`);
+            }
+          }
+
+          for (let i = startIndex; i < regularCount; i++) {
             const project = pinnedProject || eligibleProjects[(dayOffset + i) % eligibleProjects.length];
 
             // ★品質ガードで落ちた日に「投稿ゼロ」で終わらせない（2026-09-08 比嘉先生の当日補充で
@@ -1541,7 +1608,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                   const { sendApprovalPush } = await import('./lineNotify');
                   const { createApprovalToken } = await import('./approvalToken');
                   const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
-                  const posts = fresh.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt, threadsAccountId: (p as any).threadsAccountId }));
+                  const posts = fresh.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt, threadsAccountId: (p as any).threadsAccountId, choiceGroupId: (p as any).choiceGroupId ?? null }));
                   const urlFor = (postId: number) => `${base}/api/post-approval?token=${createApprovalToken(postId, user.id, 'approve')}`;
                   let sentCount = 0;
                   for (const lineId of lineIds) {

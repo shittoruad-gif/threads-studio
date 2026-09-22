@@ -214,6 +214,8 @@ export interface ApprovalPushPost {
   threadsAccountId?: number | null;
   accountName?: string | null;
   accountEmphasis?: boolean;
+  /** 3案からお選びいただく枠の印（shared/threeChoice.ts）。同じ印＝同じ枠の選択肢 */
+  choiceGroupId?: string | null;
 }
 
 function fmtTime(v: Date | string | null): string {
@@ -330,14 +332,49 @@ export async function sendApprovalPush(
     .filter((d): d is Date => !!d && !isNaN(d.getTime()))
     .sort((a, b) => a.getTime() - b.getTime())[0];
   const label = !first || jstDate(first) === jstDate(new Date()) ? "今日" : "明日";
+
+  // ★3案からお選びいただく形（2026-09-22 三上様指示）。
+  //   3案と通常の投稿を1つのカルーセルに混ぜてはいけない。混ざると
+  //   「すべて承認する」が出てしまい、選択肢のはずの3件が3件とも公開される。
+  //   枠ごとに分けて、別々のメッセージとしてお送りする。
+  const { CHOICE_LEAD_TEXT } = await import("@shared/threeChoice");
+  const choiceGroups = new Map<string, ApprovalPushPost[]>();
+  const normal: ApprovalPushPost[] = [];
+  for (const p of posts) {
+    const g = (p as any).choiceGroupId as string | null | undefined;
+    if (g) {
+      if (!choiceGroups.has(g)) choiceGroups.set(g, []);
+      choiceGroups.get(g)!.push(p);
+    } else {
+      normal.push(p);
+    }
+  }
+  // 選択肢が1件しか残っていない枠は「選ぶ」形にならないので、通常の投稿として送る
+  const groupLists: ApprovalPushPost[][] = [];
+  choiceGroups.forEach((list) => {
+    if (list.length < 2) normal.push(...list);
+    else groupLists.push(list);
+  });
+
+  let ok = false;
+  for (const list of groupLists) {
+    const sent = await pushMessage(lineUserId, [
+      { type: "text", text: CHOICE_LEAD_TEXT },
+      buildPostCards(list as any, { bulk: true }),
+    ]);
+    ok = ok || sent;
+  }
+  if (normal.length === 0) return ok;
+
   // ★2026-09-12 既定を「見送りしなければ予定時刻に公開」に変更。押せない日があっても投稿は止まらない
-  const tail = posts.length > 1
+  const tail = normal.length > 1
     ? "内容をご確認ください。「見送る」を押さない限り、予定時刻にそのまま公開されます。直したいときは「書き直す」、出したくないときだけ「見送る」を押してください。"
     : "内容をご確認ください。「見送る」を押さない限り、予定時刻にそのまま公開されます。直したいときは「書き直す」を押してください。";
-  return pushMessage(lineUserId, [
-    { type: "text", text: `${label}の投稿が${posts.length}件できました。\n${tail}` },
-    buildPostCards(posts as any, { bulk: true }),
+  const sentNormal = await pushMessage(lineUserId, [
+    { type: "text", text: `${label}の投稿が${normal.length}件できました。\n${tail}` },
+    buildPostCards(normal as any, { bulk: true }),
   ]);
+  return ok || sentNormal;
 }
 
 /** 新着コメント通知（1通・リンクはコメント管理画面へ） */
