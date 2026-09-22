@@ -2,8 +2,26 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
-import { getPlan, getFeatureLimitText } from '../../../shared/plans';
+import { getPlan, getFeatureLimitText, getAiGenerationLimitText } from '../../../shared/plans';
 import { AlertCircle, Check, X, ArrowUp, ArrowDown } from 'lucide-react';
+
+/**
+ * 上限を「多い順」に並べるための順位。
+ *
+ * ★2026-09-23 夜間整備。上限は **-1 が「無制限」** という約束（shared/plans.ts）なのに、
+ *   この画面は数のまま大小を比べていた。-1 はどの数より小さいので、
+ *   無制限のプランが「いちばん少ない」と判定され、
+ *   ・無制限 → 10件 の変更が「増える（緑・上向き矢印）」に見える
+ *   ・AI生成は `> 0` で有無を見ていたため、無制限のプロプランが ✕ と出る
+ *   という、お金の画面としてあってはならない表示になっていた。
+ *
+ *   この画面は 2026-09-22 の「特別価格のご契約でもプラン変更できる」対応で、
+ *   初めてセミナー・キャンペーン価格の方から開けるようになった（それまでは
+ *   押すと必ず失敗するため、実際に見た方がいなかった）。
+ */
+function limitRank(limit: number): number {
+  return limit === -1 ? Number.POSITIVE_INFINITY : limit;
+}
 
 interface PlanChangeDialogProps {
   open: boolean;
@@ -100,8 +118,8 @@ export function PlanChangeDialog({
                     isUpgrade ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-red-500" />
                   )}
                   <span className={`text-sm font-semibold ${
-                    currentPlan.features.maxProjects < newPlan.features.maxProjects ? 'text-emerald-600' :
-                    currentPlan.features.maxProjects > newPlan.features.maxProjects ? 'text-red-600' :
+                    limitRank(currentPlan.features.maxProjects) < limitRank(newPlan.features.maxProjects) ? 'text-emerald-600' :
+                    limitRank(currentPlan.features.maxProjects) > limitRank(newPlan.features.maxProjects) ? 'text-red-600' :
                     'text-foreground'
                   }`}>
                     {getFeatureLimitText(newPlan.features.maxProjects)}
@@ -118,8 +136,8 @@ export function PlanChangeDialog({
                     isUpgrade ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-red-500" />
                   )}
                   <span className={`text-sm font-semibold ${
-                    currentPlan.features.maxThreadsAccounts < newPlan.features.maxThreadsAccounts ? 'text-emerald-600' :
-                    currentPlan.features.maxThreadsAccounts > newPlan.features.maxThreadsAccounts ? 'text-red-600' :
+                    limitRank(currentPlan.features.maxThreadsAccounts) < limitRank(newPlan.features.maxThreadsAccounts) ? 'text-emerald-600' :
+                    limitRank(currentPlan.features.maxThreadsAccounts) > limitRank(newPlan.features.maxThreadsAccounts) ? 'text-red-600' :
                     'text-foreground'
                   }`}>
                     {getFeatureLimitText(newPlan.features.maxThreadsAccounts)}
@@ -136,8 +154,8 @@ export function PlanChangeDialog({
                     isUpgrade ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-red-500" />
                   )}
                   <span className={`text-sm font-semibold ${
-                    currentPlan.features.maxScheduledPosts < newPlan.features.maxScheduledPosts ? 'text-emerald-600' :
-                    currentPlan.features.maxScheduledPosts > newPlan.features.maxScheduledPosts ? 'text-red-600' :
+                    limitRank(currentPlan.features.maxScheduledPosts) < limitRank(newPlan.features.maxScheduledPosts) ? 'text-emerald-600' :
+                    limitRank(currentPlan.features.maxScheduledPosts) > limitRank(newPlan.features.maxScheduledPosts) ? 'text-red-600' :
                     'text-foreground'
                   }`}>
                     {getFeatureLimitText(newPlan.features.maxScheduledPosts)}
@@ -146,22 +164,30 @@ export function PlanChangeDialog({
               </div>
 
               {/* AI Generation */}
+              {/* ★2026-09-23 夜間整備で見つけた表示の誤り。
+                  AI生成の上限は -1 が「無制限」で、0 が「利用不可」。
+                  ここは `> 0` で有無を判定していたため、**無制限のプロプランが ✕**、
+                  月10回のライトプランが ✓ と出ていた（プロ → ライトへの変更で
+                  「✕ → ✓」＝機能が増えるように見える）。お金の画面なので数で出す。
+                  ※この画面は 2026-09-22 の「特別価格でもプラン変更できる」対応で
+                    初めてセミナー・キャンペーン価格の方から開けるようになった。 */}
               <div className="flex items-center justify-between py-2 border-b border-border">
                 <span className="text-sm text-muted-foreground">AI文章生成</span>
                 <div className="flex items-center gap-3">
-                  {currentPlan.features.maxAiGenerations > 0 ? (
-                    <Check className="w-4 h-4 text-muted-foreground/60" />
-                  ) : (
-                    <X className="w-4 h-4 text-muted-foreground/40" />
+                  <span className="text-sm text-muted-foreground/60">
+                    {getAiGenerationLimitText(currentPlan.features.maxAiGenerations)}
+                  </span>
+                  {limitRank(currentPlan.features.maxAiGenerations) !== limitRank(newPlan.features.maxAiGenerations) && (
+                    limitRank(newPlan.features.maxAiGenerations) > limitRank(currentPlan.features.maxAiGenerations)
+                      ? <ArrowUp className="w-3 h-3 text-emerald-500" />
+                      : <ArrowDown className="w-3 h-3 text-red-500" />
                   )}
-                  {(currentPlan.features.maxAiGenerations > 0) !== (newPlan.features.maxAiGenerations > 0) && (
-                    isUpgrade ? <ArrowUp className="w-3 h-3 text-emerald-500" /> : <ArrowDown className="w-3 h-3 text-red-500" />
-                  )}
-                  {newPlan.features.maxAiGenerations > 0 ? (
-                    <Check className="w-4 h-4 text-emerald-500" />
-                  ) : (
-                    <X className="w-4 h-4 text-red-500" />
-                  )}
+                  <span className={`text-sm font-medium ${
+                    limitRank(newPlan.features.maxAiGenerations) >= limitRank(currentPlan.features.maxAiGenerations)
+                      ? 'text-emerald-600' : 'text-red-600'
+                  }`}>
+                    {getAiGenerationLimitText(newPlan.features.maxAiGenerations)}
+                  </span>
                 </div>
               </div>
 
