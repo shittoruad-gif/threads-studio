@@ -18,6 +18,7 @@ import {
   CHOICE_ANGLE_IDS,
   CHOICE_COUNT,
   CHOICE_LEAD_TEXT,
+  CHOICE_ALL_SKIPPED_TEXT,
   choiceChosenText,
   type DayOutcome,
 } from "@shared/threeChoice";
@@ -182,6 +183,17 @@ describe("お客様にお送りする文面", () => {
 
   it("絵文字を使わない", () => {
     expect(CHOICE_LEAD_TEXT).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
+  });
+});
+
+describe("「見送る」の意味（三上様のご指示の文）", () => {
+  it("3案の見送りは「本日ぶんを見送る」。お詫びも次の催促も入れない", () => {
+    // ご指示：「その中から好きなものをお選びいただくか、見送るを押してください」
+    // ＝ 1案だけ消すのではなく、その日の公開を見送る、という意味。
+    expect(CHOICE_ALL_SKIPPED_TEXT).toContain("本日は公開を見送ります");
+    expect(CHOICE_ALL_SKIPPED_TEXT).toContain("明日の朝");
+    expect(CHOICE_ALL_SKIPPED_TEXT).not.toMatch(/申し訳|お詫び|すみません/);
+    expect(CHOICE_ALL_SKIPPED_TEXT).not.toMatch(/\p{Extended_Pictographic}/u);
   });
 });
 

@@ -366,9 +366,13 @@ async function rewritePost(userId: number, postId: number, instruction: string, 
     await db.updateScheduledPost(postId, { postContent: next });
     const updated = await db.getScheduledPostById(postId);
     const [withName] = await withAccountNames(userId, [updated as any]);
+    // ★3案のうちの1案を書き直したときは、選択肢の表記のままにする
+    const rewroteChoice = Boolean((withName as any)?.choiceGroupId);
     return [
-      { type: "text", text: "書き直しました。こちらでよろしければ「これで投稿する」を押してください。" },
-      buildPostCards([withName], { one }),
+      { type: "text", text: rewroteChoice
+        ? "書き直しました。この案でよろしければ「この案にする」を押してください。"
+        : "書き直しました。こちらでよろしければ「これで投稿する」を押してください。" },
+      buildPostCards([withName], { one, choice: rewroteChoice }),
     ];
   } catch {
     return [textWithQuick("うまく書き直せませんでした。もう一度お試しいただくか、別の言い方でお伝えください。", MENU_HINT)];
@@ -2153,6 +2157,24 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   if (q.a === "skip" && q.i) {
     const post = await ownedPost(user.id, Number(q.i));
     if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
+
+    // ★3案の「見送る」は、その1案ではなく**本日ぶんを見送る**（2026-09-22 三上様のご指示の文
+    //   「その中から好きなものをお選びいただくか、見送るを押してください」がこの意味）。
+    //   1案だけ消すと、残り2案が宙に浮くうえ「代わりを作る」で4件目ができてしまう。
+    const skipGroupId = (post as any).choiceGroupId as string | null | undefined;
+    if (skipGroupId) {
+      const n = await db.cancelChoiceGroupAll(skipGroupId).catch(() => 0);
+      if (!(post as any).clientRating) {
+        await db.updateScheduledPost(Number(q.i), { clientRating: "bad", ratedAt: new Date() } as any).catch(() => undefined);
+      }
+      console.log(`[LineChat] 3案：本日ぶんを見送り（${n}件・group=${skipGroupId}）`);
+      const { CHOICE_ALL_SKIPPED_TEXT } = await import("@shared/threeChoice");
+      return [textWithQuick(
+        CHOICE_ALL_SKIPPED_TEXT + "\n\n間違えて押した場合は「取り消す」で元に戻せます。",
+        [{ label: "取り消す", data: `a=undo&i=${q.i}` }, ...MENU_HINT],
+      )];
+    }
+
     // ★見送りは「違う」という明確な信号なので、評価が無ければ ✕ として学習に使う（2026-09-08）
     await db.updateScheduledPost(Number(q.i), {
       status: "canceled",
@@ -2193,6 +2215,21 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     }
     if (post.status !== "pending" && post.status !== "canceled") {
       return [textWithQuick("この投稿は取り消せる状態ではありません。", MENU_HINT)];
+    }
+    // ★3案の取り消しは、その枠の3案をまとめて元に戻す（1案だけ戻すと選べる形にならない）
+    const undoGroupId = (post as any).choiceGroupId as string | null | undefined;
+    if (undoGroupId) {
+      const back = await db.restoreChoiceGroup(undoGroupId).catch(() => 0);
+      if (back > 0) {
+        console.log(`[LineChat] 3案：見送りを取り消し（${back}件・group=${undoGroupId}）`);
+        return repliesForPosts(user.id);
+      }
+      // まとめて見送ったのではなく、別の案が選ばれて見送りになった場合は戻さない
+      return [textWithQuick(
+        "この案は、ほかの案をお選びいただいたため見送りになっています。\n" +
+        "選び直したい場合は、公開前に「今日の投稿」から取り消してください。",
+        [{ label: "今日の投稿", data: "m=posts" }, ...MENU_HINT],
+      )];
     }
     await db.updateScheduledPost(Number(q.i), { status: "awaiting_approval" });
     const [withName] = await withAccountNames(user.id, [(await db.getScheduledPostById(Number(q.i))) as any]);

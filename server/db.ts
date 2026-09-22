@@ -4028,6 +4028,31 @@ export async function cancelChoiceSiblings(choiceGroupId: string, keepPostId: nu
   return Number((rows as any)?.[0]?.affectedRows ?? 0);
 }
 
+/** 3案をまとめて見送る（「見送る」＝本日は公開しない。三上様のご指示の文どおり） */
+export const CHOICE_ALL_SKIPPED_REASON = '3案すべてを見送り（本日は公開しない）';
+
+export async function cancelChoiceGroupAll(choiceGroupId: string): Promise<number> {
+  const database = await getDb();
+  if (!database || !choiceGroupId) return 0;
+  const rows: any = await database.execute(sql`
+    UPDATE scheduledPosts
+    SET status = 'canceled', errorMessage = ${CHOICE_ALL_SKIPPED_REASON}
+    WHERE choiceGroupId = ${choiceGroupId} AND status IN ('awaiting_approval','pending')`);
+  return Number((rows as any)?.[0]?.affectedRows ?? 0);
+}
+
+/** まとめて見送った3案を元に戻す（押し間違いの「取り消す」） */
+export async function restoreChoiceGroup(choiceGroupId: string): Promise<number> {
+  const database = await getDb();
+  if (!database || !choiceGroupId) return 0;
+  const rows: any = await database.execute(sql`
+    UPDATE scheduledPosts
+    SET status = 'awaiting_approval', errorMessage = NULL
+    WHERE choiceGroupId = ${choiceGroupId} AND status = 'canceled'
+      AND errorMessage = ${CHOICE_ALL_SKIPPED_REASON}`);
+  return Number((rows as any)?.[0]?.affectedRows ?? 0);
+}
+
 /**
  * 3案の印を外す（3案として成立しなかったとき）。
  * 印が残ったままだと自動公開の対象から外れ、誰にも選ばれないまま消えてしまう。
