@@ -36,6 +36,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import * as db from "../db";
 import { createApprovalToken, verifyApprovalToken } from "../approvalToken";
+import { isAlreadyExistsError } from "../migrationErrors";
 import { initTrialReminderScheduler } from "../trialReminder";
 import { initPaymentFollowUpScheduler } from "../paymentFollowUp";
 import { startTokenRefreshJob } from "../tokenRefreshJob";
@@ -1473,10 +1474,21 @@ async function startServer() {
       status: 'pending',
       ...(scheduledAt ? { scheduledAt } : {}),
     });
+    // ★3案からお選びいただいた場合、残りの案を取り下げる（2026-09-22）。
+    //   メールのワンタップ承認からも選ばれるため、ここでも必ず畳む。
+    let choiceCanceled = 0;
+    const groupId = (post as any).choiceGroupId as string | null | undefined;
+    if (groupId) {
+      try {
+        choiceCanceled = await db.cancelChoiceSiblings(groupId, post.id);
+        console.log(`[QuickApproval] 3案：#${post.id} を選択 → 残り${choiceCanceled}件を見送り`);
+      } catch (e) { console.error('[QuickApproval] 3案の残りを取り下げられませんでした:', e); }
+    }
     console.log(`[QuickApproval] approved post=${post.id} user=${post.userId}`);
-    return res.send(approvalPage('承認しました', `
-      <h1>承認しました</h1>
+    return res.send(approvalPage(groupId ? 'この案にしました' : '承認しました', `
+      <h1>${groupId ? 'この案にしました' : '承認しました'}</h1>
       <p>この投稿は予定どおり公開されます。数分以内にThreadsへ反映されます。</p>
+      ${choiceCanceled > 0 ? `<p class="meta">選ばれなかった${choiceCanceled}件は公開されません。</p>` : ''}
       <a class="btn" href="/post-history">投稿履歴を見る</a>`));
   });
 
@@ -1567,7 +1579,7 @@ async function startServer() {
             try {
               await database.execute(sql.raw(trimmed));
             } catch (e: any) {
-              if (e.errno === 1050 || e.errno === 1060 || e.errno === 1061) continue;
+              if (isAlreadyExistsError(e)) continue;
               console.warn(`[DB] Warning in ${file}:`, e.message?.substring(0, 100));
             }
           }
@@ -1619,7 +1631,7 @@ async function startServer() {
               await database.execute(sql.raw(stmt));
             } catch (e: any) {
               // 既にある（1050=table / 1060=column / 1061=index）は適用済みとして進める
-              if (e.errno === 1050 || e.errno === 1060 || e.errno === 1061) continue;
+              if (isAlreadyExistsError(e)) continue;
               hardFailure = e.message?.substring(0, 200) ?? String(e);
               console.error(`[DB] ★マイグレーション失敗 ${file}: ${hardFailure}\n  文: ${stmt.slice(0, 160)}`);
               break;
