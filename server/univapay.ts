@@ -135,19 +135,24 @@ export async function cancelSubscription(subscriptionId: string) {
 /**
  * Update subscription plan
  */
-export async function updateSubscription(
-  subscriptionId: string,
-  newPlanId: string
-) {
+/**
+ * ⛔使ってはいけない。プラン変更には updateSubscriptionNextAmount を使うこと。
+ *
+ * この関数は「解約して新規作成する」つもりで書かれたまま、解約だけして
+ * 新しい定期課金を作っていなかった。プラン変更から呼ばれていたため、通っていれば
+ * そのお客様は以後いっさい請求されない状態になっていた（2026-09-22 発見。
+ * キャンペーン価格が別の条件で弾かれていたため、実際に通った方は0件）。
+ * 同じ間違いが戻らないよう、関数自体を残さず削除する。
+ */
+
+/** 次回の課金予定（日付と金額）を読む。プラン変更の「いつから」の案内に使う */
+export async function getNextPaymentDueDate(subscriptionId: string): Promise<string | null> {
   try {
-    // Univapay doesn't support direct plan change
-    // Need to cancel old subscription and create new one
-    await cancelSubscription(subscriptionId);
-    console.log('[Univapay] Subscription plan updated (canceled old, need to create new)');
-    return { subscriptionId, newPlanId };
-  } catch (error) {
-    console.error('[Univapay] Update subscription error:', error);
-    throw error;
+    const s: any = await getSubscription(subscriptionId);
+    const due = s?.next_payment?.due_date;
+    return typeof due === 'string' && due ? due : null;
+  } catch {
+    return null;
   }
 }
 

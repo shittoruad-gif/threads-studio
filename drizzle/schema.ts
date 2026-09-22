@@ -171,6 +171,15 @@ export const subscriptions = mysqlTable("subscriptions", {
   // キャンペーンプランの実課金回数。規定回数(campaignCharges)に達したらアプリ側で
   // 自動解約する（Univapay側が自動停止しない場合の過剰課金防止）。
   campaignChargeCount: int("campaignChargeCount").notNull().default(0),
+  /**
+   * 次回の請求から切り替える予定のプラン（2026-09-22）。
+   * ★プラン変更は「金額も機能も次回の請求から」。押した時点では planId を変えず、
+   *   UnivaPayの次回課金額だけ変え、ここに予定を控える。次の課金が通ったときに
+   *   planId へ移す。下げる変更で、払った期間のうちに機能だけ減るのを防ぐ。
+   */
+  pendingPlanId: varchar("pendingPlanId", { length: 50 }),
+  /** 切り替わる予定日（UnivaPayの次回課金日）。ご案内に出す */
+  pendingPlanEffectiveAt: timestamp("pendingPlanEffectiveAt"),
   // 最後に処理した課金イベントID。Webhook再送時の二重カウントを防ぐ（冪等性）。
   lastChargeEventId: varchar("lastChargeEventId", { length: 255 }),
   // ── 決済失敗フォローアップ（dunning）─────────────────────────────

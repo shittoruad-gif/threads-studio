@@ -218,11 +218,8 @@ export function PlanChangeDialog({
                   {isUpgrade ? '+' : ''}¥{Math.abs(priceDiff).toLocaleString()}/月
                 </p>
               </div>
-              {preview.daysRemaining > 0 && (
-                <p className="text-xs text-muted-foreground/60 mt-1">
-                  残り{preview.daysRemaining}日間の日割り計算: ¥{Math.abs(preview.proratedAmount).toLocaleString()}
-                </p>
-              )}
+              {/* ★日割りは発生しない。切り替えは次回の請求からで、今の期間は今のプランのまま。
+                  以前は「残り◯日の日割り計算」を出していたが、実際に請求されない額だった。 */}
             </div>
           )}
 
@@ -231,8 +228,9 @@ export function PlanChangeDialog({
             <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-800">
               <p className="font-semibold mb-1">変更のタイミングについて</p>
-              <p>プランは確定後すぐに切り替わり、<strong>次回のお支払いから新しいプランの金額</strong>が適用されます。
-              （キャンペーンプランへの変更・からの変更はこの画面では行えません。料金プランから新規にお申し込みください。）</p>
+              <p><strong>次回のお支払いから</strong>、金額も使える内容も新しいプランに切り替わります。
+              それまでは今のプランのままお使いいただけます。<strong>カードの再登録は必要ありません。</strong>
+              日割りのご請求は発生しません。切り替わるまでの間は、ホーム画面からこの変更を取り消せます。</p>
             </div>
           </div>
         </div>

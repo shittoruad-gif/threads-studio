@@ -739,7 +739,13 @@ async function startServer() {
           }
           // ── 実課金成功（金額>0）→ active 化 ──
           // プランは「金額一致 → 既存プラン維持」の順。どちらも不明なら誤付与を避けて保留通知。
-          const planId = matchedPlanId ?? existing?.planId ?? null;
+          // ★「次回の請求から」のプラン変更を、ここで実際に切り替える（2026-09-22）。
+          //   申込時にUnivaPayの次回課金額だけ変えて予定を控えてある。その課金が通った
+          //   いまが切り替えどき。金額一致による推定より、ご本人が選んだ予定を優先する。
+          const pendingPlanId = existing?.pendingPlanId && getPlan(existing.pendingPlanId)
+            ? existing.pendingPlanId
+            : null;
+          const planId = pendingPlanId ?? matchedPlanId ?? existing?.planId ?? null;
           if (!planId) {
             console.warn(`[Univapay Webhook] 課金成功だがプラン特定不可: user=${user.id} amount=${amount}`);
             try {
@@ -780,7 +786,10 @@ async function startServer() {
                 univapaySubscriptionId: univapaySubId ?? existing.univapaySubscriptionId ?? undefined,
                 currentPeriodEnd,
                 cancelAtPeriodEnd: false,
-                campaignChargeCount: newChargeCount,
+                // 予定していた変更を適用したら、キャンペーンの回数は数え直し（通常価格へ出たため）
+                campaignChargeCount: pendingPlanId ? 0 : newChargeCount,
+                pendingPlanId: null,
+                pendingPlanEffectiveAt: null,
                 lastChargeEventId: chargeEventId ?? existing.lastChargeEventId ?? undefined,
                 // 課金成功 → 決済失敗フォローの状態をリセット（past_due解消）。
                 failedPaymentCount: 0,
@@ -788,7 +797,21 @@ async function startServer() {
                 lastFailedPaymentAt: null,
                 lastDunningReminderAt: null,
               });
-              console.log(`[Univapay Webhook] サブスク更新→active: user=${user.id} plan=${planId}${isDuplicateCharge ? '（再送イベント・回数据え置き）' : ''}`);
+              console.log(`[Univapay Webhook] サブスク更新→active: user=${user.id} plan=${planId}${isDuplicateCharge ? '（再送イベント・回数据え置き）' : ''}${pendingPlanId ? `（予定していたプラン変更 ${existing.planId}→${pendingPlanId} を適用）` : ''}`);
+              // 予定していたプラン変更が切り替わったことを、ご本人にお知らせする。
+              if (pendingPlanId && pendingPlanId !== existing.planId) {
+                try {
+                  const { sendEmail } = await import('./notification');
+                  const newP = getPlan(pendingPlanId);
+                  if (user.email && newP) {
+                    await sendEmail({
+                      to: user.email,
+                      subject: '【ThreadsStudio】プランが切り替わりました',
+                      html: `<p>いつもご利用ありがとうございます。</p><p>お申し込みいただいたとおり、本日のご請求分から<strong>${newP.name}（月額¥${newP.priceMonthly.toLocaleString()}）</strong>に切り替わりました。</p><p>ご不明な点は公式LINEからお気軽にお問い合わせください。</p>`,
+                    });
+                  }
+                } catch (e) { console.error('[Univapay Webhook] プラン切替のお知らせ送信に失敗:', e); }
+              }
               // 上位プランに変わったら、自動投稿の回数を新しい上限まで引き上げる。
               // （フリーのまま初期値1回で有料化して、1日1回しか投稿されない事故の防止）
               try {

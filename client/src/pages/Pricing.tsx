@@ -17,7 +17,6 @@ import {
   ALL_CAMPAIGN_CODES,
 } from '../../../shared/plans';
 import { PlanChangeDialog } from '@/components/PlanChangeDialog';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const PLAN_ICONS: Record<string, React.ReactNode> = {
   free: <Zap className="w-6 h-6" />,
@@ -119,8 +118,6 @@ export default function Pricing() {
   const { isAuthenticated, user } = useAuth();
   const [, setLocation] = useLocation();
   const [changeDialogOpen, setChangeDialogOpen] = useState(false);
-  // キャンペーン価格でご契約中の方に、変更の手続きをご案内するダイアログ
-  const [campaignChangeOpen, setCampaignChangeOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
@@ -182,6 +179,14 @@ export default function Pricing() {
     },
   });
 
+  const cancelPending = trpc.univapay.cancelPendingPlanChange.useMutation({
+    onSuccess: (res: any) => {
+      toast.success(res?.message ?? 'プラン変更の予約を取り消しました');
+      refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const handleSelectPlan = (planId: string) => {
     if (!isAuthenticated) {
       window.location.href = getLoginUrl();
@@ -217,18 +222,12 @@ export default function Pricing() {
   // 代理店が発行したアカウント（料金は代理店契約に含まれる）
   const isAgencyClient = currentSubscription?.planId === 'agency_client';
 
-  // ★キャンペーン価格（セミナー価格・モニター価格）でご契約中かどうか。
-  //   この契約はUnivaPay側で金額を変えられないため、画面からのプラン変更ができない
-  //   （server/routers.ts の changePlan が必ず弾く）。それでも「プラン変更」ボタンを
-  //   出していたので、押すと必ずエラーになる行き止まりになっていた
-  //   （2026-09-22 比嘉様のお申し出で判明。対象は有効なキャンペーン契約12件すべて）。
-  const currentIsCampaign = Boolean(
-    currentSubscription?.planId ? (PLANS as any)[currentSubscription.planId]?.isCampaign : false,
-  );
+  // 次回の請求から切り替わる予定のプラン（予約ずみ）
+  const pendingPlanId = (currentSubscription as any)?.pendingPlanId ?? null;
+  const pendingPlanName = (currentSubscription as any)?.pendingPlanName ?? null;
+  const pendingEffectiveAt = (currentSubscription as any)?.pendingPlanEffectiveAt ?? null;
 
   const canChangePlan = (planId: string) => {
-    // キャンペーン契約中は、画面からの変更ができないので「変更」として扱わない
-    if (currentIsCampaign) return false;
     // ★キャンペーン契約中は、対応する通常プランのカードを「今のプラン」として数える
     //   （pro_seminar の方に、プロのカードで「プラン変更」を出さない）。
     const currentPlanId = currentCardPlanId || 'free';
@@ -344,6 +343,29 @@ export default function Pricing() {
           </div>
         )}
 
+        {/* 予約ずみのプラン変更。取り消しもここから（ダッシュボードの契約カードは
+            設定途中の方には出ないため、誰でも来られる料金ページにも置く） */}
+        {pendingPlanId && (
+          <div className="mb-6 rounded-xl border border-emerald-300 bg-emerald-50 p-4">
+            <p className="text-emerald-900 font-medium">
+              次回のご請求
+              {pendingEffectiveAt ? `（${new Date(pendingEffectiveAt).toLocaleDateString('ja-JP')}）` : ''}
+              から{pendingPlanName ?? ''}に切り替わります
+            </p>
+            <p className="text-emerald-800 text-sm mt-1">
+              それまでは今のプランのままお使いいただけます。カードの再登録は必要ありません。日割りのご請求もありません。
+            </p>
+            <Button
+              variant="outline"
+              className="mt-3 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+              onClick={() => cancelPending.mutate()}
+              disabled={cancelPending.isPending}
+            >
+              この変更をやめる
+            </Button>
+          </div>
+        )}
+
         {/* プレビューバナー（URLパラメータにコードがある未適用ユーザー向け） */}
         {isCampaignPreview && (
           <div className="max-w-2xl mx-auto mb-10">
@@ -448,15 +470,7 @@ export default function Pricing() {
                       ? 'bg-muted text-muted-foreground cursor-default'
                       : 'bg-background border border-border text-foreground/80 hover:bg-muted/50'
                   }`}
-                  onClick={() => {
-                    // キャンペーン契約中の方が他のプランを押したときは、
-                    // 申し込み（＝二重契約）にもエラーにもせず、手続きのご案内を出す。
-                    if (currentIsCampaign && !isCurrentPlan(plan.id) && plan.priceMonthly !== 0) {
-                      setCampaignChangeOpen(true);
-                      return;
-                    }
-                    handleSelectPlan(campaignPlan ? campaignPlan.id : plan.id);
-                  }}
+                  onClick={() => handleSelectPlan(campaignPlan ? campaignPlan.id : plan.id)}
                   // ★フリープランは「現在のプラン」でも押せるようにする。
                   //   登録直後にこの画面へ来た方が、無料のまま先へ進めず行き止まりになっていたため。
                   disabled={(isCurrentPlan(plan.id) && plan.priceMonthly !== 0) || createCheckout.isPending || isAgencyClient}
@@ -467,11 +481,8 @@ export default function Pricing() {
                     plan.priceMonthly === 0
                       ? 'このまま無料で始める'
                       : currentCampaignLabel ? `現在のプラン（${currentCampaignLabel}）` : '現在のプラン'
-                  ) : currentIsCampaign && plan.priceMonthly !== 0 ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      変更のお手続きを見る
-                    </>
+                  ) : pendingPlanId === plan.id ? (
+                    '次回のご請求から このプラン'
                   ) : canChangePlan(plan.id) ? (
                     <>
                       <RefreshCw className="w-4 h-4 mr-2" />
@@ -656,33 +667,6 @@ export default function Pricing() {
           </Button>
         </div>
       </div>
-
-      {/* キャンペーン価格でご契約中の方向け：画面から直接変更できない理由と手続き */}
-      <Dialog open={campaignChangeOpen} onOpenChange={setCampaignChangeOpen}>
-        {/* ★スマホでは共通の左右16px余白を残す（max-w-md だけだと端まで広がる） */}
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>プランの変更について</DialogTitle>
-            <DialogDescription>
-              {currentCampaignLabel ? `いまは${currentCampaignLabel}でご契約中です。` : 'いまは特別価格でご契約中です。'}
-              この価格のご契約は、決済のしくみ上、この画面から直接プランを変更できません。
-            </DialogDescription>
-          </DialogHeader>
-          <div className="text-sm text-foreground/80 space-y-2">
-            <p>変更をご希望の場合は、いまのご契約を解約したうえで、ご希望のプランに新しくお申し込みいただく形になります。</p>
-            <p>行き違いで投稿が止まらないよう、公式LINEからご連絡いただければ、こちらで日取りを合わせてお手続きをご案内します。</p>
-          </div>
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={() => setCampaignChangeOpen(false)}>閉じる</Button>
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              onClick={() => { setCampaignChangeOpen(false); setLocation('/dashboard'); }}
-            >
-              契約の状況を見る
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Plan Change Dialog */}
       <PlanChangeDialog

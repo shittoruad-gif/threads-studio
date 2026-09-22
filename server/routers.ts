@@ -619,6 +619,12 @@ export const appRouter = router({
         trialEndsAt: subscription.trialEndsAt,
         currentPeriodEnd: subscription.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+        // 次回の請求から切り替わる予定のプラン（予約ずみのプラン変更）
+        pendingPlanId: (subscription as any).pendingPlanId ?? null,
+        pendingPlanName: (subscription as any).pendingPlanId
+          ? (getPlan((subscription as any).pendingPlanId)?.name ?? null)
+          : null,
+        pendingPlanEffectiveAt: (subscription as any).pendingPlanEffectiveAt ?? null,
         // 決済失敗フォロー用
         isPaymentPastDue,
         failedPaymentCount: subscription.failedPaymentCount ?? 0,
@@ -3193,6 +3199,30 @@ ${input.commentText}
       return { success: true };
     }),
 
+    // 予約したプラン変更をやめる（次回の請求も今のプランのまま）
+    cancelPendingPlanChange: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const subscription = await db.getSubscriptionByUserId(ctx.user.id);
+        if (!subscription || !(subscription as any).pendingPlanId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '予約中のプラン変更はありません。' });
+        }
+        const currentPlan = getPlan(subscription.planId);
+        if (!currentPlan) throw new TRPCError({ code: 'BAD_REQUEST', message: 'プラン情報が見つかりません。' });
+        // UnivaPayの次回課金額を、いまのプランの金額に戻す
+        if (subscription.univapaySubscriptionId && currentPlan.priceMonthly > 0) {
+          const univapayService = await import('./univapay');
+          await univapayService.updateSubscriptionNextAmount(
+            subscription.univapaySubscriptionId,
+            currentPlan.priceMonthly,
+          );
+        }
+        await db.updateSubscription(subscription.id, {
+          pendingPlanId: null,
+          pendingPlanEffectiveAt: null,
+        } as any);
+        return { success: true, message: `プラン変更の予約を取り消しました。引き続き${currentPlan.name}をご利用いただけます。` };
+      }),
+
     // Change subscription plan
     changePlan: protectedProcedure
       .input(z.object({
@@ -3224,6 +3254,12 @@ ${input.commentText}
             message: '現在と同じプランには変更できません。',
           });
         }
+        if ((subscription as any).pendingPlanId === input.newPlanId) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'そのプランへの変更は、すでに次回の請求分で予約ずみです。',
+          });
+        }
 
         const currentPlan = getPlan(currentPlanId);
         const newPlan = getPlan(input.newPlanId);
@@ -3235,13 +3271,15 @@ ${input.commentText}
           });
         }
 
-        // キャンペーンプラン（回数制限付き定期課金）はUnivapay仕様上、
-        // 金額のAPI変更ができない。変更元・変更先のどちらかがキャンペーンなら、
-        // 一旦解約 → 希望プランに新規申込、という運用にする（サポート案内）。
-        if (currentPlan.isCampaign || newPlan.isCampaign) {
+        // ★キャンペーン価格（セミナー価格・モニター価格）からも変更できる。
+        //   以前は「Univapayの仕様で金額を変えられない」として弾いていたが、
+        //   実際の契約は回数指定なしの普通の定期課金で、カードも保存されている。
+        //   通常価格への自動移行（_core/index.ts）が毎月この金額変更を実行している。
+        //   ただしキャンペーン価格“へ”の変更は、申込コードを持つ方だけの価格なので受けない。
+        if (newPlan.isCampaign) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
-            message: 'キャンペーンプランからの変更・キャンペーンプランへの変更は、現在のプランを解約のうえ、料金プランから希望プランに新規お申し込みください。',
+            message: '特別価格のプランへはこの画面から変更できません。公式LINEからご相談ください。',
           });
         }
 
@@ -3268,24 +3306,30 @@ ${input.commentText}
           });
         }
 
-        // 通常プラン同士の変更のみ。Univapayの定期課金金額を即時更新する。
+        // ★金額も機能も「次回の請求から」に揃える（2026-09-22 三上様ご判断）。
+        //   ここで planId を変えてしまうと、下げる変更のときに
+        //   高い金額を払っている期間のうちに機能だけ減ってしまう。
+        //   いまやるのはUnivaPayの次回課金額の変更と、予定の控えだけ。
+        //   実際の切り替えは、次の課金が通ったときに webhook が行う。
         const univapayService = await import('./univapay');
-        await univapayService.updateSubscription(subscription.univapaySubscriptionId, input.newPlanId);
+        await univapayService.updateSubscriptionNextAmount(
+          subscription.univapaySubscriptionId,
+          newPlan.priceMonthly,
+        );
+        const due = await univapayService.getNextPaymentDueDate(subscription.univapaySubscriptionId);
 
         await db.updateSubscription(subscription.id, {
-          planId: input.newPlanId,
-        });
-
-        // 上位プランへの変更なら、自動投稿の回数を新しい上限まで引き上げる。
-        try {
-          const { raiseAutoPostFrequencyOnUpgrade } = await import('./planUpgrade');
-          await raiseAutoPostFrequencyOnUpgrade(ctx.user.id, subscription.planId, input.newPlanId);
-        } catch (e) { console.error('[PlanChange] 自動投稿回数の引き上げに失敗:', e); }
+          pendingPlanId: input.newPlanId,
+          pendingPlanEffectiveAt: due ? new Date(`${due}T00:00:00+09:00`) : null,
+        } as any);
 
         return {
           success: true,
-          changeTiming: 'immediate' as const,
-          message: 'プランを変更しました。次回のお支払いから新しいプランの金額が適用されます。',
+          changeTiming: 'next_period' as const,
+          effectiveOn: due,
+          message: due
+            ? `次回のお支払い（${due.replace(/-/g, '/')}）から${newPlan.name}に切り替わります。それまでは今のプランのままお使いいただけます。`
+            : `次回のお支払いから${newPlan.name}に切り替わります。それまでは今のプランのままお使いいただけます。`,
         };
       }),
 

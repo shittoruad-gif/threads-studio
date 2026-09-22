@@ -265,6 +265,17 @@ export default function Dashboard() {
     },
   });
 
+  // 予約したプラン変更をやめる
+  const cancelPendingPlanChange = trpc.univapay.cancelPendingPlanChange.useMutation({
+    onSuccess: (res: any) => {
+      toast.success(res?.message ?? t("プラン変更の予約を取り消しました"));
+      utils.subscription.getStatus.invalidate();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
   const handleLogout = async () => {
     await logout();
     setLocation('/');
@@ -1060,6 +1071,34 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+
+            {/* 次回の請求から切り替わる予定のプラン。取り消しもここから */}
+            {(subscription as any)?.pendingPlanId && (
+              <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-emerald-900 font-medium">
+                    {t("次回のご請求から")}
+                    {(subscription as any).pendingPlanEffectiveAt
+                      ? `（${new Date((subscription as any).pendingPlanEffectiveAt).toLocaleDateString('ja-JP')}）`
+                      : ''}
+                    {(subscription as any).pendingPlanName ?? ''}
+                    {t("に切り替わります")}
+                  </p>
+                  <p className="text-emerald-800 text-sm">
+                    {t("それまでは今のプランのままお使いいただけます。カードの再登録は必要ありません。")}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    className="mt-2 h-8 px-2 text-emerald-700 hover:bg-emerald-100"
+                    onClick={() => cancelPendingPlanChange.mutate()}
+                    disabled={cancelPendingPlanChange.isPending}
+                  >
+                    {t("この変更をやめる")}
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {subscription?.cancelAtPeriodEnd && (
               <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-3">
