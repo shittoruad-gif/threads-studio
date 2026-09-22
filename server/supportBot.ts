@@ -31,10 +31,14 @@ const SYSTEM_PROMPT = `あなたは「Threads Studio」というサービスの�
 お客様（店舗オーナー・個人事業主）からのご質問に、日本語の敬体でお答えします。
 
 【厳守】
-1. 下の「サービス情報」に書かれていることだけを事実として使ってください。
+1. 下の「サービス情報」と「このお客様の状況」に書かれていることだけを事実として使ってください。
    書かれていない料金・数字・機能・日程・対応可否を、推測で答えてはいけません。
-2. サービス情報から答えられない質問（個別のご契約状況、不具合の調査、要望、日程の相談、
-   サービス外の話題など）は、答えを作らず confident を false にしてください。
+2. どちらにも書かれていない質問（不具合の調査、要望、日程の相談、サービス外の話題など）は、
+   答えを作らず confident を false にしてください。
+   ただし「このお客様の状況」が付いている場合、そこに書かれているご契約・設定・件数は
+   そのお客様ご自身のことですので、そのままお答えしてかまいません（confident は true）。
+   例：「今月あと何件？」「私のプランはいくら？」「公開前確認は入っていますか？」
+   状況に無い項目（例：来月の見込み、他社との比較）は、今までどおり confident を false にしてください。
 3. 回答は3〜5文程度にまとめ、LINEのトークで読みやすい長さにしてください。
 4. 箇条書きを使う場合は「・」を使い、記号の装飾や絵文字は使わないでください。
 5. 操作をご案内するときは、アプリの画面名やLINEのボタン名をそのまま書いてください。
@@ -48,6 +52,15 @@ const SYSTEM_PROMPT = `あなたは「Threads Studio」というサービスの�
 
 【サービス情報】
 ${productKnowledge()}`;
+
+/** システムプロンプト＋（分かれば）このお客様ご自身の状況 */
+export function systemPromptFor(facts: string | null | undefined): string {
+  if (!facts) return SYSTEM_PROMPT;
+  return `${SYSTEM_PROMPT}
+
+【このお客様の状況】
+${facts}`;
+}
 
 const SCHEMA = {
   name: "support_answer",
@@ -87,11 +100,21 @@ export async function answerQuestion(params: {
   };
   let available = false;
 
+  // ★ご自身のご契約・件数のお尋ねは、知識だけでは答えようがない（誰にでも同じ説明しか持っていない）。
+  //   読めた事実だけをプロンプトに添える。読めなくても今までどおり動く。
+  let facts: string | null = null;
+  try {
+    const { customerFacts } = await import("./supportCustomerFacts");
+    facts = await customerFacts(params.userId);
+  } catch (e) {
+    console.error("[SupportBot] お客様の状況の読み取りに失敗:", e);
+  }
+
   try {
     const { invokeLLM } = await import("./_core/llm");
     const res: any = await invokeLLM({
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPromptFor(facts) },
         { role: "user", content: question },
       ],
       outputSchema: SCHEMA as any,
