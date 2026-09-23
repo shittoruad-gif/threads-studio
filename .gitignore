@@ -105,3 +105,8 @@ temp/
 *.db
 *.sqlite
 *.sqlite3
+
+# 勉強会の字幕・要点（有料の勉強会の中身。公開リポジトリに入れない）
+docs/study-sessions/
+# 一時スクリプト
+scripts/ops/tmp/
