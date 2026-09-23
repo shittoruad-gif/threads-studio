@@ -507,8 +507,12 @@ async function generateAutoPost(
     // ★3案では切り口をこちらで指定する（散らさないと、同じ材料から同じ所へ戻る）。
     //   見つからなければ今までどおり重み付き選択に落とす。
     const forced = opts.forcedAngleId ? getAngle(opts.forcedAngleId) : undefined;
+    // ★三上様のアカウント（Moveact 2店・株式会社しっとる）だけ、勉強会の型を試す（2026-09-24）
+    const { isStudyExperimentUser } = await import('../shared/postAngles');
+    const studyExperiment = isStudyExperimentUser(userId);
     angle = forced
-      ?? pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles });
+      ?? pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment });
+    if (studyExperiment && angle) console.log(`[AutoPost] 試験中（勉強会の型） userId=${userId} account=${threadsAccountId} → ${angle.id}`);
     if (forced) console.log(`[AutoPost] 3案：切り口を指定 account=${threadsAccountId} → ${forced.id}`);
     if (preferredAngles.length) console.log(`[AutoPost] 希望の型を優先 userId=${userId} ${preferredAngles.join('/')} → ${angle.id}`);
     if (excludeOutcomeAngles) console.log(`[AutoPost] 健康系のお店のため結果を語る切り口を除外 userId=${userId}`);
@@ -998,8 +1002,17 @@ async function generateAutoPost(
         const { checkAngle, angleRetryHint } = await import('../shared/angleGuard');
         const ac = checkAngle(angle.id, naturalMain);
         if (!ac.ok) {
-          if (lastAttempt) {
+          // ★効果・結果の言い切り（逆効果・意味ない・体は変わる 等）は、最後の作り直しでも公開しない。
+          //   型が崩れた程度なら枠を守って公開するが、健康系で誤情報と判定される表現は
+          //   枠が空く方がまし（2026-09-24 試験用の切り口の見本で出たため）。
+          const riskyClaim = /効果・結果の言い切り/.test(ac.reason ?? '');
+          if (lastAttempt && !riskyClaim) {
             console.log(`[AutoPost] angleGuard: ${ac.reason} だが最後の作り直しのため公開へ userId=${userId}`);
+          } else if (lastAttempt && riskyClaim) {
+            console.warn(`[AutoPost] angleGuard: ${ac.reason} → 最後の作り直しでも公開しない（枠は空ける） userId=${userId}`);
+            noteReject('angleGuard', userId, threadsAccountId, postingTimeIndex,
+              angleRetryHint(ac, angle.label), { detail: `${angle.label}：${ac.reason}` });
+            return false;
           } else {
             console.warn(`[AutoPost] angleGuard: ${ac.reason} → 作り直し userId=${userId} projectId=${project.id}`);
             noteReject('angleGuard', userId, threadsAccountId, postingTimeIndex,
@@ -1818,3 +1831,6 @@ export async function generateReplacementPost(userId: number, canceledPostId: nu
   return ok;
 }
 
+
+/** 運用スクリプト用（試験用の切り口の見本を、公開せずに作って確かめる）。本番の処理からは使わない */
+export { generateAutoPost as _generateAutoPostForOps };

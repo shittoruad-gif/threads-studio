@@ -156,11 +156,83 @@ export const PERSONAL_EXTRA_ANGLES: PostAngle[] = [
   },
 ];
 
+/**
+ * 勉強会の型を試す「試験用の切り口」（2026-09-24）。
+ *
+ * 三上様「ムーブアクトと株式会社しっとるのアカウントは私のアカウントになるので、
+ * いろいろ試してみてください。明らかに危ないのは絶対やめてください」。
+ * スレッズ集客勉強会（全28回）で教わったのに、アプリにまだ無かった型だけを入れる
+ * （docs/study-sessions/reflection-check.md で「入っていない」と判定したもの）。
+ *
+ * ★試すのは書き方だけ。本数・誘導・安全の決まりは一切ゆるめない。
+ *   健康表現ガード・作り話の禁止・いいね/フォローの直接誘導の禁止はすべてそのまま効く。
+ * ★三上様のアカウント（STUDY_EXPERIMENT_USER_IDS）でだけ使う。結果が出たら
+ *   伸びたものだけ全体の切り口へ移す。
+ */
+export const STUDY_EXPERIMENT_ANGLES: PostAngle[] = [
+  {
+    id: 'future_worry',
+    label: '未来の不安（試験）',
+    hint: 'ターゲットが「このままだと数年後こうなるかも」と薄々感じている未来の一場面を、1行目で地の文として描く'
+      + '（方向性の例：家族と出かけた先で自分だけ座って待っている）。そのあと、今から変えられることを1つだけ示して締める。'
+      + '★健康系のお店では病名・病気の悪化・「放っておくと危ない」のような医療的な脅しは書かない。日常生活の困りごとの範囲にとどめる。'
+      + '数字や統計は作らない。疑問形（〜していませんか？）にしない。'
+      + '★健康系のお店では、他の施術・方法（揉みほぐし・湿布・マッサージ・薬など）を否定・批判しない。「体が変わる」「繰り返す」「逆効果」「意味がない」など、結果や効果を言い切らない。',
+  },
+  {
+    id: 'odd_feeling',
+    label: '日常の違和感（試験）',
+    hint: 'ターゲットが日常でふと感じている小さな違和感（「なんか前と違う」と思う瞬間）を1つだけ、時間・場所・動作まで具体的に地の文で描く。'
+      + 'そのあと、その違和感の正体を一言で言い当て、専門家としての見方を1つ添えて締める。大げさにしない。疑問形にしない。効果の断定はしない。'
+      + '★健康系のお店では、他の施術・方法（揉みほぐし・湿布・マッサージ・薬など）を否定・批判しない。「体が変わる」「繰り返す」「逆効果」「意味がない」など、結果や効果を言い切らない。',
+  },
+  {
+    id: 'contrast',
+    label: '行動の対比（試験）',
+    hint: '「〇〇な人は、〜する。△△な人は、〜する。」の形で、ターゲットの中にいる2種類の人の、日常の小さな行動の違いを対比して見せる。'
+      + 'どちらかを見下したり責めたりしない。最後にこの店の考え方を一言で添える。事実・数字・結果を作らない。'
+      + '★健康系のお店では、他の施術・方法（揉みほぐし・湿布・マッサージ・薬など）を否定・批判しない。「体が変わる」「繰り返す」「逆効果」「意味がない」など、結果や効果を言い切らない。',
+  },
+  {
+    id: 'insider',
+    label: '分かる人には分かる（試験）',
+    hint: 'ターゲットにしか分からない、ごく細かい「あるある」の瞬間を1つだけ書き、「分かる人には分かる」と感じさせる。'
+      + '一般の人に伝わらなくてよい。業種やターゲットの間で自然に使う言葉を1つ入れてよい。売り込みはしない。'
+      + '★健康系のお店では、他の施術・方法（揉みほぐし・湿布・マッサージ・薬など）を否定・批判しない。「体が変わる」「繰り返す」「逆効果」「意味がない」など、結果や効果を言い切らない。',
+  },
+  {
+    id: 'warning',
+    label: '気をつけて（試験）',
+    hint: '日常のよくある習慣・動作のうち、ターゲットがついやってしまうものを1つ取り上げ、「〜している人は、気をつけて」の短い一言で締める。'
+      + 'なぜ気をつけた方がよいかは一言で言い切る。'
+      + '★健康系のお店では病名・症状の悪化・受診が必要などの医療的な警告はしない。「疲れが抜けにくい」「姿勢が崩れやすい」程度の日常の言葉にとどめる。怖がらせすぎない。'
+      + '★健康系のお店では、他の施術・方法（揉みほぐし・湿布・マッサージ・薬など）を否定・批判しない。「体が変わる」「繰り返す」「逆効果」「意味がない」など、結果や効果を言い切らない。',
+  },
+  {
+    id: 'dialogue',
+    label: '会話でオチ（試験）',
+    hint: '鍵かっこの短いやりとり（2〜4往復）で書く。お客様からよく言われる一言→店主の返し→最後にちょっと笑える、または腑に落ちるオチ。'
+      + '★特定のお客様の実話として書かない（「よく言われる」「こんなやりとりがよくある」の形にする）。数字・効果・実績は入れない。会話の中で売り込まない。'
+      + '★健康系のお店では、他の施術・方法（揉みほぐし・湿布・マッサージ・薬など）を否定・批判しない。「体が変わる」「繰り返す」「逆効果」「意味がない」など、結果や効果を言い切らない。',
+  },
+];
+
+/** 試験用の切り口を使うユーザー（三上様のアカウント＝Moveact 2店と株式会社しっとる） */
+export const STUDY_EXPERIMENT_USER_IDS: readonly number[] = [78];
+export const isStudyExperimentUser = (userId: number | null | undefined): boolean =>
+  userId != null && STUDY_EXPERIMENT_USER_IDS.includes(Number(userId));
+
+/** 試験中は、個人モード専用だった「失敗談」「持論」も店舗で試す */
+const STUDY_EXPERIMENT_EXTRA_IDS: readonly string[] = ['failure_story', 'opinion'];
+
+/** 試験用の切り口が出る割合（全体の約半分。比べられるだけの本数を早く集める） */
+export const STUDY_EXPERIMENT_SHARE = 0.5;
+
 /** 表示用だけの切り口（自動の選択には使わない） */
 const LABEL_ONLY_ANGLES: PostAngle[] = [
   { id: 'meta_ai_call', label: 'Meta AI呼びかけ', hint: '' },
 ];
-const ANGLE_BY_ID = new Map([...POST_ANGLES, ...PERSONAL_EXTRA_ANGLES, ...LABEL_ONLY_ANGLES].map((a) => [a.id, a]));
+const ANGLE_BY_ID = new Map([...POST_ANGLES, ...PERSONAL_EXTRA_ANGLES, ...STUDY_EXPERIMENT_ANGLES, ...LABEL_ONLY_ANGLES].map((a) => [a.id, a]));
 
 export function getAngle(id: string | null | undefined): PostAngle | undefined {
   if (!id) return undefined;
@@ -266,9 +338,23 @@ export function pickAngle(
   perf?: AnglePerformance,
   now: number = Date.now(),
   mode: string = 'store',
-  opts: { excludeOutcomeAngles?: boolean; preferredAngles?: readonly string[]; recentAngles?: readonly string[] } = {},
+  opts: { excludeOutcomeAngles?: boolean; preferredAngles?: readonly string[]; recentAngles?: readonly string[]; studyExperiment?: boolean } = {},
 ): PostAngle {
   let pool = activeAngles(now, mode);
+  // ★試験用の切り口（三上様のアカウントだけ）。勉強会の型を足して比べる。
+  const experimentIds = new Set<string>();
+  if (opts.studyExperiment) {
+    for (const a of STUDY_EXPERIMENT_ANGLES) experimentIds.add(a.id);
+    // ★健康系のお店では「失敗談」「持論」は試さない。見本で「湿布は逆効果かも」
+    //   「揉みほぐしでは意味ない」「根本から見ないと繰り返します」が出た（2026-09-24）。
+    if (!opts.excludeOutcomeAngles) for (const id of STUDY_EXPERIMENT_EXTRA_IDS) experimentIds.add(id);
+    for (const id of Array.from(experimentIds)) {
+      if (!pool.some((a) => a.id === id)) {
+        const a = ANGLE_BY_ID.get(id);
+        if (a) pool = [...pool, a];
+      }
+    }
+  }
   // ★はじめの設定で選んだ「多めに作りたい型」の切り口は、集中検証期間で候補が絞られていても必ず候補に入れる
   //   （お客様の希望が実験より優先。2026-09-08）
   const preferred = new Set((opts.preferredAngles ?? []).filter((id) => !(opts.excludeOutcomeAngles && OUTCOME_RISK_ANGLES.includes(id))));
@@ -305,7 +391,16 @@ export function pickAngle(
   const prefSum = pool.reduce((sum, a, i) => sum + (preferred.has(a.id) ? base[i] : 0), 0);
   const otherSum = pool.reduce((sum, a, i) => sum + (preferred.has(a.id) ? 0 : base[i]), 0);
   const scale = prefSum > 0 && otherSum > 0 ? (PREFERRED_SHARE / (1 - PREFERRED_SHARE)) * (otherSum / prefSum) : 1;
-  const weights = pool.map((a, i) => (preferred.has(a.id) ? base[i] * Math.max(1, scale) : base[i]));
+  let weights = pool.map((a, i) => (preferred.has(a.id) ? base[i] * Math.max(1, scale) : base[i]));
+  // ★試験中は、試験用の切り口が合計で約半分になるように重みを合わせる
+  if (experimentIds.size > 0) {
+    const expSum = pool.reduce((sum, a, i) => sum + (experimentIds.has(a.id) ? weights[i] : 0), 0);
+    const restSum = pool.reduce((sum, a, i) => sum + (experimentIds.has(a.id) ? 0 : weights[i]), 0);
+    if (expSum > 0 && restSum > 0) {
+      const k = (STUDY_EXPERIMENT_SHARE / (1 - STUDY_EXPERIMENT_SHARE)) * (restSum / expSum);
+      weights = pool.map((a, i) => (experimentIds.has(a.id) ? weights[i] * k : weights[i]));
+    }
+  }
   const total = weights.reduce((sum, w) => sum + w, 0);
   let r = random() * total;
   for (let i = 0; i < pool.length; i++) {
