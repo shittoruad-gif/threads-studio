@@ -442,5 +442,13 @@ export function initDailyOpsSchedulers(): void {
     const { runEveningApprovalReminderJob } = await import("./awaitingSlideJob");
     await runTrackedJob("evening_approval_reminder", runEveningApprovalReminderJob);
   });
+  // 20:30 JST = 11:30 UTC — 見送りが続くお客様の徹底フォロー（2026-09-24 三上様指示）。
+  //   共通点・理由をまとめ、ホームページから足す材料の案を作って三上様のLINEへ（押したものだけ反映）。
+  //   夜に届けるのは、翌朝6時の生成までに「足す」を押せるようにするため。
+  cron.schedule("30 11 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runDeclineFollowupJob } = await import("./declineFollowup");
+    await runTrackedJob("decline_followup", runDeclineFollowupJob);
+  });
   console.log("[DailyOps] Schedulers initialized (analytics 7:00 / approval 8:00 / next-action 8:30 / onboarding-mail 9:00 / line-nudge 9:10 / ops-digest 9:30 / comments 8:20-20:20 JST)");
 }

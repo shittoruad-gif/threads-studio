@@ -3848,6 +3848,27 @@ ${input.commentText}
     // ==================== User Management (Admin Only) ====================
     // Get all users (admin only)
     // ── お客様からのご質問（自動応答の記録・担当者返信・よくある質問への反映）──
+    // 見送りが続くお客様（直近7日に3回以上）と、足す材料の案の状態（2026-09-24・朝の点検で使う）
+    repeatDecliners: adminProcedure
+      .query(async () => {
+        const { listRepeatDecliners } = await import('./declineFollowup');
+        const list = await listRepeatDecliners();
+        const database = await db.getDb();
+        const out: any[] = [];
+        for (const t of list) {
+          let latest: any = null;
+          if (database) {
+            const { sql } = await import('drizzle-orm');
+            const rows: any = await database.execute(sql`
+              SELECT id, status, sourceUrl, createdAt FROM materialProposals
+              WHERE threadsAccountId = ${t.accountId} ORDER BY id DESC LIMIT 1`);
+            latest = (rows as any)[0]?.[0] ?? null;
+          }
+          out.push({ ...t, latestProposal: latest });
+        }
+        return out;
+      }),
+
     listQuestions: adminProcedure
       .input(z.object({ needsHumanOnly: z.boolean().optional(), limit: z.number().min(1).max(500).optional() }).optional())
       .query(async ({ input }) => {

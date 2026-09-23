@@ -95,6 +95,20 @@ async function main() {
   }
   if (waiting.length === 0) console.log('  なし');
 
+  // ── 2.5 見送りが続いているお客様（2026-09-24 三上様指示「何度も却下しているところは徹底的にフォロー」）
+  try {
+    const rd = (await get('admin.repeatDecliners')) || [];
+    console.log(`\n■ ★見送りが続いているお客様（直近7日に3回以上）: ${rd.length}件`);
+    const ST = { pending: '足す案を三上様のLINEへ送付ずみ（判断待ち）', applied: '足した', skipped: '見送り', undone: '元に戻した', no_url: '★ホームページ未登録→夜間整備で検索して案を作る', no_new: 'HPに新しい材料なし→先生に直接伺う段階' };
+    for (const t of rd) {
+      const p = t.latestProposal;
+      console.log(`  @${t.username}（${t.userName}） 見送り${t.declines}回／公開${t.published}件 → ${p ? (ST[p.status] || p.status) : '20:30のフォローで案を作る'}`);
+    }
+    if (rd.length === 0) console.log('  なし');
+  } catch (e) {
+    console.log(`\n■ 見送りが続いているお客様: 取得できませんでした（${String(e).slice(0, 80)}）`);
+  }
+
   // ── 3. 直近のご質問（自動応答が答えられているか）
   const recent = await get('admin.listQuestions', { limit: 30 });
   const rq = recent?.questions || [];

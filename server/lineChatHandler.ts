@@ -2154,6 +2154,20 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       [...moreBtn, ...MENU_HINT].slice(0, 13),
     )];
   }
+  // ── 見送りが続くお客様への「足す材料」の案（三上様だけが押せる・2026-09-24）──
+  if (q.adm === "mp" && q.id && q.v) {
+    // ★管理者以外は何もしない（お客様のトークにこのボタンは出ないが、念のため）
+    if ((user as any).role !== "admin") return [textWithQuick("この操作はできません。", MENU_HINT)];
+    const v = q.v === "apply" || q.v === "skip" || q.v === "undo" ? q.v : null;
+    if (!v) return [textWithQuick("うまく受け取れませんでした。", MENU_HINT)];
+    const { decideProposal } = await import("./declineFollowup");
+    const msg = await decideProposal(Number(q.id), v, Number(user.id));
+    const quick = v === "apply" && msg.startsWith("お店の情報に")
+      ? [{ label: "元に戻す", data: `adm=mp&id=${q.id}&v=undo` }, ...MENU_HINT]
+      : MENU_HINT;
+    return [textWithQuick(msg, quick)];
+  }
+
   // ── 3案を見送った理由（2026-09-24 三上様指示）──
   if (q.a === "skipwhy" && q.r) {
     const { isSkipReasonCode, skipReasonThanks } = await import("@shared/declinedPatterns");
@@ -2216,9 +2230,25 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const done = "この投稿は見送りにしました。明日の投稿はまた新しく作ります。\n（見送った投稿の書き方は、これから避けるようにします）";
     // ★「代わりを作る」（2026-09-10 三上様指示）：見送り＝その日の1件が減るので、別の下書きを同じ枠に作れるようにする
     const alt = { label: "代わりを作る", data: `a=alt&i=${q.i}${q.o ? "&o=1" : ""}` };
-    const undo = [alt, { label: "取り消す", data: `a=undo&i=${q.i}` }, ...MENU_HINT];
-    if (q.o) return replyOneWaiting(user.id, done + "\n（代わりの投稿がほしい場合は「代わりを作る」、間違えた場合は「取り消す」を押してください）", [alt]);
-    return [textWithQuick(done + "\n\n別の投稿がほしい場合は「代わりを作る」を押してください（1分ほどで届きます）。\n間違えて押した場合は「取り消す」で元に戻せます。", undo)];
+    // ★見送りが続いている方には、ふつうの投稿でも理由をお聞きする（2026-09-24 三上様指示
+    //   「何度も却下しているところは徹底的にフォロー」）。直近7日で3回目から。押さなくてもよい。
+    let reasonButtons: Array<{ label: string; data: string }> = [];
+    let reasonAsk = "";
+    try {
+      const accId = Number((post as any).threadsAccountId ?? 0);
+      const { countRecentDeclines } = await import("./declineFollowup");
+      const { FOLLOWUP_MIN_DECLINES } = await import("@shared/declineFollowup");
+      if (accId && (await countRecentDeclines(accId)) >= FOLLOWUP_MIN_DECLINES) {
+        const { SKIP_REASONS, SKIP_REASON_QUESTION } = await import("@shared/declinedPatterns");
+        reasonButtons = (Object.keys(SKIP_REASONS) as Array<keyof typeof SKIP_REASONS>).map((code) => ({
+          label: SKIP_REASONS[code].label, data: `a=skipwhy&i=${q.i}&r=${code}`,
+        }));
+        reasonAsk = "\n\n" + SKIP_REASON_QUESTION;
+      }
+    } catch { /* 数えられなくても見送り自体は済ませる */ }
+    const undo = [...reasonButtons, alt, { label: "取り消す", data: `a=undo&i=${q.i}` }, ...MENU_HINT];
+    if (q.o) return replyOneWaiting(user.id, done + reasonAsk + "\n（代わりの投稿がほしい場合は「代わりを作る」、間違えた場合は「取り消す」を押してください）", [...reasonButtons, alt]);
+    return [textWithQuick(done + reasonAsk + "\n\n別の投稿がほしい場合は「代わりを作る」を押してください（1分ほどで届きます）。\n間違えて押した場合は「取り消す」で元に戻せます。", undo)];
   }
   // ★見送った投稿の代わりを作る（同じアカウント・同じ枠。見送った切り口は避ける）
   if (q.a === "alt" && q.i) {

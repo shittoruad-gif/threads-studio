@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint, tinyint, uniqueIndex, index, date } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint, tinyint, uniqueIndex, index, date, mediumtext } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -1044,3 +1044,26 @@ export const postSkipFeedback = mysqlTable("postSkipFeedback", {
 ]);
 
 export type PostSkipFeedback = typeof postSkipFeedback.$inferSelect;
+
+/**
+ * 見送りが続くお客様への「足す材料」の案（2026-09-24 三上様指示・0096）。
+ * 三上様がLINEで「足す」を押したものだけ反映する（server/declineFollowup.ts）。
+ */
+export const materialProposals = mysqlTable("materialProposals", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  projectId: varchar("projectId", { length: 50 }).notNull(),
+  threadsAccountId: int("threadsAccountId").notNull(),
+  sourceUrl: varchar("sourceUrl", { length: 500 }),
+  proposal: text("proposal"),
+  beforeSnapshot: mediumtext("beforeSnapshot"),
+  status: varchar("status", { length: 20 }).default("pending").notNull(),
+  declines: int("declines").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  decidedAt: timestamp("decidedAt"),
+  decidedBy: int("decidedBy"),
+}, (table) => [
+  index("idx_materialProposals_project").on(table.projectId, table.createdAt),
+]);
+
+export type MaterialProposalRow = typeof materialProposals.$inferSelect;
