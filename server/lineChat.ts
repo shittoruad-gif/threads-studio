@@ -223,6 +223,8 @@ const PENDING_TEXT_INPUT: Record<string, (q: Record<string, string>) => boolean>
   pending_material: (q) => q.c === "addproof",
   // 理想の投稿（文体のお手本）の入力待ち
   ideal_posts: (q) => q.c === "ideal",
+  // 3案を見送った理由を文章で待っている状態。理由のボタンをもう一度押されたときは消さない
+  skip_reason: (q) => q.a === "skipwhy",
   // 「はじめの設定」の最初、何のための発信かを選んでいただくのを待っている状態。
   // 選ぶボタン（c=start）と、もう一度「はじめの設定」を押されたときは消さない。
   counseling_mode: (q) => q.c === "start" || q.m === "setup",

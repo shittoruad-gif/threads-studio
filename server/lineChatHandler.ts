@@ -2154,6 +2154,30 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       [...moreBtn, ...MENU_HINT].slice(0, 13),
     )];
   }
+  // ── 3案を見送った理由（2026-09-24 三上様指示）──
+  if (q.a === "skipwhy" && q.r) {
+    const { isSkipReasonCode, skipReasonThanks } = await import("@shared/declinedPatterns");
+    if (!isSkipReasonCode(q.r)) return [textWithQuick("うまく受け取れませんでした。", MENU_HINT)];
+    const post = q.i ? await ownedPost(user.id, Number(q.i)) : null;
+    const accountId = Number((post as any)?.threadsAccountId ?? 0);
+    const groupId = q.g ? String(q.g) : ((post as any)?.choiceGroupId ?? null);
+    if (!accountId) return [textWithQuick("その投稿が見つかりませんでした。", MENU_HINT)];
+    // 文章で伝えていただく場合は、次に届く文章を理由として受け取る
+    if (q.r === "text") {
+      await db.setLineChatState(lineUserId, "skip_reason", JSON.stringify({ a: accountId, g: groupId, i: Number(q.i) || null }));
+      return [textWithQuick(
+        "どこが違ったか、そのまま文章で送ってください。\n" +
+        "（例：「11年」を毎回書かないでほしい／マッサージを否定する言い方はしたくない／もっと症状の解説がいい）\n" +
+        "やめる場合は「やめる」と送ってください。",
+        [{ label: "やめる", data: "m=cancel" }],
+      )];
+    }
+    try {
+      await db.createSkipFeedback({ userId: user.id, threadsAccountId: accountId, choiceGroupId: groupId, postId: Number(q.i) || null, reason: q.r });
+    } catch (e) { console.error("[LineChat] 見送りの理由を記録できませんでした:", e); }
+    await notifySkipReason(user, accountId, q.r, null);
+    return [textWithQuick(skipReasonThanks(q.r), MENU_HINT)];
+  }
   if (q.a === "skip" && q.i) {
     const post = await ownedPost(user.id, Number(q.i));
     if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
@@ -2169,9 +2193,18 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       }
       console.log(`[LineChat] 3案：本日ぶんを見送り（${n}件・group=${skipGroupId}）`);
       const { CHOICE_ALL_SKIPPED_TEXT } = await import("@shared/threeChoice");
+      // ★見送った理由を、その場で1つだけお聞きする（2026-09-24 三上様指示）。
+      //   「何がその見送る原因になったのかを、質問もしくはどのような形でもいいので見つける」。
+      //   押されなくても、翌朝の生成が見送った投稿の共通点を自動で読み取って避ける
+      //   （shared/declinedPatterns.ts）。押していただければ、それを最優先で反映する。
+      const { SKIP_REASONS, SKIP_REASON_QUESTION } = await import("@shared/declinedPatterns");
+      const reasonButtons = (Object.keys(SKIP_REASONS) as Array<keyof typeof SKIP_REASONS>).map((code) => ({
+        label: SKIP_REASONS[code].label,
+        data: `a=skipwhy&g=${encodeURIComponent(skipGroupId)}&i=${q.i}&r=${code}`,
+      }));
       return [textWithQuick(
-        CHOICE_ALL_SKIPPED_TEXT + "\n\n間違えて押した場合は「取り消す」で元に戻せます。",
-        [{ label: "取り消す", data: `a=undo&i=${q.i}` }, ...MENU_HINT],
+        CHOICE_ALL_SKIPPED_TEXT + "\n\n" + SKIP_REASON_QUESTION + "\n\n間違えて押した場合は「取り消す」で元に戻せます。",
+        [...reasonButtons, { label: "取り消す", data: `a=undo&i=${q.i}` }],
       )];
     }
 
@@ -2933,7 +2966,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   // ★入力待ちの途中で「やめる」と打たれたら、その言葉を内容として使わずに抜ける。
   //   （NGワード待ち・書き直し待ちでこれが無く、「やめる」がそのまま
   //     NGワードや書き直し指示として使われてしまっていた）
-  if ((st?.state === "ngword" || st?.state === "rewrite_free" || st?.state === "self_edit" || st?.state === "set_line_url" || st?.state === "set_call_focus" || st?.state === "ideal_posts") &&
+  if ((st?.state === "ngword" || st?.state === "rewrite_free" || st?.state === "self_edit" || st?.state === "set_line_url" || st?.state === "set_call_focus" || st?.state === "ideal_posts" || st?.state === "skip_reason") &&
       /^(やめる|中止|キャンセル|戻る|終わり|終了)$/.test(text.trim())) {
     await db.clearLineChatState(lineUserId);
     return [textWithQuick("わかりました。中止しました。", MENU_HINT)];
@@ -3043,6 +3076,21 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
       postId = Number(p.i); one = !!p.o;
     } catch { postId = Number(st.payload); }
     return rewritePost(user.id, postId, text.slice(0, 200), one);
+  }
+  // ── 3案を見送った理由を、文章で受け取る（2026-09-24）──
+  if (st?.state === "skip_reason" && st.payload) {
+    let p: { a?: number; g?: string | null; i?: number | null } = {};
+    try { p = JSON.parse(String(st.payload)); } catch { p = {}; }
+    await db.clearLineChatState(lineUserId);
+    const reasonText = text.trim().slice(0, 1000);
+    if (p.a && reasonText) {
+      try {
+        await db.createSkipFeedback({ userId: user.id, threadsAccountId: Number(p.a), choiceGroupId: p.g ?? null, postId: p.i ?? null, reason: "text", reasonText });
+      } catch (e) { console.error("[LineChat] 見送りの理由（文章）を記録できませんでした:", e); }
+      await notifySkipReason(user, Number(p.a), "text", reasonText);
+    }
+    const { skipReasonThanks } = await import("@shared/declinedPatterns");
+    return [textWithQuick(skipReasonThanks("text", reasonText), MENU_HINT)];
   }
   if (st?.state === "ngword") {
     // ★入力待ちのあいだに、言葉ではなく文章（投稿文・別のご用件）が届くことがある。
@@ -3790,3 +3838,21 @@ async function forwardToStaff(userId: number, lineUserId: string, message: strin
   )];
 }
 
+
+
+/**
+ * 3案を見送った理由を運営に知らせる（2026-09-24）。
+ * 三上様が「なぜ見送られたか」を朝を待たずに分かるように。失敗しても返事は止めない。
+ */
+async function notifySkipReason(user: any, accountId: number, reason: string, reasonText: string | null): Promise<void> {
+  try {
+    const { SKIP_REASONS, isSkipReasonCode } = await import("@shared/declinedPatterns");
+    const label = isSkipReasonCode(reason) ? SKIP_REASONS[reason].label : reason;
+    const acct: any = await db.getThreadsAccountById(accountId).catch(() => null);
+    const { notifyOwner } = await import("./_core/notification");
+    await notifyOwner({
+      title: `3案の見送り理由：${user?.name ?? ""}様`,
+      content: `@${acct?.threadsUsername ?? accountId}（user ${user?.id}）\n理由：${label}${reasonText ? `\n「${reasonText.slice(0, 300)}」` : ""}\n翌朝の生成で反映します（shared/declinedPatterns.ts）。`,
+    });
+  } catch (e) { console.warn("[LineChat] 見送り理由の通知に失敗:", (e as Error)?.message); }
+}

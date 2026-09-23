@@ -4028,6 +4028,53 @@ export async function cancelChoiceSiblings(choiceGroupId: string, keepPostId: nu
   return Number((rows as any)?.[0]?.affectedRows ?? 0);
 }
 
+/**
+ * 3案を見送った理由を残す（2026-09-24 三上様指示・0095）。
+ * 記録に失敗してもお客様への返事は止めない（呼び出し側で握りつぶす）。
+ */
+export async function createSkipFeedback(row: {
+  userId: number; threadsAccountId: number; choiceGroupId?: string | null; postId?: number | null;
+  reason: string; reasonText?: string | null;
+}): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  await database.execute(sql`
+    INSERT INTO postSkipFeedback (userId, threadsAccountId, choiceGroupId, postId, reason, reasonText)
+    VALUES (${row.userId}, ${row.threadsAccountId}, ${row.choiceGroupId ?? null}, ${row.postId ?? null},
+            ${row.reason.slice(0, 20)}, ${row.reasonText ? row.reasonText.slice(0, 2000) : null})`);
+}
+
+/** 直近 days 日に届いた見送りの理由（新しい順） */
+export async function getRecentSkipFeedback(accountId: number, days: number = 14): Promise<Array<{ reason: string; reasonText: string | null; createdAt: string }>> {
+  const database = await getDb();
+  if (!database) return [];
+  const rows: any = await database.execute(sql`
+    SELECT reason, reasonText, createdAt FROM postSkipFeedback
+    WHERE threadsAccountId = ${accountId} AND createdAt >= DATE_SUB(NOW(), INTERVAL ${sql.raw(String(Math.max(1, Math.floor(days))))} DAY)
+    ORDER BY id DESC LIMIT 10`);
+  return ((rows as any)[0] ?? []) as any[];
+}
+
+/**
+ * オーナーが見送った投稿の本文（新しい順）。見送りの共通点を読み取るために使う。
+ * ・ご本人が「見送る」「✕」を押したもの（clientRating='bad'）
+ * ・3案をまとめて見送ったもの（押した1枚以外は評価が付かないので、理由の文で拾う）
+ * ★仕組みの見送り（日またぎ・3案で別の案が選ばれた）は含めない。ご本人の意思ではないため。
+ */
+export async function getRecentDeclinedContents(accountId: number, days: number = 21, limit: number = 10): Promise<string[]> {
+  const database = await getDb();
+  if (!database) return [];
+  const rows: any = await database.execute(sql`
+    SELECT postContent FROM scheduledPosts
+    WHERE threadsAccountId = ${accountId} AND status = 'canceled'
+      AND postContent IS NOT NULL AND postContent <> ''
+      AND (angle IS NULL OR angle NOT IN ('pinned','meta_ai_call'))
+      AND (clientRating = 'bad' OR errorMessage = ${CHOICE_ALL_SKIPPED_REASON})
+      AND createdAt >= DATE_SUB(NOW(), INTERVAL ${sql.raw(String(Math.max(1, Math.floor(days))))} DAY)
+    ORDER BY id DESC LIMIT ${sql.raw(String(Math.max(1, Math.floor(limit))))}`);
+  return (((rows as any)[0] ?? []) as any[]).map((r) => String(r.postContent || "")).filter(Boolean);
+}
+
 /** 3案をまとめて見送る（「見送る」＝本日は公開しない。三上様のご指示の文どおり） */
 export const CHOICE_ALL_SKIPPED_REASON = '3案すべてを見送り（本日は公開しない）';
 

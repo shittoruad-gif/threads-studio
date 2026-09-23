@@ -1024,3 +1024,23 @@ export const postRejectLog = mysqlTable("postRejectLog", {
 ]);
 
 export type PostRejectLog = typeof postRejectLog.$inferSelect;
+
+/**
+ * 3案を見送ったときに、公式LINEでお聞きした理由（2026-09-24 三上様指示・0095）。
+ * 翌朝の生成が読み、同じ理由で見送られない投稿を作る（shared/declinedPatterns.ts）。
+ */
+export const postSkipFeedback = mysqlTable("postSkipFeedback", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  threadsAccountId: int("threadsAccountId").notNull(),
+  choiceGroupId: varchar("choiceGroupId", { length: 40 }),
+  postId: int("postId"),
+  // same / claim / tone / length / today / text
+  reason: varchar("reason", { length: 20 }).notNull(),
+  reasonText: text("reasonText"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  index("idx_postSkipFeedback_account").on(table.threadsAccountId, table.createdAt),
+]);
+
+export type PostSkipFeedback = typeof postSkipFeedback.$inferSelect;

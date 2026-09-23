@@ -16,6 +16,7 @@ import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
 import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM } from "../shared/recruitingPost";
+import { touchesDeclined, filterStyleSamples, normalizeForPatterns } from "../shared/declinedPatterns";
 import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
 import { stripRawUrls } from "../shared/sanitize";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
@@ -631,9 +632,64 @@ async function generateAutoPost(
     //    1. 複数行あるときは日替わりで1つだけにする（悩み・強みと同じ扱い）
     //    2. 直近の投稿がすでにその言い回しを使っているなら、今日は渡さない
     //       （渡さなければ、AIはN1顧客像や強みなど別の材料から書くしかなくなる）
+    // ★オーナーが続けて見送った投稿の共通点と、お聞きした見送りの理由（2026-09-24 三上様指示）。
+    //
+    //   香取様（acc21）は 9/23 に初めて3案をお送りしたが、3案とも見送られた。3案とも
+    //   「揉むだけでは根本は変わりません」「11年」で、それまで見送られた投稿と同じ主張だった。
+    //   出どころは「信条」「実績」「文体のお手本」。上の9/21の直しは「直近と同じ言い回しなら渡さない」
+    //   だったため、AIが「揉むだけ」「揉んでも」と言い換えると素通りしていた。
+    //
+    //   見送られた投稿どうしに共通する言い回しを取り出し（shared/declinedPatterns.ts）、
+    //    1. それに触れる信条・実績の行と、文体のお手本の文は、今日は渡さない
+    //    2. プロンプトに「この言い回しは使わない・言い換えも不可」と書く
+    //    3. 出来上がった下書きにその言い回しが残っていたら作り直す（最後の作り直しでは止めない）
+    //   お聞きした理由（公式LINEのボタン・文章）は、それより優先して指示に入れる。
+    //   見送りが1本以下・共通点が無い方には何もしない（ふつうのお客様の生成は変わらない）。
+    let declinedPatterns: import('../shared/declinedPatterns').DeclinedPatterns | null = null;
+    let declinedNote = '';
+    let dropBeliefProof = false;
+    try {
+      const dp = await import('../shared/declinedPatterns');
+      const declinedTexts = await db.getRecentDeclinedContents(threadsAccountId, 21, 10).catch(() => [] as string[]);
+      const reasons = (await db.getRecentSkipFeedback(threadsAccountId, 14).catch(() => []))
+        .filter((r: any) => r.reason !== 'today'); // 「今日は出したくないだけ」は中身の信号ではない
+      const pt = dp.extractDeclinedPatterns(declinedTexts, [
+        (project as any).storeName, project.area, (project as any).localTerms,
+      ], {
+        // ご本人が「話したいこと」として登録した欄の言い回しは避けない（お店の主題まで禁止しない）
+        topics: [project.target, project.mainProblem, project.strength, (project as any).usp,
+          (project as any).n1Customer, (project as any).catchphrase, (project as any).customerWords],
+      });
+      if (pt.top.length > 0 || reasons.length > 0) {
+        declinedPatterns = pt;
+        dropBeliefProof = reasons.some((r: any) => r.reason === 'claim');
+        declinedNote = dp.buildDeclinedNote({
+          patterns: pt,
+          reasons,
+          declinedHeads: declinedTexts.slice(0, 3).map((t) => t.split(/\r?\n/).map((l) => l.trim()).find(Boolean) ?? '').filter(Boolean),
+        });
+        console.log(`[AutoPost] 見送りの共通点 account=${threadsAccountId} 見送り${pt.sampleSize}本 → ${pt.top.join(' / ') || 'なし'}${reasons.length ? `／お聞きした理由 ${reasons.map((r: any) => r.reason).join(',')}` : ''}`);
+      }
+    } catch (e) { console.warn(`[AutoPost] 見送りの共通点を読めませんでした account=${threadsAccountId}: ${(e as Error)?.message}`); }
+
     const dropIfRecentlyUsed = (text: string | null | undefined, label: string): string | undefined => {
-      const v = String(text ?? '').trim();
+      let v = String(text ?? '').trim();
       if (!v) return undefined;
+      // ★「言っていることが違う」とお聞きしたら、信条・実績は主張として渡さない
+      if (dropBeliefProof) {
+        console.log(`[AutoPost] ${label}は「言っていることが違う」とお聞きしたため今日は渡さない account=${threadsAccountId}`);
+        return undefined;
+      }
+      // ★見送られた投稿の共通点に触れる行は外してから、日替わりで1つ選ぶ
+      if (declinedPatterns) {
+        const lines = v.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+        const kept = lines.filter((l) => !touchesDeclined(l, declinedPatterns!));
+        if (kept.length < lines.length) {
+          console.log(`[AutoPost] ${label}の${lines.length - kept.length}行は見送られた投稿の共通点に触れるため今日は渡さない account=${threadsAccountId}`);
+        }
+        if (kept.length === 0) return undefined;
+        v = kept.join('\n');
+      }
       const picked = pickRotatingTopic(v, postTypeIndex + purposeIndex) || v;
       if (recentPosts.length > 0 && usedInRecentPosts(picked, recentPosts)) {
         console.log(`[AutoPost] ${label}「${picked.replace(/\s+/g, ' ').slice(0, 30)}」は直近の投稿で使われているため今日は渡さない userId=${userId} projectId=${project.id}`);
@@ -641,6 +697,13 @@ async function generateAutoPost(
       }
       return picked;
     };
+    const styleSamplesForToday: string = (() => {
+      const raw = String((project as any).styleSamples || '');
+      if (!declinedPatterns || !raw) return raw;
+      const f = filterStyleSamples(raw, declinedPatterns);
+      if (f !== raw) console.log(`[AutoPost] 文体のお手本から、見送られた主張に触れる文を外した account=${threadsAccountId}（${raw.length}→${f.length}字）`);
+      return f;
+    })();
     const beliefForToday = dropIfRecentlyUsed((project as any).belief, '信条');
     const proofForToday = dropIfRecentlyUsed(project.proof, '実績');
 
@@ -650,7 +713,8 @@ async function generateAutoPost(
       businessType: project.businessType,
       area: project.area,
       localTerms: approvedLocalTerms(project),
-      styleSamples: (project as any).styleSamples || undefined,
+      // ★文体のお手本は「口調の見本」。見送られた主張に触れる文は今日は渡さない（写されるため）
+      styleSamples: styleSamplesForToday || undefined,
       preferenceNote: editPreferenceNote || undefined,
       target: project.target,
       mainProblem: project.mainProblem,
@@ -730,6 +794,8 @@ async function generateAutoPost(
           + preferenceNote
           // ★切り口の指示は好みの指示のあと（末尾に近いほど守られる。2026-09-18）
           + angleNote
+          // ★オーナーが続けて見送った投稿から分かったこと（2026-09-24）。切り口の指示より後ろ＝より優先
+          + declinedNote
           + (CONVERSATION_POST_TYPES.has(postType) ? CONVERSATION_ENDING_ADDENDUM : '')
           // ★求人（採用）の投稿を、集客と同じ型で書かせない（shared/recruitingPost.ts・2026-09-23）。
           //   プレステージ様は2晩続けて naturalnessReview で3回落ち、枠を捨てていた。
@@ -907,13 +973,27 @@ async function generateAutoPost(
       }
     } catch (e) { console.warn(`[AutoPost] identityGuard skipped: ${(e as Error)?.message}`); }
 
+    // ★オーナーが何度も見送った言い回しが下書きに残っていたら作り直す（2026-09-24）。
+    //   最後の作り直しでは止めない（枠をゼロにしない。承認カードでご本人が判断できる）。
+    if (declinedPatterns && declinedPatterns.top.length > 0 && !lastAttempt) {
+      const norm = normalizeForPatterns(naturalMain);
+      const hit = declinedPatterns.top.find((p) => norm.includes(p));
+      if (hit) {
+        console.warn(`[AutoPost] declinedPhrase:「${hit}」が残っている → 作り直し userId=${userId} account=${threadsAccountId}`);
+        noteReject('declinedPhrase', userId, threadsAccountId, postingTimeIndex,
+          `- 「${hit}」は、オーナーが何度も見送った投稿に出ている言い回し。使わない。言い換えて同じ主張をするのも不可。別の材料（N1顧客像・強み・季節・よくある質問）から書く。`,
+          { detail: hit });
+        return false;
+      }
+    }
+
     // ★自然さの採点（server/naturalnessReview.ts）。正規表現で取れない不自然さの最終関門。
     //   基準未満は公開せず作り直す。採点できないとき（API障害）は止めない。
     try {
       const { reviewNaturalness, NATURALNESS_MIN_SCORE } = await import('./naturalnessReview');
       const rv = await reviewNaturalness(naturalMain, {
         brandVoice, businessType: project.businessType, storeName: (project as any).storeName,
-        styleSamples: (project as any).styleSamples || null, identityHint: identityHint || null,
+        styleSamples: styleSamplesForToday || null, identityHint: identityHint || null,
       });
       // ★最後の作り直しでは3点を通す（2026-09-11）。9/11朝は35枠中19枠が失敗し、その3回目の理由の
       //   半分以上が「3/5」だった（例：「土浦で11年。／早期回復をサポートしています。」）。
