@@ -12,6 +12,27 @@ const templateRoot = path.resolve(import.meta.dirname);
  * ★DATABASE_URL はローカル（localhost / 127.0.0.1）のときだけ渡す。
  *   本番 DB を指した .env でテストを走らせて、本番にテストユーザーを作らないため。
  */
+/**
+ * ★シェルに本番の DATABASE_URL が入ったまま（`eval "$(bash scripts/ops/prod-env.sh DATABASE_URL)"` の後など）
+ *   テストを走らせると、本番にテストユーザーと有料の契約が作られる（2026-09-24 01:06 に11件発生）。
+ *   本番へのトンネルは 127.0.0.1:13308 なので「localhost なら安全」では防げない。ポートまで見る。
+ */
+function isLocalTestDb(url: string): boolean {
+  try {
+    const u = new URL(url);
+    const localHost = u.hostname === "localhost" || u.hostname === "127.0.0.1";
+    return localHost && (u.port === "" || u.port === "3306");
+  } catch {
+    return false;
+  }
+}
+if (process.env.DATABASE_URL && !isLocalTestDb(process.env.DATABASE_URL)) {
+  throw new Error(
+    "[vitest] DATABASE_URL がローカル（localhost:3306）ではありません。本番DBでテストを走らせないため中止します。" +
+      " `unset DATABASE_URL` してから実行してください。",
+  );
+}
+
 function testEnvFromDotenv(): Record<string, string> {
   const out: Record<string, string> = {
     QA_SAFE_MODE: "1",
@@ -30,10 +51,7 @@ function testEnvFromDotenv(): Record<string, string> {
   for (const k of ALLOW) if (vars[k] && !process.env[k]) out[k] = vars[k];
   const dbUrl = vars.DATABASE_URL;
   if (dbUrl && !process.env.DATABASE_URL) {
-    try {
-      const host = new URL(dbUrl).hostname;
-      if (host === "localhost" || host === "127.0.0.1") out.DATABASE_URL = dbUrl;
-    } catch { /* 形が変なら渡さない */ }
+    if (isLocalTestDb(dbUrl)) out.DATABASE_URL = dbUrl;
   }
   return out;
 }
