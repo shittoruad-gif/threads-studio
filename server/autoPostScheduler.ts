@@ -1340,6 +1340,12 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             continue;
           }
           if (eff.autoPostRequireApproval) anyApproval = true;
+          // ★投稿時間の試験（shared/postingTimeTest.ts・2026-09-24 三上様指示）。
+          //   対象アカウントだけ、時間を候補から日替わりで回す。本数・中身は変えない。
+          const { postingTimeTestHours } = await import('../shared/postingTimeTest');
+          const testHours = postingTimeTestHours(account.id);
+          const acctHours = testHours ?? bestHours;
+          if (testHours) console.log(`[AutoPost] 投稿時間の試験 account=${account.id} 今日の時間(JST): ${testHours.slice(0, 3).join(',')}（4件目以降 ${testHours.slice(3).join(',')}）`);
           // 1日の回数（アカウント別の設定をプラン上限で頭打ち）
           let postCount = Math.min(getPostCount(eff.autoPostFrequency), maxPerDay);
           // ★新しいアカウントの慣らし運転（shared/accountRamp.ts）。連携7日未満は1件、14日未満は2件。
@@ -1400,7 +1406,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             // ★自動投稿だけを数える（手動の固定投稿の下書きを「既存」に数えない。2026-09-11 廿日市様）
             const already = await db.countAccountAutoPostsScheduledToday(account.id).catch(() => 0);
             const shortfall = Math.max(0, postCount - already);
-            sameDaySlots = buildSameDaySlots(shortfall, bestHours);
+            sameDaySlots = buildSameDaySlots(shortfall, acctHours);
             todayCount = sameDaySlots.length;
             console.log(
               `[AutoPost] 当日補充 user=${user.id} account=${account.id} 上限${postCount} 既存${already} ` +
@@ -1453,7 +1459,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                   for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
                     ok = await generateAutoPost(
                       user.id, project, typeIdx, purposeIdx, account.id, 0,
-                      true, bestHours, eff.postLength, null,
+                      true, acctHours, eff.postLength, null,
                       lastRejectReason.get(rk) ?? null, attempt === 2, false,
                       { choiceGroupId: groupId, forcedAngleId: CHOICE_ANGLE_IDS[k] },
                     );
@@ -1498,7 +1504,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                 account.id,
                 i,
                 eff.autoPostRequireApproval,
-                bestHours,
+                acctHours,
                 eff.postLength,
                 sameDaySlots ? sameDaySlots[i] : null,
                 hint,
@@ -1532,7 +1538,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                 console.log(`[AutoPost] 保証パス user=${user.id} account=${account.id} slot=${i}（未使用の材料 ${unused.length}件）`);
                 success = await generateAutoPost(
                   user.id, project, typeIdx, purposeIdx, account.id, i,
-                  eff.autoPostRequireApproval, bestHours, eff.postLength,
+                  eff.autoPostRequireApproval, acctHours, eff.postLength,
                   sameDaySlots ? sameDaySlots[i] : null,
                   guaranteeHint, true, true,
                 );
