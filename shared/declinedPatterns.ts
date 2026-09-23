@@ -212,6 +212,33 @@ export function filterStyleSamples(styleSamples: string | null | undefined, patt
   return kept.join("\n---\n");
 }
 
+/**
+ * 「はじめの設定」の答え（counselingResult）から、見送られた主張に触れる項目を外す。
+ * 信条・実績の欄を外しても、ここ（industryMyths・realProofs など）から同じ主張が渡っていたため（2026-09-24）。
+ * 事実そのものは消さない（呼び出し側は、書いてよい事実の照合には元のまま使う）。
+ */
+export function filterCounseling<T extends Record<string, any> | null | undefined>(
+  cr: T,
+  patterns: DeclinedPatterns | null,
+): { value: T; dropped: number } {
+  if (!cr || !patterns || patterns.all.length === 0) return { value: cr, dropped: 0 };
+  const out: Record<string, any> = { ...cr };
+  let dropped = 0;
+  for (const key of ["realProofs", "realEpisodes", "benefitsDaily", "industryMyths", "faq", "menu"]) {
+    const arr = (cr as any)[key];
+    if (!Array.isArray(arr)) continue;
+    const kept = arr.filter((x: unknown) => !touchesDeclined(String(x ?? ""), patterns));
+    dropped += arr.length - kept.length;
+    out[key] = kept;
+  }
+  const origin = (cr as any).originStory;
+  if (typeof origin === "string" && touchesDeclined(origin, patterns)) {
+    out.originStory = origin.split(/\r?\n/).filter((l) => !touchesDeclined(l, patterns)).join("\n");
+    dropped++;
+  }
+  return { value: out as T, dropped };
+}
+
 /** 見送りの理由（公式LINEのボタン） */
 export const SKIP_REASONS = {
   same: { label: "同じような内容ばかり", note: "オーナーから「同じような内容ばかり」と言われている。直近の投稿と違う材料（N1顧客像・強み・季節・よくあるご質問）から書く。同じ主張を言い換えて繰り返さない。" },

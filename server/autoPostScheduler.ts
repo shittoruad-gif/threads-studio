@@ -16,7 +16,7 @@ import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
 import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM } from "../shared/recruitingPost";
-import { touchesDeclined, filterStyleSamples, normalizeForPatterns } from "../shared/declinedPatterns";
+import { touchesDeclined, filterStyleSamples, normalizeForPatterns, filterCounseling } from "../shared/declinedPatterns";
 import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
 import { stripRawUrls } from "../shared/sanitize";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
@@ -704,6 +704,11 @@ async function generateAutoPost(
       if (f !== raw) console.log(`[AutoPost] 文体のお手本から、見送られた主張に触れる文を外した account=${threadsAccountId}（${raw.length}→${f.length}字）`);
       return f;
     })();
+    const counselingForToday: any = (() => {
+      const r = filterCounseling(counselingResult, declinedPatterns);
+      if (r.dropped > 0) console.log(`[AutoPost] はじめの設定の答えから、見送られた主張に触れる${r.dropped}項目を今日は外した account=${threadsAccountId}`);
+      return r.value;
+    })();
     const beliefForToday = dropIfRecentlyUsed((project as any).belief, '信条');
     const proofForToday = dropIfRecentlyUsed(project.proof, '実績');
 
@@ -745,7 +750,12 @@ async function generateAutoPost(
       catchphrase: (project as any).catchphrase || undefined,
       customerWords: (project as any).customerWords || undefined,
       purpose,
-      counseling: counselingResult,
+      // ★「はじめの設定」の答え（counselingResult）にも同じ主張が入っていることがある（2026-09-24）。
+      //   香取様は industryMyths に「痛い場所をマッサージするだけでは良くなりません」、
+      //   realProofs に「整形外科で11年勤務」が入っており、信条・実績の欄を外しても
+      //   こちらの経路から同じ主張がAIに渡っていた。見送りの共通点に触れる項目だけ外す。
+      //   （下の「書いてよい事実」の照合＝scrubPost には元のまま使う。事実そのものは消さない）
+      counseling: counselingForToday,
       useThreadsKnowhow,
       stylePreference,
       ngWords,

@@ -8,7 +8,7 @@
 import { describe, it, expect } from "vitest";
 import {
   extractDeclinedPatterns, touchesDeclined, filterStyleSamples, buildDeclinedNote,
-  protectTokensOf, SKIP_REASONS, SKIP_REASON_QUESTION, skipReasonThanks, isSkipReasonCode,
+  protectTokensOf, filterCounseling, SKIP_REASONS, SKIP_REASON_QUESTION, skipReasonThanks, isSkipReasonCode,
 } from "@shared/declinedPatterns";
 
 // ★このリポジトリは公開なので、お客様の実際の投稿・住所・ご登録内容は入れない。
@@ -82,6 +82,30 @@ describe("見送られた投稿の共通点（香取様と同じ形の架空デ�
 
   it("「長音（ー）」で言葉が切れない（マッサージを拾えていなかった不具合の番人）", () => {
     expect(pt.all.some((p) => p.includes("マッサージ"))).toBe(true);
+  });
+});
+
+describe("はじめの設定の答えからも外す（2026-09-24 追加）", () => {
+  const pt = extractDeclinedPatterns(DECLINED, PROTECT);
+  it("業界の誤解・実績に入っている同じ主張を外し、ほかの項目は残す", () => {
+    const cr = {
+      industryMyths: ["痛い場所をマッサージするだけでは良くなりません。", "昔はマッサージばかりやっていた。"],
+      realProofs: ["整形外科で11年勤務", "学会で11年連続で発表"],
+      realEpisodes: ["小学生が足を捻って我慢していたが、エコーで骨折が見つかった"],
+      faq: ["予約が必要ですか？"],
+      brandVoice: "ですます調",
+    };
+    const r = filterCounseling(cr, pt);
+    expect(r.value.industryMyths).toEqual([]);
+    expect(r.value.realProofs).toEqual([]);
+    expect(r.value.realEpisodes).toHaveLength(1);
+    expect(r.value.faq).toHaveLength(1);
+    expect(r.value.brandVoice).toBe("ですます調");
+    expect(r.dropped).toBe(4);
+  });
+  it("見送りが無ければ何も変えない", () => {
+    const cr = { realProofs: ["整形外科で11年勤務"] };
+    expect(filterCounseling(cr, null).value).toBe(cr);
   });
 });
 
