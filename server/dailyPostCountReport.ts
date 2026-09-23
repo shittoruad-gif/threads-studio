@@ -16,12 +16,21 @@ const FREQ_COUNT: Record<string, number> = { daily: 1, twice_daily: 2, three_dai
 
 export function buildDailyPostCountMessage(
   dateLabel: string,
-  rows: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number; note?: string; carryNote?: string }>,
+  rows: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number; note?: string; carryNote?: string; planMax?: number; perAccount?: boolean }>,
 ): string {
   const lines: string[] = [`昨日の投稿結果（${dateLabel}）`];
   let anyZero = false;
   for (const r of rows) {
-    const head = `・@${r.username}：公開 ${r.posted}件（${r.note ? r.note : `ご契約 1日${r.entitled}件`}）`;
+    // ★「ご契約1日◯件」と書くと、アカウント個別の設定まで契約の話に見える。
+    //   プロ（1日3件）なのに個別設定で1件だった方から「契約が1件になっていますが
+    //   合ってますか？」とお問い合わせがあった（2026-09-23 梅原様）。
+    //   契約の上限と、そのアカウントの設定は分けて書く。
+    const entitledLabel = r.note
+      ? r.note
+      : (r.perAccount && r.planMax && r.planMax > r.entitled)
+        ? `このアカウントの設定 1日${r.entitled}件（ご契約は1日${r.planMax}件まで）`
+        : `ご契約 1日${r.entitled}件`;
+    const head = `・@${r.username}：公開 ${r.posted}件（${entitledLabel}）`;
     if (r.posted === 0) {
       anyZero = true;
       const why: string[] = [];
@@ -68,12 +77,14 @@ export async function buildDailyCountTextForUser(
   if (maxPerDay <= 0) return null; // 自動投稿の無いプラン
   const common = await db.getAutoPostSettings(userId);
   const accounts = await db.getThreadsAccountsByUserId(userId);
-  const lines: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number; note?: string; carryNote?: string }> = [];
+  const lines: Array<{ username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; entitled: number; note?: string; carryNote?: string; planMax?: number; perAccount?: boolean }> = [];
   for (const r of rows) {
     const acct: any = (accounts || []).find((a: any) => Number(a.id) === r.accountId);
     const eff = effectiveAccountSettings(common as any, acct);
     if (!eff.autoPostEnabled) continue; // 自動投稿OFFのアカウントは数えない
     let entitled = Math.min(FREQ_COUNT[eff.autoPostFrequency] ?? 1, maxPerDay);
+    // このアカウントだけ個別に本数を決めているか（共通設定＝契約どおりとは別の話）
+    const perAccount = Boolean(acct && (acct as any).autoPostFrequency);
     let note: string | undefined;
     // 新しいアカウントは慣らし運転中の本数で数える（「ご契約より少ない」と出さない）。補填中は＋の本数と理由
     try {
@@ -92,7 +103,7 @@ export async function buildDailyCountTextForUser(
         carryNote = `昨日届かなかった分のうち${full.carryCount}件を、今日の投稿に足しています`;
       }
     } catch { /* 無ければ出さない */ }
-    lines.push({ ...r, entitled, note, carryNote });
+    lines.push({ ...r, entitled, note, carryNote, planMax: maxPerDay, perAccount });
   }
   if (lines.length === 0) return null;
   return { text: buildDailyPostCountMessage(dateLabel, lines), accounts: lines.length, zero: lines.filter((l) => l.posted === 0).length };

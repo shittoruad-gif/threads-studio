@@ -17,3 +17,20 @@ describe("昨日の公開数の通知文", () => {
     expect(t).toContain("ご契約より 2件 少ない（承認待ち 2件）");
   });
 });
+
+describe("契約の上限と、アカウント個別の設定を分けて書く", () => {
+  it("個別設定で契約より少ないときは、契約の上限もあわせて出す", () => {
+    const t = buildDailyPostCountMessage("9月21日", [
+      { username: "daigo.sekkotsuin", posted: 1, awaiting: 0, canceled: 0, failed: 0, pending: 0, entitled: 1, planMax: 3, perAccount: true },
+    ]);
+    expect(t).toContain("このアカウントの設定 1日1件（ご契約は1日3件まで）");
+    expect(t).not.toContain("ご契約 1日1件");
+  });
+
+  it("共通設定のままなら、これまでどおり「ご契約 1日◯件」", () => {
+    const t = buildDailyPostCountMessage("9月21日", [
+      { username: "yusuke_seitai", posted: 3, awaiting: 0, canceled: 0, failed: 0, pending: 0, entitled: 3, planMax: 3, perAccount: false },
+    ]);
+    expect(t).toContain("ご契約 1日3件");
+  });
+});
