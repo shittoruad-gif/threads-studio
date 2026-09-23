@@ -93,3 +93,15 @@ describe("試験用の切り口：健康系のお店の守り（2026-09-24 見�
     expect(seen.has("opinion")).toBe(true);
   });
 });
+
+describe("試験用の切り口：すり抜けを塞ぐ（2026-09-24 作り直した見本より）", () => {
+  it("間に言葉が入った『体は意外と変わる』も止める", () => {
+    expect(checkAngle("dialogue", "「肩ガチガチです」「姿勢から見ると、体は意外と変わるもの」").ok).toBe(false);
+  });
+  it("他の方法を軽く見る『ごまかす』も止める", () => {
+    expect(checkAngle("contrast", "湿布でごまかす人は〜。姿勢を見直す人は〜。").ok).toBe(false);
+  });
+  it("やわらかい言い方（楽になる方が多い）は通す", () => {
+    expect(checkAngle("insider", "分かる人には分かる、あの肩の重さ。楽になる方が多いです").ok).toBe(true);
+  });
+});
