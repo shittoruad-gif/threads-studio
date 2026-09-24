@@ -11,7 +11,7 @@ import * as db from "./db";
 import { getPlan } from "../shared/plans";
 import { buildCtaText } from "../shared/autoPostCta";
 import { charBudgetFor, resolveWithAlternation, POST_LENGTHS, trimToBudget } from "../shared/postLength";
-import { checkNaturalized, findBannedTic, findRepeatedHookNumber, findRepeatedPhrase, polishPunctuation } from "../shared/jpQualityGuard";
+import { checkNaturalized, findAgreementQuestion, findBannedTic, findRepeatedHookNumber, findRepeatedPhrase, polishPunctuation } from "../shared/jpQualityGuard";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
@@ -915,11 +915,26 @@ async function generateAutoPost(
 
     // 両方の候補に決まり文句が残った場合は、機械で削ると新しい不自然を作るので
     // 公開はするが必ず記録に残す（週次リサーチがこのログで検出しプロンプトを直す）。
-    const ticLeft = findBannedTic(naturalMain);
+    //   ★2026-09-24 週次リサーチ：記録だけでは止まらなかった（直近7日287本中、決まり文句4本・
+    //   い抜き等の別表記を含む同意確認疑問9本が公開）。最後の作り直し以外では、
+    //   きれいな方（リライト前）に戻すか、戻せなければ作り直す。最後の1回は枠を捨てない。
+    const ticLeft = findBannedTic(naturalMain) || findAgreementQuestion(naturalMain);
     if (ticLeft) {
-      console.warn(
-        `[AutoPost] bannedTic「${ticLeft}」が残存（生成側の要修正） userId=${userId} projectId=${project.id}`,
-      );
+      const beforeClean = !findBannedTic(beforeNaturalize) && !findAgreementQuestion(beforeNaturalize);
+      if (lastAttempt) {
+        console.warn(
+          `[AutoPost] bannedTic「${ticLeft}」が残存（最後の作り直しのため公開） userId=${userId} projectId=${project.id}`,
+        );
+      } else if (beforeClean && naturalMain !== beforeNaturalize) {
+        console.warn(`[AutoPost] bannedTic「${ticLeft}」→ リライト前の文に戻す userId=${userId}`);
+        naturalMain = beforeNaturalize;
+      } else {
+        console.warn(`[AutoPost] bannedTic「${ticLeft}」が生成本文に残存 → 作り直し userId=${userId} projectId=${project.id}`);
+        noteReject('bannedTic', userId, threadsAccountId, postingTimeIndex,
+          `- 「${ticLeft}」のような、読み手に同意を求める確認疑問（〜ていませんか？／〜てませんか？／〜と思いませんか？）は使わない。悩みや思い込みは疑問形にせず、地の文で言い切って描く。`,
+          { detail: ticLeft });
+        return false;
+      }
     }
 
     try {

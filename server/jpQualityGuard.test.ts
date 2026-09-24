@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   checkNaturalized, hiraganaRatio, endsWithQuestion, countNdesu,
   countEmoji, hasRepeatedEnding, polishPunctuation, findBannedTic, findRepeatedPhrase,
-  findRepeatedHookNumber,
+  findRepeatedHookNumber, findAgreementQuestion,
   HIRAGANA_RATIO_MAX, NDESU_MAX,
 } from "../shared/jpQualityGuard";
 
@@ -253,5 +253,34 @@ describe("書き出しの実績の数字の繰り返し（2026-09-13 香取様�
 
   it("直近が無ければ何もしない", () => {
     expect(findRepeatedHookNumber(本物[0], [])).toBeNull();
+  });
+});
+
+describe("findAgreementQuestion（同意確認疑問の語尾の族・2026-09-24）", () => {
+  it("い抜き・？なしの別表記まで拾う（2026-09-24週に公開されていた形）", () => {
+    for (const t of [
+      "情報に疲れてませんか？",
+      "最初の1行でスルーされてませんか？",
+      "肩こり、強く揉めばいいって思ってませんか？",
+      "夏の疲れ、秋の肩こりに繋がってませんか？",
+      "年だからと諦めていませんか？",
+      "エステティシャンは難しいって誤解してませんか？",
+      "スポーツのケガ、我慢していませんか。",
+      "こう感じたことはないと思いませんか",
+    ]) {
+      expect(findAgreementQuestion(t), t).not.toBeNull();
+    }
+  });
+
+  it("誘い・勧誘の「〜ませんか」には当たらない", () => {
+    for (const t of [
+      "美容鍼、受けてみませんか😊",
+      "倉敷市玉島で、呼吸を整えませんか？",
+      "横浜・川崎・横須賀で、一緒に働きませんか？",
+      "一緒にエステティシャンになりませんか？",
+      "新しい自分を見つけませんか？",
+    ]) {
+      expect(findAgreementQuestion(t), t).toBeNull();
+    }
   });
 });
