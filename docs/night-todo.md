@@ -7,6 +7,26 @@
 > 過去の経緯は `git log docs/night-todo.md` から追える。ここには **これからやること** と
 > **忘れると事故になること** だけを残す。
 
+## 2026-09-24 日中：案の◯✕アンケート（三上様指示・★今夜 push／★明朝10時ごろ送信は三上様の最終確認後）
+
+> 「8案を1回送って、丸かバツかで選ぶような形で、残ったものを中心に作っていくのはどうですか？」（1〜3すべて承諾）
+
+- 新規 `server/draftSurvey.ts`・マイグレーション `0097_draft_survey.sql`（`draftSurveyItems`）。
+  **投稿（scheduledPosts）にはしない**＝押しても公開されず、✕も見送りに数えない（数えると翌朝3案が出る）
+- ◯ → 文体のお手本（styleSamples）に足す／生成の「好み」に最優先（`getRatedPostSamples`）／切り口の重みに2倍で入る。
+  ✕ → 避ける方向性。押し直しできる（◯→✕でお手本から外す）
+- LINEのボタンは `sv=1&id=&v=good|bad`（`handlePostback`）。ローカルQAで通しを確認ずみ
+- 送る案：`scripts/ops/announcements/2026-09-25_prestige_survey.json`（プレステージ様 acc22）・
+  `2026-09-25_katori_survey.json`（香取様 acc21）。各8案・切り口すべて別・検査（健康表現・語調・禁止の言い回し）通過
+- **送り方**（お客様に届く送信。三上様の「送ってよい」をチャットでいただいてから。付けなければ表示だけ）:
+
+      nc -z localhost 13308 || ssh -fN -L 13308:10.0.1.7:3306 root@163.44.103.9
+      eval "$(bash scripts/ops/prod-env.sh DATABASE_URL LINE_NOTIFY_CHANNEL_ACCESS_TOKEN LINE_NOTIFY_CHANNEL_SECRET)"
+      npx tsx scripts/ops/send-draft-survey.mts --account=22 --file=scripts/ops/announcements/2026-09-25_prestige_survey.json --send
+      npx tsx scripts/ops/send-draft-survey.mts --account=21 --file=scripts/ops/announcements/2026-09-25_katori_survey.json --send
+
+- 反映後の確認：本番で `[DB] Applied migration: 0097_draft_survey.sql`、`SHOW TABLES LIKE 'draftSurveyItems'`
+
 ## 2026-09-24 日中：ホームページの材料を全店に反映（三上様指示）／「元に戻す」の直し（★今夜 push）
 
 **データ（本番・反映ずみ）**：materialProposals #1〜#14（14件・167項目）。お客様の登録に「足すだけ」、

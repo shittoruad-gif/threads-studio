@@ -3513,8 +3513,11 @@ export async function getAngleFeedbackStats(userId: number, projectId?: string):
     ))
     .groupBy(scheduledPosts.angle, scheduledPosts.clientRating);
   const stats: Record<string, { good: number; bad: number }> = {};
-  for (const r of rows) {
+  // ★案の◯✕も切り口の好みに入れる。方向性を選んでいただいたものなので2倍で数える（2026-09-24）
+  const survey = projectId ? (await getSurveyAngleStats(projectId)).map((r) => ({ ...r, count: r.count * 2 })) : [];
+  for (const r of [...rows, ...survey]) {
     if (!r.angle || !r.rating) continue;
+    if (r.rating !== 'good' && r.rating !== 'bad') continue;
     if (!stats[r.angle]) stats[r.angle] = { good: 0, bad: 0 };
     stats[r.angle][r.rating as 'good' | 'bad'] += Number(r.count);
   }
@@ -3617,6 +3620,10 @@ export async function getAnglePerformanceStats(
 export async function getRatedPostSamples(userId: number, rating: 'good' | 'bad', limit: number = 3, projectId?: string): Promise<string[]> {
   const db = await getDb();
   if (!db) return [];
+  // ★案の◯✕（draftSurveyItems）を先に入れる（2026-09-24 三上様指示「◯が付いたものを中心に作る」）。
+  //   お客様が方向性として選んだ案なので、日々の投稿の◯✕より優先する。
+  const survey = projectId ? await getSurveyRatedContents(projectId, rating, limit) : [];
+  if (survey.length >= limit) return survey;
   const rows = await db.select({ content: scheduledPosts.postContent })
     .from(scheduledPosts)
     .where(and(
@@ -3626,7 +3633,34 @@ export async function getRatedPostSamples(userId: number, rating: 'good' | 'bad'
     ))
     .orderBy(desc(scheduledPosts.ratedAt))
     .limit(limit);
-  return rows.map((r) => r.content).filter((c): c is string => !!c);
+  const posts = rows.map((r) => r.content).filter((c): c is string => !!c);
+  return [...survey, ...posts].slice(0, limit);
+}
+
+// ==================== 案の◯✕（draftSurveyItems・2026-09-24） ====================
+
+/** そのお店の案で、◯（good）か✕（bad）が付いた本文（新しい順） */
+export async function getSurveyRatedContents(projectId: string, rating: 'good' | 'bad', limit: number = 3): Promise<string[]> {
+  const database = await getDb();
+  if (!database) return [];
+  try {
+    const rows: any = await database.execute(sql`
+      SELECT content FROM draftSurveyItems WHERE projectId = ${projectId} AND rating = ${rating}
+      ORDER BY ratedAt DESC LIMIT ${limit}`);
+    return (((rows as any)[0] ?? []) as any[]).map((r) => String(r.content)).filter(Boolean);
+  } catch { return []; } // 表がまだ無い環境（マイグレーション前）でも生成は止めない
+}
+
+/** 案の◯✕を切り口ごとに数える（getAngleFeedbackStats に足す） */
+async function getSurveyAngleStats(projectId: string): Promise<Array<{ angle: string; rating: string; count: number }>> {
+  const database = await getDb();
+  if (!database) return [];
+  try {
+    const rows: any = await database.execute(sql`
+      SELECT angle, rating, COUNT(*) AS count FROM draftSurveyItems
+      WHERE projectId = ${projectId} AND angle IS NOT NULL AND rating IS NOT NULL GROUP BY angle, rating`);
+    return (((rows as any)[0] ?? []) as any[]).map((r) => ({ angle: String(r.angle), rating: String(r.rating), count: Number(r.count) }));
+  } catch { return []; }
 }
 
 // ============================================================================

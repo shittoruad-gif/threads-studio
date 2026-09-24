@@ -2154,6 +2154,13 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       [...moreBtn, ...MENU_HINT].slice(0, 13),
     )];
   }
+  // ── 案の◯✕アンケート（2026-09-24 三上様指示。公開も見送りもしない。server/draftSurvey.ts）──
+  if (q.sv && q.id && (q.v === "good" || q.v === "bad")) {
+    const { rateSurveyItem } = await import("./draftSurvey");
+    const msg = await rateSurveyItem(Number(user.id), Number(q.id), q.v);
+    return [textWithQuick(msg, MENU_HINT)];
+  }
+
   // ── 見送りが続くお客様への「足す材料」の案（三上様だけが押せる・2026-09-24）──
   if (q.adm === "mp" && q.id && q.v) {
     // ★管理者以外は何もしない（お客様のトークにこのボタンは出ないが、念のため）
