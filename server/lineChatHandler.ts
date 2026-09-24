@@ -3035,10 +3035,10 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     await db.updateThreadsAccount(accountId, { callFocus: clear ? null : raw } as any);
     let sample = "";
     try {
-      const { buildMetaAiCallPost } = await import("../shared/metaAiAsk");
+      const { buildMetaAiCallPostOfKind } = await import("../shared/metaAiAsk");
       const pjs: any[] = ((await db.getUserProjects(user.id)) || []).filter((pj: any) => !String(pj.id).startsWith("demo_") && pj.businessType && pj.area);
       const pj: any = (acct.defaultProjectId && pjs.find((x: any) => String(x.id) === String(acct.defaultProjectId))) || pjs[0];
-      if (pj) sample = buildMetaAiCallPost({ storeName: pj.storeName, businessType: pj.businessType, area: pj.area, localTerms: pj.localTerms, target: pj.target, mainProblem: pj.mainProblem, focus: clear ? null : raw }, 1) || "";
+      if (pj) sample = buildMetaAiCallPostOfKind({ storeName: pj.storeName, businessType: pj.businessType, area: pj.area, localTerms: pj.localTerms, target: pj.target, mainProblem: pj.mainProblem, focus: clear ? null : raw }, "recommend") || "";
     } catch { sample = ""; }
     return [textWithQuick(
       (clear ? `@${acct.threadsUsername} の得意分野を消しました。` : `@${acct.threadsUsername} の得意分野を「${raw}」にしました。`) +

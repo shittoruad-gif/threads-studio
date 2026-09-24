@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateMetaAiAsk, META_AI_ASK_ANGLES, buildMetaAiAskPrompt, shortAreaName, buildMetaAiCallPost, callAreaLabel, splitDailyQuota } from "../shared/metaAiAsk";
+import { validateMetaAiAsk, META_AI_ASK_ANGLES, buildMetaAiAskPrompt, shortAreaName, buildMetaAiCallPost, buildMetaAiCallPostOfKind, callAreaLabel, splitDailyQuota } from "../shared/metaAiAsk";
 
 describe("Meta AIに聞く返信：質問の検査", () => {
   it("正しい形はそのまま通る", () => {
@@ -55,31 +55,69 @@ describe("Meta AIに聞く返信：質問の検査", () => {
 
 describe("Meta AI 呼びかけ投稿（本文が @meta.ai ＋依頼文）", () => {
   const src = { storeName: "テスト整体院", businessType: "整体院", area: "岡山県倉敷市中央", target: "デスクワークの30〜50代", mainProblem: "慢性的な肩こり、朝の腰の痛み", menu: ["骨盤矯正", "猫背改善"] };
-  it("先頭は @meta.ai、地域名が入り、絵文字なし", () => {
-    for (let d = 0; d < 5; d++) {
-      const t = buildMetaAiCallPost(src, d)!;
+  const sep = new Date("2026-09-24T06:00:00+09:00");
+  it("先頭は @meta.ai、絵文字なし、120字以内", () => {
+    for (let d = 0; d < 10; d++) {
+      const t = buildMetaAiCallPost(src, d, sep)!;
       expect(t.startsWith("@meta.ai ")).toBe(true);
       expect(/[\uD83C-\uD83E][\uDC00-\uDFFF]/.test(t)).toBe(false);
+      expect(Array.from(t).length).toBeLessThanOrEqual(120);
     }
-    expect(buildMetaAiCallPost(src, 0)).toContain("倉敷市");
   });
-  it("日替わりで型が変わり、店名を使う型がある", () => {
-    const all = new Set([0, 1, 2, 3, 4].map((d) => buildMetaAiCallPost(src, d)));
-    expect(all.size).toBeGreaterThanOrEqual(4);
-    expect([...all].some((t) => t!.includes("テスト整体院"))).toBe(true);
+  it("材料が揃っていれば10日間すべて違う文（同じパターンが続かない・2026-09-24 三上様指示）", () => {
+    const all = [...Array(10)].map((_, d) => buildMetaAiCallPost(src, d, sep));
+    expect(new Set(all).size).toBe(10);
+    for (let d = 1; d < 10; d++) expect(all[d]).not.toBe(all[d - 1]);
+  });
+  it("宣伝を頼む型は1つだけ。表示が落ちた「届けて」「他のお店と何が違う？」は出さない", () => {
+    const all = [...Array(10)].map((_, d) => buildMetaAiCallPost(src, d, sep)!);
+    expect(all.filter((t) => t.includes("テスト整体院")).length).toBe(1);
+    expect(all.some((t) => t.includes("届けて"))).toBe(false);
+    expect(all.some((t) => t.includes("何が違う"))).toBe(false);
+  });
+  it("地元の話題・来店前の質問・体の質問が入る", () => {
+    const all = [...Array(10)].map((_, d) => buildMetaAiCallPost(src, d, sep)!).join("\n");
+    expect(all).toContain("@meta.ai 倉敷市中央の名産品と言えば？");
+    expect(all).toContain("@meta.ai 倉敷市中央周辺で、秋に出かけるならおすすめの場所は？");
+    expect(all).toContain("@meta.ai 初めて整体院に行くとき、知っておくと安心なことは？");
+    expect(all).toContain("@meta.ai 整体院を選ぶときに、確認しておくといいポイントは？");
+    expect(all).toContain("@meta.ai 朝晩の寒暖差が大きいこの時期、体がだるいと感じるときに自分でできる工夫は？");
+    expect(all).toContain("@meta.ai 慢性的な肩こりが気になる人が、毎日の生活で気をつけるといいことは？");
+  });
+  it("効果・結果を言い切る聞き方をしない", () => {
+    const all = [...Array(10)].map((_, d) => buildMetaAiCallPost(src, d, sep)!).join("\n");
+    expect(/治る|治す|改善する|効果がある|必ず/.test(all)).toBe(false);
+  });
+  it("季節は日本時間の月で変わる", () => {
+    const jan = new Date("2026-01-10T06:00:00+09:00");
+    expect(buildMetaAiCallPostOfKind(src, "local_season", jan)).toContain("冬に出かけるなら");
+    expect(buildMetaAiCallPostOfKind(src, "body_season", jan)).toContain("寒さが厳しいこの時期");
+  });
+  it("体の業種でなければ体の質問は出さない", () => {
+    const shop = { storeName: "テスト呉服店", businessType: "呉服店", area: "岡山県倉敷市中央", mainProblem: "着物の手入れ" };
+    expect(buildMetaAiCallPostOfKind(shop, "body_season", sep)).toBeNull();
+    expect(buildMetaAiCallPostOfKind(shop, "body_daily", sep)).toBeNull();
+    expect(buildMetaAiCallPostOfKind(shop, "first_visit", sep)).toBe("@meta.ai 初めて呉服店を利用するとき、知っておくと安心なことは？");
   });
   it("悩みは先頭の句だけ使い、動詞で終わる悩みは使わない（届けたい方に切り替える）", () => {
-    const t = buildMetaAiCallPost(src, 2)!;
+    const t = buildMetaAiCallPostOfKind(src, "merit", sep)!;
     expect(t).toContain("慢性的な肩こりに悩む人");
     expect(t).not.toContain("朝の腰の痛み");
-    const t2 = buildMetaAiCallPost({ ...src, mainProblem: "体型が戻らない" }, 2)!;
+    const t2 = buildMetaAiCallPostOfKind({ ...src, mainProblem: "体型が戻らない" }, "merit", sep)!;
     expect(t2).not.toContain("戻らないに悩む");
     expect(t2).toContain("デスクワークの30〜50代に");
+    expect(buildMetaAiCallPostOfKind({ ...src, mainProblem: "体型が戻らない" }, "body_daily", sep)).toBeNull();
+    const t3 = buildMetaAiCallPostOfKind({ ...src, mainProblem: "一人で入りづらい", target: "仕事帰りの30代" }, "merit", sep)!;
+    expect(t3).not.toContain("入りづらいに悩む");
+    expect(t3).toContain("仕事帰りの30代に");
   });
   it("業種の括弧書きは落とし、「・」の列挙は先頭だけ", () => {
-    const t = buildMetaAiCallPost({ businessType: "マシンピラティススタジオ（整体・美容鍼併設）", area: "岡山県倉敷市玉島" }, 1)!;
+    const t = buildMetaAiCallPostOfKind({ businessType: "マシンピラティススタジオ（整体・美容鍼併設）", area: "岡山県倉敷市玉島" }, "recommend")!;
     expect(t).toBe("@meta.ai 倉敷市玉島でマシンピラティススタジオのおすすめを教えて");
-    expect(buildMetaAiCallPost({ businessType: "整骨院・接骨院", area: "倉敷市" }, 1)).toBe("@meta.ai 倉敷市で整骨院のおすすめを教えて");
+    expect(buildMetaAiCallPostOfKind({ businessType: "整骨院・接骨院", area: "倉敷市" }, "recommend")).toBe("@meta.ai 倉敷市で整骨院のおすすめを教えて");
+  });
+  it("得意分野は「おすすめ」型の業種の前に付く", () => {
+    expect(buildMetaAiCallPostOfKind({ businessType: "整体院", area: "倉敷市", focus: "ダイエット" }, "recommend")).toBe("@meta.ai 倉敷市でダイエットに強い整体院のおすすめを教えて");
   });
   it("材料が無くても「強みを伝えて」型は作れる", () => {
     expect(buildMetaAiCallPost({}, 0)).toBe("@meta.ai うちのお店の強みを、来店されたことのない人に伝えて");
@@ -107,13 +145,13 @@ describe("呼びかけ投稿の地域名は市より細かく（三上様指示 
     expect(callAreaLabel("岡山市北区の整体院です。腰痛が得意です。", null)).toBe("");
   });
   it("悩みが改行区切りなら先頭だけ", () => {
-    const t = buildMetaAiCallPost({ businessType: "整骨院", area: "倉敷市玉島", mainProblem: "繰り返す腰痛\n猫背" }, 2)!;
+    const t = buildMetaAiCallPostOfKind({ businessType: "整骨院", area: "倉敷市玉島", mainProblem: "繰り返す腰痛\n猫背" }, "merit")!;
     expect(t).toContain("繰り返す腰痛に悩む人");
     expect(t).not.toContain("猫背");
   });
   it("投稿文に細かい地域名が入る", () => {
-    const t = buildMetaAiCallPost({ businessType: "マシンピラティススタジオ", area: "岡山県倉敷市玉島", localTerms: "JR新倉敷駅から車で約7分", storeName: "Moveact玉島店" }, 0)!;
-    expect(t).toBe("@meta.ai 新倉敷・玉島周辺の人に、うちのお店（Moveact玉島店）を届けて");
+    const t = buildMetaAiCallPostOfKind({ businessType: "マシンピラティススタジオ", area: "岡山県倉敷市玉島", localTerms: "JR新倉敷駅から車で約7分", storeName: "Moveact玉島店" }, "local_specialty")!;
+    expect(t).toBe("@meta.ai 新倉敷・玉島の名産品と言えば？");
   });
 });
 

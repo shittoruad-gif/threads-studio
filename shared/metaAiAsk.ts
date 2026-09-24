@@ -207,6 +207,8 @@ function shortProblem(p: string | null | undefined): string {
   // 疑問文・かぎ括弧・文らしいもの（「敷居が高いと思われている？」）は名詞扱いしない
   if (/[？?！!「」『』]/.test(head) || /(ている|れている|です|ます)$/.test(head)) return '';
   if (/(ない|たい|らない|れない|くる|する|なる|える|ある|いる|う|く|す|つ|む|る)$/.test(head)) return '';
+  // 「入りづらい」「続けにくい」のような形容詞で終わるものも「〜に悩む人」につなげない（2026-09-24 スナック様で「入りづらいに悩む人」）
+  if (/(づらい|にくい|やすい|しい|らい|たい|さい|かい)$/.test(head)) return '';
   return head;
 }
 
@@ -221,7 +223,56 @@ function serviceWord(src: MetaAiCallSource): string {
   return bt.length > 0 && bt.length <= 14 ? bt : '';
 }
 
-export function buildMetaAiCallPost(src: MetaAiCallSource, dayIndex: number): string | null {
+/**
+ * ★呼びかけ文の種類（2026-09-24 三上様「同じパターンのものばかりになっていて気になる。
+ *   投稿することで集客につながったり、ユーザーにとってプラスになったりするものを採用して」）。
+ *
+ *   以前は「お店を届けて／おすすめを教えて／通うメリット／強み／他と何が違う」の5つを回していた。
+ *   Moveact 2アカウントの実測（9/5〜9/23・Threads API）：
+ *     - 同じ文の繰り返しで表示が落ちた。「〇〇周辺の人に、うちのお店を届けて」は 2,000台 → 31〜62回（通常投稿の中央値141を下回る）
+ *     - 「〇〇の名産品と言えば？」（9/23・地元の話題）は 766回／896回
+ *     - 「〇〇で整体院のおすすめを教えて」は 467〜926回
+ *   → お店の宣伝を頼む型を減らし、「地元の人が答えたくなる話題」「来店前の不安が減る質問」
+ *     「見た人が自分の体に役立てられる質問」を足す。Meta AI の答えがコメント欄に付くので、
+ *     投稿そのものが読む人の役に立つ。地元の人の目に留まり、お店のアカウントを知ってもらうきっかけになる。
+ *   → 「届けて」「他のお店と何が違う？」はやめた（表示が落ちた型・比べる話は他店を下げる答えを呼びやすい）。
+ *
+ *   依頼文は今までどおり登録内容から決まった型で組み立てる（AIに書かせない＝事実が混ざらない）。
+ *   効果・結果を言い切る聞き方（治る・改善する 等）はしない。
+ */
+export type MetaAiCallKind =
+  | 'local_specialty' | 'recommend' | 'body_season' | 'first_visit' | 'local_season'
+  | 'merit' | 'choose' | 'local_family' | 'strength' | 'body_daily';
+
+/** 並び順＝日替わりの順番。同じ系統（地元・来店前・体・お店）が続かないように交互に並べる */
+export const META_AI_CALL_ROTATION: readonly MetaAiCallKind[] = [
+  'local_specialty', 'recommend', 'body_season', 'first_visit', 'local_season',
+  'merit', 'choose', 'local_family', 'strength', 'body_daily',
+];
+
+/** 体の不調を扱う業種か（季節の体・日常の注意の質問はこの業種だけ） */
+function isBodyBusiness(service: string, businessType: string | null | undefined): boolean {
+  return /(院|整体|整骨|接骨|鍼灸|ピラティス|ヨガ|ジム|スタジオ|サロン|クリニック|マッサージ|リラク|エステ)/.test(`${service} ${businessType ?? ''}`);
+}
+
+function jstMonth(now: Date): number {
+  return new Date(now.getTime() + 9 * 3600_000).getUTCMonth() + 1;
+}
+
+function seasonWord(month: number): string {
+  return month >= 3 && month <= 5 ? '春' : month >= 6 && month <= 8 ? '夏' : month >= 9 && month <= 11 ? '秋' : '冬';
+}
+
+/** 季節の体の話題（一般的な気候の話だけ。数字・固有名詞・効果は入れない） */
+const SEASON_BODY: Record<number, string> = {
+  1: '寒さが厳しいこの時期', 2: '寒さが続くこの時期', 3: '季節の変わり目のこの時期',
+  4: '新生活が始まるこの時期', 5: '季節の変わり目のこの時期', 6: '梅雨どきのこの時期',
+  7: '暑さが続くこの時期', 8: '暑さと冷房の差が大きいこの時期', 9: '朝晩の寒暖差が大きいこの時期',
+  10: '朝晩が冷え込むこの時期', 11: '冷えを感じやすいこの時期', 12: '寒さが厳しくなるこの時期',
+};
+
+/** 種類を指定して1つ作る。材料が足りない種類は null */
+export function buildMetaAiCallPostOfKind(src: MetaAiCallSource, kind: MetaAiCallKind, now: Date = new Date()): string | null {
   const area = callAreaLabel(src.area, src.localTerms);
   const store = String(src.storeName || '').trim();
   const storeOk = store.length > 0 && store.length <= 16;
@@ -234,20 +285,48 @@ export function buildMetaAiCallPost(src: MetaAiCallSource, dayIndex: number): st
   const focus = String(src.focus || '').replace(/[。．\s]/g, '').trim();
   const f = focus.length > 0 && focus.length <= 12 ? focus : '';
   const svc = f && service ? `${f}に強い${service}` : service;
+  // 「通う」が自然な業種（院・サロン・スタジオ・ジム・教室）以外は「利用する」（呉服店に通う、は不自然）
+  const visitable = /(院|サロン|スタジオ|ジム|教室|クリニック|整体|整骨|接骨|鍼灸|ピラティス|ヨガ|塾)/.test(svc);
+  const body = isBodyBusiness(service, src.businessType);
+  const month = jstMonth(now);
+  const H = META_AI_HANDLE;
 
-  // 実測で表示が多かった順に近い並び。要素が無い型は候補から外す。
-  const candidates: Array<string | null> = [
-    area ? `${META_AI_HANDLE} ${area}周辺${f ? `で${f}に興味がある人` : 'の人'}に、うちの${storeOk ? `お店（${store}）` : 'お店'}を届けて` : null,
-    area && svc ? `${META_AI_HANDLE} ${area}で${svc}のおすすめを教えて` : null,
-    // 「通う」が自然な業種（院・サロン・スタジオ・ジム・教室）以外は「利用する」（呉服店に通う、は不自然）
-    area && who && svc ? `${META_AI_HANDLE} ${area}で${who}に、${svc}${/(院|サロン|スタジオ|ジム|教室|クリニック|整体|整骨|接骨|鍼灸|ピラティス|ヨガ|塾)/.test(svc) ? 'に通う' : 'を利用する'}メリットを伝えて` : null,
-    `${META_AI_HANDLE} うちのお店${storeOk ? `（${store}）` : ''}の${f ? `${f}の` : ''}強みを、来店されたことのない人に伝えて`,
-    storeOk && (f || service) ? `${META_AI_HANDLE} ${store}の${f || service}は、他のお店と何が違う？` : null,
-  ];
-  const list = candidates.filter((c): c is string => !!c);
+  let text: string | null = null;
+  switch (kind) {
+    case 'local_specialty':
+      text = area ? `${H} ${area}の名産品と言えば？` : null; break;
+    case 'local_season':
+      text = area ? `${H} ${area}周辺で、${seasonWord(month)}に出かけるならおすすめの場所は？` : null; break;
+    case 'local_family':
+      text = area ? `${H} ${area}周辺で、子どもと一緒に楽しめる場所を教えて` : null; break;
+    case 'recommend':
+      text = area && svc ? `${H} ${area}で${svc}のおすすめを教えて` : null; break;
+    case 'merit':
+      text = area && who && svc ? `${H} ${area}で${who}に、${svc}${visitable ? 'に通う' : 'を利用する'}メリットを伝えて` : null; break;
+    case 'first_visit':
+      text = service ? `${H} 初めて${service}${visitable ? 'に行く' : 'を利用する'}とき、知っておくと安心なことは？` : null; break;
+    case 'choose':
+      text = service ? `${H} ${service}を選ぶときに、確認しておくといいポイントは？` : null; break;
+    case 'body_season':
+      text = body ? `${H} ${SEASON_BODY[month]}、体がだるいと感じるときに自分でできる工夫は？` : null; break;
+    case 'body_daily':
+      text = body && problem ? `${H} ${problem}が気になる人が、毎日の生活で気をつけるといいことは？` : null; break;
+    case 'strength':
+      text = `${H} うちのお店${storeOk ? `（${store}）` : ''}の${f ? `${f}の` : ''}強みを、来店されたことのない人に伝えて`; break;
+  }
+  return text && Array.from(text).length <= 120 ? text : null;
+}
+
+/**
+ * 日替わりの呼びかけ文。seed は日付の番号（＋アカウントごとのずらし）。
+ * 作れる種類だけを並び順どおりに回すので、材料が揃っていれば10日間同じ種類は出ない。
+ */
+export function buildMetaAiCallPost(src: MetaAiCallSource, seed: number, now: Date = new Date()): string | null {
+  const list = META_AI_CALL_ROTATION
+    .map((k) => buildMetaAiCallPostOfKind(src, k, now))
+    .filter((c): c is string => !!c);
   if (list.length === 0) return null;
-  const text = list[Math.abs(dayIndex) % list.length];
-  return Array.from(text).length <= 120 ? text : null;
+  return list[Math.abs(seed) % list.length];
 }
 
 /**

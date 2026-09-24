@@ -12,7 +12,7 @@
  * - ライトの方には送らない（設定画面・LINE設定で「プロ・ビジネスで使えます」と案内）
  */
 import * as db from "./db";
-import { buildMetaAiCallPost, splitDailyQuota } from "../shared/metaAiAsk";
+import { buildMetaAiCallPost, buildMetaAiCallPostOfKind, splitDailyQuota } from "../shared/metaAiAsk";
 import { effectiveAccountSettings } from "../shared/accountSettings";
 import { getPlan, resolveEffectivePlanId } from "../shared/plans";
 
@@ -84,7 +84,7 @@ export function buildMetaAiCallBundle(items: MetaAiCallMessageInput[]): unknown[
     (redo
       ? "今朝の自動投稿は、Threadsの決まりでMeta AIに届きませんでした（自動投稿からだと@meta.aiが効かないため）。すみません。上のボタンからアプリで出し直すと届きます。今朝の投稿は消さなくて大丈夫です。\n\n"
       : "") +
-    "これは、Meta AI（Threadsの中のAI）に「うちのお店を紹介して」と頼む投稿です。Meta AIがお店の名前を出してコメントで答えてくれるので、見る人が増えます。\n\n" +
+    "これは、Meta AI（Threadsの中のAI）に質問する投稿です。地元の話題や、お客様が来店前に気になることを聞くと、Meta AIがコメント欄で答えてくれます。見た方の役に立つ投稿になり、地元の方にお店のアカウントを知ってもらうきっかけになります。質問の内容は毎日変わります。\n\n" +
     (items.length > 1
       ? `カードは${items.length}枚（${names}）あります。横にめくって、それぞれのアカウントでログインした状態でボタンを押してください。開いた画面の上の名前がカードのアカウントと同じなら、そのまま「投稿」で大丈夫です。\n\n`
       : `開いた画面の上に出る名前が ${names} なら、そのまま「投稿」で大丈夫です。別の名前なら、Threadsアプリでお店のアカウントに切り替えてから、もう一度ボタンを押してください。\n\n`) +
@@ -166,7 +166,8 @@ export async function buildTodayCallsForUser(userId: number, dayIndex: number, o
     }
     const pinned = acct.defaultProjectId ? projects.find((p) => p.id === acct.defaultProjectId) : null;
     const project = pinned || projects[dayIndex % projects.length];
-    const text = buildMetaAiCallPost({ ...callSourceOf(project), focus: acct.callFocus ?? null }, dayIndex);
+    // ★アカウントごとにずらす（同じお店の2アカウントが同じ日に同じ種類の質問にならないように）
+    const text = buildMetaAiCallPost({ ...callSourceOf(project), focus: acct.callFocus ?? null }, dayIndex + Number(acct.id));
     if (!text) continue;
     out.push({ accountId: Number(acct.id), username: String(acct.threadsUsername), storeName: project.storeName ?? null, text });
   }
@@ -241,8 +242,12 @@ export async function buildRedoForUsernames(usernames: string[], focusOverride: 
     const pinned = acct.defaultProjectId ? projects.find((p) => p.id === acct.defaultProjectId) : null;
     const project = pinned || projects[0];
     let text = !focus && today && today.trim().startsWith("@meta.ai") ? today.trim() : null;
-    // 得意分野を指定したやり直しは②型（「〇〇でダイエットに強い整体院のおすすめを教えて」）に固定
-    if (!text && project) text = buildMetaAiCallPost({ ...callSourceOf(project), focus }, focus ? 1 : dayIndex);
+    // 得意分野を指定したやり直しは「おすすめ」型（「〇〇でダイエットに強い整体院のおすすめを教えて」）に固定
+    if (!text && project) {
+      text = focus
+        ? buildMetaAiCallPostOfKind({ ...callSourceOf(project), focus }, "recommend")
+        : buildMetaAiCallPost({ ...callSourceOf(project), focus }, dayIndex + Number(acct.id));
+    }
     if (!text) { console.log(`@${username}: 呼びかけ文を作れません（材料不足）`); continue; }
     const targets = await db.getLineUserIdsForUser(Number(acct.userId));
     out.push({ userId: Number(acct.userId), username, storeName: project?.storeName ?? null, text, targets });
