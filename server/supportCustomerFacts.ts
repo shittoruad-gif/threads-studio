@@ -15,6 +15,14 @@
  * （書かなければ、プロンプトの「ここに無いことは推測しない」でそのまま伏せられる）。
  */
 import { contractSummary, formatJpDate, type ContractInfo } from "@shared/contractSummary";
+
+async function nextPaymentInfo(userId: number): Promise<{ nextPaymentDate: string | null; nextPaymentAmount: number | null }> {
+  try {
+    const { nextPaymentForUser } = await import("./nextPayment");
+    const np = await nextPaymentForUser(userId);
+    return { nextPaymentDate: np?.dueDate ?? null, nextPaymentAmount: np?.amount ?? null };
+  } catch { return { nextPaymentDate: null, nextPaymentAmount: null }; }
+}
 import { effectiveAccountSettings, FREQ_LABEL } from "@shared/accountSettings";
 import * as db from "./db";
 
@@ -52,6 +60,8 @@ async function contractOf(userId: number): Promise<{ info: ContractInfo; sub: an
       currentPeriodEnd: sub?.currentPeriodEnd ?? null,
       cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? null,
       isCampaign: Boolean(plan.isCampaign),
+      // ★次回の決済日は UnivaPay が正（currentPeriodEnd は1日遅い・2026-09-25）
+      ...(await nextPaymentInfo(userId)),
     },
   };
 }

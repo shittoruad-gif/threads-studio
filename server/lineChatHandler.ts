@@ -314,6 +314,14 @@ async function contractOf(userId: number): Promise<ContractInfo | null> {
       currentPeriodEnd: sub?.currentPeriodEnd ?? null,
       cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? null,
       isCampaign: Boolean(plan.isCampaign),
+      // ★次回の決済日は UnivaPay が正（currentPeriodEnd は1日遅い・2026-09-25）
+      ...(await (async () => {
+        try {
+          const { nextPaymentForUser } = await import("./nextPayment");
+          const np = await nextPaymentForUser(userId);
+          return { nextPaymentDate: np?.dueDate ?? null, nextPaymentAmount: np?.amount ?? null };
+        } catch { return {}; }
+      })()),
     };
   } catch {
     return null;

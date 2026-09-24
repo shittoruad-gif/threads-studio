@@ -14,6 +14,7 @@ import { useLang } from "@/i18n";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { AccountSettingsCard } from "@/components/AccountSettingsCard";
+import BillingSummary from "@/components/BillingSummary";
 import { getPlan } from "@shared/plans";
 
 export default function Settings() {
@@ -868,10 +869,12 @@ export default function Settings() {
             <h2 className="text-lg font-semibold text-foreground">{t("プラン")}</h2>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 flex-1 basis-60">
               <p className="text-sm font-medium text-foreground">{t("現在のプラン")}</p>
               <p className="text-lg font-bold text-emerald-700 mt-1">{planLabel}</p>
+              {/* ★月額・次回の決済日・金額（2026-09-25 三上様指示） */}
+              <BillingSummary subscription={subscription} />
             </div>
             <Button
               variant="outline"

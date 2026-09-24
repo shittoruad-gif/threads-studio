@@ -19,6 +19,21 @@ export interface ContractInfo {
   cancelAtPeriodEnd?: boolean | null;
   /** キャンペーン（3回課金で終了）か */
   isCampaign?: boolean;
+  /**
+   * 次回の決済日（JST・YYYY-MM-DD）。UnivaPay の next_payment が正（server/nextPayment.ts）。
+   * ★currentPeriodEnd は UnivaPay の次回決済日より1日遅く入っているため、これがあれば必ずこちらを使う（2026-09-25）
+   */
+  nextPaymentDate?: string | null;
+  /** 次回の金額（円・税込） */
+  nextPaymentAmount?: number | null;
+}
+
+/** 「2026年10月2日（金）」（YYYY-MM-DD から。タイムゾーンに左右されない） */
+export function formatDueDate(ymd: string | null | undefined): string | null {
+  if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
+  const [y, m, d] = ymd.split("-").map(Number);
+  const w = "日月火水木金土"[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${y}年${m}月${d}日（${w}）`;
 }
 
 function toDate(v: Date | string | null | undefined): Date | null {
@@ -55,6 +70,9 @@ export function contractSummary(c: ContractInfo | null | undefined): string {
   } else if (c.cancelAtPeriodEnd && periodEnd) {
     lines.push(`解約のお手続き済みです。${periodEnd}までお使いいただけます。`);
     lines.push("以降のお支払いはございません。");
+  } else if (formatDueDate(c.nextPaymentDate)) {
+    const amount = typeof c.nextPaymentAmount === "number" ? `（${c.nextPaymentAmount.toLocaleString("ja-JP")}円・税込）` : "";
+    lines.push(`次回のご請求日：${formatDueDate(c.nextPaymentDate)}${amount}`);
   } else if (periodEnd) {
     lines.push(`次回のご請求日：${periodEnd}`);
   } else {

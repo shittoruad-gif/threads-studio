@@ -577,6 +577,12 @@ export const appRouter = router({
 
   // ============ Subscription Management ============
   subscription: router({
+    // ★次回の決済日と金額（UnivaPay が正。currentPeriodEnd は1日遅いので画面の日付はこれを使う・2026-09-25）
+    nextPayment: protectedProcedure.query(async ({ ctx }) => {
+      const { nextPaymentForUser } = await import('./nextPayment');
+      return await nextPaymentForUser(ctx.user.id);
+    }),
+
     // Get current user's subscription status
     getStatus: protectedProcedure.query(async ({ ctx }) => {
       const subscription = await db.getSubscriptionByUserId(ctx.user.id);

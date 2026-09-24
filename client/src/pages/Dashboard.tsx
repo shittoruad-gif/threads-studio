@@ -51,6 +51,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RELATED_SERVICES } from '@shared/relatedServices';
+import { formatDueDate } from '@shared/contractSummary';
 import TrialBanner from '@/components/TrialBanner';
 import OnboardingTour from '@/components/OnboardingTour';
 import ProjectExplanation from '@/components/ProjectExplanation';
@@ -134,6 +135,11 @@ export default function Dashboard() {
     undefined,
     { enabled: isAuthenticated }
   );
+  // ★次回の決済日と金額（UnivaPay が正・2026-09-25）
+  const { data: nextPayment } = trpc.subscription.nextPayment.useQuery(undefined, {
+    enabled: !!subscription && subscription.status === 'active' && !subscription.cancelAtPeriodEnd && !subscription.isTrialing,
+    staleTime: 10 * 60_000,
+  });
 
   const { data: invoices } = trpc.subscription.getInvoices.useQuery(
     undefined,
@@ -1062,12 +1068,16 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {subscription?.currentPeriodEnd && !subscription?.isTrialing && (
+              {/* ★次回の決済日は UnivaPay が正（currentPeriodEnd は1日遅かった・2026-09-25） */}
+              {!subscription?.isTrialing && subscription?.status === 'active' && !subscription?.cancelAtPeriodEnd && nextPayment?.dueDate && (
                 <div>
-                  <p className="text-muted-foreground text-sm mb-1">{t("次回請求日")}</p>
+                  <p className="text-muted-foreground text-sm mb-1">{t("次回の決済日")}</p>
                   <p className="text-lg font-semibold text-foreground">
-                    {formatDate(subscription.currentPeriodEnd)}
+                    {formatDueDate(nextPayment.dueDate)}
                   </p>
+                  {typeof nextPayment.amount === 'number' && (
+                    <p className="text-muted-foreground text-sm">{nextPayment.amount.toLocaleString('ja-JP')}{t("円（税込）")}</p>
+                  )}
                 </div>
               )}
             </div>

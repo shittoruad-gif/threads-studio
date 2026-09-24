@@ -55,3 +55,25 @@ describe("ご契約内容の文面", () => {
     expect(t).toContain("キャンペーン価格");
   });
 });
+
+describe("次回の決済日は UnivaPay の日付を使う（2026-09-25：currentPeriodEnd は1日遅かった）", () => {
+  it("UnivaPay の日付と金額があればそれを出し、currentPeriodEnd の日付は出さない", () => {
+    const t = contractSummary({
+      planName: "ライト（キャンペーン）", priceMonthly: 2980, status: "active",
+      currentPeriodEnd: "2026-10-03T06:46:39Z", nextPaymentDate: "2026-10-02", nextPaymentAmount: 2980,
+    });
+    expect(t).toContain("次回のご請求日：2026年10月2日（金）（2,980円・税込）");
+    expect(t).not.toContain("10月3日");
+  });
+  it("UnivaPay が読めないときは今までどおり", () => {
+    const t = contractSummary({ planName: "プロ", priceMonthly: 6980, status: "active", currentPeriodEnd: "2026-10-03T06:46:39Z" });
+    expect(t).toContain("次回のご請求日：");
+  });
+  it("曜日つきの日付（タイムゾーンに左右されない）", async () => {
+    const { formatDueDate } = await import("@shared/contractSummary");
+    expect(formatDueDate("2026-10-02")).toBe("2026年10月2日（金）");
+    expect(formatDueDate("2026-10-08")).toBe("2026年10月8日（木）");
+    expect(formatDueDate(null)).toBeNull();
+    expect(formatDueDate("10/2")).toBeNull();
+  });
+});
