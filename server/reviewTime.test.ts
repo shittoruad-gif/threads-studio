@@ -64,3 +64,11 @@ describe("お返事", () => {
     expect(reviewHourReply(null)).toContain("朝6時");
   });
 });
+
+describe("お尋ねの文（既存のお客様へのお知らせの決まり）", () => {
+  it("「変わらないこと」を先に書き、戻し方（選び直し方）も書く", async () => {
+    const { REVIEW_HOUR_QUESTION } = await import("@shared/reviewTime");
+    expect(REVIEW_HOUR_QUESTION.split("\n")[0]).toContain("これまでどおり");
+    expect(REVIEW_HOUR_QUESTION).toContain("選び直せます");
+  });
+});
