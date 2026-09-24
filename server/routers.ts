@@ -3685,6 +3685,7 @@ ${input.commentText}
           if (user) {
             const sub = await db.getSubscriptionByUserId(user.id);
             r.appUser = { id: user.id, name: user.name, planId: sub?.planId ?? null, planStatus: sub?.status ?? null };
+            r.appSubscriptionId = (sub as any)?.univapaySubscriptionId ?? null;
           } else {
             r.appUser = null;
           }
@@ -3695,10 +3696,13 @@ ${input.commentText}
 
       // ★Threads Studio関連の契約だけに絞る（ストアは他事業と共用のため、
       //   広告代行・Keiro・コンサル等の契約は表示しない。三上さん指示 2026-08-15）。
-      //   判定: 【Threads】決済リンク経由、またはアプリ登録ユーザーのメールと一致。
-      const tsRows = rows.filter((r) =>
-        String(r.linkDescription ?? '').includes('【Threads】') || r.appUser,
-      );
+      //   ★2026-09-25：メールの一致だけでは入れない（Threadsのお客様が別事業で結んだ
+      //   660,000円・16,500円・11,000円の契約が出ていた）。判定は shared/threadsContract.ts
+      const { isThreadsContract } = await import('../shared/threadsContract');
+      const tsRows = rows.filter((r) => isThreadsContract({
+        id: r.id, amount: r.amount, linkDescription: r.linkDescription,
+        isAppUser: !!r.appUser, appSubscriptionId: r.appSubscriptionId ?? null,
+      }));
 
       // 二重契約検知（Threads関連の中で、同一メールに複数の有効契約）
       const activeByEmail = new Map<string, number>();
