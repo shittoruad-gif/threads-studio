@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, MessageSquare, Send, BookOpen, AlertTriangle, User } from 'lucide-react';
 import { toast } from 'sonner';
+import MaterialProposalsCard from '@/components/MaterialProposalsCard';
 
 /**
  * お客様からのご質問の管理画面。
@@ -161,6 +162,8 @@ export default function AdminQuestions() {
           </p>
         </CardContent>
       </Card>
+
+      <MaterialProposalsCard />
 
       {/* 新規のお客様の最初の投稿。お客様へ送る前に運営が読む。 */}
       <Card>

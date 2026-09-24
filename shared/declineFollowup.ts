@@ -87,6 +87,41 @@ export function mergeProposal(
   return { strength: [...lines, ...addS].join("\n"), counselingResult: JSON.stringify(cr), added };
 }
 
+/**
+ * 足したものだけを取り除いて「足す前」に戻す（2026-09-24 三上様指示：
+ * 「反映した後に『なんかちょっと違うな』となったら、元の状態に戻せるように」）。
+ *
+ * ★丸ごと書き戻すと、足したあとにお客様ご自身が直した分まで消える。以前はそれを避けるため
+ *   「足したあとに更新があれば戻さない」としていたが、それでは戻したいときに戻せない。
+ *   足した項目は「足す前の状態」と「案」から mergeProposal と同じ計算で決まるので、
+ *   その文だけを今の登録から外す。ほかの行（お客様が足した・直したもの）には触れない。
+ */
+export function removeProposal(
+  current: { strength: string | null; counselingResult: string | null },
+  before: { strength: string | null; counselingResult: string | null },
+  p: MaterialProposal,
+): { strength: string; counselingResult: string; removed: number } {
+  const parse = (s: string | null) => { try { return s ? JSON.parse(s) : {}; } catch { return {}; } };
+  const cr: Record<string, any> = parse(current.counselingResult);
+  const bcr: Record<string, any> = parse(before.counselingResult);
+  let removed = 0;
+  const strip = (cur: string[], added: string[]) => {
+    const drop = new Set(added.map(key));
+    const kept = cur.filter((x) => !drop.has(key(x)));
+    removed += cur.length - kept.length;
+    return kept;
+  };
+  for (const k of ["realEpisodes", "faq", "menu", "realProofs"] as const) {
+    if (!Array.isArray(cr[k])) continue;
+    const beforeList: string[] = Array.isArray(bcr[k]) ? bcr[k].map(String) : [];
+    cr[k] = strip(cr[k].map(String), dropAlreadyRegistered(p[k] ?? [], beforeList));
+  }
+  const lines = String(current.strength ?? "").split(/\n/).map((l) => l.trim()).filter(Boolean);
+  const beforeLines = String(before.strength ?? "").split(/\n/).map((l) => l.trim()).filter(Boolean);
+  const keptS = strip(lines, dropAlreadyRegistered(p.strength ?? [], beforeLines));
+  return { strength: keptS.join("\n"), counselingResult: JSON.stringify(cr), removed };
+}
+
 /** LINEで三上様にお送りする案の本文（1通5000字の上限に余裕をもって収める） */
 export function proposalMessage(params: {
   userName: string;

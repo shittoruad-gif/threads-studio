@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  mergeProposal, dropAlreadyRegistered, proposalMessage, proposalSize,
+  mergeProposal, removeProposal, dropAlreadyRegistered, proposalMessage, proposalSize,
   EMPTY_PROPOSAL, FOLLOWUP_DAYS, FOLLOWUP_MIN_DECLINES, type MaterialProposal,
 } from "@shared/declineFollowup";
 import { websiteUrlOf } from "./declineFollowup";
@@ -116,5 +116,45 @@ describe("発動の条件（三上様決定）", () => {
   it("直近7日に3回以上", () => {
     expect(FOLLOWUP_DAYS).toBe(7);
     expect(FOLLOWUP_MIN_DECLINES).toBe(3);
+  });
+});
+
+describe("元に戻す（足した項目だけを外す・2026-09-24 三上様指示）", () => {
+  const before = {
+    strength: "創業40年",
+    counselingResult: JSON.stringify({ menu: ["痩身メニュー"], faq: ["ノルマはあるのか"] }),
+  };
+  const p: MaterialProposal = {
+    ...EMPTY_PROPOSAL,
+    strength: ["座学よりもサロン実習を大切にしている"],
+    menu: ["フェイシャル", "痩身メニュー"],
+    realProofs: ["賞与年3回（実績賞与）"],
+  };
+
+  it("足したあとに何もしていなければ、足す前と同じ中身に戻る", () => {
+    const merged = mergeProposal(before, p);
+    const r = removeProposal(merged, before, p);
+    expect(r.strength).toBe("創業40年");
+    const cr = JSON.parse(r.counselingResult);
+    expect(cr.menu).toEqual(["痩身メニュー"]);
+    expect(cr.faq).toEqual(["ノルマはあるのか"]);
+    expect(cr.realProofs).toEqual([]);
+    expect(r.removed).toBe(3);
+  });
+
+  it("足したあとにお客様が直した・足した分は消さない（以前は戻せなかった場面）", () => {
+    const merged = mergeProposal(before, p);
+    const cr = JSON.parse(merged.counselingResult);
+    cr.menu.push("ブライダル（ご本人が追加）");
+    const edited = { strength: merged.strength + "\nチームワークを大事にする", counselingResult: JSON.stringify(cr) };
+    const r = removeProposal(edited, before, p);
+    expect(r.strength).toBe("創業40年\nチームワークを大事にする");
+    expect(JSON.parse(r.counselingResult).menu).toEqual(["痩身メニュー", "ブライダル（ご本人が追加）"]);
+  });
+
+  it("もともと登録にあった文は、案に同じ文があっても外さない", () => {
+    const merged = mergeProposal(before, p);
+    const r = removeProposal(merged, before, p);
+    expect(JSON.parse(r.counselingResult).menu).toContain("痩身メニュー");
   });
 });

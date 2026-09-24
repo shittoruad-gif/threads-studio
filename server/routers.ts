@@ -3869,6 +3869,38 @@ ${input.commentText}
         return out;
       }),
 
+    // ホームページから足した材料の一覧（2026-09-24 三上様指示：「ちょっと違う」と思ったら戻せるように）
+    listMaterialProposals: adminProcedure
+      .query(async () => {
+        const database = await db.getDb();
+        if (!database) return [];
+        const { sql } = await import('drizzle-orm');
+        const rows: any = await database.execute(sql`
+          SELECT mp.id, mp.status, mp.sourceUrl, mp.proposal, mp.createdAt, mp.decidedAt,
+                 p.storeName, p.title, u.name AS userName
+          FROM materialProposals mp
+          LEFT JOIN projects p ON p.id = mp.projectId
+          LEFT JOIN users u ON u.id = mp.userId
+          ORDER BY mp.id DESC LIMIT 100`);
+        return (((rows as any)[0] ?? []) as any[]).map((r) => {
+          let proposal: any = {};
+          try { proposal = JSON.parse(r.proposal ?? '{}'); } catch { proposal = {}; }
+          return {
+            id: Number(r.id), status: String(r.status), sourceUrl: r.sourceUrl ?? null,
+            createdAt: r.createdAt, decidedAt: r.decidedAt,
+            store: String(r.storeName || r.title || '').replace(/\n/g, ' '), userName: r.userName ?? '',
+            proposal,
+          };
+        });
+      }),
+
+    decideMaterialProposal: adminProcedure
+      .input(z.object({ id: z.number(), action: z.enum(['apply', 'skip', 'undo']) }))
+      .mutation(async ({ ctx, input }) => {
+        const { decideProposal } = await import('./declineFollowup');
+        return { message: await decideProposal(input.id, input.action, Number(ctx.user.id)) };
+      }),
+
     listQuestions: adminProcedure
       .input(z.object({ needsHumanOnly: z.boolean().optional(), limit: z.number().min(1).max(500).optional() }).optional())
       .query(async ({ input }) => {

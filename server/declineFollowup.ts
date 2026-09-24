@@ -15,7 +15,7 @@ import { sql } from "drizzle-orm";
 import * as db from "./db";
 import {
   FOLLOWUP_DAYS, FOLLOWUP_MIN_DECLINES, FOLLOWUP_COOLDOWN_DAYS,
-  EMPTY_PROPOSAL, dropAlreadyRegistered, mergeProposal, proposalMessage, proposalSize,
+  EMPTY_PROPOSAL, dropAlreadyRegistered, mergeProposal, removeProposal, proposalMessage, proposalSize,
   type MaterialProposal,
 } from "@shared/declineFollowup";
 
@@ -293,18 +293,16 @@ export async function decideProposal(id: number, action: "apply" | "skip" | "und
 
   // undo
   if (row.status !== "applied" || !row.beforeSnapshot) return "この案は、元に戻せる状態ではありません。";
-  const decided = row.decidedAt ? new Date(row.decidedAt).getTime() : 0;
-  const updated = project.updatedAt ? new Date(project.updatedAt).getTime() : 0;
-  // ★足したあとにお客様ご自身が直していたら、上書きしない（ご本人の直しを消してしまう）
-  //   decidedAt も updatedAt も同じDBの時計（NOW()）で入れてある。UTC_TIMESTAMP() と混ぜると、
-  //   DBの時刻がJSTの環境（ローカルQA）で9時間ずれ、戻せなくなっていた（2026-09-24 実機で確認）。
-  if (updated > decided + 60_000) {
-    return "足したあとに、お店の情報が別に更新されています。上書きしないよう、元に戻すのは止めました。担当で個別に確認してください。";
-  }
+  // ★丸ごと書き戻さず、足した項目だけを外す。足したあとにお客様ご自身が直した・足した分は残る
+  //   （以前は「足したあとに更新があれば戻さない」＝戻したいときに戻せなかった。2026-09-24）
+  let proposal: MaterialProposal = EMPTY_PROPOSAL;
+  try { proposal = { ...EMPTY_PROPOSAL, ...JSON.parse(row.proposal ?? "{}") }; } catch { /* 空のまま */ }
   const before = JSON.parse(row.beforeSnapshot);
-  await database.execute(sql`UPDATE projects SET strength = ${before.strength}, counselingResult = ${before.counselingResult} WHERE id = ${project.id}`);
+  const r = removeProposal({ strength: project.strength, counselingResult: project.counselingResult }, before, proposal);
+  await database.execute(sql`UPDATE projects SET strength = ${r.strength}, counselingResult = ${r.counselingResult} WHERE id = ${project.id}`);
   await database.execute(sql`UPDATE materialProposals SET status = 'undone', decidedAt = NOW(), decidedBy = ${adminUserId} WHERE id = ${id}`);
-  return "元に戻しました（足す前の状態です）。";
+  console.log(`[DeclineFollowup] 案 #${id} を元に戻した（${r.removed}件を外した・project=${project.id}）`);
+  return `元に戻しました（足した${r.removed}件を外しました。それ以外の登録には触れていません）。\n翌朝6時の投稿から、足す前の内容で作ります。`;
 }
 
 /** 夜の定例（20:30 JST） */
