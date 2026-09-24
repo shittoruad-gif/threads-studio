@@ -1043,7 +1043,7 @@ async function generateAutoPost(
       if (rv && rv.score < minScore) {
         console.warn(`[AutoPost] naturalnessReview: ${rv.score}/5 ${rv.problems.join(' / ')} → 作り直し userId=${userId} projectId=${project.id}`);
         noteReject('naturalnessReview', userId, threadsAccountId, postingTimeIndex,
-          rv.problems.length ? rv.problems.map((p) => `- 不自然と判定された箇所：「${p}」`).join('\n') : '- 店主が自分で打った文に見えない（説明文・汎用の締め）',
+          (await import('../shared/naturalnessRetryHint')).naturalnessRetryHint(rv.problems, identityHint),
           { detail: `${rv.score}/5 ${rv.problems.join(' / ')}`, gaveUp: lastAttempt });
         return false;
       }
