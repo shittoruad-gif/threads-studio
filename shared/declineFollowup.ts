@@ -38,6 +38,15 @@ export const EMPTY_PROPOSAL: MaterialProposal = {
   strength: [], realEpisodes: [], faq: [], menu: [], realProofs: [], discrepancies: [],
 };
 
+/**
+ * 営業時間・受付・定休日・予約の決まりに触れる文か（2026-09-24 三上様指示「登録の方を優先させて」）。
+ * ホームページは古いまま残っていることが多く（例：たきもと様「平日午後は15時から」／登録は通し営業、
+ * 香取様「24時間受付」／登録は9〜21時）、足すと登録と食い違う。これらは足さず、確認事項に回す。
+ */
+export function isScheduleItem(s: string): boolean {
+  return /([0-9０-９]{1,2}\s*[時:：]|24時間|午前|午後|営業時間|受付|定休|休診|休業|[月火水木金土日祝]曜|予約(制|優先|なし|不要)|予約が(なく|なくて|いらな))/.test(String(s ?? ""));
+}
+
 /** 案に何件あるか（食い違いは数えない） */
 export function proposalSize(p: MaterialProposal): number {
   return p.strength.length + p.realEpisodes.length + p.faq.length + p.menu.length + p.realProofs.length;

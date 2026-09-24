@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  mergeProposal, removeProposal, dropAlreadyRegistered, proposalMessage, proposalSize,
+  mergeProposal, removeProposal, isScheduleItem, dropAlreadyRegistered, proposalMessage, proposalSize,
   EMPTY_PROPOSAL, FOLLOWUP_DAYS, FOLLOWUP_MIN_DECLINES, type MaterialProposal,
 } from "@shared/declineFollowup";
 import { websiteUrlOf } from "./declineFollowup";
@@ -156,5 +156,27 @@ describe("元に戻す（足した項目だけを外す・2026-09-24 三上様�
     const merged = mergeProposal(before, p);
     const r = removeProposal(merged, before, p);
     expect(JSON.parse(r.counselingResult).menu).toContain("痩身メニュー");
+  });
+});
+
+describe("登録を優先する：時間・予約の決まりはホームページから足さない（2026-09-24 三上様指示）", () => {
+  it("9/24 に登録と食い違った実物は、足さない側に入る", () => {
+    for (const s of [
+      "交通事故のご相談は24時間受付で無料",
+      "24時間急患電話で出られなかった場合、折り返し連絡",
+      "予約がなくても来院可能か？→予約優先だが来院可",
+      "平日午後の診療は15時からですか？",
+      "祝日午後の診療は15時からですか？",
+      "定休日 水曜・日曜隔週",
+    ]) expect(isScheduleItem(s), s).toBe(true);
+  });
+  it("時間に触れない材料は足せる", () => {
+    for (const s of [
+      "座学よりもサロン実習を大切にしている",
+      "応募から内定まで1週間〜10日程度",
+      "口コミ平均点5.00（91件）",
+      "4か月の子どもを連れて初めて来院した患者さん",
+      "パラ卓球日本代表選手の指導実績",
+    ]) expect(isScheduleItem(s), s).toBe(false);
   });
 });
