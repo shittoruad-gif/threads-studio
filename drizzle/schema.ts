@@ -35,6 +35,10 @@ export const users = mysqlTable("users", {
   autoPostRequireApproval: boolean("autoPostRequireApproval").default(false).notNull(),
   // 承認ONのまま「見送りを押さなければ予定時刻に公開する」（忙しくて押せない方向け。2026-09-12）
   autoPublishIfNoResponse: boolean("autoPublishIfNoResponse").default(true).notNull(),
+  // ★お客様が案を確認しやすい時間（JSTの時・0〜23。NULL＝未設定＝朝6時に作ってすぐお届け）。2026-09-24 三上様指示。
+  //   昼までの時間 → 朝に作り、その時間より後に公開する。夕方以降 → 前の晩のその時間に翌日分を作ってお届けする
+  //   （shared/reviewTime.ts）。公開前確認（autoPostRequireApproval）のお客様にだけ効く。
+  reviewHour: tinyint("reviewHour"),
   // 投稿にトピックタグ（地域名・悩みワード）を自動でつける（発見性UP）
   autoTopicTag: boolean("autoTopicTag").default(true).notNull(),
   // 追い投稿：自動投稿の約6時間後に、自分の投稿へひとこと返信して再浮上させる
@@ -596,6 +600,10 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   //   同じ印を持つ投稿は「1つの枠に対する選択肢」で、公開されるのは選ばれた1件だけ。
   //   1日の本数を数えるときも1件として数える。NULL は今までどおりの1件ずつの投稿。
   choiceGroupId: varchar("choiceGroupId", { length: 40 }),
+  // ★この投稿が「何日の分」か（JSTの日付）。前の晩に翌日分を作ったときだけ入れる（2026-09-24・reviewHour）。
+  //   NULL のときは作った日（createdAt の JST日付）が「その日の分」＝今までどおり。
+  //   日をまたいだ承認待ちの見送り・当日の本数・3案の判定は COALESCE(forDate, 作った日) で見る。
+  forDate: date("forDate", { mode: "string" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [

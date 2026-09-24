@@ -1744,6 +1744,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         [
           ...accts.slice(0, 6).map((a: any) => ({ label: `@${String(a.threadsUsername).slice(0, 14)} の設定`, data: `s=acct&a=${a.id}` })),
           { label: "共通の設定", data: "s=common" },
+          ...(((s as any).autoPostRequireApproval || accts.some((a: any) => a.autoPostRequireApproval)) ? [{ label: "案を見る時間を選ぶ", data: "m=reviewtime" }] : []),
           { label: "NGワードを追加", data: "s=ng" },
         ],
       )];

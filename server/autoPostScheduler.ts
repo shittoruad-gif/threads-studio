@@ -383,6 +383,19 @@ function getNextPostingTime(index: number, customHours?: number[] | null): Date 
 }
 
 /**
+ * 指定した日（dayOffset=1 は明日）の JST hour:分 の投稿時刻（前の晩に翌日分を作るとき・2026-09-24）。
+ * 並びは getNextPostingTime と同じ（index 番目の時間）。「過ぎていれば翌日」はしない。
+ */
+export function postingTimeOnDay(index: number, customHours: number[] | null | undefined, dayOffset: number, now: Date = new Date()): Date {
+  const hours = customHours && customHours.length > 0 ? customHours : POSTING_HOURS;
+  const list = index >= hours.length && hours.length < 4 ? [...hours, 12] : hours;
+  const hour = list[index % list.length];
+  const nowJst = new Date(now.getTime() + JST_OFFSET_MS);
+  const base = Date.UTC(nowJst.getUTCFullYear(), nowJst.getUTCMonth(), nowJst.getUTCDate() + dayOffset, hour, Math.floor(Math.random() * 30), 0);
+  return new Date(base - JST_OFFSET_MS);
+}
+
+/**
  * ★当日分の補充（登録したその日に、その日の本数ぶん投稿するための時刻決め）
  *
  * なぜ要るか:
@@ -1315,6 +1328,12 @@ export type AutoPostRunOptions = {
    * 今日の残り時間に配置する。朝6時の定例では false（翌回の勝ち時間帯に置く）。
    */
   fillToday?: boolean;
+  /**
+   * 前の晩に「明日の分」を作る（2026-09-24 三上様指示・shared/reviewTime.ts）。
+   * 夕方以降に確認されるお客様（reviewHour 15〜23時）だけが対象。その時間の30分前に走る。
+   * 作った投稿には forDate＝明日 を付け、日をまたいでも見送りにならないようにする。
+   */
+  forTomorrow?: boolean;
 };
 
 export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): Promise<{ processed: number; generated: number; failed: number }> {
@@ -1401,7 +1420,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         let purposeIdx = user.lastAutoPurposeIndex;
 
         // 日替わりでプロジェクトを巡回するためのオフセット
-        const dayOffset = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
+        const dayOffset = Math.floor(Date.now() / (24 * 60 * 60 * 1000)) + (opts.forTomorrow ? 1 : 0);
 
         // 各アカウントごとに postCount 本ずつ自動投稿（月間上限はアカウント単位で判定）
         for (const account of accounts) {
@@ -1449,10 +1468,24 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           //   対象アカウントだけ、時間を候補から日替わりで回す。本数・中身は変えない。
           const { postingTimeTestHours } = await import('../shared/postingTimeTest');
           const testHours = postingTimeTestHours(account.id);
-          const acctHours = testHours ?? bestHours;
+          let acctHours = testHours ?? bestHours;
+          // ★案を確認しやすい時間（2026-09-24 三上様指示・shared/reviewTime.ts）。公開前確認のお客様だけ。
+          //   昼まで → 朝に作り、公開は確認の1時間後から／夕方以降 → 前の晩に翌日分（forTomorrow の回）
+          const { normalizeReviewHour, isDaytimeReview, isEveningReview, hoursAfterReview } = await import('../shared/reviewTime');
+          const reviewHour = eff.autoPostRequireApproval ? normalizeReviewHour((user as any).reviewHour) : null;
+          if (opts.forTomorrow && !isEveningReview(reviewHour)) {
+            // 夜の回は「夕方以降に確認される・公開前確認あり」のアカウントだけ（それ以外は朝6時に作る）
+            continue;
+          }
+          if (!opts.fillToday && isDaytimeReview(reviewHour)) {
+            acctHours = hoursAfterReview(acctHours ?? POSTING_HOURS, reviewHour as number);
+            console.log(`[AutoPost] 確認は${reviewHour}時ごろ account=${account.id} → 公開は${(reviewHour as number) + 1}時以降（${acctHours.slice(0, 3).join(',')}時）`);
+          }
+          const acctIdBefore = await db.getMaxScheduledPostId().catch(() => 0);
           if (testHours) console.log(`[AutoPost] 投稿時間の試験 account=${account.id} 今日の時間(JST): ${testHours.slice(0, 3).join(',')}（4件目以降 ${testHours.slice(3).join(',')}）`);
           // 1日の回数（アカウント別の設定をプラン上限で頭打ち）
           let postCount = Math.min(getPostCount(eff.autoPostFrequency), maxPerDay);
+          let pendingDecrement: 'deleted' | 'apology' | null = null;
           // ★新しいアカウントの慣らし運転（shared/accountRamp.ts）。連携7日未満は1件、14日未満は2件。
           //   2026-09-06 連携4日目・フォロワー0のアカウントが本人確認→停止になった再発防止。
           {
@@ -1461,10 +1494,10 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             if (r.capped) { console.log(`[AutoPost] account ${account.id} ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count; }
             else if (r.extra) {
               console.log(`[AutoPost] account ${account.id} 補填: ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count;
-              // ★消えた投稿の補填（R6）は朝の生成で1日1件ずつ消化する
-              if (r.reason === 'deleted' && !opts.fillToday) await db.decrementDeletedShortfall(account.id).catch(() => undefined);
-              // ★お詫びの補填（2026-09-21）も同じく1日1件ずつ消化する
-              if (r.reason === 'apology' && !opts.fillToday) await db.decrementApologyShortfall(account.id).catch(() => undefined);
+              // ★消えた投稿の補填（R6）・お詫びの補填（2026-09-21）は朝の生成で1日1件ずつ消化する。
+              //   消化は「その日の分を実際に作る」と決まってから（下の alreadyToday の後）。
+              //   先に減らすと、前の晩に作ってある日（2026-09-24 reviewHour）に朝の回が二重に減らしてしまう。
+              if (!opts.fillToday && (r.reason === 'deleted' || r.reason === 'apology')) pendingDecrement = r.reason;
             }
             else if (r.established) console.log(`[AutoPost] account ${account.id} はThreads歴が長いため慣らし運転なし`);
           }
@@ -1474,7 +1507,8 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           //   手動の補填（extraPosts*）と合わせて1日＋2件まで。当日補充のときは足さない（朝に足した分と二重になる）。
           const contractCount = Math.min(getPostCount(eff.autoPostFrequency), maxPerDay);
           let carried = 0;
-          if (!opts.fillToday) {
+          // ★前の晩の回（forTomorrow）では足さない。届かなかった枠は翌朝6時の回が「今日の不足」として作り直す
+          if (!opts.fillToday && !opts.forTomorrow) {
             try {
               const { carryOverCount, jstDateString, inCooldown } = await import('../shared/accountRamp');
               const fullAcct: any = await db.getThreadsAccountById(account.id);
@@ -1495,13 +1529,16 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           // ★R1（2026-09-13）：今日すでに予定・公開されている自動投稿（前日に上限で翌日へ送られた分など）を先に数え、
           //   新規はその差だけ作る。これが無いと翌日へ送った分と新規が重なって、また上限超えになる。
           if (!opts.fillToday) {
-            const alreadyToday = await db.countAccountAutoPostsScheduledToday(account.id).catch(() => 0);
+            // ★前の晩の回は「明日の分」を数える。朝の回は、前の晩に作った今日の分もここで数える（二重に作らない）
+            const alreadyToday = await db.countAccountAutoPostsScheduledToday(account.id, opts.forTomorrow ? 1 : 0).catch(() => 0);
             if (alreadyToday > 0) {
               const before = postCount;
               postCount = Math.max(0, postCount - alreadyToday);
-              console.log(`[AutoPost] account ${account.id} 今日すでに${alreadyToday}件（翌日へ送られた分など）→ 新規は${before}→${postCount}件`);
+              console.log(`[AutoPost] account ${account.id} ${opts.forTomorrow ? '明日の分がすでに' : '今日すでに'}${alreadyToday}件（翌日へ送られた分・前の晩に作った分など）→ 新規は${before}→${postCount}件`);
               if (postCount === 0) continue;
             }
+            if (pendingDecrement === 'deleted') await db.decrementDeletedShortfall(account.id).catch(() => undefined);
+            if (pendingDecrement === 'apology') await db.decrementApologyShortfall(account.id).catch(() => undefined);
           }
 
           // ★当日補充: 今日すでにある分を引いて、残り時間に入る本数だけ作る
@@ -1553,7 +1590,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
               if (decision.on) {
                 const { newChoiceGroupId, CHOICE_ANGLE_IDS, CHOICE_COUNT } = await import('../shared/threeChoice');
                 const { jstDateString } = await import('../shared/accountRamp');
-                const groupId = newChoiceGroupId(account.id, jstDateString(0));
+                const groupId = newChoiceGroupId(account.id, jstDateString(opts.forTomorrow ? 1 : 0));
                 const project = pinnedProject || eligibleProjects[dayOffset % eligibleProjects.length];
                 let made = 0;
                 for (let k = 0; k < CHOICE_COUNT; k++) {
@@ -1564,7 +1601,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                   for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
                     ok = await generateAutoPost(
                       user.id, project, typeIdx, purposeIdx, account.id, 0,
-                      true, acctHours, eff.postLength, null,
+                      true, acctHours, eff.postLength, opts.forTomorrow ? postingTimeOnDay(0, acctHours, 1) : null,
                       lastRejectReason.get(rk) ?? null, attempt === 2, false,
                       { choiceGroupId: groupId, forcedAngleId: CHOICE_ANGLE_IDS[k] },
                     );
@@ -1611,7 +1648,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                 eff.autoPostRequireApproval,
                 acctHours,
                 eff.postLength,
-                sameDaySlots ? sameDaySlots[i] : null,
+                sameDaySlots ? sameDaySlots[i] : (opts.forTomorrow ? postingTimeOnDay(i, acctHours, 1) : null),
                 hint,
                 attempt === 3,
               );
@@ -1644,7 +1681,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                 success = await generateAutoPost(
                   user.id, project, typeIdx, purposeIdx, account.id, i,
                   eff.autoPostRequireApproval, acctHours, eff.postLength,
-                  sameDaySlots ? sameDaySlots[i] : null,
+                  sameDaySlots ? sameDaySlots[i] : (opts.forTomorrow ? postingTimeOnDay(i, acctHours, 1) : null),
                   guaranteeHint, true, true,
                 );
                 if (success) {
@@ -1673,8 +1710,18 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             await new Promise(r => setTimeout(r, 2000));
           }
 
-          // ★落ちた枠の数を記録（翌朝の自動補填に使う）。朝の生成は上書き、当日補充は同じ日なら足す
-          try {
+          // ★前の晩に作った分に「明日の分」の印を付ける（日をまたいでも見送りにしない・2026-09-24）
+          if (opts.forTomorrow) {
+            try {
+              const { jstDateString } = await import('../shared/accountRamp');
+              const marked = await db.markForDate(account.id, acctIdBefore, jstDateString(1));
+              console.log(`[AutoPost] 前の晩に明日の分 account=${account.id} ${marked}件（確認は${reviewHour}時ごろ）`);
+            } catch (e) { console.warn(`[AutoPost] 明日の分の印に失敗 account=${account.id}: ${(e as Error)?.message}`); }
+          }
+
+          // ★落ちた枠の数を記録（翌朝の自動補填に使う）。朝の生成は上書き、当日補充は同じ日なら足す。
+          //   前の晩の回では記録しない（翌朝6時の回が今日の不足を数えて作り直す）
+          if (!opts.forTomorrow) try {
             const { jstDateString, dateColToJst } = await import('../shared/accountRamp');
             const today = jstDateString(0);
             if (!opts.fillToday) {
@@ -1692,7 +1739,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           // ★2日続けて1本も届かなかったら、お詫びして「これを送ってください」とお願いする
           //   （2026-09-21 三上様指示）。黙って翌日へ回すと、お客様からは
           //   「投稿が来ていません」というお問い合わせになる（香取様・9/10 と 9/21 の2度）。
-          if (!opts.fillToday) {
+          if (!opts.fillToday && !opts.forTomorrow) {
             try {
               const { runZeroPostCheck } = await import('./zeroPostApology');
               // 追記のお願いは、そのアカウントが実際に使う「お店の情報」に対して出す
@@ -1872,6 +1919,25 @@ export function startAutoPostScheduler() {
   });
 
   console.log('[AutoPost Scheduler] Scheduled for 6:00 AM JST daily');
+
+  // ★前の晩に「明日の分」を作る（2026-09-24 三上様指示・shared/reviewTime.ts）。
+  //   夕方以降に確認されるお客様（reviewHour 15〜23時）について、その時間の30分前に作ってお届けする。
+  //   朝6時の回は「前の晩に作った今日の分」を数えて差分だけ作るので、二重にはならない。
+  cron.schedule('30 * * * *', async () => {
+    const { isEveningReview } = await import('../shared/reviewTime');
+    const hourJst = new Date(Date.now() + JST_OFFSET_MS).getUTCHours();
+    const reviewHour = hourJst + 1;
+    if (!isEveningReview(reviewHour)) return;
+    const ids = await db.listUserIdsByReviewHour(reviewHour).catch(() => [] as number[]);
+    if (ids.length === 0) return;
+    const { runTrackedJob } = await import('./jobRunner');
+    await runTrackedJob(`auto_post_evening_${reviewHour}`, async () => {
+      for (const id of ids) {
+        const r = await processAutoPostGeneration({ onlyUserId: id, forTomorrow: true });
+        console.log(`[AutoPost Scheduler] 前の晩の回（確認${reviewHour}時） user=${id}: ${r.generated}件作成・失敗${r.failed}`);
+      }
+    });
+  }, { timezone: 'Asia/Tokyo' });
 }
 
 /** ご本人のThreads直近投稿（返信を除く・本文のみ）。アカウントごとに1日1回だけ取得してキャッシュ */

@@ -708,7 +708,8 @@ export async function promoteSoftApprovedDuePosts(): Promise<{ promoted: number;
     SET sp.status = 'canceled', sp.errorMessage = '承認されないまま日をまたいだため見送り（翌朝また新しい投稿が届きます）'
     WHERE sp.status = 'awaiting_approval'
       AND (sp.angle IS NULL OR sp.angle <> 'pinned') AND sp.scheduledAt <= NOW()
-      AND DATE(CONVERT_TZ(sp.createdAt,'+00:00','+09:00')) < DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
+      -- ★「何日の分か」は forDate（前の晩に翌日分を作ったとき・2026-09-24 reviewHour）、無ければ作った日
+      AND COALESCE(sp.forDate, DATE(CONVERT_TZ(sp.createdAt,'+00:00','+09:00'))) < DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
   const rows: any = await db.execute(sql`
     UPDATE scheduledPosts sp JOIN users u ON u.id = sp.userId
     -- ★approvedAt は他の場所（LINE・画面）が new Date() で入れる UTC と揃える。
@@ -719,7 +720,7 @@ export async function promoteSoftApprovedDuePosts(): Promise<{ promoted: number;
       --   「見送らなければ公開」のままだと、選択肢として出した3件が3件とも公開される。
       AND sp.choiceGroupId IS NULL
       AND (sp.angle IS NULL OR sp.angle <> 'pinned') AND sp.scheduledAt <= NOW()
-      AND DATE(CONVERT_TZ(sp.createdAt,'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
+      AND COALESCE(sp.forDate, DATE(CONVERT_TZ(sp.createdAt,'+00:00','+09:00'))) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
   return { promoted: Number((rows as any)?.[0]?.affectedRows ?? 0), expired: Number((exp as any)?.[0]?.affectedRows ?? 0) };
 }
 
@@ -1088,7 +1089,9 @@ export async function countAccountPostsScheduledToday(accountId: number): Promis
  * ★2026-09-21：日をまたいだ承認待ちも数えない。promoteSoftApprovedDuePosts が必ず見送りにするため、
  *   公開されることはないのに枠だけ埋めてしまい、その日の公開が0件になる（香取様・実測）。
  */
-export async function countAccountAutoPostsScheduledToday(accountId: number): Promise<number> {
+export async function countAccountAutoPostsScheduledToday(accountId: number, dayOffset: 0 | 1 = 0): Promise<number> {
+  // ★dayOffset=1 は「明日の分」（前の晩に翌日分を作るとき・2026-09-24 reviewHour）
+  const target = sql.raw(`DATE_ADD(DATE(DATE_ADD(NOW(), INTERVAL 9 HOUR)), INTERVAL ${dayOffset === 1 ? 1 : 0} DAY)`);
   const database = await getDb();
   if (!database) return 0;
   const [row] = await database
@@ -1102,10 +1105,11 @@ export async function countAccountAutoPostsScheduledToday(accountId: number): Pr
         sql`${scheduledPosts.source} = 'auto'`,
         sql`${scheduledPosts.status} IN ('pending', 'awaiting_approval', 'posted', 'processing')`,
         sql`${scheduledPosts.replyToThreadsId} IS NULL`,
-        sql`DATE(DATE_ADD(${scheduledPosts.scheduledAt}, INTERVAL 9 HOUR)) = DATE(DATE_ADD(NOW(), INTERVAL 9 HOUR))`,
-        // ★見送りが決まっている承認待ち（前日以前に作られたもの）は枠に数えない（2026-09-21）
+        sql`DATE(DATE_ADD(${scheduledPosts.scheduledAt}, INTERVAL 9 HOUR)) = ${target}`,
+        // ★見送りが決まっている承認待ち（その日の分でないもの）は枠に数えない（2026-09-21）。
+        //   「何日の分か」は forDate、無ければ作った日（2026-09-24）
         sql`(${scheduledPosts.status} <> 'awaiting_approval'
-             OR DATE(DATE_ADD(${scheduledPosts.createdAt}, INTERVAL 9 HOUR)) = DATE(DATE_ADD(NOW(), INTERVAL 9 HOUR)))`,
+             OR COALESCE(${scheduledPosts.forDate}, DATE(DATE_ADD(${scheduledPosts.createdAt}, INTERVAL 9 HOUR))) = ${target})`,
       ),
     );
   return Number(row?.n ?? 0);
@@ -2811,6 +2815,8 @@ export async function getAutoPostEligibleUsers(onlyUserId?: number) {
       lastAutoPurposeIndex: users.lastAutoPurposeIndex,
       // 投稿の長さ設定（shared/postLength.ts）。生成時の上限と指示に使う
       postLength: users.postLength,
+      // ★案を確認しやすい時間（shared/reviewTime.ts・2026-09-24）。これが無いと夜の回が誰も対象にならない
+      reviewHour: users.reviewHour,
     })
     .from(users)
     .innerJoin(subscriptions, eq(users.id, subscriptions.userId))
@@ -4020,7 +4026,8 @@ export async function getAccountRecentDayOutcomes(
       WHERE seq < ${sql.raw(String(n))}
     ) d
     LEFT JOIN (
-      SELECT DATE(CONVERT_TZ(createdAt,'+00:00','+09:00')) AS date,
+      -- ★「何日の分か」は forDate（前の晩に翌日分を作ったとき）、無ければ作った日（2026-09-24）
+      SELECT COALESCE(forDate, DATE(CONVERT_TZ(createdAt,'+00:00','+09:00'))) AS date,
              COUNT(DISTINCT COALESCE(choiceGroupId, CAST(id AS CHAR))) AS created
       FROM scheduledPosts
       WHERE threadsAccountId = ${accountId} AND source = 'auto'
@@ -4862,3 +4869,31 @@ export async function recordAutoModeNudge(userId: number, stop = false): Promise
   ));
 }
 
+
+
+// ==================== 案を確認しやすい時間（reviewHour・2026-09-24） ====================
+
+/** お客様の「確認しやすい時間」を保存する（null＝未設定＝今までどおり朝6時） */
+export async function setUserReviewHour(userId: number, hour: number | null): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  await database.update(users).set({ reviewHour: hour } as any).where(eq(users.id, userId));
+}
+
+/** その時間を選んだお客様（夜の生成の対象を探す） */
+export async function listUserIdsByReviewHour(hour: number): Promise<number[]> {
+  const database = await getDb();
+  if (!database) return [];
+  const rows: any = await database.execute(sql`SELECT id FROM users WHERE reviewHour = ${hour}`);
+  return (((rows as any)[0] ?? []) as any[]).map((r) => Number(r.id));
+}
+
+/** 前の晩に作った翌日分に「何日の分か」を付ける（afterId より後にそのアカウントで作った自動投稿） */
+export async function markForDate(threadsAccountId: number, afterId: number, forDate: string): Promise<number> {
+  const database = await getDb();
+  if (!database) return 0;
+  const r: any = await database.execute(sql`
+    UPDATE scheduledPosts SET forDate = ${forDate}
+    WHERE threadsAccountId = ${threadsAccountId} AND id > ${afterId} AND source = 'auto' AND forDate IS NULL`);
+  return Number((r as any)?.[0]?.affectedRows ?? 0);
+}

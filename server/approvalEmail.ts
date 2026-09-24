@@ -80,23 +80,31 @@ export async function sendApprovalDigestEmail(params: {
     && posts.every((p: any) => p.choiceGroupId)
     && new Set(posts.map((p: any) => p.choiceGroupId)).size === 1;
 
+  // ★「本日」か「明日」かは予定時刻で決める（前の晩に翌日分をお届けするお客様・2026-09-24 reviewHour）
+  const jstDate = (d: Date) => new Date(d.getTime() + 9 * 3600_000).toISOString().slice(0, 10);
+  const firstAt = posts
+    .map((p: any) => (p.scheduledAt ? new Date(p.scheduledAt) : null))
+    .filter((d): d is Date => !!d && !isNaN(d.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+  const dayWord = firstAt && jstDate(firstAt) !== jstDate(new Date()) ? "明日" : "本日";
+
   const cards = posts
     .map((p, i) => postCard(p, userId, base, { choice: isChoice, index: i + 1, total: posts.length }))
     .join("");
 
   const lead = isChoice
-    ? `<p style="margin:0 0 8px;font-size:15px;color:#334155;">本日ぶんの投稿の案を <strong>${posts.length}案</strong> ご用意しました。この中からお好きなものを1つお選びください。</p>`
+    ? `<p style="margin:0 0 8px;font-size:15px;color:#334155;">${dayWord}ぶんの投稿の案を <strong>${posts.length}案</strong> ご用意しました。この中からお好きなものを1つお選びください。</p>`
     : overdue
     ? `<p style="margin:0 0 8px;font-size:15px;color:#334155;">自動作成された投稿 <strong>${posts.length}件</strong> が、承認されないまま予定時刻を過ぎていました。投稿時刻は翌日に自動で調整しています。</p>`
-    : `<p style="margin:0 0 8px;font-size:15px;color:#334155;">本日ぶんの投稿 <strong>${posts.length}件</strong> を作成しました。内容を確認して、よければボタンを押してください。</p>`;
+    : `<p style="margin:0 0 8px;font-size:15px;color:#334155;">${dayWord}ぶんの投稿 <strong>${posts.length}件</strong> を作成しました。内容を確認して、よければボタンを押してください。</p>`;
 
   await sendEmail({
     to,
     subject: isChoice
-      ? `【Threads Studio】本日の投稿の案 ${posts.length} 案から お選びください`
+      ? `【Threads Studio】${dayWord}の投稿の案 ${posts.length} 案から お選びください`
       : overdue
       ? `【Threads Studio】承認待ちの投稿が ${posts.length} 件あります`
-      : `【Threads Studio】本日の投稿 ${posts.length} 件をご確認ください`,
+      : `【Threads Studio】${dayWord}の投稿 ${posts.length} 件をご確認ください`,
     html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',sans-serif;max-width:600px;margin:0 auto;padding:8px;">
       <h2 style="font-size:19px;color:#0f172a;margin:0 0 12px;">${isChoice ? "どの案にするかお選びください" : "投稿の確認をお願いします"}</h2>
       ${lead}
