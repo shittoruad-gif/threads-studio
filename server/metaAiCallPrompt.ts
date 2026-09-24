@@ -85,6 +85,7 @@ export function buildMetaAiCallBundle(items: MetaAiCallMessageInput[]): unknown[
       ? "今朝の自動投稿は、Threadsの決まりでMeta AIに届きませんでした（自動投稿からだと@meta.aiが効かないため）。すみません。上のボタンからアプリで出し直すと届きます。今朝の投稿は消さなくて大丈夫です。\n\n"
       : "") +
     "これは、Meta AI（Threadsの中のAI）に質問する投稿です。地元の話題や、お客様が来店前に気になることを聞くと、Meta AIがコメント欄で答えてくれます。見た方の役に立つ投稿になり、地元の方にお店のアカウントを知ってもらうきっかけになります。質問の内容は毎日変わります。\n\n" +
+    "Meta AIの答えは間違うことがあります。していないサービスや言い過ぎの表現が書かれていたら、その返信の「…」から非表示にできます。\n\n" +
     (items.length > 1
       ? `カードは${items.length}枚（${names}）あります。横にめくって、それぞれのアカウントでログインした状態でボタンを押してください。開いた画面の上の名前がカードのアカウントと同じなら、そのまま「投稿」で大丈夫です。\n\n`
       : `開いた画面の上に出る名前が ${names} なら、そのまま「投稿」で大丈夫です。別の名前なら、Threadsアプリでお店のアカウントに切り替えてから、もう一度ボタンを押してください。\n\n`) +
@@ -242,10 +243,10 @@ export async function buildRedoForUsernames(usernames: string[], focusOverride: 
     const pinned = acct.defaultProjectId ? projects.find((p) => p.id === acct.defaultProjectId) : null;
     const project = pinned || projects[0];
     let text = !focus && today && today.trim().startsWith("@meta.ai") ? today.trim() : null;
-    // 得意分野を指定したやり直しは「おすすめ」型（「〇〇でダイエットに強い整体院のおすすめを教えて」）に固定
+    // 得意分野を指定したやり直しは「通うメリット」型に固定（「おすすめ」型は他店を並べる答えが返るため使わない・2026-09-24）
     if (!text && project) {
       text = focus
-        ? buildMetaAiCallPostOfKind({ ...callSourceOf(project), focus }, "recommend")
+        ? (buildMetaAiCallPostOfKind({ ...callSourceOf(project), focus }, "merit") ?? buildMetaAiCallPostOfKind({ ...callSourceOf(project), focus }, "strength"))
         : buildMetaAiCallPost({ ...callSourceOf(project), focus }, dayIndex + Number(acct.id));
     }
     if (!text) { console.log(`@${username}: 呼びかけ文を作れません（材料不足）`); continue; }

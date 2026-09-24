@@ -69,11 +69,17 @@ describe("Meta AI 呼びかけ投稿（本文が @meta.ai ＋依頼文）", () =
     expect(new Set(all).size).toBe(10);
     for (let d = 1; d < 10; d++) expect(all[d]).not.toBe(all[d - 1]);
   });
-  it("宣伝を頼む型は1つだけ。表示が落ちた「届けて」「他のお店と何が違う？」は出さない", () => {
+  it("店名は中立の紹介の1日だけ。「届けて」「おすすめを教えて」「何が違う」「強み」は回さない（他アカウントの実際の答えを見て判断・2026-09-24）", () => {
     const all = [...Array(10)].map((_, d) => buildMetaAiCallPost(src, d, sep)!);
     expect(all.filter((t) => t.includes("テスト整体院")).length).toBe(1);
-    expect(all.some((t) => t.includes("届けて"))).toBe(false);
-    expect(all.some((t) => t.includes("何が違う"))).toBe(false);
+    expect(all).toContain("@meta.ai テスト整体院はどんなところ？初めての人にも分かるように教えて");
+    for (const ng of ["届けて", "おすすめを教えて", "何が違う", "強み"]) expect(all.some((t) => t.includes(ng))).toBe(false);
+  });
+  it("地元の話題には、地元の方の返信を呼ぶ一言が付く（返信が表示の約半分）", () => {
+    const t = buildMetaAiCallPostOfKind(src, "local_specialty", sep)!;
+    expect(t).toBe("@meta.ai 倉敷市中央の名産品と言えば？\n地元の方のおすすめも、よかったら教えてください");
+    expect(buildMetaAiCallPostOfKind(src, "local_event", sep)).toContain("秋にある行事やお祭りを教えて\n地元の方");
+    expect(buildMetaAiCallPostOfKind(src, "first_visit", sep)).not.toContain("地元の方");
   });
   it("地元の話題・来店前の質問・体の質問が入る", () => {
     const all = [...Array(10)].map((_, d) => buildMetaAiCallPost(src, d, sep)!).join("\n");
@@ -119,6 +125,11 @@ describe("Meta AI 呼びかけ投稿（本文が @meta.ai ＋依頼文）", () =
   it("得意分野は「おすすめ」型の業種の前に付く", () => {
     expect(buildMetaAiCallPostOfKind({ businessType: "整体院", area: "倉敷市", focus: "ダイエット" }, "recommend")).toBe("@meta.ai 倉敷市でダイエットに強い整体院のおすすめを教えて");
   });
+  it("オンラインのお店に地元の話題、大人向けのお店に子ども連れの話題を出さない", () => {
+    expect(buildMetaAiCallPostOfKind({ businessType: "オンラインでのダイエットコーチ", area: "京都府京都市" }, "local_specialty", sep)).toBeNull();
+    expect(buildMetaAiCallPostOfKind({ businessType: "スナック", area: "倉敷市水島" }, "local_family", sep)).toBeNull();
+    expect(buildMetaAiCallPostOfKind({ businessType: "スナック", area: "倉敷市水島" }, "local_specialty", sep)).toContain("倉敷市水島の名産品");
+  });
   it("材料が無くても「強みを伝えて」型は作れる", () => {
     expect(buildMetaAiCallPost({}, 0)).toBe("@meta.ai うちのお店の強みを、来店されたことのない人に伝えて");
   });
@@ -139,6 +150,14 @@ describe("呼びかけ投稿の地域名は市より細かく（三上様指示 
     expect(callAreaLabel("岡山市北区京橋町", null)).toBe("岡山市北区京橋町");
     expect(callAreaLabel("岡山県倉敷市中央", null)).toBe("倉敷市中央");
   });
+  it("「なし」は地域にしない。京都府・東京都・北海道を正しく扱う", () => {
+    expect(callAreaLabel("なし", null)).toBe("");
+    expect(callAreaLabel("オンライン", null)).toBe("");
+    expect(callAreaLabel("京都府", null)).toBe("京都");
+    expect(callAreaLabel("東京都", null)).toBe("東京");
+    expect(callAreaLabel("北海道", null)).toBe("北海道");
+    expect(callAreaLabel("京都府京都市伏見区醍醐構口町", null)).toBe("醍醐構口町");
+  });
   it("町名も駅も無ければ市、それも無ければ都道府県。文章が入った登録は使わない", () => {
     expect(callAreaLabel("倉敷市", null)).toBe("倉敷市");
     expect(callAreaLabel("神奈川県", null)).toBe("神奈川");
@@ -151,7 +170,7 @@ describe("呼びかけ投稿の地域名は市より細かく（三上様指示 
   });
   it("投稿文に細かい地域名が入る", () => {
     const t = buildMetaAiCallPostOfKind({ businessType: "マシンピラティススタジオ", area: "岡山県倉敷市玉島", localTerms: "JR新倉敷駅から車で約7分", storeName: "Moveact玉島店" }, "local_specialty")!;
-    expect(t).toBe("@meta.ai 新倉敷・玉島の名産品と言えば？");
+    expect(t.split("\n")[0]).toBe("@meta.ai 新倉敷・玉島の名産品と言えば？");
   });
 });
 

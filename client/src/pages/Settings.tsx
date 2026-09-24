@@ -426,9 +426,9 @@ export default function Settings() {
                     <div>
                       <Label className="text-sm font-medium text-foreground">{t("毎朝10時にMeta AI呼びかけ文を公式LINEで受け取る（おすすめ）")}</Label>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {t("「@meta.ai 新倉敷・玉島で整体院のおすすめを教えて」のような呼びかけ文が、毎朝10時に公式LINEへ届きます。")}
+                        {t("「@meta.ai 新倉敷・玉島の名産品と言えば？」「@meta.ai 初めて整体院に行くとき、知っておくと安心なことは？」のような呼びかけ文が、毎朝10時に公式LINEへ届きます。")}
                         {t("「Threadsアプリで投稿する」を押すと文章が入った投稿画面が開くので、「投稿」を押すだけです。")}<br className="hidden sm:inline" />
-                        {t("自動投稿（API）からだと@meta.aiがメンションにならないため、この1件だけはアプリから投稿していただきます。Meta AIがお店の名前を出してコメントで答えるので、届く人が増えます。")}
+                        {t("自動投稿（API）からだと@meta.aiがメンションにならないため、この1件だけはアプリから投稿していただきます。Meta AIがコメントで答えるので、投稿の下に会話ができ、地元の方の目に留まりやすくなります。")}
                         {t("公式LINEの「設定」→「呼びかけの得意分野」で、アカウントごとに「ダイエットに強い整体院」のように変えられます。")}
                         {t("@meta.ai はThreadsの仕様で段階的に提供されており、まだ使えないアカウントではMeta AIの返事が付きません。")}
                         {!available && (

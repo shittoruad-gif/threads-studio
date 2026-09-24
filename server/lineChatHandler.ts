@@ -1706,8 +1706,24 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       MENU_HINT,
     )];
   }
+  // ── 案を確認しやすい時間（2026-09-24 三上様指示・shared/reviewTime.ts）──
+  if (q.m === "reviewtime") {
+    const { REVIEW_HOUR_OPTIONS, REVIEW_HOUR_QUESTION } = await import("@shared/reviewTime");
+    return [textWithQuick(REVIEW_HOUR_QUESTION, [
+      ...REVIEW_HOUR_OPTIONS.map((o) => ({ label: o.label, data: `rt=${o.hour}` })),
+      { label: "決まっていない", data: "rt=none" },
+    ])];
+  }
+  if (q.rt) {
+    const { normalizeReviewHour, reviewHourReply } = await import("@shared/reviewTime");
+    const h = q.rt === "none" ? null : normalizeReviewHour(q.rt);
+    if (q.rt !== "none" && h === null) return [textWithQuick("うまく受け取れませんでした。もう一度お選びください。", MENU_HINT)];
+    await db.setUserReviewHour(Number(user.id), h);
+    return [textWithQuick(reviewHourReply(h), MENU_HINT)];
+  }
+
   if (q.m === "settings" || q.s === "common") {
-    const s = (await db.getAutoPostSettings(user.id)) || {};
+    const s = { ...((await db.getAutoPostSettings(user.id)) || {}), reviewHour: (user as any).reviewHour ?? null };
     const { plan } = await planOf(user.id);
     const maxPerDay = plan?.features.maxAutoPostsPerDay ?? 0;
     const notify = await db.isNextActionNotifyEnabled(user.id);
@@ -2526,7 +2542,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     return [{ type: "text", text:
       `@${acct.threadsUsername} の得意分野を、短い言葉で1つ送ってください。\n` +
       "（例：ダイエット、産後骨盤矯正、美容鍼、着物のお手入れ）\n\n" +
-      "毎朝10時の呼びかけ文が「〇〇でダイエットに強い整体院のおすすめを教えて」のようになります。\n" +
+      "毎朝10時の呼びかけ文のうち、お店を紹介する日の文が「〇〇で…に、ダイエットに強い整体院に通うメリットを伝えて」のようになります。\n" +
       (acct.callFocus ? `いまは「${acct.callFocus}」です。消す場合は「なし」と送ってください。\n` : "") +
       "やめる場合は「やめる」と送ってください。" }];
   }
@@ -2713,7 +2729,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         const base = process.env.APP_BASE_URL || "https://threads-studio.com";
         return [textWithQuick(
           "Meta AI呼びかけ投稿は、プロプラン・ビジネスプランでご利用いただけます。\n" +
-          "毎朝10時に「@meta.ai 〇〇で…のおすすめを教えて」という呼びかけ文をLINEでお届けし、ボタン1つでThreadsアプリから投稿できます。Meta AIがお店の名前を出して答えるので、届く人が増えます。\n\n" +
+          "毎朝10時に「@meta.ai 〇〇の名産品と言えば？」のような呼びかけ文（毎日内容が変わります）をLINEでお届けし、ボタン1つでThreadsアプリから投稿できます。Meta AIがコメントで答えるので、投稿の下に会話ができ、地元の方の目に留まりやすくなります。\n\n" +
           `プランを変更すると、その日からお使いいただけます。\n${base}/pricing?openExternalBrowser=1`,
           [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT],
         )];
@@ -2729,9 +2745,9 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     return [textWithQuick(
       (on
         ? "Meta AI呼びかけ投稿をONにしました。\n\n" +
-          "毎朝10時に「@meta.ai 〇〇で…のおすすめを教えて」のような呼びかけ文を、このLINEにお届けします。" +
+          "毎朝10時に「@meta.ai 〇〇の名産品と言えば？」のような呼びかけ文（毎日内容が変わります）を、このLINEにお届けします。" +
           "「Threadsアプリで投稿する」を押すと文章が入った投稿画面が開くので、「投稿」を押すだけです。" +
-          "Meta AIがお店の名前を出してコメントで答えるので、投稿の下に会話ができ、届く人が増えます。\n" +
+          "Meta AIがコメントで答えるので、投稿の下に会話ができ、地元の方の目に留まりやすくなります。\n" +
           "※ 自動投稿（API）からだと@meta.aiがメンションにならないため、この1件だけはアプリから投稿していただきます。\n" +
           "※ @meta.ai はThreadsの仕様で段階的に提供されており、まだ使えないアカウントではMeta AIの返事が付きません。"
         : "Meta AI呼びかけ投稿を止めました。") +
@@ -3045,7 +3061,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
       const { buildMetaAiCallPostOfKind } = await import("../shared/metaAiAsk");
       const pjs: any[] = ((await db.getUserProjects(user.id)) || []).filter((pj: any) => !String(pj.id).startsWith("demo_") && pj.businessType && pj.area);
       const pj: any = (acct.defaultProjectId && pjs.find((x: any) => String(x.id) === String(acct.defaultProjectId))) || pjs[0];
-      if (pj) sample = buildMetaAiCallPostOfKind({ storeName: pj.storeName, businessType: pj.businessType, area: pj.area, localTerms: pj.localTerms, target: pj.target, mainProblem: pj.mainProblem, focus: clear ? null : raw }, "recommend") || "";
+      if (pj) { const src = { storeName: pj.storeName, businessType: pj.businessType, area: pj.area, localTerms: pj.localTerms, target: pj.target, mainProblem: pj.mainProblem, focus: clear ? null : raw }; sample = buildMetaAiCallPostOfKind(src, "merit") || buildMetaAiCallPostOfKind(src, "strength") || ""; }
     } catch { sample = ""; }
     return [textWithQuick(
       (clear ? `@${acct.threadsUsername} の得意分野を消しました。` : `@${acct.threadsUsername} の得意分野を「${raw}」にしました。`) +

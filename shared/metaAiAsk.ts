@@ -146,8 +146,12 @@ export interface MetaAiCallSource {
  */
 export function callAreaLabel(area: string | null | undefined, localTerms?: string | null): string {
   const raw = String(area || '').trim();
-  const pref = raw.match(/^(.+?[都道府県])/)?.[1] ?? '';
-  const rest = raw.replace(/^(.+?[都道府県])/, '');
+  // 「なし」「未定」「オンライン」などは地域として使わない（2026-09-24「なしの名産品と言えば？」が作られていた）
+  if (/^(なし|無し|未定|特になし|-|ー|―|オンライン.*|全国.*)$/.test(raw)) return '';
+  // 都道府県。「京都府」を「京都＋府」と切って「京」になっていた（東京都・大阪府・北海道も同じ形に）
+  const PREF_RE = /^(東京都|北海道|京都府|大阪府|[^都道府県\s]{2,3}県)/;
+  const pref = raw.match(PREF_RE)?.[1] ?? '';
+  const rest = raw.replace(PREF_RE, '');
   // 市区町村。「廿日市市」「市川市」のように名前に「市」を含む市に対応（2文字以上＋市、直後が市でない）
   const cityM = rest.match(/^(.{1,}?[市郡])(?![市])((?:[^\s]{1,4}?区)?)/);
   const city = cityM ? cityM[1] + (cityM[2] || '') : (rest.match(/^(.+?[区町村])/)?.[1] ?? '');
@@ -183,7 +187,7 @@ export function callAreaLabel(area: string | null | undefined, localTerms?: stri
   // 駅が無いときは、短い町名だけだと分かりにくいので市区名を前に付ける（倉敷市玉島／倉敷市中央）
   if (town) { const lbl = town.length <= 3 && city ? `${city}${town}` : town; return bad(lbl) ? '' : lbl; }
   if (city) return bad(city) ? '' : city;
-  const pf = pref.replace(/[都道府県]$/, '');
+  const pf = pref === '北海道' ? pref : pref.replace(/[都道府県]$/, '');
   return pf && !bad(pf) ? pf : '';
 }
 
@@ -225,30 +229,41 @@ function serviceWord(src: MetaAiCallSource): string {
 
 /**
  * ★呼びかけ文の種類（2026-09-24 三上様「同じパターンのものばかりになっていて気になる。
- *   投稿することで集客につながったり、ユーザーにとってプラスになったりするものを採用して」）。
+ *   投稿することで集客につながったり、ユーザーにとってプラスになったりするものを採用して」
+ *   → 同日「うちのアカウントだけではなく、他のものからリサーチして」）。
  *
- *   以前は「お店を届けて／おすすめを教えて／通うメリット／強み／他と何が違う」の5つを回していた。
- *   Moveact 2アカウントの実測（9/5〜9/23・Threads API）：
- *     - 同じ文の繰り返しで表示が落ちた。「〇〇周辺の人に、うちのお店を届けて」は 2,000台 → 31〜62回（通常投稿の中央値141を下回る）
- *     - 「〇〇の名産品と言えば？」（9/23・地元の話題）は 766回／896回
- *     - 「〇〇で整体院のおすすめを教えて」は 467〜926回
- *   → お店の宣伝を頼む型を減らし、「地元の人が答えたくなる話題」「来店前の不安が減る質問」
- *     「見た人が自分の体に役立てられる質問」を足す。Meta AI の答えがコメント欄に付くので、
- *     投稿そのものが読む人の役に立つ。地元の人の目に留まり、お店のアカウントを知ってもらうきっかけになる。
- *   → 「届けて」「他のお店と何が違う？」はやめた（表示が落ちた型・比べる話は他店を下げる答えを呼びやすい）。
+ * 調べたこと（2026-09-24）：
+ *   A. 連携中12アカウントの @meta.ai 投稿101件（Threads API・通常投稿の中央値に対する倍率）
+ *        おすすめ 3.3倍／メリット 3.1倍／届けて 2.7倍／強み 1.7倍／違い 1.5倍。同じ型は4回目から落ちる（2.9→1.6→1.0倍）
+ *   B. その投稿に Meta AI が実際に付けた答え（読む人が目にするもの）
+ *        - 「届けて」：答えは店主向けの宣伝のコツ（ハッシュタグ・Googleマップ）。読む人の役に立たない。
+ *          店がしていない「初回チェック無料」を勝手に書いた例もあった（9/24 廿日市）
+ *        - 「おすすめを教えて」：自店の投稿の下に他店の名前と料金を並べた（9/15 金光「コスパ重視なら楽兆」）
+ *        - 「強み」「違い」：店の投稿を元に「根本改善」「その場しのぎではない」等、NGワードにしている言い切りを書く
+ *        - 「名産品と言えば？」：地元の正しい情報が返り、地元の人が返信した（「良寛餅」）。表示は通常の5〜6倍
+ *        - 「〇〇はどういう場所？」「うちでできること」：店名を出して中立に紹介（金光 2,053回）→ about_store
+ *   C. 先行して使われている台湾・東南アジアの記事：返信が表示の約半分を占める。
+ *      「AIに聞いて、読む人にも答えてもらう」使い方が反応を広げる。AIの答えには誤りがある前提で使う。
  *
+ * → 読む人の役に立ち、店の名前が中立に出て、他店や言い切りを呼ばない質問だけを回す。
+ *   地元の話題には「地元の方の声も聞きたい」の一言を添えて、返信を呼ぶ。
+ *   「届けて」「おすすめを教えて」「他と何が違う？」は回さない（recommend は種類指定でだけ使える）。
  *   依頼文は今までどおり登録内容から決まった型で組み立てる（AIに書かせない＝事実が混ざらない）。
  *   効果・結果を言い切る聞き方（治る・改善する 等）はしない。
  */
 export type MetaAiCallKind =
-  | 'local_specialty' | 'recommend' | 'body_season' | 'first_visit' | 'local_season'
-  | 'merit' | 'choose' | 'local_family' | 'strength' | 'body_daily';
+  | 'local_specialty' | 'about_store' | 'body_season' | 'first_visit' | 'local_season'
+  | 'merit' | 'choose' | 'local_family' | 'body_daily' | 'local_event'
+  | 'recommend' | 'strength';
 
-/** 並び順＝日替わりの順番。同じ系統（地元・来店前・体・お店）が続かないように交互に並べる */
+/** 並び順＝日替わりの順番。地元の話題・お店の紹介・来店前・体の質問が交互になるように並べる */
 export const META_AI_CALL_ROTATION: readonly MetaAiCallKind[] = [
-  'local_specialty', 'recommend', 'body_season', 'first_visit', 'local_season',
-  'merit', 'choose', 'local_family', 'strength', 'body_daily',
+  'local_specialty', 'about_store', 'body_season', 'first_visit', 'local_season',
+  'merit', 'choose', 'local_family', 'body_daily', 'local_event',
 ];
+
+/** 地元の話題に添える一言（返信を呼ぶ。返信が表示の約半分を占めるため） */
+const LOCAL_INVITE = '\n地元の方のおすすめも、よかったら教えてください';
 
 /** 体の不調を扱う業種か（季節の体・日常の注意の質問はこの業種だけ） */
 function isBodyBusiness(service: string, businessType: string | null | undefined): boolean {
@@ -288,19 +303,26 @@ export function buildMetaAiCallPostOfKind(src: MetaAiCallSource, kind: MetaAiCal
   // 「通う」が自然な業種（院・サロン・スタジオ・ジム・教室）以外は「利用する」（呉服店に通う、は不自然）
   const visitable = /(院|サロン|スタジオ|ジム|教室|クリニック|整体|整骨|接骨|鍼灸|ピラティス|ヨガ|塾)/.test(svc);
   const body = isBodyBusiness(service, src.businessType);
+  // オンラインだけのお店に地元の話題は合わない。大人向けのお店（スナック等）に子ども連れの話題は合わない
+  const online = /オンライン|リモート|全国対応/.test(String(src.businessType || ''));
+  const local = area && !online ? area : '';
+  const adultsOnly = /(スナック|バー|パブ|居酒屋|キャバ|ラウンジ|クラブ)/.test(String(src.businessType || ''));
   const month = jstMonth(now);
   const H = META_AI_HANDLE;
 
   let text: string | null = null;
   switch (kind) {
     case 'local_specialty':
-      text = area ? `${H} ${area}の名産品と言えば？` : null; break;
+      text = local ? `${H} ${local}の名産品と言えば？${LOCAL_INVITE}` : null; break;
     case 'local_season':
-      text = area ? `${H} ${area}周辺で、${seasonWord(month)}に出かけるならおすすめの場所は？` : null; break;
+      text = local ? `${H} ${local}周辺で、${seasonWord(month)}に出かけるならおすすめの場所は？${LOCAL_INVITE}` : null; break;
     case 'local_family':
-      text = area ? `${H} ${area}周辺で、子どもと一緒に楽しめる場所を教えて` : null; break;
-    case 'recommend':
-      text = area && svc ? `${H} ${area}で${svc}のおすすめを教えて` : null; break;
+      text = local && !adultsOnly ? `${H} ${local}周辺で、子どもと一緒に楽しめる場所を教えて${LOCAL_INVITE}` : null; break;
+    case 'local_event':
+      text = local ? `${H} ${local}周辺で、${seasonWord(month)}にある行事やお祭りを教えて${LOCAL_INVITE}` : null; break;
+    case 'about_store':
+      // 会社・教室・オンラインにも合うよう「お店」ではなく「ところ」（9/8 はいさい整骨院「どういう場所？」が中立の紹介になった）
+      text = storeOk ? `${H} ${store}はどんなところ？初めての人にも分かるように教えて` : null; break;
     case 'merit':
       text = area && who && svc ? `${H} ${area}で${who}に、${svc}${visitable ? 'に通う' : 'を利用する'}メリットを伝えて` : null; break;
     case 'first_visit':
@@ -311,6 +333,9 @@ export function buildMetaAiCallPostOfKind(src: MetaAiCallSource, kind: MetaAiCal
       text = body ? `${H} ${SEASON_BODY[month]}、体がだるいと感じるときに自分でできる工夫は？` : null; break;
     case 'body_daily':
       text = body && problem ? `${H} ${problem}が気になる人が、毎日の生活で気をつけるといいことは？` : null; break;
+    // ↓ 日替わりには入れない（種類指定でだけ使う）
+    case 'recommend':
+      text = area && svc ? `${H} ${area}で${svc}のおすすめを教えて` : null; break;
     case 'strength':
       text = `${H} うちのお店${storeOk ? `（${store}）` : ''}の${f ? `${f}の` : ''}強みを、来店されたことのない人に伝えて`; break;
   }
@@ -319,13 +344,15 @@ export function buildMetaAiCallPostOfKind(src: MetaAiCallSource, kind: MetaAiCal
 
 /**
  * 日替わりの呼びかけ文。seed は日付の番号（＋アカウントごとのずらし）。
- * 作れる種類だけを並び順どおりに回すので、材料が揃っていれば10日間同じ種類は出ない。
+ * 作れる種類だけを並び順どおりに回すので、材料が揃っていれば10日間同じ種類は出ない
+ * （同じ型は4回目から表示が落ちるので、1つの型は月3回程度に収まる）。
  */
 export function buildMetaAiCallPost(src: MetaAiCallSource, seed: number, now: Date = new Date()): string | null {
   const list = META_AI_CALL_ROTATION
     .map((k) => buildMetaAiCallPostOfKind(src, k, now))
     .filter((c): c is string => !!c);
-  if (list.length === 0) return null;
+  // 材料がほとんど無いときだけ「強み」を使う（何も送れないよりは良い）
+  if (list.length === 0) { const fb = buildMetaAiCallPostOfKind(src, 'strength', now); return fb; }
   return list[Math.abs(seed) % list.length];
 }
 
