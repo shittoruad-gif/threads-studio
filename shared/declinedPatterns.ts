@@ -241,7 +241,7 @@ export function filterCounseling<T extends Record<string, any> | null | undefine
 
 /** 見送りの理由（公式LINEのボタン） */
 export const SKIP_REASONS = {
-  same: { label: "同じような内容ばかり", note: "オーナーから「同じような内容ばかり」と言われている。直近の投稿と違う材料（N1顧客像・強み・季節・よくあるご質問）から書く。同じ主張を言い換えて繰り返さない。" },
+  same: { label: "同じような内容ばかり", note: "オーナーから「同じような内容ばかり」と言われている。直近の投稿でまだ使っていない材料（メニュー・よくあるご質問・季節・お店ごとの違いなど）から書く。同じ主張・同じ人物・同じ体験を言い換えて繰り返さない。" },
   claim: { label: "言っていることが違う", note: "オーナーから「言っていることが違う（当院の考えと違う）」と言われている。見送られた投稿の主張は使わない。信条・実績を主張としてそのまま書かない。" },
   tone: { label: "口調・言い回しが違う", note: "オーナーから「口調・言い回しが違う」と言われている。文体のお手本の語尾・文の長さに寄せる。決め台詞や、毎回同じ問いかけで締める形は使わない。" },
   length: { label: "長い・読みにくい", note: "オーナーから「長い・読みにくい」と言われている。短く、伝えることは1つだけにする。" },
@@ -263,6 +263,7 @@ export const SKIP_REASON_QUESTION =
 /** 理由を受け取ったあとのお返事 */
 export function skipReasonThanks(code: SkipReasonCode, text?: string | null): string {
   if (code === "today") return "承知しました。内容の問題ではないとして扱います。明日の朝、また新しい案をお届けします。";
+  if (code === "same") return "ありがとうございます。これまでの投稿に多い話題を外して、まだ使っていないお店の材料から作るようにします。";
   if (code === "text" && text) return `ありがとうございます。いただいた内容（「${text.slice(0, 60)}${text.length > 60 ? "…" : ""}」）を、明日からの投稿づくりでいちばん優先します。`;
   return `ありがとうございます。「${SKIP_REASONS[code].label}」を、明日からの投稿づくりに反映します。`;
 }

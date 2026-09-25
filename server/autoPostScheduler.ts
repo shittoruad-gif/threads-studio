@@ -17,6 +17,7 @@ import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
 import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM } from "../shared/recruitingPost";
 import { touchesDeclined, filterStyleSamples, normalizeForPatterns, filterCounseling } from "../shared/declinedPatterns";
+import { overusedHits, dropOverusedLines } from "../shared/freshTopic";
 import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
 import { stripRawUrls } from "../shared/sanitize";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
@@ -661,11 +662,13 @@ async function generateAutoPost(
     let declinedPatterns: import('../shared/declinedPatterns').DeclinedPatterns | null = null;
     let declinedNote = '';
     let dropBeliefProof = false;
+    let skipReasons: Array<{ reason: string; reasonText?: string | null }> = [];
     try {
       const dp = await import('../shared/declinedPatterns');
       const declinedTexts = await db.getRecentDeclinedContents(threadsAccountId, 21, 10).catch(() => [] as string[]);
       const reasons = (await db.getRecentSkipFeedback(threadsAccountId, 14).catch(() => []))
         .filter((r: any) => r.reason !== 'today'); // 「今日は出したくないだけ」は中身の信号ではない
+      skipReasons = reasons;
       const pt = dp.extractDeclinedPatterns(declinedTexts, [
         (project as any).storeName, project.area, (project as any).localTerms,
       ], {
@@ -685,7 +688,55 @@ async function generateAutoPost(
       }
     } catch (e) { console.warn(`[AutoPost] 見送りの共通点を読めませんでした account=${threadsAccountId}: ${(e as Error)?.message}`); }
 
-    const dropIfRecentlyUsed = (text: string | null | undefined, label: string): string | undefined => {
+    // ★「同じような内容ばかり」と言われた方は、言い回しではなく「話題」で変える（2026-09-25 三上様指示）。
+    //
+    //   プレステージ様（acc22）は 9/24〜9/25 に「同じような内容ばかり」で4回見送った。
+    //   直近の投稿はほぼすべて「未経験で不安→先輩も最初は不安→2年で役職→スタッフが優しい」。
+    //   上の見送りの共通点は言い回しの禁止なので、言い換えると素通りしていた（10:31に見送り→
+    //   10:33の「代わりを作る」も同じ話→10:48にまた見送り）。出どころは N1顧客像とお客様の声で、
+    //   この2欄はプロンプトで「そのまま使う」「★最優先」と指示されていた。
+    //
+    //   ここでは直近の投稿の多くに出ている話題の言葉を数え（shared/freshTopic.ts）、
+    //    1. N1顧客像・お客様の声・信条・実績から、その話題の行を今日は渡さない
+    //    2. まだ使っていない材料を1つ「今日の主題」として指定する
+    //    3. 出来上がった下書きがその話題の言葉を2つ以上含んでいたら作り直す（最後の作り直しでは止めない）
+    //   「同じような内容ばかり」と言われていない方には何もしない。
+    let freshPlan: import('../shared/freshTopic').FreshTopicPlan | null = null;
+    let freshNote = '';
+    try {
+      const ft = await import('../shared/freshTopic');
+      if (ft.saidSameContent(skipReasons)) {
+        const cr: any = counselingResult || {};
+        const plan = ft.planFreshTopic({
+          recentPosts,
+          materials: [project.strength, project.usp, project.proof, project.n1Customer, (project as any).belief,
+            (project as any).customerWords, ...(cr.realProofs ?? []), ...(cr.realEpisodes ?? []), ...(cr.faq ?? []), ...(cr.menu ?? [])],
+          // 毎回出てよい言葉（店名・地名・業種・対象のお客様）は数えない
+          protect: [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title],
+          index: postTypeIndex * PURPOSES.length + purposeIndex,
+        });
+        if (plan.overused.length > 0) {
+          freshPlan = plan;
+          freshNote = ft.buildFreshTopicNote(plan);
+          console.log(`[AutoPost] 話題を変える account=${threadsAccountId} 使いすぎ=${plan.overused.join('・')} 今日の主題=${plan.topic ?? '指定なし'}`);
+        }
+      }
+    } catch (e) { console.warn(`[AutoPost] 話題の偏りを数えられませんでした account=${threadsAccountId}: ${(e as Error)?.message}`); }
+    // N1顧客像・お客様の声は「そのまま使う」「★最優先」と指示される欄なので、
+    // 使いすぎの言葉が1つでもある行と、直近の投稿ですでに使った行は渡さない。
+    // ★試しに作った案では「お客様の変化を一緒に喜べる」（お客様の声）が毎回入り、重複ガードで落ちていた（2026-09-25）
+    const freshLines = (text: string | null | undefined, label: string): string | undefined => {
+      if (!freshPlan) return text || undefined;
+      const before = String(text ?? '').split(/\r?\n/).filter((l) => l.trim()).length;
+      const kept = dropOverusedLines(text, freshPlan, 1).split(/\r?\n/)
+        .filter((l) => l.trim() && !usedInRecentPosts(l, recentPosts));
+      if (kept.length < before) console.log(`[AutoPost] ${label}の${before - kept.length}行は直近と同じ話のため今日は渡さない account=${threadsAccountId}`);
+      return kept.join('\n') || undefined;
+    };
+    const n1ForToday = freshLines(project.n1Customer, 'N1顧客像');
+    const customerWordsForToday = freshLines((project as any).customerWords, 'お客様の声');
+
+    const dropIfRecentlyUsed =(text: string | null | undefined, label: string): string | undefined => {
       let v = String(text ?? '').trim();
       if (!v) return undefined;
       // ★「言っていることが違う」とお聞きしたら、信条・実績は主張として渡さない
@@ -700,6 +751,14 @@ async function generateAutoPost(
         if (kept.length < lines.length) {
           console.log(`[AutoPost] ${label}の${lines.length - kept.length}行は見送られた投稿の共通点に触れるため今日は渡さない account=${threadsAccountId}`);
         }
+        if (kept.length === 0) return undefined;
+        v = kept.join('\n');
+      }
+      // ★「同じような内容ばかり」と言われた方は、使いすぎの話題を2つ以上含む行を今日は渡さない
+      if (freshPlan) {
+        const lines = v.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+        const kept = lines.filter((l) => overusedHits(l, freshPlan).length < 2);
+        if (kept.length < lines.length) console.log(`[AutoPost] ${label}の${lines.length - kept.length}行は使いすぎの話題のため今日は渡さない account=${threadsAccountId}`);
         if (kept.length === 0) return undefined;
         v = kept.join('\n');
       }
@@ -720,6 +779,13 @@ async function generateAutoPost(
     const counselingForToday: any = (() => {
       const r = filterCounseling(counselingResult, declinedPatterns);
       if (r.dropped > 0) console.log(`[AutoPost] はじめの設定の答えから、見送られた主張に触れる${r.dropped}項目を今日は外した account=${threadsAccountId}`);
+      // ★はじめの設定の体験談（realEpisodes）にも、N1顧客像と同じ話が入っている（プレステージ様・2026-09-25）
+      if (freshPlan && r.value && Array.isArray((r.value as any).realEpisodes)) {
+        const eps = (r.value as any).realEpisodes as unknown[];
+        const kept = eps.filter((x) => overusedHits(String(x ?? ''), freshPlan).length < 2);
+        if (kept.length < eps.length) console.log(`[AutoPost] はじめの設定の体験談${eps.length - kept.length}件は使いすぎの話題のため今日は外した account=${threadsAccountId}`);
+        return { ...(r.value as any), realEpisodes: kept };
+      }
       return r.value;
     })();
     const beliefForToday = dropIfRecentlyUsed((project as any).belief, '信条');
@@ -746,7 +812,8 @@ async function generateAutoPost(
       //   指数は postTypeIndex * PURPOSES.length + purposeIndex（0〜23）にする。
       //   purposeIndex だけだと 0〜3 しか取らず、7行のうち4行しか回らなかった
       //   （2026-09-18 昼に本番データで実測）。
-      focusN1: pickRotatingTopic(project.n1Customer, postTypeIndex * PURPOSES.length + purposeIndex) || undefined,
+      // ★「同じような内容ばかり」と言われた方は、使いすぎの話題の行を外したN1顧客像から選ぶ（2026-09-25）
+      focusN1: pickRotatingTopic(n1ForToday, postTypeIndex * PURPOSES.length + purposeIndex) || undefined,
       // ★健康系のお店では、はじめの設定に書かれた結果表現を渡す前に落とす（2026-09-15 三上様指示）。
       //   落としたことはログに残す（誰の設定を洗ったかが分からないと、材料の足りない方に
       //   気づけない。岩根様のように登録内容そのものが薄い方は朝の報告に載せる）。
@@ -758,10 +825,10 @@ async function generateAutoPost(
       postType,
       treeCount: 0,
       usp: project.usp || undefined,
-      n1Customer: project.n1Customer || undefined,
+      n1Customer: n1ForToday,
       belief: beliefForToday,
       catchphrase: (project as any).catchphrase || undefined,
-      customerWords: (project as any).customerWords || undefined,
+      customerWords: customerWordsForToday,
       purpose,
       // ★「はじめの設定」の答え（counselingResult）にも同じ主張が入っていることがある（2026-09-24）。
       //   香取様は industryMyths に「痛い場所をマッサージするだけでは良くなりません」、
@@ -819,6 +886,8 @@ async function generateAutoPost(
           + angleNote
           // ★オーナーが続けて見送った投稿から分かったこと（2026-09-24）。切り口の指示より後ろ＝より優先
           + declinedNote
+          // ★「同じような内容ばかり」と言われた方への、話題の指定（2026-09-25）。見送りの共通点より後ろ＝より優先
+          + freshNote
           + (CONVERSATION_POST_TYPES.has(postType) ? CONVERSATION_ENDING_ADDENDUM : '')
           // ★求人（採用）の投稿を、集客と同じ型で書かせない（shared/recruitingPost.ts・2026-09-23）。
           //   プレステージ様は2晩続けて naturalnessReview で3回落ち、枠を捨てていた。
@@ -1019,8 +1088,21 @@ async function generateAutoPost(
       if (hit) {
         console.warn(`[AutoPost] declinedPhrase:「${hit}」が残っている → 作り直し userId=${userId} account=${threadsAccountId}`);
         noteReject('declinedPhrase', userId, threadsAccountId, postingTimeIndex,
-          `- 「${hit}」は、オーナーが何度も見送った投稿に出ている言い回し。使わない。言い換えて同じ主張をするのも不可。別の材料（N1顧客像・強み・季節・よくある質問）から書く。`,
+          `- 「${hit}」は、オーナーが何度も見送った投稿に出ている言い回し。使わない。言い換えて同じ主張をするのも不可。直近で使っていない材料（メニュー・よくある質問・季節・お店ごとの違い）から書く。`,
           { detail: hit });
+        return false;
+      }
+    }
+
+    // ★「同じような内容ばかり」と言われた方で、使いすぎの話題の言葉が2つ以上残っていたら作り直す（2026-09-25）。
+    //   1つだけなら通す（「先輩」1語で落とすと、書ける話が無くなる）。最後の作り直しでは止めない。
+    if (freshPlan && !lastAttempt) {
+      const hits = overusedHits(naturalMain, freshPlan);
+      if (hits.length >= 2) {
+        console.warn(`[AutoPost] sameTopic:「${hits.join('・')}」の話が続いている → 作り直し userId=${userId} account=${threadsAccountId}`);
+        noteReject('sameTopic', userId, threadsAccountId, postingTimeIndex,
+          `- 「${hits.join('」「')}」は、直近の投稿の多くと同じ話題。オーナーから「同じような内容ばかり」と言われている。この言葉を使わず、${freshPlan.topic ? `「${freshPlan.topic}」を主題にして` : '直近で使っていない材料から'}書く。`,
+          { detail: hits.join('・') });
         return false;
       }
     }

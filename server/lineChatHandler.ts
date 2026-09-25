@@ -2231,7 +2231,13 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       await db.createSkipFeedback({ userId: user.id, threadsAccountId: accountId, choiceGroupId: groupId, postId: Number(q.i) || null, reason: q.r });
     } catch (e) { console.error("[LineChat] 見送りの理由を記録できませんでした:", e); }
     await notifySkipReason(user, accountId, q.r, null);
-    return [textWithQuick(skipReasonThanks(q.r), MENU_HINT)];
+    // ★1件の見送りでは、理由を押すと「代わりを作る」のボタンが消えていた（2026-09-25）。
+    //   理由を反映した代わりをその場で作れるように、もう一度出す（3案の見送りは本日ぶんを見送るので出さない）。
+    const canAlt = !groupId && (post as any)?.status === "canceled" && q.r !== "today";
+    return [textWithQuick(
+      skipReasonThanks(q.r) + (canAlt ? "\n\n別の投稿がほしい場合は「代わりを作る」を押してください（1分ほどで届きます）。" : ""),
+      canAlt ? [{ label: "代わりを作る", data: `a=alt&i=${q.i}` }, ...MENU_HINT] : MENU_HINT,
+    )];
   }
   if (q.a === "skip" && q.i) {
     const post = await ownedPost(user.id, Number(q.i));
@@ -3920,10 +3926,23 @@ async function notifySkipReason(user: any, accountId: number, reason: string, re
     const { SKIP_REASONS, isSkipReasonCode } = await import("@shared/declinedPatterns");
     const label = isSkipReasonCode(reason) ? SKIP_REASONS[reason].label : reason;
     const acct: any = await db.getThreadsAccountById(accountId).catch(() => null);
+    // ★同じ理由が続いているかを添える（2026-09-25：プレステージ様は「同じような内容ばかり」を2日で4回。
+    //   通知が毎回同じ文面だと、続いていることも、何が変わるのかも分からなかった）
+    let sameCount = 0;
+    try {
+      const recent = await db.getRecentSkipFeedback(accountId, 14);
+      sameCount = recent.filter((r) => r.reason === reason).length;
+    } catch { sameCount = 0; }
+    const { saidSameContent } = await import("@shared/freshTopic");
+    const action = saidSameContent([{ reason, reasonText }])
+      ? "次に作る案（「代わりを作る」と翌朝の生成）から、直近の投稿に多い話題を外し、まだ使っていない材料を主題にします（shared/freshTopic.ts）。"
+      : "次に作る案から反映します（shared/declinedPatterns.ts）。";
     const { notifyOwner } = await import("./_core/notification");
     await notifyOwner({
       title: `3案の見送り理由：${user?.name ?? ""}様`,
-      content: `@${acct?.threadsUsername ?? accountId}（user ${user?.id}）\n理由：${label}${reasonText ? `\n「${reasonText.slice(0, 300)}」` : ""}\n翌朝の生成で反映します（shared/declinedPatterns.ts）。`,
+      content: `@${acct?.threadsUsername ?? accountId}（user ${user?.id}）\n理由：${label}${reasonText ? `\n「${reasonText.slice(0, 300)}」` : ""}` +
+        (sameCount >= 2 ? `\n※この理由は直近14日で${sameCount}回目です。` : "") +
+        `\n${action}`,
     });
   } catch (e) { console.warn("[LineChat] 見送り理由の通知に失敗:", (e as Error)?.message); }
 }
