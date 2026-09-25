@@ -30,10 +30,34 @@ drafts.forEach((d: any, i: number) => console.log(`--- 案${i + 1}（${d.label}�
 if (!send) { console.log("\n（確認のみ。送るときは --send）"); process.exit(0); }
 if (lineIds.length === 0) { console.error("LINEの送り先がありません"); process.exit(1); }
 
+// ★二重送信の防止（2026-09-25 同じ定期タスクが二重起動し、プレステージ様へ同じ8案が2通届いた）。
+//   ①同時に走った2本目は、アカウントごとのロック（MySQLのGET_LOCK・待たない）が取れず止まる
+//   ②後から走った2本目は、直近20時間に同じアカウントの案が作られていれば止まる
+//   意図して送り直すときだけ --force を付ける。
+const force = process.argv.includes("--force");
+const mysql = await import("mysql2/promise");
+const lockConn = await mysql.createConnection(process.env.DATABASE_URL ?? "");
+const lockName = `draft-survey-${accountId}`;
+const [lockRows]: any = await lockConn.query("SELECT GET_LOCK(?, 0) AS got", [lockName]);
+if (Number(lockRows?.[0]?.got) !== 1) {
+  console.error("同じアカウントへの送信が、別の実行でいま進んでいます。二重送信を避けるため止めました。");
+  await lockConn.end(); process.exit(1);
+}
+const [recent]: any = await lockConn.query(
+  "SELECT surveyKey, MIN(createdAt) AS at FROM draftSurveyItems WHERE threadsAccountId = ? AND createdAt > NOW() - INTERVAL 20 HOUR GROUP BY surveyKey",
+  [accountId],
+);
+if (recent.length > 0 && !force) {
+  console.error(`直近20時間に同じアカウントへ送った案があります（${recent.map((r: any) => r.surveyKey).join(", ")}）。二重送信を避けるため止めました。送り直すときは --force を付けてください。`);
+  await lockConn.end(); process.exit(1);
+}
+
 const { createSurvey, buildSurveyMessages } = await import("../../server/draftSurvey");
 const { pushMessages } = await import("../../server/lineNotify");
 const { surveyKey, items } = await createSurvey(accountId, drafts);
 let ok = 0;
 for (const id of lineIds) if (await pushMessages(id, buildSurveyMessages(items, intro))) ok++;
 console.log(`\n送信：${ok}／${lineIds.length}（${surveyKey}・案ID ${items.map((x) => x.id).join(",")}）`);
+await lockConn.query("SELECT RELEASE_LOCK(?)", [lockName]).catch(() => undefined);
+await lockConn.end();
 process.exit(ok > 0 ? 0 : 1);
