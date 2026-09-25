@@ -97,6 +97,7 @@
       npx tsx scripts/ops/send-draft-survey.mts --account=21 --file=scripts/ops/announcements/2026-09-25_katori_survey.json --send
 
 - 反映後の確認：本番で `[DB] Applied migration: 0097_draft_survey.sql`、`SHOW TABLES LIKE 'draftSurveyItems'`
+- 9/25 10:01 プレステージ様 送信ずみ（送信 1／1・sv-22-mug98q25）。**⚠️同じ定期タスクが二重起動し、もう一方も 10:01 に送信（sv-22-mug98r8l）＝同じ8案が2通届いた**（どちらのボタンも有効・行は id1〜16）。香取様は未送信：acc21 の defaultProjectId が null で createSurvey が「お店の情報が紐づいていません」で止まる（LINEには何も出ていない）。紐づけ後に三上様の承諾を取り直して送る。send-draft-survey.mts に「同じ日に同じアカウントで作成済みなら止める」判定が必要（二重起動対策）
 
 ## 2026-09-24 日中：ホームページの材料を全店に反映（三上様指示）／「元に戻す」の直し（9/25 01:21 反映ずみ c7286a2）
 
