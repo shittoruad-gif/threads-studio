@@ -40,7 +40,7 @@ function labelFor(action: { key: string; accountName?: string }, stepLabel: (k: 
 export async function runOpsDigestJob(): Promise<void> {
   const { getPlan, resolveEffectivePlanId } = await import("@shared/plans");
 
-  const { stepLabel, isBlockingStep } = await import("@shared/clientFollowup");
+  const { stepLabel, isBlockingStep, OPS_IGNORE_USER_IDS } = await import("@shared/clientFollowup");
   const { refreshStallState } = await import("./clientFollowup");
   const users = await db.getAllUsers().catch(() => [] as any[]);
   // お金をいただいているのに投稿が出ない方（最優先）
@@ -55,6 +55,7 @@ export async function runOpsDigestJob(): Promise<void> {
   for (const u of users as any[]) {
     try {
       if (isInternalAccount(u)) continue;
+      if (OPS_IGNORE_USER_IDS.has(Number(u.id))) continue; // 三上様のご判断で報告に出さない方
       // 社内の管理用アカウント（Threads未連携の管理者）は報告に出さない（「しっとる広告」が毎朝並んでいた）
       if (u.role === "admin" && (await db.getThreadsAccountsByUserId(u.id).catch(() => [] as any[])).length === 0) continue;
       const sub = await db.getSubscriptionByUserId(u.id).catch(() => null);

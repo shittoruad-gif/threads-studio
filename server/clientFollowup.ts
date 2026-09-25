@@ -14,7 +14,7 @@ import { sql } from "drizzle-orm";
 import * as db from "./db";
 import { detectNextAction } from "./nextAction";
 import {
-  REPROPOSE_DAYS, SILENT_DAYS, adminCard, decideStall, draftMessage, needsInternalFixOnly,
+  OPS_IGNORE_USER_IDS, REPROPOSE_DAYS, SILENT_DAYS, adminCard, decideStall, draftMessage, needsInternalFixOnly,
   type SilentCause,
 } from "@shared/clientFollowup";
 
@@ -99,7 +99,7 @@ export async function listStalledClients(): Promise<FollowupTarget[]> {
   const out: FollowupTarget[] = [];
   for (const u of users) {
     try {
-      if (isInternalAccount(u) || u.role === "admin") continue;
+      if (isInternalAccount(u) || u.role === "admin" || OPS_IGNORE_USER_IDS.has(Number(u.id))) continue;
       const sub: any = await db.getSubscriptionByUserId(u.id).catch(() => null);
       const plan = getPlan(resolveEffectivePlanId(sub?.planId, sub?.status));
       if (!plan || plan.priceMonthly <= 0) continue; // ご契約中の方だけ

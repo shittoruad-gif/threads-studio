@@ -11,6 +11,12 @@
  * お客様へは自動で送らない。三上様のLINEに「事実＋送る文の案」を届け、「この文で送る」を押したものだけ送る。
  */
 
+/**
+ * 朝の報告と、動いていないお客様のフォローに出さない方（三上様のご判断）。
+ *   6518 比嘉美和様 … 2026-09-25 三上様「これはスルーで大丈夫です」
+ */
+export const OPS_IGNORE_USER_IDS: ReadonlySet<number> = new Set([6518]);
+
 export const STALL_DAYS = 3;
 export const SILENT_DAYS = 3;
 /** 同じお客様への案は、この日数あける */
