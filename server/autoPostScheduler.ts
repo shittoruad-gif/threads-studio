@@ -736,7 +736,7 @@ async function generateAutoPost(
     const n1ForToday = freshLines(project.n1Customer, 'N1顧客像');
     const customerWordsForToday = freshLines((project as any).customerWords, 'お客様の声');
 
-    const dropIfRecentlyUsed =(text: string | null | undefined, label: string): string | undefined => {
+    const dropIfRecentlyUsed = (text: string | null | undefined, label: string): string | undefined => {
       let v = String(text ?? '').trim();
       if (!v) return undefined;
       // ★「言っていることが違う」とお聞きしたら、信条・実績は主張として渡さない

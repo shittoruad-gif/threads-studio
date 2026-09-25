@@ -2233,7 +2233,21 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     await notifySkipReason(user, accountId, q.r, null);
     // ★1件の見送りでは、理由を押すと「代わりを作る」のボタンが消えていた（2026-09-25）。
     //   理由を反映した代わりをその場で作れるように、もう一度出す（3案の見送りは本日ぶんを見送るので出さない）。
-    const canAlt = !groupId && (post as any)?.status === "canceled" && q.r !== "today";
+    //   ★ただし、そのアカウントでいちばん新しく見送った投稿で、見送ったあとに新しい案がまだ無いときだけ。
+    //   9/25 のプレステージ様は、朝8:52に見送った投稿（#1968）の古い理由ボタンを10:31に押していた
+    //   （その直前に別の投稿 #1964 を見送り、代わりも作成中）。古いボタンからも出すと代わりが余分にできる。
+    let canAlt = !groupId && (post as any)?.status === "canceled" && q.r !== "today";
+    if (canAlt) {
+      try {
+        const mine = (await db.getScheduledPostsByUserId(user.id, accountId)) as any[];
+        const canceledAt = new Date((post as any).updatedAt ?? 0).getTime();
+        const newerCancel = mine.some((p) => p.status === "canceled" && Number(p.id) !== Number(q.i) &&
+          new Date(p.updatedAt ?? 0).getTime() > canceledAt);
+        const newerDraft = mine.some((p) => (p.status === "awaiting_approval" || p.status === "pending") &&
+          new Date(p.createdAt ?? 0).getTime() > canceledAt);
+        canAlt = !newerCancel && !newerDraft;
+      } catch { canAlt = false; }
+    }
     return [textWithQuick(
       skipReasonThanks(q.r) + (canAlt ? "\n\n別の投稿がほしい場合は「代わりを作る」を押してください（1分ほどで届きます）。" : ""),
       canAlt ? [{ label: "代わりを作る", data: `a=alt&i=${q.i}` }, ...MENU_HINT] : MENU_HINT,
