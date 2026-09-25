@@ -3715,6 +3715,23 @@ ${input.commentText}
         r.duplicateWarning = !!(r.email && (activeByEmail.get(r.email) ?? 0) >= 2 &&
           (r.status === 'current' || r.status === 'unpaid' || r.status === 'suspended'));
       }
+      // ★次回課金日は一覧APIには入っていない（2026-09-25 実測：有効68件すべて next_payment が空）。
+      //   定期課金ごとの詳細（GET /subscriptions/:id）にだけ入っているので、有効な契約だけ詳細を読む。
+      //   読めなかった行は空のまま（推測で埋めない）。30分キャッシュつき（server/nextPayment.ts）。
+      {
+        const { nextPaymentForSubscriptionId } = await import('./nextPayment');
+        const need = tsRows.filter((r) => r.status === 'current' || r.status === 'unpaid');
+        const q2 = [...need];
+        await Promise.all(Array.from({ length: 2 }, async () => {
+          while (q2.length > 0) {
+            const r = q2.shift();
+            if (!r) break;
+            const np = await nextPaymentForSubscriptionId(String(r.id)).catch(() => null);
+            r.nextPaymentDate = np?.dueDate ?? null;
+            r.nextPaymentAmount = np?.amount ?? null;
+          }
+        }));
+      }
       // 新しい契約順
       tsRows.sort((a, b) => String(b.createdOn).localeCompare(String(a.createdOn)));
       return tsRows;

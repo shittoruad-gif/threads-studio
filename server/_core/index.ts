@@ -174,6 +174,8 @@ async function startServer() {
         for (const ev of payload.events ?? []) {
           const lineUserId: string | undefined = ev?.source?.userId;
           if (!lineUserId) continue;
+          // ★最後にLINEを操作した時刻（動いていないお客様のフォロー用・1時間に1回だけ書く）
+          if (ev.type === 'postback' || ev.type === 'message') db.touchLineActivity(lineUserId).catch(() => undefined);
           if (ev.type === 'follow') {
             // ★アプリ登録より先にLINEを追加した方は、users にも行が無く追いかけられない。
             //   友だち追加を控えておき、連携が無いままなら後日このトークでご案内する。

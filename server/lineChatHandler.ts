@@ -2186,6 +2186,15 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     return [textWithQuick(msg, MENU_HINT)];
   }
 
+  // ── 動いていないお客様へのフォローの案（三上様だけが押せる・2026-09-25・server/clientFollowup.ts）──
+  if (q.adm === "cf" && q.id && q.v) {
+    if ((user as any).role !== "admin") return [textWithQuick("この操作はできません。", MENU_HINT)];
+    const v = q.v === "send" || q.v === "skip" ? q.v : null;
+    if (!v) return [textWithQuick("うまく受け取れませんでした。", MENU_HINT)];
+    const { decideFollowup } = await import("./clientFollowup");
+    return [textWithQuick(await decideFollowup(Number(q.id), v, Number(user.id)), MENU_HINT)];
+  }
+
   // ── 見送りが続くお客様への「足す材料」の案（三上様だけが押せる・2026-09-24）──
   if (q.adm === "mp" && q.id && q.v) {
     // ★管理者以外は何もしない（お客様のトークにこのボタンは出ないが、念のため）

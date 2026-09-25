@@ -4392,6 +4392,28 @@ export async function countFailedPostsSince(userId: number, days: number): Promi
   return Number(rows?.[0]?.[0]?.c ?? 0);
 }
 
+/** 直近 days 日にThreadsへ公開できた投稿の件数（朝の報告で「投稿は出ているか」を見る） */
+export async function countPostedPostsSince(userId: number, days: number): Promise<number> {
+  const database = await getDb();
+  if (!database) return 0;
+  const rows: any = await database.execute(sql.raw(
+    `SELECT COUNT(*) AS c FROM \`scheduledPosts\` WHERE \`userId\` = ${Number(userId)} AND \`status\` = 'posted'
+       AND \`postedAt\` >= DATE_SUB(NOW(), INTERVAL ${Number(days)} DAY)`
+  ));
+  return Number(rows?.[0]?.[0]?.c ?? 0);
+}
+
+/**
+ * そのLINEから最後にボタン・文章が届いた時刻を記録する（1時間に1回だけ更新。2026-09-25）。
+ * 動いていないお客様のフォローで「最後にLINEを操作した日」を事実として出すため。
+ */
+export async function touchLineActivity(lineUserId: string): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  await database.execute(sql`UPDATE userLineLinks SET lastActiveAt = CURRENT_TIMESTAMP
+    WHERE lineUserId = ${lineUserId} AND (lastActiveAt IS NULL OR lastActiveAt < DATE_SUB(NOW(), INTERVAL 1 HOUR))`);
+}
+
 /** Threadsに公開できた投稿の件数（0なら、まだ1件もThreadsに出ていない） */
 export async function countPostedPosts(userId: number): Promise<number> {
   const database = await getDb();

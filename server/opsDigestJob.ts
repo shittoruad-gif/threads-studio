@@ -18,7 +18,7 @@ import { detectNextAction } from "./nextAction";
  * ★検証用・審査用が混ざると、本当に見るべき方が埋もれて読まれなくなる。
  *   （ローカルの検証環境には数十件あり、報告が全部それで埋まった）
  */
-function isInternalAccount(u: { email?: string | null; name?: string | null }): boolean {
+export function isInternalAccount(u: { email?: string | null; name?: string | null }): boolean {
   const email = String(u.email || "").toLowerCase();
   const name = String(u.name || "");
   if (email.endsWith("@example.com")) return true;
@@ -28,38 +28,25 @@ function isInternalAccount(u: { email?: string | null; name?: string | null }): 
   return false;
 }
 
-/** 工程の種類を、社内向けの短い日本語にする */
-const STEP_LABEL: Record<string, string> = {
-  no_project: "お店の情報が未登録",
-  no_account: "Threads未連携",
-  account_without_project: "アカウントに店舗情報が未紐づけ",
-  account_unpinned: "どの店舗情報を使うか未設定",
-  no_pinned: "固定投稿が未作成",
-  not_posted: "固定投稿がThreads未公開",
-  pin_not_confirmed: "固定投稿のピン留めが未確認",
-  auto_off: "自動投稿がOFF",
-  approval_off: "公開前の確認がOFF",
-  // 複数アカウント運用（アカウント別。キーは "acct_pinned:12" の形）
-  acct_project: "使うお店の情報が未設定",
-  acct_pinned: "固定投稿が未作成",
-  acct_posted: "固定投稿がThreads未公開",
-  acct_pin: "固定投稿のピン留めが未確認",
-  acct_auto: "自動投稿がOFF",
-};
-
-/** 工程キー → 社内向けの短い表記（アカウント別なら「@xxx：」を頭に付ける） */
-function labelFor(action: { key: string; accountName?: string }): string {
-  const base = action.key.split(":")[0];
-  const label = STEP_LABEL[base] ?? action.key;
-  return action.accountName ? `${action.accountName}：${label}` : label;
+/**
+ * 工程キー → 社内向けの短い表記（アカウント別なら「@xxx：」を頭に付ける）。
+ * ★ラベルは shared/clientFollowup.ts の STEP_LABEL に一本化（2026-09-25：no_style_samples・no_link・project_almost が
+ *   ラベル無しのまま英語のキーで報告に出ていた）。
+ */
+function labelFor(action: { key: string; accountName?: string }, stepLabel: (k: string, a?: string | null) => string): string {
+  return stepLabel(action.key, action.accountName);
 }
 
 export async function runOpsDigestJob(): Promise<void> {
   const { getPlan, resolveEffectivePlanId } = await import("@shared/plans");
 
+  const { stepLabel, isBlockingStep } = await import("@shared/clientFollowup");
+  const { refreshStallState } = await import("./clientFollowup");
   const users = await db.getAllUsers().catch(() => [] as any[]);
-  // お金をいただいているのに何も動いていない方（最優先）
+  // お金をいただいているのに投稿が出ない方（最優先）
   const paidStuck: string[] = [];
+  // ★投稿は出ているが、設定に残りがある方（2026-09-25：毎日投稿が出ている方まで「止まっている」に並んでいた）
+  const paidRemaining: string[] = [];
   // 無料で使っていて止まっている方
   const freeStuck: string[] = [];
   // 投稿が失敗している方
@@ -68,6 +55,8 @@ export async function runOpsDigestJob(): Promise<void> {
   for (const u of users as any[]) {
     try {
       if (isInternalAccount(u)) continue;
+      // 社内の管理用アカウント（Threads未連携の管理者）は報告に出さない（「しっとる広告」が毎朝並んでいた）
+      if (u.role === "admin" && (await db.getThreadsAccountsByUserId(u.id).catch(() => [] as any[])).length === 0) continue;
       const sub = await db.getSubscriptionByUserId(u.id).catch(() => null);
       const planId = resolveEffectivePlanId(sub?.planId, sub?.status);
       const plan = getPlan(planId);
@@ -86,11 +75,16 @@ export async function runOpsDigestJob(): Promise<void> {
       // 「公開前の確認がOFF」はご本人の好みなので、社内報告には出さない
       if (action.key === "approval_off") continue;
 
-      const label = labelFor(action);
+      const label = labelFor(action, stepLabel);
+      // その工程のままの日数（clientStallState。動いていないお客様のフォローと共通）
+      let since = "";
+      try { const st = await refreshStallState(u.id, action.key); if (st.days >= 1) since = `（${st.days}日前から）`; } catch { /* 書かない */ }
       if (paid) {
         const posted = await db.countPostedPosts(u.id).catch(() => 1);
         const mark = posted === 0 ? "（まだ1件も投稿されていません）" : "";
-        paidStuck.push(`${name}（${plan?.name}）：${label}${mark}`);
+        const recent = await db.countPostedPostsSince(u.id, 3).catch(() => 0);
+        if (!isBlockingStep(action.key) && recent > 0) paidRemaining.push(`${name}（${plan?.name}）：${label}${since}・直近3日で${recent}件公開`);
+        else paidStuck.push(`${name}（${plan?.name}）：${label}${since}${mark}`);
       } else {
         freeStuck.push(`${name}：${label}`);
       }
@@ -111,8 +105,13 @@ export async function runOpsDigestJob(): Promise<void> {
 
   const lines: string[] = [];
   if (paidStuck.length) {
-    lines.push("【ご契約中で止まっている方】");
+    lines.push("【ご契約中で投稿が出ていない方】");
     lines.push(...paidStuck.map((s) => `・${s}`));
+  }
+  if (paidRemaining.length) {
+    if (lines.length) lines.push("");
+    lines.push("【投稿は出ているが、設定に残りがある方】");
+    lines.push(...paidRemaining.map((s) => `・${s}`));
   }
   if (failing.length) {
     lines.push("");

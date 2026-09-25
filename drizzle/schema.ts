@@ -128,6 +128,8 @@ export const userLineLinks = mysqlTable("userLineLinks", {
   lineUserId: varchar("lineUserId", { length: 64 }).notNull().unique(),
   // LINEの表示名（連携時にプロフィールAPIから取得。設定画面の一覧表示用・取れなくても可）
   displayName: varchar("displayName", { length: 120 }),
+  // ★そのLINEから最後にボタン・文章が届いた時刻（1時間に1回だけ更新。2026-09-25 動いていないお客様のフォロー用）
+  lastActiveAt: timestamp("lastActiveAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => [
   index("idx_userLineLinks_userId").on(table.userId),
@@ -1075,3 +1077,31 @@ export const materialProposals = mysqlTable("materialProposals", {
 ]);
 
 export type MaterialProposalRow = typeof materialProposals.$inferSelect;
+
+/**
+ * 動いていないお客様のフォロー（2026-09-25 三上様指示・server/clientFollowup.ts）。
+ * clientStallState … いま止まっている工程と、いつからその工程のままか
+ * clientFollowups  … 三上様へお送りしたフォローの案（押したものだけお客様へ届く）
+ */
+export const clientStallState = mysqlTable("clientStallState", {
+  userId: int("userId").primaryKey(),
+  stepKey: varchar("stepKey", { length: 80 }).notNull(),
+  stepSince: timestamp("stepSince").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const clientFollowups = mysqlTable("clientFollowups", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  reason: varchar("reason", { length: 40 }).notNull(),
+  stepKey: varchar("stepKey", { length: 80 }),
+  daysStalled: int("daysStalled").default(0).notNull(),
+  level: int("level").default(1).notNull(),
+  message: text("message").notNull(),
+  status: varchar("status", { length: 20 }).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  decidedAt: timestamp("decidedAt"),
+  decidedBy: int("decidedBy"),
+}, (table) => [
+  index("idx_clientFollowups_user").on(table.userId, table.createdAt),
+]);

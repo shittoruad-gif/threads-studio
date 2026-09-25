@@ -147,7 +147,7 @@ export default function AdminBilling() {
                       <td className="px-3 py-2.5">{subStatusBadge(c.status)}</td>
                       <td className="px-3 py-2.5 text-xs">{c.linkDescription ?? <span className="text-muted-foreground">（リンク情報なし）</span>}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-xs">{fmtDate(c.createdOn)}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-xs">{c.status === 'current' ? fmtDate(c.nextPaymentDate) : '—'}</td>
+                      <td className="px-3 py-2.5 whitespace-nowrap text-xs">{(c.status === 'current' || c.status === 'unpaid') && c.nextPaymentDate ? fmtDate(c.nextPaymentDate) : '—'}</td>
                       <td className="px-3 py-2.5 text-xs">
                         {c.appUser
                           ? <span>{c.appUser.planId ?? '—'}<span className="text-muted-foreground">（{c.appUser.planStatus ?? '—'}）</span></span>

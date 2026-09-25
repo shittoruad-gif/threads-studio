@@ -442,6 +442,14 @@ export function initDailyOpsSchedulers(): void {
     const { runEveningApprovalReminderJob } = await import("./awaitingSlideJob");
     await runTrackedJob("evening_approval_reminder", runEveningApprovalReminderJob);
   });
+  // 11:00 JST = 2:00 UTC — 動いていないお客様のフォロー（2026-09-25 三上様指示・server/clientFollowup.ts）。
+  //   ご契約中で「投稿が出ない工程のまま3日」「設定は終わっているのに3日公開ゼロ」の方を、
+  //   事実のまとめと送る文の案つきで三上様のLINEへ。三上様が「この文で送る」を押したものだけお客様へ届く。
+  cron.schedule("0 2 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runClientFollowupJob } = await import("./clientFollowup");
+    await runTrackedJob("client_followup", runClientFollowupJob);
+  });
   // 20:30 JST = 11:30 UTC — 見送りが続くお客様の徹底フォロー（2026-09-24 三上様指示）。
   //   共通点・理由をまとめ、ホームページから足す材料の案を作って三上様のLINEへ（押したものだけ反映）。
   //   夜に届けるのは、翌朝6時の生成までに「足す」を押せるようにするため。
