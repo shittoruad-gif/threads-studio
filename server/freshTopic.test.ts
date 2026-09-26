@@ -8,6 +8,7 @@
 import { describe, it, expect } from "vitest";
 import {
   planFreshTopic, overusedHits, dropOverusedLines, buildFreshTopicNote, saidSameContent, topicWordsOf,
+  framesOf, dropFramedSentences, surveyAvoidWords, hitsSurveyAvoid, buildSurveyAvoidNote,
 } from "@shared/freshTopic";
 
 const RECENT: string[] = [
@@ -125,5 +126,86 @@ describe("話題の言葉", () => {
     expect(w).toEqual(expect.arrayContaining(["技術", "スタッフ"]));
     expect(w).not.toContain("客様");
     expect(w).not.toContain("一緒");
+  });
+});
+
+/**
+ * 2026-09-26：言葉を言い換えても同じ「流れ」が続き、また「同じ」で見送られた。
+ * 「覚えるのが大変そう？／難しそう／自分にできるかな → 先輩が教える → 一緒にプロを目指しませんか」。
+ * （架空のネイルサロンで再現。実際の投稿は入れない）
+ */
+const FRAMED: string[] = [
+  "デザイン、覚えるのが大変そうに感じますか？\nサンプルサロンは、座学より現場で学びます。\n駅前で、お客様に寄り添うプロを目指しませんか",
+  "ネイルの仕事、興味あるけど自分にできるかな？\nサンプルサロンはチームで支え合います。\n一緒に成長しませんか",
+  "ケアの手順、難しそうに感じるかもしれません。\n先輩が丁寧に、ひとつずつ教えます。\n駅前のサロンで、一緒にプロを目指しましょう。",
+  "賞与は年3回。\n頑張った分をきちんと評価します。\n駅前のサロンで、あなたの成長を応援します。",
+  "応募の前に、まず話を聞いてみたい方へ。\nオンラインのカジュアル面談を行っています。",
+  "店舗ごとに雰囲気が違います。\n本店は広くゆったり、2号店はアットホーム。",
+  "季節ごとのデザイン研修があります。\n秋は深い色のデザインを練習します。",
+  "創業20年。\n地元のお客様に長く通っていただいています。",
+];
+
+describe("流れの型（言い換えても同じに見えるもの）", () => {
+  const p = () => planFreshTopic({
+    recentPosts: FRAMED,
+    materials: ["技術を覚えられるか不安だった\n季節ごとのデザイン研修がある\n応募から内定まで1週間ほど"],
+    protect: ["サンプルサロン", "駅前"],
+  });
+
+  it("書き出しの不安・締めの「目指しませんか」を型として数える", () => {
+    expect(p().frames).toEqual(expect.arrayContaining(["worry", "invite"]));
+  });
+
+  it("話題の言葉が無くても、型があれば計画を作る", () => {
+    expect(p().frames!.length).toBeGreaterThan(0);
+    expect(buildFreshTopicNote(p())).toContain("書き出しを");
+    expect(buildFreshTopicNote(p())).toContain("締めを");
+  });
+
+  it("型に当たる材料は主題にしない", () => {
+    expect(p().topic).not.toContain("不安");
+  });
+
+  it("下書きの先頭・末尾で型を見分ける（本文の途中の「不安」では当たらない）", () => {
+    expect(framesOf("ネイル、自分にできるかな？\n先輩が教えます。", ["worry"])).toEqual(["worry"]);
+    expect(framesOf("秋の研修の話です。\n深い色を練習します。\n不安な方にも先輩がつきます。\n研修は月2回です。", ["worry"])).toEqual([]);
+    expect(framesOf("研修の話。\n駅前で一緒にプロを目指しませんか", ["invite"])).toEqual(["invite"]);
+  });
+
+  it("ふつうの並びでは型にならない", () => {
+    const q = planFreshTopic({ recentPosts: FRAMED.slice(3), materials: ["季節ごとのデザイン研修がある"], protect: [] });
+    expect(q.frames).toEqual([]);
+  });
+
+  it("お手本・◯の例から型に当たる文だけを外す", () => {
+    const out = dropFramedSentences("Q. 覚えることが多そうで不安です。\nA. 現場で先輩が教えます。\n---\n秋の研修では深い色を練習します。", p());
+    expect(out).not.toContain("不安");
+    expect(out).toContain("秋の研修");
+  });
+});
+
+describe("◯✕アンケートで✕が付いた題材", () => {
+  const bad = [{ label: "子育てと両立する働き方", content: "子育て中の先輩が働いています。\n産休・育休から戻ったとき、スタッフが迎えてくれました。" }];
+  const good = ["先輩がそばで教えます。ネイルの仕事は施術だけではありません。"];
+  const av = surveyAvoidWords(bad, good, ["サンプルサロン"]);
+
+  it("題名の言葉と、✕の本文にだけ出る言葉を取る（◯にも出る言葉は取らない）", () => {
+    expect(av.labelWords).toEqual(expect.arrayContaining(["子育", "両立"]));
+    expect(av.contentWords).toEqual(expect.arrayContaining(["産休", "育休"]));
+    expect([...av.labelWords, ...av.contentWords]).not.toContain("先輩");
+  });
+
+  it("Q&Aに言い換えても同じ題材なら当たる", () => {
+    expect(hitsSurveyAvoid("Q. 産休・育休から復帰できるの？\nA. 復帰した先輩がいます。", av).length).toBeGreaterThan(0);
+    expect(hitsSurveyAvoid("子育て中でも働けます", av)).toContain("子育");
+  });
+
+  it("本文の言葉1つだけでは当てない（「スタッフ」1語で落とさない）", () => {
+    expect(hitsSurveyAvoid("スタッフみんなで研修をしています", av)).toEqual([]);
+  });
+
+  it("プロンプトに題名が入る", () => {
+    expect(buildSurveyAvoidNote(av)).toContain("「子育てと両立する働き方」");
+    expect(buildSurveyAvoidNote(null)).toBe("");
   });
 });

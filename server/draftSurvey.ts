@@ -32,7 +32,12 @@ export async function createSurvey(threadsAccountId: number, drafts: SurveyDraft
   if (!database) throw new Error("DBに接続できません");
   const acc: any = await db.getThreadsAccountById(threadsAccountId);
   if (!acc) throw new Error(`アカウント ${threadsAccountId} が見つかりません`);
-  const projectId = String(acc.defaultProjectId ?? "");
+  let projectId = String(acc.defaultProjectId ?? "");
+  // 紐づけが無くても、お店の情報が1件だけの方はそれを使う（生成側と同じ扱い・2026-09-26 香取様）
+  if (!projectId) {
+    const pjs: any[] = ((await db.getUserProjects(Number(acc.userId))) || []).filter((p: any) => !String(p.id).startsWith("demo_"));
+    if (pjs.length === 1) projectId = String(pjs[0].id);
+  }
   if (!projectId) throw new Error(`アカウント ${threadsAccountId} にお店の情報が紐づいていません`);
   const surveyKey = `sv-${threadsAccountId}-${Date.now().toString(36)}`;
   const items: SurveyItem[] = [];

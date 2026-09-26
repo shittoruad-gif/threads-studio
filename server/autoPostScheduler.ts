@@ -17,7 +17,7 @@ import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
 import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM } from "../shared/recruitingPost";
 import { touchesDeclined, filterStyleSamples, normalizeForPatterns, filterCounseling } from "../shared/declinedPatterns";
-import { overusedHits, dropOverusedLines } from "../shared/freshTopic";
+import { overusedHits, dropOverusedLines, dropFramedSentences, framesOf, hitsSurveyAvoid, lineHitsFrames } from "../shared/freshTopic";
 import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
 import { stripRawUrls } from "../shared/sanitize";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
@@ -490,6 +490,21 @@ async function generateAutoPost(
   //   ◯が付いた切り口は出やすく、✕が付いた切り口は出にくくなる（完全にゼロにはしない）。
   let angle: ReturnType<typeof pickAngle> | null = null;
   let preferenceNote = '';
+  let likedSamples: string[] = [];
+  let dislikedSamples: string[] = [];
+  const buildRatingNote = (liked: string[], disliked: string[]): string => {
+    if (liked.length === 0 && disliked.length === 0) return '';
+    let note = '\n\n【このお店の好み（オーナーの◯✕評価より・厳守）】';
+    if (liked.length > 0) {
+      note += '\n- オーナーが「いい」と評価した投稿の方向性（雰囲気・切り口を参考にする。丸写しはしない）:\n' +
+        liked.map((s) => `  「${String(s).replace(/\s+/g, ' ').slice(0, 120)}」`).join('\n');
+    }
+    if (disliked.length > 0) {
+      note += '\n- オーナーが「違う」と評価した投稿の方向性（この系統の書き方・切り口を避ける）:\n' +
+        disliked.map((s) => `  「${String(s).replace(/\s+/g, ' ').slice(0, 120)}」`).join('\n');
+    }
+    return note;
+  };
   try {
     // ★店舗（project）単位で学習：複数店舗ユーザーで別店舗の好みを混ぜない
     const stats = await db.getAngleFeedbackStats(userId, project.id);
@@ -536,17 +551,9 @@ async function generateAutoPost(
       db.getRatedPostSamples(userId, 'good', 2, project.id),
       db.getRatedPostSamples(userId, 'bad', 2, project.id),
     ]);
-    if (liked.length > 0 || disliked.length > 0) {
-      preferenceNote = '\n\n【このお店の好み（オーナーの◯✕評価より・厳守）】';
-      if (liked.length > 0) {
-        preferenceNote += '\n- オーナーが「いい」と評価した投稿の方向性（雰囲気・切り口を参考にする。丸写しはしない）:\n' +
-          liked.map((s) => `  「${String(s).replace(/\s+/g, ' ').slice(0, 120)}」`).join('\n');
-      }
-      if (disliked.length > 0) {
-        preferenceNote += '\n- オーナーが「違う」と評価した投稿の方向性（この系統の書き方・切り口を避ける）:\n' +
-          disliked.map((s) => `  「${String(s).replace(/\s+/g, ' ').slice(0, 120)}」`).join('\n');
-      }
-    }
+    likedSamples = liked;
+    dislikedSamples = disliked;
+    preferenceNote = buildRatingNote(liked, disliked);
   } catch (e) {
     console.error('[AutoPost] angle selection failed (fallback to none):', e);
   }
@@ -701,6 +708,36 @@ async function generateAutoPost(
     //    2. まだ使っていない材料を1つ「今日の主題」として指定する
     //    3. 出来上がった下書きがその話題の言葉を2つ以上含んでいたら作り直す（最後の作り直しでは止めない）
     //   「同じような内容ばかり」と言われていない方には何もしない。
+    // ★◯✕アンケートで✕が付いた題材は書かない（2026-09-26 三上様指示「また同じものばかり」）。
+    //   9/25 に「子育てと両立する働き方」に✕が付いたのに、翌日「産休・育休から復帰できるの？」が作られた。
+    //   ✕は「避ける書き方の例」として渡していただけで、題材としては外していなかった。
+    //   材料から外し、プロンプトで禁止し、下書きに残っていたら作り直す（アンケートに✕がある方だけ）。
+    let surveyAvoid: import('../shared/freshTopic').SurveyAvoid | null = null;
+    let surveyAvoidNote = '';
+    try {
+      const items = await db.getSurveyRatedItems(String(project.id));
+      const bad = items.filter((i) => i.rating === 'bad');
+      if (bad.length > 0) {
+        const ft = await import('../shared/freshTopic');
+        const av = ft.surveyAvoidWords(bad, items.filter((i) => i.rating === 'good').map((i) => i.content),
+          [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title]);
+        if (av.labelWords.length > 0 || av.contentWords.length > 0) {
+          surveyAvoid = av;
+          surveyAvoidNote = ft.buildSurveyAvoidNote(av);
+          console.log(`[AutoPost] ✕の題材を外す account=${threadsAccountId} ${av.labels.join('・')} → ${[...av.labelWords, ...av.contentWords].join('・')}`);
+        }
+      }
+    } catch (e) { console.warn(`[AutoPost] ✕の題材を読めませんでした account=${threadsAccountId}: ${(e as Error)?.message}`); }
+    const dropAvoided = (text: string | null | undefined, label: string): string | undefined => {
+      if (!surveyAvoid || !text) return text || undefined;
+      const lines = String(text).split(/\r?\n/);
+      const kept = lines.filter((l) => hitsSurveyAvoid(l, surveyAvoid).length === 0);
+      if (kept.length < lines.length) console.log(`[AutoPost] ${label}の${lines.length - kept.length}行は✕の題材のため渡さない account=${threadsAccountId}`);
+      return kept.join('\n').trim() || undefined;
+    };
+    const dropAvoidedList = (list: unknown): unknown =>
+      surveyAvoid && Array.isArray(list) ? list.filter((x) => hitsSurveyAvoid(String(x ?? ''), surveyAvoid).length === 0) : list;
+
     let freshPlan: import('../shared/freshTopic').FreshTopicPlan | null = null;
     let freshNote = '';
     try {
@@ -710,15 +747,16 @@ async function generateAutoPost(
         const plan = ft.planFreshTopic({
           recentPosts,
           materials: [project.strength, project.usp, project.proof, project.n1Customer, (project as any).belief,
-            (project as any).customerWords, ...(cr.realProofs ?? []), ...(cr.realEpisodes ?? []), ...(cr.faq ?? []), ...(cr.menu ?? [])],
+            (project as any).customerWords, ...(cr.realProofs ?? []), ...(cr.realEpisodes ?? []), ...(cr.faq ?? []), ...(cr.menu ?? [])]
+            .map((m) => dropAvoided(m as string, '主題の候補')),
           // 毎回出てよい言葉（店名・地名・業種・対象のお客様）は数えない
           protect: [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title],
           index: postTypeIndex * PURPOSES.length + purposeIndex,
         });
-        if (plan.overused.length > 0) {
+        if (plan.overused.length > 0 || (plan.frames?.length ?? 0) > 0) {
           freshPlan = plan;
           freshNote = ft.buildFreshTopicNote(plan);
-          console.log(`[AutoPost] 話題を変える account=${threadsAccountId} 使いすぎ=${plan.overused.join('・')} 今日の主題=${plan.topic ?? '指定なし'}`);
+          console.log(`[AutoPost] 話題を変える account=${threadsAccountId} 使いすぎ=${plan.overused.join('・') || 'なし'} 型=${(plan.frames ?? []).join('・') || 'なし'} 今日の主題=${plan.topic ?? '指定なし'}`);
         }
       }
     } catch (e) { console.warn(`[AutoPost] 話題の偏りを数えられませんでした account=${threadsAccountId}: ${(e as Error)?.message}`); }
@@ -733,11 +771,23 @@ async function generateAutoPost(
       if (kept.length < before) console.log(`[AutoPost] ${label}の${before - kept.length}行は直近と同じ話のため今日は渡さない account=${threadsAccountId}`);
       return kept.join('\n') || undefined;
     };
-    const n1ForToday = freshLines(project.n1Customer, 'N1顧客像');
-    const customerWordsForToday = freshLines((project as any).customerWords, 'お客様の声');
+    const n1ForToday = dropAvoided(freshLines(project.n1Customer, 'N1顧客像'), 'N1顧客像');
+    const customerWordsForToday = dropAvoided(freshLines((project as any).customerWords, 'お客様の声'), 'お客様の声');
+    const strengthForToday = dropAvoided(project.strength, '強み') ?? '';
+    const mainProblemForToday = dropAvoided(project.mainProblem, '悩み') ?? '';
+    // ★◯の付いた案・投稿も「写される」ので、その日の型に当たる文と✕の題材は外して渡す（2026-09-26）
+    if (freshPlan || surveyAvoid) {
+      const liked = likedSamples
+        .map((s) => dropFramedSentences(s, freshPlan))
+        .filter((s) => s.replace(/\s/g, '').length >= 10 && hitsSurveyAvoid(s, surveyAvoid).length === 0);
+      if (liked.length !== likedSamples.length || liked.some((s, i) => s !== likedSamples[i])) {
+        console.log(`[AutoPost] ◯の例から、今日の型・✕の題材に当たる文を外した account=${threadsAccountId}（${likedSamples.length}→${liked.length}件）`);
+        preferenceNote = buildRatingNote(liked, dislikedSamples);
+      }
+    }
 
     const dropIfRecentlyUsed = (text: string | null | undefined, label: string): string | undefined => {
-      let v = String(text ?? '').trim();
+      let v = String(dropAvoided(text, label) ?? '').trim();
       if (!v) return undefined;
       // ★「言っていることが違う」とお聞きしたら、信条・実績は主張として渡さない
       if (dropBeliefProof) {
@@ -757,7 +807,7 @@ async function generateAutoPost(
       // ★「同じような内容ばかり」と言われた方は、使いすぎの話題を2つ以上含む行を今日は渡さない
       if (freshPlan) {
         const lines = v.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-        const kept = lines.filter((l) => overusedHits(l, freshPlan).length < 2);
+        const kept = lines.filter((l) => overusedHits(l, freshPlan).length < 2 && !lineHitsFrames(l, freshPlan!.frames ?? []));
         if (kept.length < lines.length) console.log(`[AutoPost] ${label}の${lines.length - kept.length}行は使いすぎの話題のため今日は渡さない account=${threadsAccountId}`);
         if (kept.length === 0) return undefined;
         v = kept.join('\n');
@@ -771,22 +821,33 @@ async function generateAutoPost(
     };
     const styleSamplesForToday: string = (() => {
       const raw = String((project as any).styleSamples || '');
-      if (!declinedPatterns || !raw) return raw;
-      const f = filterStyleSamples(raw, declinedPatterns);
+      if (!raw) return raw;
+      let f = declinedPatterns ? filterStyleSamples(raw, declinedPatterns) : raw;
       if (f !== raw) console.log(`[AutoPost] 文体のお手本から、見送られた主張に触れる文を外した account=${threadsAccountId}（${raw.length}→${f.length}字）`);
+      // ★今日の型に当たる文・✕の題材のお手本も外す（◯の案はお手本の先頭に入るため・2026-09-26）
+      const g = dropFramedSentences(f, freshPlan).split(/\n?-{3,}\n?/)
+        .filter((b) => b.trim() && hitsSurveyAvoid(b, surveyAvoid).length === 0).join('\n---\n');
+      if (g !== f) console.log(`[AutoPost] 文体のお手本から、今日の型・✕の題材に当たる文を外した account=${threadsAccountId}（${f.length}→${g.length}字）`);
+      f = g;
       return f;
     })();
     const counselingForToday: any = (() => {
       const r = filterCounseling(counselingResult, declinedPatterns);
       if (r.dropped > 0) console.log(`[AutoPost] はじめの設定の答えから、見送られた主張に触れる${r.dropped}項目を今日は外した account=${threadsAccountId}`);
       // ★はじめの設定の体験談（realEpisodes）にも、N1顧客像と同じ話が入っている（プレステージ様・2026-09-25）
-      if (freshPlan && r.value && Array.isArray((r.value as any).realEpisodes)) {
-        const eps = (r.value as any).realEpisodes as unknown[];
-        const kept = eps.filter((x) => overusedHits(String(x ?? ''), freshPlan).length < 2);
+      let v: any = r.value;
+      if (freshPlan && v && Array.isArray(v.realEpisodes)) {
+        const eps = v.realEpisodes as unknown[];
+        const kept = eps.filter((x) => overusedHits(String(x ?? ''), freshPlan).length < 2 && !lineHitsFrames(String(x ?? ''), freshPlan!.frames ?? []));
         if (kept.length < eps.length) console.log(`[AutoPost] はじめの設定の体験談${eps.length - kept.length}件は使いすぎの話題のため今日は外した account=${threadsAccountId}`);
-        return { ...(r.value as any), realEpisodes: kept };
+        v = { ...v, realEpisodes: kept };
       }
-      return r.value;
+      // ★✕の題材は、はじめの設定の答え（体験談・よくある質問・実績・良くなること）からも外す（2026-09-26）
+      if (surveyAvoid && v) {
+        v = { ...v };
+        for (const k of ['realEpisodes', 'faq', 'realProofs', 'benefitsDaily']) if (Array.isArray(v[k])) v[k] = dropAvoidedList(v[k]);
+      }
+      return v;
     })();
     const beliefForToday = dropIfRecentlyUsed((project as any).belief, '信条');
     const proofForToday = dropIfRecentlyUsed(project.proof, '実績');
@@ -801,12 +862,12 @@ async function generateAutoPost(
       styleSamples: styleSamplesForToday || undefined,
       preferenceNote: editPreferenceNote || undefined,
       target: project.target,
-      mainProblem: project.mainProblem,
-      strength: project.strength,
+      mainProblem: mainProblemForToday,
+      strength: strengthForToday,
       // ★登録された悩み・強みが複数あるときは、今日の1本で取り上げるものを日替わりで指定する。
       //   これが無いと、材料を全部渡していても毎回いちばん上の1つだけが使われる（shared/topicRotation.ts）。
-      focusProblem: pickRotatingTopic(project.mainProblem, postTypeIndex + purposeIndex) || undefined,
-      focusStrength: pickRotatingTopic(project.strength, postTypeIndex) || undefined,
+      focusProblem: pickRotatingTopic(mainProblemForToday, postTypeIndex + purposeIndex) || undefined,
+      focusStrength: pickRotatingTopic(strengthForToday, postTypeIndex) || undefined,
       // ★悩み・強みが1行しか無い方でも、N1顧客像に複数行の材料があることがある
       //   （岩根様＝悩み1行・強みは文の折り返しで取り出せず・N1顧客像に7行。2026-09-18）
       //   指数は postTypeIndex * PURPOSES.length + purposeIndex（0〜23）にする。
@@ -888,6 +949,8 @@ async function generateAutoPost(
           + declinedNote
           // ★「同じような内容ばかり」と言われた方への、話題の指定（2026-09-25）。見送りの共通点より後ろ＝より優先
           + freshNote
+          // ★◯✕アンケートで✕が付いた題材（2026-09-26）
+          + surveyAvoidNote
           + (CONVERSATION_POST_TYPES.has(postType) ? CONVERSATION_ENDING_ADDENDUM : '')
           // ★求人（採用）の投稿を、集客と同じ型で書かせない（shared/recruitingPost.ts・2026-09-23）。
           //   プレステージ様は2晩続けて naturalnessReview で3回落ち、枠を捨てていた。
@@ -1102,6 +1165,27 @@ async function generateAutoPost(
         console.warn(`[AutoPost] sameTopic:「${hits.join('・')}」の話が続いている → 作り直し userId=${userId} account=${threadsAccountId}`);
         noteReject('sameTopic', userId, threadsAccountId, postingTimeIndex,
           `- 「${hits.join('」「')}」は、直近の投稿の多くと同じ話題。オーナーから「同じような内容ばかり」と言われている。この言葉を使わず、${freshPlan.topic ? `「${freshPlan.topic}」を主題にして` : '直近で使っていない材料から'}書く。`,
+          { detail: hits.join('・') });
+        return false;
+      }
+      // ★言葉を変えても同じ流れ（不安から入る・「一緒に目指しませんか」で締める）なら作り直す（2026-09-26）
+      const fr = framesOf(naturalMain, freshPlan.frames ?? []);
+      if (fr.length > 0) {
+        console.warn(`[AutoPost] sameFrame:${fr.join('・')} の流れが続いている → 作り直し userId=${userId} account=${threadsAccountId}`);
+        noteReject('sameFrame', userId, threadsAccountId, postingTimeIndex,
+          `- 直近の投稿の多くと同じ流れになっている。オーナーから「同じような内容ばかり」と言われている。${fr.includes('worry') ? '「不安・難しそう・できるかな・覚えられるか・未経験」から書き出さない。' : ''}${fr.includes('invite') ? '「一緒に◯◯を目指しませんか／成長しませんか」で締めない。' : ''}`,
+          { detail: fr.join('・') });
+        return false;
+      }
+    }
+
+    // ★◯✕アンケートで✕が付いた題材が残っていたら作り直す（2026-09-26）。最後の作り直しでも公開しない。
+    if (surveyAvoid) {
+      const hits = hitsSurveyAvoid(naturalMain, surveyAvoid);
+      if (hits.length > 0) {
+        console.warn(`[AutoPost] surveyAvoid:「${hits.join('・')}」は✕の付いた題材 → 作り直し userId=${userId} account=${threadsAccountId}`);
+        noteReject('surveyAvoid', userId, threadsAccountId, postingTimeIndex,
+          `- 「${hits.join('」「')}」は、オーナーが方向性のアンケートで「違う」と答えた題材（${surveyAvoid.labels.join('・')}）。この題材は書かない。`,
           { detail: hits.join('・') });
         return false;
       }

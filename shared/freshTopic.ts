@@ -63,9 +63,55 @@ function protectWordsOf(protect: readonly (string | null | undefined)[]): string
   return Array.from(out).filter((w) => w.length >= 2);
 }
 
+/**
+ * 言葉を言い換えても同じに見える「流れの型」（2026-09-26 三上様指示「また同じものばかり」）。
+ *
+ * ★きっかけ：9/25 夜に上の「話題の言葉」を入れたあとも、同じ求人アカウントで
+ *   「覚えるのが大変そう？／難しそう／自分にできるかな → 先輩が教える → 一緒にプロを目指しませんか」
+ *   が続き、また「同じ」で見送られた。「覚えられる」「できるかな」はかなを含むので、
+ *   漢字・カタカナの言葉を数える上の仕組みでは拾えない。流れの入り口と締めを型として数える。
+ */
+export const FRAMES = [
+  {
+    key: "worry",
+    where: "head" as const,
+    re: /不安|できるかな|できるか[？?]|できるのか|覚えられ|覚えるのが|覚えることが|難しそう|大変そう|自分にでき|ついていけ|向いてるか|向いているか|未経験/,
+    note: "書き出しを「不安・難しそう・大変そう・自分にできるかな・覚えられるか・未経験」から入らない。「不安→教えてもらえる→大丈夫」の流れは直近で何度も使っているので、今日は書かない。",
+  },
+  {
+    key: "invite",
+    where: "tail" as const,
+    re: /目指しませんか|目指しましょう|一緒に成長|成長しませんか|成長を応援|踏み出しませんか|一緒に働きませんか/,
+    note: "締めを「一緒に◯◯を目指しませんか／成長しませんか／成長を応援します」にしない。締めはこの投稿の内容に固有の1文にする。",
+  },
+];
+export type FrameKey = (typeof FRAMES)[number]["key"];
+
+function headOf(text: string): string {
+  return String(text ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(0, 2).join("");
+}
+function tailOf(text: string): string {
+  return String(text ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(-2).join("");
+}
+
+/** その文が当たっている型（書き出しの型は先頭2行、締めの型は末尾2行で見る） */
+export function framesOf(text: string, keys?: readonly string[]): FrameKey[] {
+  return FRAMES
+    .filter((f) => !keys || keys.includes(f.key))
+    .filter((f) => f.re.test(f.where === "head" ? headOf(text) : tailOf(text)))
+    .map((f) => f.key);
+}
+
+/** 材料の1行・お手本の1文など、短い文がその型の言い回しを含むか（位置は問わない） */
+export function lineHitsFrames(line: string, keys: readonly string[]): boolean {
+  return FRAMES.some((f) => keys.includes(f.key) && f.re.test(String(line ?? "")));
+}
+
 export interface FreshTopicPlan {
   /** 直近の投稿の多くに出ている話題の言葉（今日は触れない）。多い順 */
   overused: string[];
+  /** 直近の投稿の多くが当たっている流れの型（今日は使わない） */
+  frames?: FrameKey[];
   /** 今日の主題（まだ使っていない材料から1つ）。候補が無ければ null */
   topic: string | null;
   /** 何本の投稿から数えたか */
@@ -88,8 +134,14 @@ export function planFreshTopic(params: {
   maxOverused?: number;
 }): FreshTopicPlan {
   const docs = params.recentPosts.map(norm).filter((d) => d.length >= 10).slice(0, 12);
-  const empty: FreshTopicPlan = { overused: [], topic: null, sampleSize: docs.length };
+  const empty: FreshTopicPlan = { overused: [], frames: [], topic: null, sampleSize: docs.length };
   if (docs.length < 4) return empty;
+
+  // 流れの型：直近の3割以上（最低3本）が同じ入り方・締め方なら、今日は使わない（改行を残した原文で見る）
+  const raws = params.recentPosts.filter((t) => norm(t).length >= 10).slice(0, 12);
+  const minFrameDocs = Math.max(3, Math.ceil(raws.length * 0.3));
+  const frames = FRAMES.map((f) => f.key)
+    .filter((k) => raws.filter((t) => framesOf(t, [k]).length > 0).length >= minFrameDocs);
 
   const protect = protectWordsOf(params.protect);
   const isProtected = (w: string) => protect.some((p) => p.includes(w) || w.includes(p));
@@ -116,7 +168,7 @@ export function planFreshTopic(params: {
     overused.push(w);
     if (overused.length >= (params.maxOverused ?? 8)) break;
   }
-  if (overused.length === 0) return empty;
+  if (overused.length === 0 && frames.length === 0) return empty;
 
   // 材料を1行ずつに分け、「使いすぎの言葉を含む数」と「直近の投稿での使われ具合」で並べる
   const items: string[] = [];
@@ -135,15 +187,17 @@ export function planFreshTopic(params: {
     const hitOverused = overused.filter((o) => norm(s).includes(o)).length;
     // その材料の言葉が、直近の投稿にどれだけ出ているか（0〜1）
     const used = words.length === 0 ? 1 : words.filter((w) => docs.some((d) => d.includes(w))).length / words.length;
-    return { s, score: hitOverused * 2 + used, words: words.length };
+    // 使いすぎの型の言い回しを含む材料（「技術を覚えられるか不安」）は主題にしない
+    const hitFrame = lineHitsFrames(s, frames) ? 2 : 0;
+    return { s, score: hitOverused * 2 + hitFrame + used, words: words.length };
   }).filter((x) => x.words > 0);
-  if (scored.length === 0) return { ...empty, overused };
+  if (scored.length === 0) return { ...empty, overused, frames };
   const best = Math.min(...scored.map((x) => x.score));
   // いちばん使われていない材料の中から、枠ごとに順に選ぶ（同じ日の3案が同じ主題にならないように）
   const pool = scored.filter((x) => x.score <= best + 0.34);
   const i = Math.abs(Math.trunc(params.index ?? 0)) % pool.length;
   const topic = pool[i].score < 2 ? pool[i].s : null; // 使いすぎの言葉を含む材料しか無ければ指定しない
-  return { overused, topic, sampleSize: docs.length };
+  return { overused, frames, topic, sampleSize: docs.length };
 }
 
 /** 下書きに含まれる「使いすぎの話題の言葉」 */
@@ -163,8 +217,81 @@ export function overusedHits(text: string, plan: FreshTopicPlan | null): string[
  */
 export function dropOverusedLines(text: string | null | undefined, plan: FreshTopicPlan | null, maxHits: number = 2): string {
   const raw = String(text ?? "");
-  if (!plan || plan.overused.length === 0 || !raw.trim()) return raw;
-  return raw.split(/\r?\n/).filter((l) => overusedHits(l, plan).length < maxHits).join("\n").trim();
+  const frames = plan?.frames ?? [];
+  if (!plan || (plan.overused.length === 0 && frames.length === 0) || !raw.trim()) return raw;
+  return raw.split(/\r?\n/)
+    .filter((l) => overusedHits(l, plan).length < maxHits && !lineHitsFrames(l, frames))
+    .join("\n").trim();
+}
+
+/**
+ * 文体のお手本・◯の付いた案から、使いすぎの型・話題に当たる文を外す（お手本は写されるため）。
+ * ★9/26：◯✕アンケートで◯が付いた「覚えることが多そうで不安です→現場で覚える」の案が
+ *   お手本の先頭に入り、毎回その流れで書かれていた。◯は残し、その日の型に当たる文だけ外す。
+ */
+export function dropFramedSentences(text: string | null | undefined, plan: FreshTopicPlan | null): string {
+  const raw = String(text ?? "");
+  const frames = plan?.frames ?? [];
+  if (!plan || (plan.overused.length === 0 && frames.length === 0) || !raw.trim()) return raw;
+  return raw.split(/\n?-{3,}\n?/)
+    .map((b) => b.split(/(?<=[。！？!?\n])/)
+      .filter((s) => !lineHitsFrames(s, frames) && overusedHits(s, plan).length < 2)
+      .join("").trim())
+    .filter((b) => b.replace(/\s/g, "").length >= 6)
+    .join("\n---\n");
+}
+
+// ==================== ◯✕アンケートで✕が付いた題材（2026-09-26） ====================
+
+export interface SurveyAvoid {
+  /** ✕が付いた案の題名の言葉（1つでも出たら同じ題材） */
+  labelWords: string[];
+  /** ✕が付いた案の本文にだけ出る言葉（◯の案には出ない。2つ出たら同じ題材） */
+  contentWords: string[];
+  /** 題名（プロンプトに書く用） */
+  labels: string[];
+}
+
+/**
+ * ✕が付いた案の「題材の言葉」を取り出す。
+ * ★9/25 に「子育てと両立する働き方」に✕が付いたのに、翌日「産休・育休から復帰できるの？」が作られた。
+ *   ✕は「避ける書き方の例」として渡していただけで、題材としては外していなかった。
+ *   ◯の案にも出る言葉（エステティシャン・先輩など、お店の主題）は外さない。
+ */
+export function surveyAvoidWords(
+  bad: ReadonlyArray<{ label?: string | null; content?: string | null }>,
+  goodContents: readonly string[],
+  protect: readonly (string | null | undefined)[],
+): SurveyAvoid {
+  const good = new Set(goodContents.flatMap((c) => topicWordsOf(c)));
+  const pw = protectWordsOf(protect);
+  const keep = (w: string) => !good.has(w) && !pw.some((p) => p.includes(w) || w.includes(p));
+  const labelWords = new Set<string>();
+  const contentWords = new Set<string>();
+  for (const b of bad) {
+    for (const w of topicWordsOf(String(b.label ?? ""))) if (keep(w)) labelWords.add(w);
+    for (const w of topicWordsOf(String(b.content ?? ""))) if (keep(w) && !labelWords.has(w)) contentWords.add(w);
+  }
+  return {
+    labelWords: Array.from(labelWords),
+    contentWords: Array.from(contentWords).filter((w) => !labelWords.has(w)),
+    labels: bad.map((b) => String(b.label ?? "").trim()).filter(Boolean),
+  };
+}
+
+/** その文が✕の題材に当たっているか（題名の言葉1つ、または本文の言葉2つ） */
+export function hitsSurveyAvoid(text: string, avoid: SurveyAvoid | null): string[] {
+  if (!avoid) return [];
+  const t = norm(text);
+  const l = avoid.labelWords.filter((w) => t.includes(w));
+  const c = avoid.contentWords.filter((w) => t.includes(w));
+  return l.length >= 1 || c.length >= 2 ? [...l, ...c] : [];
+}
+
+export function buildSurveyAvoidNote(avoid: SurveyAvoid | null): string {
+  if (!avoid || avoid.labels.length === 0) return "";
+  const words = [...avoid.labelWords, ...avoid.contentWords].slice(0, 8);
+  return `\n\n【オーナーが✕を付けた題材（厳守）】\n- オーナーが方向性のアンケートで「違う」と答えた題材：${avoid.labels.map((l) => `「${l}」`).join("")}\n- この題材は書かない（${words.map((w) => `「${w}」`).join("")}の話をしない）。Q&Aや別の切り口に言い換えて同じ題材を書くのも不可。`;
 }
 
 /**
@@ -179,11 +306,18 @@ export function saidSameContent(reasons: ReadonlyArray<{ reason: string; reasonT
 
 /** 生成プロンプトに足す指示。使いすぎの話題が無ければ空文字 */
 export function buildFreshTopicNote(plan: FreshTopicPlan | null): string {
-  if (!plan || plan.overused.length === 0) return "";
-  const lines = [
-    `- 直近${plan.sampleSize}本の投稿の多くが、同じ話題（${plan.overused.map((w) => `「${w}」`).join("")}）になっている。オーナーから「同じような内容ばかり」と言われている。`,
-    `- 今日の投稿では、上の言葉を1つも使わない。言い換えて同じ話（同じ人物・同じ体験・同じ悩み）を書くのも不可。`,
-  ];
+  const frames = plan?.frames ?? [];
+  if (!plan || (plan.overused.length === 0 && frames.length === 0)) return "";
+  const lines: string[] = [];
+  if (plan.overused.length > 0) {
+    lines.push(
+      `- 直近${plan.sampleSize}本の投稿の多くが、同じ話題（${plan.overused.map((w) => `「${w}」`).join("")}）になっている。オーナーから「同じような内容ばかり」と言われている。`,
+      `- 今日の投稿では、上の言葉を1つも使わない。言い換えて同じ話（同じ人物・同じ体験・同じ悩み）を書くのも不可。`,
+    );
+  } else {
+    lines.push(`- 直近${plan.sampleSize}本の投稿の多くが、同じ流れになっている。オーナーから「同じような内容ばかり」と言われている。`);
+  }
+  for (const f of FRAMES) if (frames.includes(f.key)) lines.push(`- ${f.note}`);
   if (plan.topic) {
     lines.push(`- ★今日の主題（必須）：「${plan.topic}」\n  ご登録の材料のうち、直近の投稿でまだ使っていないもの。この1つだけを主題にして書く。書いてある事実だけを使い、足さない。`);
   } else {

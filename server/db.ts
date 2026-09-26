@@ -3657,6 +3657,17 @@ export async function getSurveyRatedContents(projectId: string, rating: 'good' |
   } catch { return []; } // 表がまだ無い環境（マイグレーション前）でも生成は止めない
 }
 
+/** そのお店の案のうち◯✕が付いたもの（題名つき・✕の題材を外すため） */
+export async function getSurveyRatedItems(projectId: string): Promise<Array<{ label: string; content: string; rating: 'good' | 'bad' }>> {
+  const database = await getDb();
+  if (!database) return [];
+  try {
+    const rows: any = await database.execute(sql`
+      SELECT label, content, rating FROM draftSurveyItems WHERE projectId = ${projectId} AND rating IS NOT NULL`);
+    return (((rows as any)[0] ?? []) as any[]).map((r) => ({ label: String(r.label ?? ''), content: String(r.content ?? ''), rating: r.rating === 'good' ? 'good' as const : 'bad' as const }));
+  } catch { return []; }
+}
+
 /** 案の◯✕を切り口ごとに数える（getAngleFeedbackStats に足す） */
 async function getSurveyAngleStats(projectId: string): Promise<Array<{ angle: string; rating: string; count: number }>> {
   const database = await getDb();
