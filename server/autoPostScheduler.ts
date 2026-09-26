@@ -15,7 +15,7 @@ import { checkNaturalized, findAgreementQuestion, findBannedTic, findRepeatedHoo
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
-import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM } from "../shared/recruitingPost";
+import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM, hasRecruitingMarker } from "../shared/recruitingPost";
 import { touchesDeclined, filterStyleSamples, normalizeForPatterns, filterCounseling } from "../shared/declinedPatterns";
 import { overusedHits, dropOverusedLines, dropFramedSentences, framesOf, hitsSurveyAvoid, lineHitsFrames } from "../shared/freshTopic";
 import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
@@ -1177,6 +1177,16 @@ async function generateAutoPost(
           { detail: fr.join('・') });
         return false;
       }
+    }
+
+    // ★求人のアカウントで、求人だと読めない下書きは作り直す（2026-09-26 三上様指示「今後は求人向けに書いてください」）。
+    //   最後の作り直しでは止めない（枠を捨てない）。
+    if (looksLikeRecruiting(project) && !lastAttempt && !hasRecruitingMarker(naturalMain)) {
+      console.warn(`[AutoPost] recruitingMarker: 求人だと読めない → 作り直し userId=${userId} account=${threadsAccountId}`);
+      noteReject('recruitingMarker', userId, threadsAccountId, postingTimeIndex,
+        '- この投稿は求人（働く人に向けた投稿）。お客様向けの宣伝に読める。働く・職場・募集・入社・スタッフとして などの言葉で、働く人に向けた投稿だと分かるように書く。',
+        { detail: 'no-marker' });
+      return false;
     }
 
     // ★◯✕アンケートで✕が付いた題材が残っていたら作り直す（2026-09-26）。最後の作り直しでも公開しない。

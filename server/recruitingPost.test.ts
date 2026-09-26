@@ -6,7 +6,7 @@
  * 落ちた下書きをそのままここに入れて、同じ型に戻ったら気づけるようにする。
  */
 import { describe, it, expect } from "vitest";
-import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM } from "@shared/recruitingPost";
+import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM, hasRecruitingMarker } from "@shared/recruitingPost";
 
 describe("求人の投稿かどうかの見分け", () => {
   it("プレステージ様の実データを求人として見分ける", () => {
@@ -53,9 +53,16 @@ describe("求人の投稿に足す指示", () => {
     expect(RECRUITING_POST_ADDENDUM).toContain("不合格");
   });
 
-  it("実際にあった一人の話を、起きた順に書かせる", () => {
-    expect(RECRUITING_POST_ADDENDUM).toContain("一人の話を1つだけ選び");
+  it("登録された事実を1つ選んで具体的に書かせ、入社された方の話は起きた順に書かせる", () => {
+    expect(RECRUITING_POST_ADDENDUM).toContain("**1つだけ**選び");
     expect(RECRUITING_POST_ADDENDUM).toContain("起きた順");
+    // ★9/26「また同じものばかり」：一人の話を毎回必ず使わせると、同じ流れが続く
+    expect(RECRUITING_POST_ADDENDUM).toContain("毎回同じ人の話にしない");
+    expect(RECRUITING_POST_ADDENDUM).not.toContain("一人の話を1つだけ選び");
+  });
+
+  it("求人の投稿だと読んで分かるように書かせる（2026-09-26）", () => {
+    expect(RECRUITING_POST_ADDENDUM).toContain("求人の投稿だ」とすぐ分かる");
   });
 
   it("来店を促す言い方を止める（読む人はお客様ではない）", () => {
@@ -70,5 +77,18 @@ describe("求人の投稿に足す指示", () => {
 
   it("絵文字を使っていない（★は社内の強調記号なので対象外）", () => {
     expect(RECRUITING_POST_ADDENDUM).not.toMatch(/\p{Extended_Pictographic}/u);
+  });
+});
+
+describe("求人だと読める言葉があるか（2026-09-26）", () => {
+  it("お客様向けの宣伝にも読める文は、求人の言葉が無いと判定する", () => {
+    // 架空のサロン。体質別ケアの紹介だけで、働く人に向けた言葉が無い
+    expect(hasRecruitingMarker("サンプルサロンのケアは、体質別。\n創業から20年続けてきました。\nお客様の体質を見て組み立てます。")).toBe(false);
+  });
+  it("働く・職場・募集・入社などがあれば求人と読める", () => {
+    expect(hasRecruitingMarker("働きながら学べる職場です。")).toBe(true);
+    expect(hasRecruitingMarker("一緒に働く仲間を募集しています。")).toBe(true);
+    expect(hasRecruitingMarker("入社2か月目に指名をいただけた方がいます。")).toBe(true);
+    expect(hasRecruitingMarker("あなたが働くなら、どのお店が合いそうですか？")).toBe(true);
   });
 });
