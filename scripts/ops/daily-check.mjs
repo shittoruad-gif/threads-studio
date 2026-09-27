@@ -157,6 +157,9 @@ async function main() {
         const posted = Array.isArray(hist) ? hist.filter((h) => h.status === 'posted').length : 0;
         const daysLeft = Math.ceil((new Date(u.trialEndsAt).getTime() - Date.now()) / 86400000);
         if (posted === 0) trialFlag += ` / ★トライアル中で公開0本（残り${daysLeft}日）→担当者からお声がけ`;
+      } else if (u.subscriptionStatus === 'trialing') {
+        // 期限なしのお試し（PROST2026 等・課金なし）。有料の契約と見分けられるよう印だけ付ける（2026-09-26）
+        trialFlag += ' / 課金なしのお試し';
       }
       const FREQ = { daily: '1日1回', twice_daily: '1日2回', three_daily: '1日3回' };
       // ★「未紐づけ」は、お店の情報が複数あるときだけ困りごとになる。

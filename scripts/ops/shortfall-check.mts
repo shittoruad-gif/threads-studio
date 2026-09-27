@@ -28,7 +28,7 @@ if (!d) { console.error("DBに接続できません"); process.exit(1); }
 
 const { getPlan, resolveEffectivePlanId } = await import("../../shared/plans");
 const { effectiveAccountSettings } = await import("../../shared/accountSettings");
-const { accountAgeDays, rampCap } = await import("../../shared/accountRamp");
+const { accountAgeDays, rampCap, compensationCount, COMPENSATION_WINDOW_DAYS } = await import("../../shared/accountRamp");
 
 const FREQ: Record<string, number> = { daily: 1, twice_daily: 2, three_daily: 3 };
 const JST = (d: Date | string) => new Date(d).toISOString().slice(0, 10);
@@ -96,19 +96,33 @@ for (const a of accts) {
   const elapsed = Math.max(0, accountAgeDays(a.createdAt)); // 今日を含まない
   if (elapsed >= 3) {
     // 慣らし運転で意図的に少ない分は引く（設計どおりなので「不足」と呼ばない）
+    //   期待本数は「いまの設定（want）」で数える。ご本人が1日1件にしている方をプランの上限で数えると、
+    //   それだけで大きな不足に見える（2026-09-26 佐々木様 acc27/31 が「28件不足」と出た）。
+    //   設定が上限より少ないこと自体は 1. で出している。
     let expected = 0;
     for (let i = 0; i < elapsed; i++) {
       const at = new Date(new Date(a.createdAt).getTime() + i * 86400000).getTime();
-      expected += rampCap(planMax, a.createdAt, at).count;
+      expected += Math.min(want, rampCap(planMax, a.createdAt, at).count);
     }
     const short = expected - posted;
-    if (short >= planMax) { // 1日分以上足りない時だけ出す
+    if (short >= want) { // 1日分以上足りない時だけ出す
+      // 補填：手動（extraPostsPerDay）に加えて、連携30日以内の自動補填（compensationCount）も見る
+      //   （自動補填が動いている比嘉様・髙木様まで「補填は未設定」と出ていた・2026-09-26）
+      const comp = compensationCount(want, elapsed, posted);
+      const compOn = comp.count > want;
+      const compEnd = JST(new Date(new Date(a.createdAt).getTime() + COMPENSATION_WINDOW_DAYS * 86400000));
+      const extras = [
+        a.extraPostsPerDay ? `手動の補填 +${a.extraPostsPerDay}件/日（${a.extraPostsUntil ? JST(a.extraPostsUntil) : "期限なし"}まで）設定ずみ` : "",
+        compOn ? `自動の補填 +${comp.count - want}件/日（連携30日の${compEnd}まで）が動いている` : "",
+      ].filter(Boolean);
+      // 課金の無いお試し（PROST2026 など）は「要判断」にしない（2026-09-19 三上様「放置でよい」）
+      const paying = sub?.status === "active" && Boolean(sub?.univapaySubscriptionId);
       found.push({
-        level: short >= planMax * 3 ? "要判断" : "確認",
+        level: paying && short >= want * 3 ? "要判断" : "確認",
         user: who, account: acct,
         what: `連携からの累計が ${short}件 足りない`,
-        detail: `${since} からの${elapsed}日間：慣らし運転を織り込むと${expected}件のはずが${posted}件。` +
-          (a.extraPostsPerDay ? `補填 +${a.extraPostsPerDay}件/日（${a.extraPostsUntil ? JST(a.extraPostsUntil) : "期限なし"}まで）設定ずみ` : "補填は未設定"),
+        detail: `${since} からの${elapsed}日間：いまの設定（1日${want}件）と慣らし運転を織り込むと${expected}件のはずが${posted}件。` +
+          (extras.length ? extras.join("／") : "補填は未設定") + (paying ? "" : "（課金なしのお試し）"),
       });
     }
   }
