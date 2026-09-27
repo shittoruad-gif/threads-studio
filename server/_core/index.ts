@@ -621,6 +621,16 @@ async function startServer() {
             console.log(`[Univapay Webhook] 別契約の解約通知を無視: user=${user.id} event.sub=${univapaySubId} app.sub=${existing.univapaySubscriptionId}`);
             return res.json({ received: true, note: 'canceled event for a different subscription' });
           }
+          // ★解約の予約（アプリの解約ボタン・運営の手続き）なら、お支払いずみの期間の終わりまでは
+          //   active のまま据え置く（期間の終わりに billingReconcile が canceled に落とす）。
+          //   ここで即 canceled にすると、期間の途中で投稿が止まり、しかもキャンペーン価格の方には
+          //   「キャンペーン期間が終了しました」という誤ったメールが届いてしまう
+          //   （2026-09-27 氷見様の解約予約の際に発見。それまでアプリからの解約は0件で未通過だった）。
+          if (existing?.cancelAtPeriodEnd && existing.currentPeriodEnd
+              && new Date(existing.currentPeriodEnd).getTime() > Date.now()) {
+            console.log(`[Univapay Webhook] 解約予約の解約通知: user=${user.id} ${new Date(existing.currentPeriodEnd).toISOString()}まで利用可のため据え置き`);
+            return res.json({ received: true, note: 'canceled at period end' });
+          }
           if (existing) {
             await db.updateSubscription(existing.id, { status: 'canceled' });
           }

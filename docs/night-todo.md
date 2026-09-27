@@ -7,6 +7,20 @@
 > 過去の経緯は `git log docs/night-todo.md` から追える。ここには **これからやること** と
 > **忘れると事故になること** だけを残す。
 
+## 2026-09-27 昼：氷見様（user 2907・pro_seminar）を「次回で更新せず解約」に（三上様指示・コミットのみ・今夜 push）
+
+> 「氷見先生は次回で更新せず解約に設定してください」
+
+- 本番DBは設定済み（9/27 15:00）：subscriptions id=8 の cancelAtPeriodEnd=1。status は active のまま（期間の終わりまで使える）。
+- **UnivaPay の定期課金（11f1a687-f901-449a-bb5e-ab832a1f55a2）はまだ生きている。次回課金日は 10/2。**
+  反映前に止めなかった理由：解約通知の Webhook が cancelAtPeriodEnd を見ずに即 canceled にし、しかもキャンペーン価格の方には
+  「キャンペーン期間が終了しました」のメールを送る作りだった（アプリからの解約は過去0件で未通過）。
+- 直し：①Webhook は解約の予約で期間中なら据え置き（メールも出さない）②毎日の照合（billing_reconcile・7:20 JST）が
+  「解約の予約あり＋UnivaPay課金中」を見つけたら UnivaPay の定期課金を止める。
+- **反映後に見ること**：9/28 7:20 の照合で `解約の予約どおり UnivaPay の定期課金を止めた sub=8` が出て、UnivaPay の状態が canceled になること。
+  出なければ、10/1 までに手で止める（`cancelSubscription('11f1a687-...')`）。10/2 に課金されたら事故。
+- 利用の終わり：DB の currentPeriodEnd は 10/3 13:37 JST。その後の照合（10/4 7:20）で無料に切り替わる。
+
 ## 2026-09-26 未明：Moveact グループレッスン初回のカウンセリング案内（a8afe60）は段階1で中止・本番は無変更
 
 - 段階0 済：本番Supabaseを全75表取り出し → `~/Backups/moveact-supabase/20260926/`（tar.gz 1.5MB）、R2 `2026-09-26/supabase-moveact/` にも置いた。

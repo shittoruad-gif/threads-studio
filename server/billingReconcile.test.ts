@@ -159,4 +159,35 @@ describe("billingReconcile: ジョブ本体", () => {
     expect(r.failed).toHaveLength(1);
     expect(r.failed[0].subscriptionId).toBe(9);
   });
+
+  it("解約の予約（cancelAtPeriodEnd）なのに UnivaPay が課金中なら、定期課金を止める。利用は期間の終わりまで active のまま", async () => {
+    const updates: any[] = [];
+    const canceled: string[] = [];
+    const future = new Date(Date.now() + 5 * 86400_000);
+    const fakeDb = {
+      select: () => ({
+        from: () => ({
+          where: async () => [
+            { id: 8, userId: 2907, status: "active", cancelAtPeriodEnd: true, currentPeriodEnd: future, univapaySubscriptionId: "sub_h" },
+            { id: 4, userId: 10, status: "active", cancelAtPeriodEnd: false, currentPeriodEnd: future, univapaySubscriptionId: "sub_n" },
+          ],
+        }),
+      }),
+      update: () => ({ set: (p: any) => ({ where: async () => updates.push(p) }) }),
+    };
+    vi.doMock("./db", () => ({ getDb: async () => fakeDb }));
+    vi.doMock("./univapay", () => ({
+      getSubscription: async () => ({ status: "current" }),
+      cancelSubscription: async (id: string) => { canceled.push(id); },
+    }));
+    vi.doMock("./_core/notification", () => ({ notifyOwner: async () => true }));
+
+    const { runBillingReconcileJob } = await import("./billingReconcile");
+    const r = await runBillingReconcileJob();
+
+    expect(canceled).toEqual(["sub_h"]);
+    expect(updates).toHaveLength(0);
+    expect(r.updated).toHaveLength(1);
+    expect(r.updated[0].subscriptionId).toBe(8);
+  });
 });

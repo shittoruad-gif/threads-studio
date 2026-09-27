@@ -1,6 +1,6 @@
 import { getDb } from "./db";
 import { subscriptions } from "../drizzle/schema";
-import { getSubscription } from "./univapay";
+import { cancelSubscription, getSubscription } from "./univapay";
 import { notifyOwner } from "./_core/notification";
 import { eq, sql } from "drizzle-orm";
 
@@ -91,6 +91,22 @@ export async function runBillingReconcileJob(): Promise<ReconcileResult> {
     } catch (e: any) {
       // Univapay に無いID（テスト用など）や通信断。落とさず記録だけ残す。
       result.failed.push({ subscriptionId: row.id, reason: String(e?.message ?? e).slice(0, 200) });
+      continue;
+    }
+
+    // ★解約の予約が付いているのに UnivaPay の定期課金が生きていれば、ここで止める（次の課金を起こさない）。
+    //   運営が「次回で更新せず解約」を受けたときは cancelAtPeriodEnd を付けるだけでよい
+    //   （2026-09-27 三上様「氷見先生は次回で更新せず解約に設定してください」）。
+    //   利用は期間の終わりまで続く（解約通知の Webhook も期間中は据え置く）。
+    const remoteStatus = String(remote?.status ?? '').toLowerCase();
+    if (row.cancelAtPeriodEnd && (remoteStatus === 'current' || remoteStatus === 'unpaid' || remoteStatus === 'unconfirmed')) {
+      try {
+        await cancelSubscription(row.univapaySubscriptionId as string);
+        result.updated.push({ subscriptionId: row.id, userId: row.userId, from: `UnivaPay ${remoteStatus}`, to: 'UnivaPay 解約（解約の予約どおり・利用は期間の終わりまで）' });
+        console.log(`[BillingReconcile] sub=${row.id} 解約の予約どおり UnivaPay の定期課金を止めた`);
+      } catch (e: any) {
+        result.failed.push({ subscriptionId: row.id, reason: `解約の予約を UnivaPay に反映できません: ${String(e?.message ?? e).slice(0, 150)}` });
+      }
       continue;
     }
 
