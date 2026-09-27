@@ -3203,6 +3203,12 @@ ${input.commentText}
 
       // Cancel subscription in Univapay
       const univapayService = await import('./univapay');
+      // 使える期間の終わりは、UnivaPay の次回課金日の 0:00（日本時間）にそろえる（解約する前に読む）。
+      //   アプリ側の currentPeriodEnd は「課金時刻＋31日」の仮の値のことがあり、1日長くなる（2026-09-27 氷見様で発見）。
+      const { paidThroughFromDueDate } = await import('./billingReconcile');
+      const remoteBefore: any = await univapayService.getSubscription(subscription.univapaySubscriptionId).catch(() => null);
+      const dueEnd = paidThroughFromDueDate(remoteBefore?.next_payment?.due_date);
+      if (dueEnd) (subscription as any).currentPeriodEnd = dueEnd;
       await univapayService.cancelSubscription(subscription.univapaySubscriptionId);
 
       // ★お支払いずみの期間が残っていれば、その終わりまでは今までどおり使えるようにする
@@ -3216,6 +3222,7 @@ ${input.commentText}
       await db.updateSubscription(subscription.id, {
         status: stillPaidFor ? 'active' : 'canceled',
         cancelAtPeriodEnd: true,
+        ...(periodEnd ? { currentPeriodEnd: periodEnd } : {}),
         // 解約するなら、予約していたプラン変更も取り消す
         pendingPlanId: null,
         pendingPlanEffectiveAt: null,

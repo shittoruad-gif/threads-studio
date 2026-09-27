@@ -42,6 +42,13 @@ export function mapUnivapayStatus(univapayStatus: string | undefined | null): st
   return STATUS_MAP[String(univapayStatus).toLowerCase()] ?? null;
 }
 
+/** UnivaPay の次回課金日（YYYY-MM-DD・日本時間）→ その日の 0:00（日本時間）。お支払いずみの期間はその直前まで。 */
+export function paidThroughFromDueDate(due: string | null | undefined): Date | null {
+  if (!due || !/^\d{4}-\d{2}-\d{2}/.test(String(due))) return null;
+  const d = new Date(`${String(due).slice(0, 10)}T00:00:00+09:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 type Changed = {
   subscriptionId: number;
   userId: number;
@@ -101,7 +108,11 @@ export async function runBillingReconcileJob(): Promise<ReconcileResult> {
     const remoteStatus = String(remote?.status ?? '').toLowerCase();
     if (row.cancelAtPeriodEnd && (remoteStatus === 'current' || remoteStatus === 'unpaid' || remoteStatus === 'unconfirmed')) {
       try {
+        // 使える期間の終わり＝UnivaPay の次回課金日の 0:00（日本時間）。お支払いずみの分はその前日まで。
+        //   アプリ側の currentPeriodEnd は「課金時刻＋31日」の仮の値のことがあり、1日長くなる（2026-09-27 氷見様で発見）。
+        const periodEnd = paidThroughFromDueDate(remote?.next_payment?.due_date);
         await cancelSubscription(row.univapaySubscriptionId as string);
+        if (periodEnd) await db.update(subscriptions).set({ currentPeriodEnd: periodEnd }).where(eq(subscriptions.id, row.id));
         result.updated.push({ subscriptionId: row.id, userId: row.userId, from: `UnivaPay ${remoteStatus}`, to: 'UnivaPay 解約（解約の予約どおり・利用は期間の終わりまで）' });
         console.log(`[BillingReconcile] sub=${row.id} 解約の予約どおり UnivaPay の定期課金を止めた`);
       } catch (e: any) {

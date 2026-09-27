@@ -190,4 +190,11 @@ describe("billingReconcile: ジョブ本体", () => {
     expect(r.updated).toHaveLength(1);
     expect(r.updated[0].subscriptionId).toBe(8);
   });
+
+  it("次回課金日（日本時間）→ その日の0:00。お支払いずみはその前日いっぱい", async () => {
+    const { paidThroughFromDueDate } = await import("./billingReconcile");
+    expect(paidThroughFromDueDate("2026-10-02")?.toISOString()).toBe("2026-10-01T15:00:00.000Z");
+    expect(paidThroughFromDueDate(null)).toBeNull();
+    expect(paidThroughFromDueDate("なし")).toBeNull();
+  });
 });
