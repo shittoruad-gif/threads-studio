@@ -31,6 +31,7 @@ const rows: any[] = (await d.execute(sql`
   JOIN postAnalytics p ON p.threadsPostId = s.publishedThreadsPostId AND p.userId = s.userId
   WHERE s.threadsAccountId IN (${sql.raw(ids)})
     AND s.status = 'posted'
+    AND (s.angle IS NULL OR s.angle <> 'hit_pattern')  -- 他店の当たり型の試し（4・5本目・2026-09-28）は時間の試験に数えない
     AND CONVERT_TZ(s.postedAt, '+00:00', '+09:00') >= ${start}
     AND CONVERT_TZ(s.postedAt, '+00:00', '+09:00') < DATE_ADD(${end}, INTERVAL 1 DAY)
     AND s.postedAt < NOW() - INTERVAL 24 HOUR`))[0] as any;

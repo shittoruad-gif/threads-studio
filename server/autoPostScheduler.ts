@@ -481,7 +481,7 @@ async function generateAutoPost(
   // ★3案からお選びいただく形（2026-09-22 三上様指示・shared/threeChoice.ts）。
   //   choiceGroupId を渡すと「1つの枠に対する選択肢」として作る（必ず承認カード）。
   //   forcedAngleId は3案の切り口を散らすため（同じ材料から3本作ると同じ所へ戻るため）。
-  opts: { choiceGroupId?: string | null; forcedAngleId?: string | null } = {},
+  opts: { choiceGroupId?: string | null; forcedAngleId?: string | null; hitPatternId?: number | null } = {},
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
   const purpose = PURPOSES[purposeIndex % PURPOSES.length];
@@ -542,9 +542,21 @@ async function generateAutoPost(
     const studyExperiment = isStudyExperimentUser(userId);
     angle = forced
       ?? pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment });
+    // ★他店の当たり型の枠（2026-09-28 三上様指示・shared/hitPatterns.ts）。型が読めなければ通常の切り口のまま
+    if (!forced && opts.hitPatternId) {
+      try {
+        const { getHitPatternText } = await import('./hitPatterns');
+        const { buildHitPatternAngle } = await import('../shared/hitPatterns');
+        const pattern = await getHitPatternText(opts.hitPatternId);
+        if (pattern) {
+          angle = buildHitPatternAngle(pattern) as any;
+          console.log(`[AutoPost] 他店の当たり型 account=${threadsAccountId} pattern=${opts.hitPatternId}`);
+        }
+      } catch (e) { console.warn(`[AutoPost] 当たり型を読めませんでした account=${threadsAccountId}: ${(e as Error)?.message}`); }
+    }
     if (studyExperiment && angle) console.log(`[AutoPost] 試験中（勉強会の型） userId=${userId} account=${threadsAccountId} → ${angle.id}`);
     if (forced) console.log(`[AutoPost] 3案：切り口を指定 account=${threadsAccountId} → ${forced.id}`);
-    if (preferredAngles.length) console.log(`[AutoPost] 希望の型を優先 userId=${userId} ${preferredAngles.join('/')} → ${angle.id}`);
+    if (preferredAngles.length) console.log(`[AutoPost] 希望の型を優先 userId=${userId} ${preferredAngles.join('/')} → ${angle?.id}`);
     if (excludeOutcomeAngles) console.log(`[AutoPost] 健康系のお店のため結果を語る切り口を除外 userId=${userId}`);
     // ◯✕が付いた実例をプロンプトに注入して「このお店の好み」を学習させる
     const [liked, disliked] = await Promise.all([
@@ -1441,6 +1453,7 @@ async function generateAutoPost(
       source: 'auto',
       // 使った切り口を記録（◯✕評価と組み合わせて好み学習に使う）
       angle: angle?.id ?? null,
+      hitPatternId: angle?.id === 'hit_pattern' && opts.hitPatternId ? opts.hitPatternId : null,
       // 使った長さ条件を記録（A/Bテストの集計に使う。設定は後から変わるため投稿側に残す）
       postLength: effectiveLength,
       metaAiAskText,
@@ -1807,6 +1820,19 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           for (let i = startIndex; i < regularCount; i++) {
             const project = pinnedProject || eligibleProjects[(dayOffset + i) % eligibleProjects.length];
 
+            // ★他店の当たり型の試し（2026-09-28 三上様指示・shared/hitPatterns.ts）。
+            //   試しのアカウントだけ、契約の本数より後ろの枠（4本目・5本目）を当たり型で作る。契約の3本は今までどおり。
+            let hitPatternId: number | null = null;
+            try {
+              const { isHitPatternSlot, businessGroupOf } = await import('../shared/hitPatterns');
+              if (!opts.fillToday && isHitPatternSlot(account.id, i, contractCount)) {
+                const { looksLikeRecruiting } = await import('../shared/recruitingPost');
+                const { pickHitPatternId } = await import('./hitPatterns');
+                hitPatternId = await pickHitPatternId(account.id, businessGroupOf((project as any).businessType, { recruiting: looksLikeRecruiting(project as any) }));
+                console.log(`[AutoPost] 当たり型の枠 account=${account.id} slot=${i} → ${hitPatternId ?? '型なし（通常の切り口）'}`);
+              }
+            } catch (e) { console.warn(`[AutoPost] 当たり型を選べませんでした account=${account.id}: ${(e as Error)?.message}`); }
+
             // ★品質ガードで落ちた日に「投稿ゼロ」で終わらせない（2026-09-08 比嘉先生の当日補充で
             //   1回目が健康表現ガードに落ち、generated=0 のまま終わっていた）。最大3回まで作り直す。
             let success = false;
@@ -1827,6 +1853,8 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                 sameDaySlots ? sameDaySlots[i] : (opts.forTomorrow ? postingTimeOnDay(i, acctHours, 1) : null),
                 hint,
                 attempt === 3,
+                false,
+                hitPatternId ? { hitPatternId } : {},
               );
               if (!success && attempt < 3) console.log(`[AutoPost] user=${user.id} account=${account.id} slot=${i} 作り直し ${attempt + 1}回目${hint ? '（前回の理由を渡す）' : ''}`);
             }

@@ -606,6 +606,8 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   //   NULL のときは作った日（createdAt の JST日付）が「その日の分」＝今までどおり。
   //   日をまたいだ承認待ちの見送り・当日の本数・3案の判定は COALESCE(forDate, 作った日) で見る。
   forDate: date("forDate", { mode: "string" }),
+  // ★他店の当たり型（hitPatterns）で作った投稿なら、その型のID（2026-09-28・型ごとの効果を測る）
+  hitPatternId: int("hitPatternId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [
@@ -1054,6 +1056,27 @@ export const postSkipFeedback = mysqlTable("postSkipFeedback", {
 ]);
 
 export type PostSkipFeedback = typeof postSkipFeedback.$inferSelect;
+
+/**
+ * クライアント全体の「その店の普段の2倍以上読まれた投稿」から取り出した型（2026-09-28 三上様指示・0100）。
+ * 本文・店名・数字は持たない（他のお客様の文がそのまま出る・他店の事実を書く、を防ぐ）。shared/hitPatterns.ts
+ */
+export const hitPatterns = mysqlTable("hitPatterns", {
+  id: int("id").autoincrement().primaryKey(),
+  sourceThreadsPostId: varchar("sourceThreadsPostId", { length: 255 }).notNull(),
+  sourceAccountId: int("sourceAccountId").notNull(),
+  businessGroup: varchar("businessGroup", { length: 20 }).notNull(),
+  impressions: int("impressions").notNull().default(0),
+  ratio: int("ratio").notNull().default(0),
+  pattern: text("pattern").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("active"),
+  note: varchar("note", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uniq_hitPatterns_source").on(table.sourceThreadsPostId),
+]);
+
+export type HitPattern = typeof hitPatterns.$inferSelect;
 
 /**
  * 見送りが続くお客様への「足す材料」の案（2026-09-24 三上様指示・0096）。
