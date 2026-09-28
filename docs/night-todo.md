@@ -9,6 +9,11 @@
 
 
 
+
+## 2026-09-28 22:56：88fb2e1〜dd8768e（ほか 9/28 の申し送り分 e467ec0 まで8コミット）を push 済み
+
+- 三上様「もう今から始めて」（Meta審査の録画を今夜行うため）。23:30 の翌日分生成の前に反映が終わる時刻で push した。夜間整備はこの8コミットを再 push しなくてよい。反映後の確認項目は各節のとおり。
+
 ## 2026-09-28 夜：場所のタグ・Instagramストーリーズ同時シェア（審査の申請用・コミットのみ・今夜 push）
 
 - migration 0102（threadsAccounts.grantedExtraScopes/locationId/locationName/shareToIgStories）。録画用ユーザー（THREADS_REVIEW_REPLY_SCOPE_USER_IDS=78）の連携だけ2権限を追加で求める。一般のお客様の連携は変わらない
