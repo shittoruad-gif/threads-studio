@@ -6,7 +6,7 @@
  *   （「有料会員◯名に送る／この回は送らない」ボタン付き）。
  * 三上様が「送る」を押した時点で、あらためて配信先を数え直してから送る
  *   （下見のあとに解約・無料へ変わった方には届かない）。
- * 配信先：有料で、いまご契約中で、解約の予約も入っていない方だけ（isNewsletterRecipient）。
+ * 配信先：有料で、いまご契約中の方（isNewsletterRecipient）。解約の予約があっても期間が残っていれば送る（9/29 三上様）。
  *   公式LINEがつながっている方はLINE、無い方はメール。
  * 同じ回が同じ方へ2回届かないよう、送る前に配信記録（一意）を入れる。
  * 「読み物は不要」とおっしゃった方は newsletterOptOuts に入れる（担当者の作業）。入っている方には送らない。
@@ -22,13 +22,13 @@ export async function listNewsletterRecipients(): Promise<Recipient[]> {
   const database = await db.getDb();
   if (!database) return [];
   const rows: any = await database.execute(sql`
-    SELECT u.id AS userId, u.name, u.email, u.role, s.planId, s.status, s.univapaySubscriptionId, s.cancelAtPeriodEnd
+    SELECT u.id AS userId, u.name, u.email, u.role, s.planId, s.status, s.univapaySubscriptionId, s.cancelAtPeriodEnd, s.currentPeriodEnd
     FROM users u JOIN subscriptions s ON s.userId = u.id`);
   const byUser = new Map<number, { user: any; subs: RecipientSub[] }>();
   for (const r of ((rows as any)[0] ?? []) as any[]) {
     const id = Number(r.userId);
     const cur = byUser.get(id) ?? { user: r, subs: [] };
-    cur.subs.push({ planId: r.planId, status: r.status, univapaySubscriptionId: r.univapaySubscriptionId, cancelAtPeriodEnd: r.cancelAtPeriodEnd });
+    cur.subs.push({ planId: r.planId, status: r.status, univapaySubscriptionId: r.univapaySubscriptionId, cancelAtPeriodEnd: r.cancelAtPeriodEnd, currentPeriodEnd: r.currentPeriodEnd });
     byUser.set(id, cur);
   }
   // 「読み物は不要」とおっしゃった方は外す（担当者が newsletterOptOuts に入れる）
@@ -111,7 +111,7 @@ export async function runNewsletterPreview(opts: { dryRun?: boolean } = {}): Pro
     : "";
   const preview =
     `【有料会員向けの読み物・お送りする前の確認】第${issue.no}回\n` +
-    `配信先：有料会員${recipients.length}名（無料・解約ずみ・解約の予約ありの方には送りません）\n` +
+    `配信先：有料会員${recipients.length}名（無料・解約ずみの方には送りません。解約の予約がある方も、期間が残っていれば送ります）\n` +
     `「送る」を押すと、公式LINE（LINEが無い方はメール）で届きます。\n\n` +
     renderIssue(issue, sample);
   if (opts.dryRun) return { issueNo: issue.no, recipients: recipients.length, preview };

@@ -9,28 +9,38 @@
  * ★社外に出る文なので、講師名・書名・絵文字・広告費の具体額は書かない。
  */
 
-/** 配信してよい方か。有料で、いまご契約中で、解約の予約も入っていない方だけ */
+/**
+ * 配信してよい方か。有料で、いまご契約中の方。
+ * 解約の予約が入っていても、ご契約期間が残っているあいだは有料会員として送る
+ * （2026-09-29 三上様「解約の予約があって、まだ有料会員の人にはちゃんと送ってください」）。
+ */
 export interface RecipientSub {
   planId: string | null;
   status: string | null;
   univapaySubscriptionId: string | null;
   cancelAtPeriodEnd: boolean | number | null;
+  /** ご契約期間の終わり。解約予約の方は、ここを過ぎたら送らない */
+  currentPeriodEnd?: Date | string | null;
 }
 
-export function isPaidMemberSubscription(s: RecipientSub): boolean {
+export function isPaidMemberSubscription(s: RecipientSub, now: Date = new Date()): boolean {
   if (!s) return false;
   const plan = String(s.planId ?? "");
   if (!plan || plan === "free" || plan.startsWith("free")) return false; // 無料プラン
   if (s.status !== "active") return false; // 解約ずみ・未払い・お試し
   if (!s.univapaySubscriptionId) return false; // 課金なしのお試し・運営のテスト
-  if (s.cancelAtPeriodEnd === true || Number(s.cancelAtPeriodEnd) === 1) return false; // 解約の予約あり
+  // 解約の予約あり：期間が残っていれば送る。期間の終わりを過ぎたのに status が active のままなら送らない
+  if ((s.cancelAtPeriodEnd === true || Number(s.cancelAtPeriodEnd) === 1) && s.currentPeriodEnd) {
+    const end = new Date(s.currentPeriodEnd);
+    if (!Number.isNaN(end.getTime()) && end.getTime() <= now.getTime()) return false;
+  }
   return true;
 }
 
 /** ご契約が複数あっても、1つでも条件を満たせば配信する。運営（admin）には送らない */
 export function isNewsletterRecipient(user: { role?: string | null }, subs: RecipientSub[]): boolean {
   if (user?.role === "admin") return false;
-  return (subs ?? []).some(isPaidMemberSubscription);
+  return (subs ?? []).some((s) => isPaidMemberSubscription(s));
 }
 
 export interface NewsletterIssue {

@@ -14,9 +14,16 @@ describe("読み物の配信先", () => {
   it("解約した方には配信しない", () => {
     expect(isPaidMemberSubscription({ ...paid, status: "canceled" })).toBe(false);
   });
-  it("解約の予約が入っている方にも配信しない（例：9/27 解約予約の方）", () => {
-    expect(isPaidMemberSubscription({ ...paid, cancelAtPeriodEnd: 1 })).toBe(false);
-    expect(isPaidMemberSubscription({ ...paid, cancelAtPeriodEnd: true })).toBe(false);
+  // 2026-09-29 三上様「解約の予約があって、まだ有料会員の人にはちゃんと送ってください」
+  it("解約の予約があっても、期間が残っていれば配信する", () => {
+    const now = new Date("2026-09-29T00:00:00Z");
+    expect(isPaidMemberSubscription({ ...paid, cancelAtPeriodEnd: 1, currentPeriodEnd: "2026-10-01T15:00:00Z" }, now)).toBe(true);
+    expect(isPaidMemberSubscription({ ...paid, cancelAtPeriodEnd: true, currentPeriodEnd: new Date("2026-10-01T15:00:00Z") }, now)).toBe(true);
+    expect(isPaidMemberSubscription({ ...paid, cancelAtPeriodEnd: 1 }, now)).toBe(true);
+  });
+  it("解約の予約で期間が終わった方には、status が active のままでも配信しない", () => {
+    const now = new Date("2026-10-02T00:00:00Z");
+    expect(isPaidMemberSubscription({ ...paid, cancelAtPeriodEnd: 1, currentPeriodEnd: "2026-10-01T15:00:00Z" }, now)).toBe(false);
   });
   it("課金なしのお試し（pro だが決済が無い）・未払い・お試し中には配信しない", () => {
     expect(isPaidMemberSubscription({ ...paid, univapaySubscriptionId: null })).toBe(false);
