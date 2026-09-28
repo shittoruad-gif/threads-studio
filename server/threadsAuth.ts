@@ -64,6 +64,23 @@ export interface ThreadsAuthUrlOptions {
    * which Threads inherits from Meta's OAuth implementation.
    */
   forceReauth?: boolean;
+  /** 連携するアプリのユーザー。審査の録画用に返信権限を求めるかの判定に使う */
+  userId?: number;
+}
+
+/**
+ * このユーザーの連携で threads_manage_replies を求めるか。
+ * 承認後（THREADS_MANAGE_REPLIES_APPROVED=true）は全員。承認前は、Meta審査の録画に使う
+ * 自社ユーザーだけ（THREADS_REVIEW_REPLY_SCOPE_USER_IDS=78 のようにカンマ区切り）。
+ * 録画用のThreadsアカウントはアプリの役割でテスター登録済みなので、未承認でも同意画面に出る。
+ * （2026-09-28 三上様「審査に落ちているものを承認できるように」・同意画面に5権限を映すため）
+ */
+export function wantsReplyScope(userId?: number | null): boolean {
+  if (process.env.THREADS_MANAGE_REPLIES_APPROVED === "true") return true;
+  if (userId == null) return false;
+  const ids = String(process.env.THREADS_REVIEW_REPLY_SCOPE_USER_IDS || "")
+    .split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0);
+  return ids.includes(Number(userId));
 }
 
 /**
@@ -88,7 +105,7 @@ export function getThreadsAuthUrl(config: ThreadsAuthConfig, options: ThreadsAut
   //   承認されるまで既定では要求しない。承認後は環境変数を true にするだけで戻る。
   //   テスター登録済みの自社アカウントは取得済みトークンにスコープが残っており、
   //   トークン更新でも維持されるため影響しない（新規の再連携時のみ返信系が外れる）。
-  if (process.env.THREADS_MANAGE_REPLIES_APPROVED === "true") {
+  if (wantsReplyScope(options.userId)) {
     defaultScopes.splice(2, 0, "threads_manage_replies");
   }
 

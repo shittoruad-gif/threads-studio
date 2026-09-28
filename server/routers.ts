@@ -2092,7 +2092,7 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         return {
           authUrl: getThreadsAuthUrl(
             { redirectUri },
-            { forceReauth: input?.forceReauth },
+            { forceReauth: input?.forceReauth, userId: ctx.user.id },
             byoa,
           ),
           usingOwnApp: !!byoa,
@@ -2163,7 +2163,7 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           accessToken: longLivedToken.access_token,
           tokenExpiresAt: expiresAt,
           // このトークンを返信権限付きで取得したか（threadsAuth.tsのスコープ既定と対で真実を記録）
-          hasReplyScope: process.env.THREADS_MANAGE_REPLIES_APPROVED === "true",
+          hasReplyScope: (await import("./threadsAuth")).wantsReplyScope(ctx.user.id),
         } as any);
 
         // ★連携直後：自己紹介が空のままなら、貼るだけの提案を公式LINEへ（2026-09-06 三上様指示）
