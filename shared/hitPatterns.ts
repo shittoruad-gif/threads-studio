@@ -20,7 +20,7 @@ export const HIT_MIN_CHARS = 30;
 
 /** 試しの対象：Moveact 玉島・金光、そら先生（滝本様）、しっとる公式。期限はJSTの終日まで */
 export const HIT_PATTERN_TRIAL = {
-  accountIds: [10, 12, 11, 14] as readonly number[],
+  accountIds: [10, 12, 11, 36] as readonly number[],
   until: "2026-10-27",
   extraSlots: 2,
 };

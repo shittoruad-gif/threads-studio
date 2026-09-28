@@ -19,7 +19,7 @@
 
 export const FEATURE_TRIAL = {
   /** Moveact 玉島・Moveact 金光・そら先生・しっとる公式（投稿時間の試験と同じ4つ） */
-  accountIds: [10, 12, 11, 14] as readonly number[],
+  accountIds: [10, 12, 11, 36] as readonly number[],
   /** 日本時間の日付（この日を含む） */
   start: "2026-10-28",
   end: "2026-11-30",

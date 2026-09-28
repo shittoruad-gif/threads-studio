@@ -61,7 +61,7 @@ describe("hitPatterns: 試しの枠", () => {
     expect(isHitPatternSlot(10, 5, 3, now)).toBe(false);
   });
   it("対象はMoveact2店・そら先生・しっとる公式だけ。期限を過ぎたら止まる", () => {
-    expect([...HIT_PATTERN_TRIAL.accountIds].sort()).toEqual([10, 11, 12, 14]);
+    expect([...HIT_PATTERN_TRIAL.accountIds].sort()).toEqual([10, 11, 12, 36]);
     expect(isHitPatternSlot(21, 3, 3, now)).toBe(false);
     expect(inHitPatternTrial(10, Date.parse("2026-10-28T00:00:01+09:00"))).toBe(false);
   });

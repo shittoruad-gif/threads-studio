@@ -20,9 +20,9 @@ describe("Threads の機能の投稿：いつ・どのアカウントで", () =>
     expect(featureForSlot(10, 1, jst("2026-12-01"))).toBeNull(); // 終わったあと
   });
   it("再投稿は日曜だけ", () => {
-    expect(isRepostDay(14, jst("2026-11-01"))).toBe(true);
-    expect(isRepostDay(14, jst("2026-11-02"))).toBe(false);
-    expect(isRepostDay(14, jst("2026-10-25"))).toBe(false);
+    expect(isRepostDay(36, jst("2026-11-01"))).toBe(true);
+    expect(isRepostDay(36, jst("2026-11-02"))).toBe(false);
+    expect(isRepostDay(36, jst("2026-10-25"))).toBe(false);
   });
 });
 
