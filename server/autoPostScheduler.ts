@@ -507,7 +507,13 @@ async function generateAutoPost(
   // ★3案からお選びいただく形（2026-09-22 三上様指示・shared/threeChoice.ts）。
   //   choiceGroupId を渡すと「1つの枠に対する選択肢」として作る（必ず承認カード）。
   //   forcedAngleId は3案の切り口を散らすため（同じ材料から3本作ると同じ所へ戻るため）。
-  opts: { choiceGroupId?: string | null; forcedAngleId?: string | null; hitPatternId?: number | null; feature?: import('../shared/threadsFeatures').FeatureKind | null } = {},
+  opts: {
+    choiceGroupId?: string | null; forcedAngleId?: string | null; hitPatternId?: number | null; feature?: import('../shared/threadsFeatures').FeatureKind | null;
+    // ★◯✕アンケートの案づくり（2026-09-29・server/draftSurveyWeekly.ts）。検査はすべて通常どおり通し、
+    //   投稿（scheduledPosts）にはせず本文だけを受け取る。
+    collect?: (d: { content: string; angleId: string | null }) => void;
+    extraRecent?: string[];
+  } = {},
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
   const purpose = PURPOSES[purposeIndex % PURPOSES.length];
@@ -677,6 +683,8 @@ async function generateAutoPost(
     //   以前より前へ移した（取り方は変えていない）。
     let recentPosts: string[] = [];
     try { recentPosts = await db.getRecentPostContents(threadsAccountId, 10); } catch { recentPosts = []; }
+    // ★◯✕アンケートの案づくりでは、同じ回にすでに作った案も「直近の投稿」として扱う（同じ題材に寄らないように）
+    if (opts.extraRecent?.length) recentPosts = [...opts.extraRecent, ...recentPosts];
     // ★ご本人がThreadsアプリから投稿した分も見る（2026-09-11 香取様「同じ内容だったので自分で投稿していた」）。
     //   こちらの下書きだけでなく、ご本人の直近の投稿とも話題・言い回しを重ねない。1日1回だけ取りに行く。
     try {
@@ -1453,6 +1461,11 @@ async function generateAutoPost(
         `userId=${userId} projectId=${project.id}`,
       );
       return false;
+    }
+
+    if (opts.collect) {
+      opts.collect({ content: fullContent, angleId: angle?.id ?? null });
+      return true;
     }
 
     // Schedule the post
@@ -2283,3 +2296,39 @@ export async function generateReplacementPost(userId: number, canceledPostId: nu
 
 /** 運用スクリプト用（試験用の切り口の見本を、公開せずに作って確かめる）。本番の処理からは使わない */
 export { generateAutoPost as _generateAutoPostForOps };
+
+/**
+ * ◯✕アンケートの案を作る（2026-09-29・server/draftSurveyWeekly.ts）。
+ * 切り口を1つずつ指定して通常の生成を通し（検査もすべて通常どおり）、投稿にはせず本文だけ集める。
+ * 作れなかった切り口は飛ばして次へ。同じ本文は入れない。
+ */
+export async function generateSurveyDrafts(
+  userId: number,
+  project: any,
+  threadsAccountId: number,
+  angleIds: readonly string[],
+  want: number,
+): Promise<Array<{ content: string; angleId: string }>> {
+  const out: Array<{ content: string; angleId: string }> = [];
+  for (const angleId of angleIds) {
+    if (out.length >= want) break;
+    let got: { content: string; angleId: string | null } | null = null;
+    // 毎朝の生成と同じく3回まで。落ちた理由を次の作り直しに渡す（渡さないと同じ所で落ち続ける）
+    const rk = rejectKey(userId, threadsAccountId, 0);
+    lastRejectReason.delete(rk);
+    for (let attempt = 1; attempt <= 3 && !got; attempt++) {
+      // 枠の番号（投稿の種類・目的・今日の主題の選び方に効く）を案ごとにずらし、同じ題材に寄らないようにする
+      const k = out.length;
+      await generateAutoPost(
+        userId, project, k, k, threadsAccountId, 0, true, null, null, null,
+        lastRejectReason.get(rk) ?? null, attempt === 3, false,
+        { forcedAngleId: angleId, collect: (d) => { got = d; }, extraRecent: out.map((o) => o.content) },
+      ).catch(() => false);
+    }
+    lastRejectReason.delete(rk);
+    const g = got as { content: string; angleId: string | null } | null;
+    if (g && g.content && !out.some((o) => o.content === g.content)) out.push({ content: g.content, angleId: g.angleId ?? angleId });
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  return out;
+}

@@ -457,6 +457,20 @@ export function initDailyOpsSchedulers(): void {
     const { runClientFollowupJob } = await import("./clientFollowup");
     await runTrackedJob("client_followup", runClientFollowupJob);
   });
+  // 木曜 11:00 JST = 2:00 UTC — 有料会員向けの読み物（2026-09-29 三上様指示・server/newsletter.ts）。
+  //   次の回の下見を三上様のLINEへ。「送る」を押した回だけ、有料会員（無料・解約ずみ・解約予約ありは除く）へ届く。
+  cron.schedule("0 2 * * 4", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runNewsletterJob } = await import("./newsletter");
+    await runTrackedJob("newsletter_preview", runNewsletterJob);
+  });
+  // 月曜 11:30 JST = 2:30 UTC — 案の◯✕アンケートを週1回（2026-09-29 三上様指示「型Bを定期的に」・server/draftSurveyWeekly.ts）。
+  //   見送りが続き、公開もある方に8案を作り、三上様のLINEへ下見。「この8案を送る」を押したものだけお客様へ届く。
+  cron.schedule("30 2 * * 1", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runWeeklySurveyJob } = await import("./draftSurveyWeekly");
+    await runTrackedJob("weekly_draft_survey", runWeeklySurveyJob);
+  });
   // 20:30 JST = 11:30 UTC — 見送りが続くお客様の徹底フォロー（2026-09-24 三上様指示）。
   //   共通点・理由をまとめ、ホームページから足す材料の案を作って三上様のLINEへ（押したものだけ反映）。
   //   夜に届けるのは、翌朝6時の生成までに「足す」を押せるようにするため。

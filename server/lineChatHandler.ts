@@ -2234,6 +2234,24 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     return [textWithQuick(await decideFollowup(Number(q.id), v, Number(user.id)), MENU_HINT)];
   }
 
+  // ── 有料会員向けの読み物の下見（三上様だけが押せる・2026-09-29・server/newsletter.ts）──
+  if (q.adm === "nl" && q.n && q.v) {
+    if ((user as any).role !== "admin") return [textWithQuick("この操作はできません。", MENU_HINT)];
+    const v = q.v === "send" || q.v === "skip" ? q.v : null;
+    if (!v) return [textWithQuick("うまく受け取れませんでした。", MENU_HINT)];
+    const { decideNewsletter } = await import("./newsletter");
+    return [textWithQuick(await decideNewsletter(Number(q.n), v, Number(user.id)), MENU_HINT)];
+  }
+
+  // ── 週1回の◯✕アンケートの下見（三上様だけが押せる・2026-09-29・server/draftSurveyWeekly.ts）──
+  if (q.adm === "sv" && q.k && q.v) {
+    if ((user as any).role !== "admin") return [textWithQuick("この操作はできません。", MENU_HINT)];
+    const v = q.v === "send" || q.v === "skip" ? q.v : null;
+    if (!v) return [textWithQuick("うまく受け取れませんでした。", MENU_HINT)];
+    const { decideWeeklySurvey } = await import("./draftSurveyWeekly");
+    return [textWithQuick(await decideWeeklySurvey(String(q.k), v, Number(user.id)), MENU_HINT)];
+  }
+
   // ── 見送りが続くお客様への「足す材料」の案（三上様だけが押せる・2026-09-24）──
   if (q.adm === "mp" && q.id && q.v) {
     // ★管理者以外は何もしない（お客様のトークにこのボタンは出ないが、念のため）

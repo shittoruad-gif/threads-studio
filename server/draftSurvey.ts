@@ -27,7 +27,7 @@ export interface SurveyItem extends SurveyDraft {
 }
 
 /** 案を記録する（送る前に1回だけ） */
-export async function createSurvey(threadsAccountId: number, drafts: SurveyDraft[]): Promise<{ surveyKey: string; items: SurveyItem[] }> {
+export async function createSurvey(threadsAccountId: number, drafts: SurveyDraft[], opts: { pending?: boolean } = {}): Promise<{ surveyKey: string; items: SurveyItem[] }> {
   const database = await db.getDb();
   if (!database) throw new Error("DBに接続できません");
   const acc: any = await db.getThreadsAccountById(threadsAccountId);
@@ -42,9 +42,14 @@ export async function createSurvey(threadsAccountId: number, drafts: SurveyDraft
   const surveyKey = `sv-${threadsAccountId}-${Date.now().toString(36)}`;
   const items: SurveyItem[] = [];
   for (const d of drafts) {
-    const ins: any = await database.execute(sql`
-      INSERT INTO draftSurveyItems (surveyKey, userId, threadsAccountId, projectId, angle, label, content)
-      VALUES (${surveyKey}, ${acc.userId}, ${threadsAccountId}, ${projectId}, ${d.angle}, ${d.label.slice(0, 60)}, ${d.content})`);
+    // ★週1回の定例（server/draftSurveyWeekly.ts）は、三上様が「送る」を押すまで pending のまま置く
+    const ins: any = opts.pending
+      ? await database.execute(sql`
+        INSERT INTO draftSurveyItems (surveyKey, userId, threadsAccountId, projectId, angle, label, content, status)
+        VALUES (${surveyKey}, ${acc.userId}, ${threadsAccountId}, ${projectId}, ${d.angle}, ${d.label.slice(0, 60)}, ${d.content}, 'pending')`)
+      : await database.execute(sql`
+        INSERT INTO draftSurveyItems (surveyKey, userId, threadsAccountId, projectId, angle, label, content)
+        VALUES (${surveyKey}, ${acc.userId}, ${threadsAccountId}, ${projectId}, ${d.angle}, ${d.label.slice(0, 60)}, ${d.content})`);
     items.push({ ...d, id: Number((ins as any)[0]?.insertId ?? 0) });
   }
   return { surveyKey, items };
@@ -100,6 +105,8 @@ export async function rateSurveyItem(userId: number, id: number, rating: "good" 
   const rows: any = await database.execute(sql`SELECT * FROM draftSurveyItems WHERE id = ${id} LIMIT 1`);
   const item: any = (rows as any)[0]?.[0];
   if (!item || Number(item.userId) !== Number(userId)) return "その案が見つかりませんでした。";
+  // まだお送りしていない（三上様の判断待ち・送らないことにした）案は受け付けない
+  if (item.status && item.status !== "sent") return "その案は受け付けられませんでした。";
   const before = item.rating ? String(item.rating) : null;
   await database.execute(sql`UPDATE draftSurveyItems SET rating = ${rating}, ratedAt = NOW() WHERE id = ${id}`);
   if (rating === "good" && before !== "good") await db.appendStyleSamples(String(item.projectId), [String(item.content)]);
