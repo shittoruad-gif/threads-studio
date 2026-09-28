@@ -65,8 +65,11 @@ async function univapayRequest(
         throw new Error(`Univapay API error: ${response.status} ${errorText}`);
       }
 
-      const data = await response.json();
-      return data;
+      // ★解約（DELETE）は本文なし（204 等）で返る。json() で読むと
+      //   「Unexpected end of JSON input」になり、成功したのに失敗と誤報していた（2026-09-28 照合）。
+      const text = await response.text();
+      if (!text.trim()) return null;
+      return JSON.parse(text);
     } catch (error) {
       console.error('[Univapay] Request error:', error);
       throw error;

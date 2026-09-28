@@ -1869,6 +1869,45 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
         )];
       }
     }
+    // ★このアカウントの固定投稿がもう公開されていたら、作る前にそう伝える（2026-09-26 川邊様 acc34：
+    //   朝に公開した固定投稿のピン留めが済まないうちに、昼にもう一度作って公開し、同じ趣旨の固定投稿が2件出た）。
+    //   作り直したい方のために「もう一度作る」は残す。承認ずみで公開待ちのものがあるときは、それでも作らない。
+    {
+      try {
+        const accts = (await db.getThreadsAccountsByUserId(user.id)).filter((a: any) => a.isActive !== false);
+        const target: any = q.a ? accts.find((a: any) => String(a.id) === String(q.a)) : accts[0];
+        const queuedAt = target ? await db.getQueuedPinnedPostAt(user.id, Number(target.id)).catch(() => null) : null;
+        if (target && queuedAt) {
+          const hhmm = new Date(queuedAt.getTime() + 9 * 3600 * 1000).toISOString().slice(11, 16);
+          const who = accts.length >= 2 ? `@${target.threadsUsername} の` : "";
+          return [textWithQuick(
+            `${who}固定投稿は、承認済みで ${hhmm} ごろに公開される予定です。\n` +
+            "新しく作る必要はありません。いま作ると、固定投稿が2件公開されます。\n" +
+            "公開されたら、プロフィールへのピン留めをお願いします。",
+            [
+              { label: "ピン留めの方法", data: `n=pinhow&a=${target.id}` },
+              { label: "やめる", data: "m=menu" },
+            ],
+          )];
+        }
+        if (!q.again && target && (await db.getAccountPinnedProgress(user.id, Number(target.id))).posted) {
+          const confirmed = await db.isPinnedPostConfirmedForAccount(Number(target.id)).catch(() => false);
+          const who = accts.length >= 2 ? `@${target.threadsUsername} の` : "";
+          return [textWithQuick(
+            `${who}固定投稿は、もうThreadsに公開されています。\n` +
+            (confirmed
+              ? "ピン留めも記録済みです。新しく作り直すと、Threadsに固定投稿がもう1件公開されます。"
+              : "あとはプロフィールへのピン留めだけです。新しく作る必要はありません。\n" +
+                "作り直すと、Threadsに固定投稿がもう1件公開されます。"),
+            [
+              ...(confirmed ? [] : [{ label: "ピン留めの方法", data: `n=pinhow&a=${target.id}` }]),
+              { label: "もう一度作る", data: `m=makepin&a=${target.id}&again=1` },
+              { label: "やめる", data: "m=menu" },
+            ],
+          )];
+        }
+      } catch (e) { console.warn(`[LINE] 固定投稿の公開済み確認に失敗 user=${user.id}: ${(e as Error)?.message}`); }
+    }
     // ★ご案内先のURLが未登録なら、先に登録を勧める（コメント欄のリンクが集客の入口のため）。
     //   URLなしでも作れるが、コメント欄のリンクが付かず効果が大きく落ちる。
     if (!q.nourl) {
@@ -3240,6 +3279,18 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
       "お急ぎの場合は、お困りの画面のスクリーンショットをこのトークに送っていただければ、先に文字でお答えします。",
       MENU_HINT,
     )];
+  }
+  // ★Zoomの日程のお返事（「平日12:30ごろが希望です」）は、自動応答に回さず担当者へ（2026-09-28 川邊様 #47：
+  //   投稿の時間のご質問と取り違え「投稿時刻は指定できません」と返していた）。直近96時間にZoomのやりとりがある方だけ。
+  {
+    const { looksLikeScheduleReply, isZoomThread, ZOOM_SCHEDULE_ACK_TEXT } = await import("../shared/zoomScheduling");
+    if (looksLikeScheduleReply(t)) {
+      const recent = await db.getRecentSupportQuestionsByUser(user.id).catch(() => []);
+      if ((recent || []).some((r: any) => isZoomThread(r))) {
+        await forwardToStaff(user.id, lineUserId, `【Zoom日程】日程のお返事です。（お客様の文面：${t}）`);
+        return [textWithQuick(ZOOM_SCHEDULE_ACK_TEXT, MENU_HINT)];
+      }
+    }
   }
   // ★紹介コードをそのまま送られた場合は、その場で適用して料金ページへご案内する。
   if (looksLikeReferralCode(t)) return referralLink(lineUserId, t, user.id);

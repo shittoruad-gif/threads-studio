@@ -12,6 +12,8 @@
  *   アカウントごとに1つずつずらすので、同じ日の4アカウント×3枠＝12枠はすべて別の時間になる。
  *   1日の3枠は5時間以上あく（ランダムの分0〜29分を足しても連投にならない）。
  *   4件目（補填の日）は r+3 番目で、ほかの枠と3時間以上あく。
+ *   5件目（他店の当たり型の試し・10/27まで）は r+14 番目で、これもほかの枠と3時間以上あく。
+ *   ★以前は4つしか無く、5件目が1件目と同じ時間に回って数分おきの連投になっていた（2026-09-28 玉島 11:08/11:11）。
  *
  * 期間: 17日×2周＝34日。1周目の終わり（10/10）で途中の見立て、2周目の終わり（10/27）で結論。
  * 期間が過ぎたら null を返し、自動で今までどおり（本人の実績で伸びる時間）に戻る。
@@ -27,8 +29,8 @@ export const POSTING_TIME_TEST = {
   firstRoundEnd: "2026-10-10", // 1周目の終わり（途中の見立て）
 };
 
-// 1日のうち何番目の枠にどの候補を当てるか（先頭3つが3件の日、4つ目は補填の日）
-const DAY_ORDER = [0, 6, 11, 3];
+// 1日のうち何番目の枠にどの候補を当てるか（先頭3つが3件の日、4つ目は補填の日、5つ目は当たり型の試しの日）
+const DAY_ORDER = [0, 6, 11, 3, 14];
 
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
@@ -40,7 +42,7 @@ function dayNumberOf(ymd: string): number {
   return Math.floor(Date.parse(`${ymd}T00:00:00Z`) / 86_400_000);
 }
 
-/** 試験中なら、その日のこのアカウントの時間（枠の順・4つ）を返す。対象外・期間外は null。 */
+/** 試験中なら、その日のこのアカウントの時間（枠の順・5つ）を返す。対象外・期間外は null。 */
 export function postingTimeTestHours(accountId: number, now: Date = new Date()): number[] | null {
   const pos = (POSTING_TIME_TEST.accountIds as readonly number[]).indexOf(accountId);
   if (pos < 0) return null;

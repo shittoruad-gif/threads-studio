@@ -1786,12 +1786,14 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           // ★当日補充: 今日すでにある分を引いて、残り時間に入る本数だけ作る
           let todayCount = postCount;
           let sameDaySlots: Date[] | null = null;
+          let fillTarget = postCount; // 当日補充で「今日そろえる」本数（既存＋置けた枠）
           if (opts.fillToday) {
             // ★自動投稿だけを数える（手動の固定投稿の下書きを「既存」に数えない。2026-09-11 廿日市様）
             const already = await db.countAccountAutoPostsScheduledToday(account.id).catch(() => 0);
             const shortfall = Math.max(0, postCount - already);
             sameDaySlots = buildSameDaySlots(shortfall, acctHours);
             todayCount = sameDaySlots.length;
+            fillTarget = already + todayCount;
             console.log(
               `[AutoPost] 当日補充 user=${user.id} account=${account.id} 上限${postCount} 既存${already} ` +
               `→ ${todayCount}本を配置 (${sameDaySlots.map((t) => new Date(t.getTime() + JST_OFFSET_MS).toISOString().slice(11, 16)).join(' / ') || 'なし'})`,
@@ -1989,14 +1991,17 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           // ★落ちた枠の数を記録（翌朝の自動補填に使う）。朝の生成は上書き、当日補充は同じ日なら足す。
           //   前の晩の回では記録しない（翌朝6時の回が今日の不足を数えて作り直す）
           if (!opts.forTomorrow) try {
-            const { jstDateString, dateColToJst } = await import('../shared/accountRamp');
+            const { jstDateString, dateColToJst, sameDayShortfall } = await import('../shared/accountRamp');
             const today = jstDateString(0);
             if (!opts.fillToday) {
               await db.updateThreadsAccount(account.id, { shortfallDate: today, shortfallCount: accFailed } as any);
             } else {
               // 当日補充のあとは「今日まだ足りない数」に置き換える（回数の累計にしない。翌朝の自動補填の元になる）
+              // ★数えるのは「置けた枠のうち作れなかった数」だけ。夜遅いお申し込みで時間が足りず置かなかった枠は
+              //   不足に数えない。数えていたため、翌朝に1件足されて契約より多く出ていた
+              //   （2026-09-26 川邊様 acc34：9/25 23:08 に2枠だけ置けた→翌日 自動4件）。
               const have = await db.countAccountAutoPostsScheduledToday(account.id).catch(() => 0);
-              await db.updateThreadsAccount(account.id, { shortfallDate: today, shortfallCount: Math.max(0, postCount - have) } as any);
+              await db.updateThreadsAccount(account.id, { shortfallDate: today, shortfallCount: sameDayShortfall(fillTarget, have) } as any);
             }
             void dateColToJst;
             if (accFailed > 0) console.log(`[AutoPost] account ${account.id} 届かなかった枠 ${accFailed}件 → 明日の生成で自動補填`);

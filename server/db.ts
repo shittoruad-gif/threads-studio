@@ -4458,6 +4458,23 @@ export async function isPinnedPostConfirmed(userId: number): Promise<boolean> {
   return Boolean(rows?.[0]?.v);
 }
 
+/**
+ * このアカウントで「公開を承認ずみ・公開待ち」の固定投稿の予定時刻（無ければ null）。
+ * 2026-09-28 川邊様 acc35：承認した固定投稿が1時間後の予定だったため、出ないと思って
+ * もう1件作って公開し、2件とも出た。作る前にこれを見て、予定をお伝えする。
+ */
+export async function getQueuedPinnedPostAt(userId: number, accountId: number): Promise<Date | null> {
+  const database = await getDb();
+  if (!database) return null;
+  const rows: any = await database.execute(sql.raw(
+    `SELECT MIN(\`scheduledAt\`) AS at FROM \`scheduledPosts\`
+     WHERE \`userId\` = ${Number(userId)} AND \`threadsAccountId\` = ${Number(accountId)}
+       AND \`angle\` = 'pinned' AND \`status\` = 'pending' AND \`approvedAt\` IS NOT NULL`
+  ));
+  const v = rows?.[0]?.[0]?.at;
+  return v ? new Date(v) : null;
+}
+
 // ── 固定投稿の進み具合（アカウント単位） ─────────────────────
 /**
  * このアカウントの固定投稿が「作られた」「Threadsに出た」か。
@@ -4792,6 +4809,20 @@ export async function listSupportQuestions(opts?: { needsHumanOnly?: boolean; li
     ? base.where(eq(supportQuestions.needsHuman, 1))
     : base;
   return await q.orderBy(desc(supportQuestions.createdAt)).limit(limit);
+}
+
+/**
+ * この方の直近のご質問（担当者とのやりとり）を新しい順に。Zoomの日程のお返事を見分けるのに使う（2026-09-28）。
+ */
+export async function getRecentSupportQuestionsByUser(userId: number, hours = 96, limit = 5): Promise<any[]> {
+  const database = await getDb();
+  if (!database) return [];
+  const { supportQuestions } = await import("../drizzle/schema");
+  const { and, eq, gte, desc } = await import("drizzle-orm");
+  const since = new Date(Date.now() - hours * 3600 * 1000);
+  return await database.select().from(supportQuestions)
+    .where(and(eq(supportQuestions.userId, userId), gte(supportQuestions.createdAt, since)))
+    .orderBy(desc(supportQuestions.createdAt)).limit(limit);
 }
 
 /** ご質問を1件取り出す。 */

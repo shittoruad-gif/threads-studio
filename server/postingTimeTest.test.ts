@@ -28,13 +28,14 @@ describe("投稿時間の試験（7〜23時の1時間ごと）", () => {
     }
   });
 
-  it("1日の枠は重ならず、ランダムの分を足しても25分以上あく（4件目を含む）", () => {
+  it("1日の枠は重ならず、ランダムの分を足しても60分以上あく（4・5件目を含む・9/28 玉島 11:08/11:11 の連投）", () => {
     for (const acc of POSTING_TIME_TEST.accountIds) {
       for (let d = 0; d < 34; d++) {
         const hs = postingTimeTestHours(acc, dayN(d))!;
-        expect(new Set(hs).size).toBe(4);
+        expect(hs).toHaveLength(5);
+        expect(new Set(hs).size).toBe(5);
         const sorted = [...hs].sort((a, b) => a - b);
-        for (let i = 1; i < sorted.length; i++) expect((sorted[i] - sorted[i - 1]) * 60 - 29).toBeGreaterThanOrEqual(25);
+        for (let i = 1; i < sorted.length; i++) expect((sorted[i] - sorted[i - 1]) * 60 - 29).toBeGreaterThanOrEqual(60);
       }
     }
   });

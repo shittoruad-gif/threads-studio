@@ -92,6 +92,14 @@ export function dateColToJst(v: Date | string | null | undefined): string {
   return v instanceof Date ? new Date(v.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10) : String(v).slice(0, 10);
 }
 
+/**
+ * 当日補充のあとの「届かなかった数」（翌朝の自動補填の元）。
+ * fillTarget＝既存＋今日置けた枠。時間が足りず置かなかった枠は数えない（2026-09-26 川邊様 acc34 で翌日4件になった）。
+ */
+export function sameDayShortfall(fillTarget: number, have: number): number {
+  return Math.max(0, fillTarget - have);
+}
+
 /** 1日に足せる本数の上限（手動の補填＋自動の繰り越しを合わせて） */
 export const MAX_EXTRA_PER_DAY = 2;
 
