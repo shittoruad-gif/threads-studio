@@ -12,7 +12,8 @@
  * Meta の追加審査が要るので、ここでは使わない。
  *
  * ★投稿時間の試験・他店の当たり型の試し（どちらも 10/27 まで）の集計を崩さないよう、10/28 から。
- * ★1日の本数は変えない。契約の枠のうち2本目（slotIndex=1）を、曜日で決めた機能の投稿にする。
+ * ★1日の本数は変えない。契約の枠のうち2本目（slotIndex=1）を毎日アンケートに、火・金は3本目（slotIndex=2）をクイズにする
+ *   （2026-09-28 三上様「これは毎日投稿してみて」。最初は火=アンケート・金=クイズの週2本だった）。
  * ★効果は scripts/ops/threads-features-report.mts で、同じアカウントの普段の投稿と比べる。
  */
 
@@ -22,14 +23,16 @@ export const FEATURE_TRIAL = {
   /** 日本時間の日付（この日を含む） */
   start: "2026-10-28",
   end: "2026-11-30",
-  /** 機能の投稿にする枠（0始まり。2本目） */
+  /** アンケートにする枠（0始まり。2本目・毎日） */
   slotIndex: 1,
+  /** クイズにする枠（3本目・火と金だけ） */
+  quizSlotIndex: 2,
 } as const;
 
 export type FeatureKind = "poll" | "spoiler_quiz";
 
-/** 日本時間の曜日（0=日）→ その日の機能。火曜=アンケート、金曜=ネタバレのクイズ */
-const FEATURE_BY_WEEKDAY: Record<number, FeatureKind> = { 2: "poll", 5: "spoiler_quiz" };
+/** クイズを出す曜日（日本時間・0=日）。火と金 */
+const QUIZ_WEEKDAYS: ReadonlySet<number> = new Set([2, 5]);
 /** 再投稿は日曜に1本（投稿の枠とは別） */
 export const REPOST_WEEKDAY = 0;
 
@@ -52,9 +55,10 @@ export function inFeatureTrial(accountId: number, day: Date): boolean {
 
 /** その枠を機能の投稿にするか。day は「公開する日」（前の晩に翌日分を作るときは翌日） */
 export function featureForSlot(accountId: number, slotIndex: number, day: Date): FeatureKind | null {
-  if (slotIndex !== FEATURE_TRIAL.slotIndex) return null;
   if (!inFeatureTrial(accountId, day)) return null;
-  return FEATURE_BY_WEEKDAY[jstWeekday(day)] ?? null;
+  if (slotIndex === FEATURE_TRIAL.slotIndex) return "poll";
+  if (slotIndex === FEATURE_TRIAL.quizSlotIndex && QUIZ_WEEKDAYS.has(jstWeekday(day))) return "spoiler_quiz";
+  return null;
 }
 
 export function isRepostDay(accountId: number, day: Date): boolean {

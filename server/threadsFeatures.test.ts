@@ -8,12 +8,14 @@ import { checkAngle } from "../shared/angleGuard";
 const jst = (ds: string) => new Date(`${ds}T12:00:00+09:00`);
 
 describe("Threads の機能の投稿：いつ・どのアカウントで", () => {
-  it("10/28 から、試しの4アカウントの2本目だけ。火=アンケート・金=クイズ", () => {
-    expect(featureForSlot(10, 1, jst("2026-10-27"))).toBeNull(); // 火曜だが試しの前（投稿時間の試験中）
-    expect(featureForSlot(10, 1, jst("2026-11-03"))).toBe("poll"); // 火
-    expect(featureForSlot(10, 1, jst("2026-10-30"))).toBe("spoiler_quiz"); // 金
+  it("10/28 から、試しの4アカウント。2本目は毎日アンケート、火・金は3本目をクイズ", () => {
+    expect(featureForSlot(10, 1, jst("2026-10-27"))).toBeNull(); // 試しの前（投稿時間の試験中）
+    expect(featureForSlot(10, 1, jst("2026-10-29"))).toBe("poll"); // 木
+    expect(featureForSlot(10, 1, jst("2026-11-01"))).toBe("poll"); // 日
+    expect(featureForSlot(10, 2, jst("2026-10-30"))).toBe("spoiler_quiz"); // 金
+    expect(featureForSlot(10, 2, jst("2026-11-03"))).toBe("spoiler_quiz"); // 火
+    expect(featureForSlot(10, 2, jst("2026-10-29"))).toBeNull(); // 木の3本目は普段どおり
     expect(featureForSlot(10, 0, jst("2026-11-03"))).toBeNull(); // 1本目は変えない
-    expect(featureForSlot(10, 1, jst("2026-10-29"))).toBeNull(); // 木
     expect(featureForSlot(99, 1, jst("2026-11-03"))).toBeNull(); // お客様のアカウントは対象外
     expect(featureForSlot(10, 1, jst("2026-12-01"))).toBeNull(); // 終わったあと
   });
