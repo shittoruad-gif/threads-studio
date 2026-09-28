@@ -32,6 +32,10 @@ export interface CreatePostParams {
   pollAttachment?: Record<string, string>;
   /** ネタバレなど、本文の一部に付ける印（text_entities） */
   textEntities?: Array<{ entity_type: string; offset: number; length: number }>;
+  /** 場所のタグ（threads_location_tagging が必要） */
+  locationId?: string;
+  /** Instagramストーリーズへの同時シェア（threads_share_to_instagram が必要） */
+  crossreshareToIg?: boolean;
 }
 
 /** topic_tag のAPI制約に合わせて整形（不正なら null＝付けない） */
@@ -56,7 +60,7 @@ export interface PublishResponse {
 export async function createMediaContainer(
   params: CreatePostParams
 ): Promise<MediaContainer> {
-  const { accessToken, threadsUserId, text, mediaType = "TEXT", imageUrl, videoUrl, children, replyToId, topicTag, quotePostId, pollAttachment, textEntities } = params;
+  const { accessToken, threadsUserId, text, mediaType = "TEXT", imageUrl, videoUrl, children, replyToId, topicTag, quotePostId, pollAttachment, textEntities, locationId, crossreshareToIg } = params;
 
   const body: Record<string, string> = {
     media_type: mediaType,
@@ -66,6 +70,9 @@ export async function createMediaContainer(
   // アンケート（テキストのみの投稿・選択肢2〜4個）とネタバレ（text_entities）。shared/threadsFeatures.ts
   if (pollAttachment && mediaType === "TEXT" && !replyToId) body.poll_attachment = JSON.stringify(pollAttachment);
   if (textEntities && textEntities.length > 0) body.text_entities = JSON.stringify(textEntities);
+  // 場所のタグ・Instagramストーリーズへの同時シェア（ルート投稿だけ）
+  if (locationId && !replyToId) body.location_id = locationId;
+  if (crossreshareToIg && !replyToId) body.crossreshare_to_ig = "true";
 
   // Add text content
   if (text) {
@@ -302,6 +309,7 @@ export async function createAndPublishThread(
   base: {
     accessToken: string; threadsUserId: string; topicTag?: string; quotePostId?: string;
     pollAttachment?: Record<string, string>; textEntities?: Array<{ entity_type: string; offset: number; length: number }>;
+    locationId?: string; crossreshareToIg?: boolean;
   },
   segments: string[],
 ): Promise<{ id: string; replyIds: string[] }> {
@@ -309,7 +317,7 @@ export async function createAndPublishThread(
   if (clean.length === 0) throw new Error('No content to post');
 
   // ルート投稿（失敗時は何も公開されていないので通常エラー＝再試行可能）
-  const root = await createAndPublishPost({
+  const rootParams: CreatePostParams = {
     accessToken: base.accessToken,
     threadsUserId: base.threadsUserId,
     text: clean[0],
@@ -318,7 +326,20 @@ export async function createAndPublishThread(
     quotePostId: base.quotePostId, // 引用投稿（固定投稿の再露出）
     pollAttachment: base.pollAttachment,
     textEntities: base.textEntities,
-  });
+    locationId: base.locationId,
+    crossreshareToIg: base.crossreshareToIg,
+  };
+  let root: PublishResponse;
+  try {
+    root = await createAndPublishPost(rootParams);
+  } catch (err) {
+    // ★場所のタグ・同時シェア・ネタバレ・アンケートは「付け足し」。これが原因で投稿そのものが止まらないよう、
+    //   付け足しがある投稿は外して1回だけ出し直す（コンテナ作成で弾かれた＝まだ何も公開されていない）。
+    const extras = rootParams.locationId || rootParams.crossreshareToIg || rootParams.textEntities || rootParams.pollAttachment;
+    if (!extras || !/create media container/i.test(String((err as Error)?.message ?? ''))) throw err;
+    console.warn(`[ThreadsPost] 付け足し（場所/同時シェア/ネタバレ/アンケート）付きで作れなかったため外して出し直し: ${String((err as Error)?.message).slice(0, 200)}`);
+    root = await createAndPublishPost({ ...rootParams, locationId: undefined, crossreshareToIg: undefined, textEntities: undefined, pollAttachment: undefined });
+  }
 
   // ルート投稿後に失敗した場合は PartialThreadError を投げる（再試行で二重投稿しない）
   const replyIds: string[] = [];

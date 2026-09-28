@@ -2164,6 +2164,8 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           tokenExpiresAt: expiresAt,
           // このトークンを返信権限付きで取得したか（threadsAuth.tsのスコープ既定と対で真実を記録）
           hasReplyScope: (await import("./threadsAuth")).wantsReplyScope(ctx.user.id),
+          // 場所のタグ・Instagram同時シェアの権限を求めたか（審査の承認前は録画用ユーザーだけ）
+          grantedExtraScopes: (await import("./threadsAuth")).wantsExtraScopes(ctx.user.id).join(",") || null,
         } as any);
 
         // ★連携直後：自己紹介が空のままなら、貼るだけの提案を公式LINEへ（2026-09-06 三上様指示）
@@ -2267,6 +2269,48 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           }
         }
         await db.updateThreadsAccount(input.accountId, { defaultProjectId: input.projectId });
+        return { success: true };
+      }),
+
+    // ★場所のタグ（threads_location_tagging）：店の場所を探して、このアカウントの投稿に付ける（2026-09-28）
+    searchLocation: protectedProcedure
+      .input(z.object({ accountId: z.number(), q: z.string().min(1).max(100) }))
+      .mutation(async ({ ctx, input }) => {
+        const account: any = await db.getThreadsAccountById(input.accountId);
+        if (!account || account.userId !== ctx.user.id) throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found' });
+        const { hasExtraScope, LOCATION_SCOPE } = await import('./threadsAuth');
+        if (!hasExtraScope(account.grantedExtraScopes, LOCATION_SCOPE)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Location tagging is not available for this account yet. Please reconnect Threads.' });
+        }
+        const url = `https://graph.threads.net/v1.0/location_search?q=${encodeURIComponent(input.q)}&fields=id,name,address,city,country&access_token=${encodeURIComponent(account.accessToken)}`;
+        const res = await fetch(url);
+        const body: any = await res.json().catch(() => ({}));
+        if (!res.ok) throw new TRPCError({ code: 'BAD_REQUEST', message: String(body?.error?.message ?? 'Location search failed').slice(0, 200) });
+        return ((body?.data ?? []) as any[]).slice(0, 10).map((l) => ({
+          id: String(l.id), name: String(l.name ?? ''), address: [l.address, l.city, l.country].filter(Boolean).join(', '),
+        }));
+      }),
+
+    setLocation: protectedProcedure
+      .input(z.object({ accountId: z.number(), locationId: z.string().max(64).nullable(), locationName: z.string().max(200).nullable() }))
+      .mutation(async ({ ctx, input }) => {
+        const account: any = await db.getThreadsAccountById(input.accountId);
+        if (!account || account.userId !== ctx.user.id) throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found' });
+        await db.updateThreadsAccount(input.accountId, { locationId: input.locationId, locationName: input.locationId ? input.locationName : null } as any);
+        return { success: true };
+      }),
+
+    // ★Instagramストーリーズへの同時シェア（threads_share_to_instagram・2026-09-28）
+    setShareToIg: protectedProcedure
+      .input(z.object({ accountId: z.number(), enabled: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const account: any = await db.getThreadsAccountById(input.accountId);
+        if (!account || account.userId !== ctx.user.id) throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found' });
+        const { hasExtraScope, IG_SHARE_SCOPE } = await import('./threadsAuth');
+        if (input.enabled && !hasExtraScope(account.grantedExtraScopes, IG_SHARE_SCOPE)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Sharing to Instagram Stories is not available for this account yet. Please reconnect Threads.' });
+        }
+        await db.updateThreadsAccount(input.accountId, { shareToIgStories: input.enabled } as any);
         return { success: true };
       }),
 

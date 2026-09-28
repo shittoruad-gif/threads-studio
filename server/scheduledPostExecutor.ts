@@ -318,6 +318,15 @@ export async function executePendingPosts() {
               accessToken, threadsUserId: account.threadsUserId, topicTag, quotePostId: (post as any).quotePostId || undefined,
               pollAttachment: pollOpts ? pollAttachment(pollOpts) : undefined,
               textEntities: spoilers ?? undefined,
+              // 場所のタグ・Instagramストーリーズ同時シェア（その権限で連携したアカウントだけ）
+              ...(await (async () => {
+                const { hasExtraScope, LOCATION_SCOPE, IG_SHARE_SCOPE } = await import('./threadsAuth');
+                const a: any = account;
+                return {
+                  locationId: a.locationId && hasExtraScope(a.grantedExtraScopes, LOCATION_SCOPE) ? String(a.locationId) : undefined,
+                  crossreshareToIg: a.shareToIgStories && hasExtraScope(a.grantedExtraScopes, IG_SHARE_SCOPE) ? true : undefined,
+                };
+              })()),
             },
             segments,
           );

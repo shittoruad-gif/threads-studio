@@ -8,6 +8,15 @@
 > **忘れると事故になること** だけを残す。
 
 
+
+## 2026-09-28 夜：場所のタグ・Instagramストーリーズ同時シェア（審査の申請用・コミットのみ・今夜 push）
+
+- migration 0102（threadsAccounts.grantedExtraScopes/locationId/locationName/shareToIgStories）。録画用ユーザー（THREADS_REVIEW_REPLY_SCOPE_USER_IDS=78）の連携だけ2権限を追加で求める。一般のお客様の連携は変わらない
+- Connect Threads のアカウント欄に Reach settings（その権限で連携したアカウントだけ）。公開時に location_id・crossreshare_to_ig を付け、弾かれたら外して出し直す
+- 連携し直したときに hasReplyScope・grantedExtraScopes を記録し直すようにした（前は再連携で hasReplyScope が更新されなかった）
+- 反映後に見ること：user 78 の `getAuthUrl` の scope に threads_location_tagging・threads_share_to_instagram が入ること、別ユーザーでは入らないこと
+- 録画の手順・申請文：docs/meta-review-2026-09-manage-replies.md の「9/28 夜」
+
 ## 2026-09-28 夜：Threads の機能の投稿（アンケート・答えを隠すクイズ・再投稿）（三上様指示・コミットのみ・今夜 push）
 
 > 「アンケート形式でスレッズ投稿を自動化してできるようにできませんか？」→「勧め方の案どおりやってみ」

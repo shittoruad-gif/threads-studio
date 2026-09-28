@@ -149,3 +149,49 @@ posts. Nothing is posted to other users' content.
 5. 長文（500字超）を予約・公開 → threads.com で2件目以降が返信として連なっていることを映す
 - 字幕は必ず録画後にフレームを見て秒数を決め、焼き込み後にもう一度フレームで照合する。
 - 申請文には、動画に映したもの（コメントへの返信・ツリー投稿）だけを書く。映していない機能（固定投稿のリンクコメント・追い投稿）は書かない。
+
+
+## 2026-09-28 夜：同じ録画に「場所のタグ」「Instagramストーリーズ同時シェア」を足す（三上様「Meta のアプリレビューの審査も通してください」）
+
+リーチを広げる機能（shared/threadsFeatures.ts）のうち、この2つだけは Meta の審査が要る。返信の撮り直しと**同じ録画・同じ申請**に入れる（録画は三上様のログインが要るので1回にまとめる）。
+
+### アプリ側（コミット済み・今夜反映）
+- 録画用ユーザー（`THREADS_REVIEW_REPLY_SCOPE_USER_IDS=78`・Coolify 設定済み）の連携だけ、`threads_location_tagging`・`threads_share_to_instagram` も求める → 同意画面に**7権限**が出る
+- 連携後、Connect Threads のアカウント欄に **Reach settings**（英語表示）が出る
+  - Location tag：検索 → 「Use this location」→ 以後の投稿に location_id が付く
+  - Also share to Instagram Stories：On にすると以後の投稿に crossreshare_to_ig=true が付く
+- 付けられなかったときは外して投稿だけ出す（投稿が止まらない）
+- 承認後：`THREADS_LOCATION_TAGGING_APPROVED=true`・`THREADS_SHARE_TO_IG_APPROVED=true` で全員に広がる
+
+### 録画前に必要なこと（三上様）
+- **@shittoru_official にInstagramアカウントがつながっていること**（Threadsのプロフィール→Instagramとリンク）。つながっていないと同時シェアは失敗する（投稿は出る）
+- ⚠️**場所の検索は、承認前は「Menlo Park」しか返らない**（Meta の資料の仕様）。録画では「Menlo Park」で検索して選ぶ。録画のあとは場所を「外す」を押して戻す（しっとる公式の普段の投稿にMenlo Parkが付かないように）
+
+### 撮る順序（返信の5つの後ろに足す・合計7〜8分）
+6. Connect Threads → Reach settings → Location tag で「Menlo Park」を検索 → Use this location
+7. 同じ欄で Also share to Instagram Stories を On
+8. 投稿を1本すぐ公開（Posts → Post now）
+9. **threads.com でその投稿に場所（Menlo Park）が表示されていることを映す**
+10. **Instagram アプリ（またはinstagram.com）でストーリーズに同じ投稿が出ていることを映す**
+11. Reach settings で場所を外し、同時シェアを Off に戻す（録画の外でもよい）
+
+### 申請文（英語・下書き。録画の秒数を入れてから貼る）
+
+threads_location_tagging:
+```
+Threads Studio helps local store owners (clinics, salons, gyms) in Japan reach nearby customers on Threads.
+With threads_location_tagging, the owner searches for their own store location once (Connect Threads > Reach settings > Location tag),
+selects it, and the app adds that location_id to the posts it publishes on the owner's own account.
+This lets people nearby discover the store's posts. The screencast shows: searching the location (mm:ss), selecting it (mm:ss),
+publishing a post (mm:ss), and the published post on threads.com showing the location tag (mm:ss).
+The location is only added to the authenticated user's own posts, and the user can remove it at any time.
+```
+
+threads_share_to_instagram:
+```
+Many of our users run their store's Instagram account together with Threads. With threads_share_to_instagram, the owner turns on
+"Also share to Instagram Stories" for their account (Connect Threads > Reach settings), and the app sets crossreshare_to_ig=true
+when it publishes the owner's post, so the same post also appears as a Story on the owner's linked Instagram account.
+The screencast shows: turning the setting on (mm:ss), publishing a post (mm:ss), and the Story on the linked Instagram account (mm:ss).
+It only shares the authenticated user's own posts to their own linked Instagram account, and can be turned off at any time.
+```

@@ -84,6 +84,37 @@ export function wantsReplyScope(userId?: number | null): boolean {
 }
 
 /**
+ * リーチを広げる追加の権限（2026-09-28 三上様「スレッズの使える機能をいろいろ使ってリーチを取れるように」
+ * 「Meta のアプリレビューの審査も通してください」）。
+ *   threads_location_tagging    … 投稿に店の場所のタグを付ける（location_id）
+ *   threads_share_to_instagram  … 投稿をInstagramストーリーズにも同時にシェア（crossreshare_to_ig）
+ * どちらも Meta の審査が要る。承認後は環境変数（THREADS_LOCATION_TAGGING_APPROVED / THREADS_SHARE_TO_IG_APPROVED）を
+ * true にするだけで全員に広がる。承認前は審査の録画用ユーザー（THREADS_REVIEW_REPLY_SCOPE_USER_IDS）だけ。
+ * ★未承認の権限を一般のお客様の連携に混ぜると連携自体が失敗するので、ここ以外で足さない。
+ */
+export const LOCATION_SCOPE = "threads_location_tagging";
+export const IG_SHARE_SCOPE = "threads_share_to_instagram";
+
+function isReviewUser(userId?: number | null): boolean {
+  if (userId == null) return false;
+  const ids = String(process.env.THREADS_REVIEW_REPLY_SCOPE_USER_IDS || "")
+    .split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0);
+  return ids.includes(Number(userId));
+}
+
+export function wantsExtraScopes(userId?: number | null): string[] {
+  const out: string[] = [];
+  if (process.env.THREADS_LOCATION_TAGGING_APPROVED === "true" || isReviewUser(userId)) out.push(LOCATION_SCOPE);
+  if (process.env.THREADS_SHARE_TO_IG_APPROVED === "true" || isReviewUser(userId)) out.push(IG_SHARE_SCOPE);
+  return out;
+}
+
+/** 連携時に記録した追加の権限を持っているか */
+export function hasExtraScope(granted: string | null | undefined, scope: string): boolean {
+  return String(granted ?? "").split(",").map((s) => s.trim()).includes(scope);
+}
+
+/**
  * Generate OAuth authorization URL
  */
 export function getThreadsAuthUrl(config: ThreadsAuthConfig, options: ThreadsAuthUrlOptions = {}, creds?: ThreadsAppCreds | null): string {
@@ -108,6 +139,7 @@ export function getThreadsAuthUrl(config: ThreadsAuthConfig, options: ThreadsAut
   if (wantsReplyScope(options.userId)) {
     defaultScopes.splice(2, 0, "threads_manage_replies");
   }
+  for (const sc of wantsExtraScopes(options.userId)) defaultScopes.push(sc);
 
   // 地域トレンド収集（keyword_search）。Meta審査が「承認された後」だけ要求する。
   // ★未承認のスコープを一般ユーザーの連携リクエストに混ぜると、Threads連携

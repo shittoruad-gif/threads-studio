@@ -1114,4 +1114,20 @@ export const dict: Record<string, string> = {
   "自分で直す": "Edit myself",
   "確認するまで、この内容は投稿には使われません。": "This will not be used in posts until you confirm it.",
   "商圏を確定しました。次の投稿から使われます": "Catchment area saved. It will be used from your next post.",
+
+  // ── 投稿を届きやすくする設定（場所のタグ・Instagram同時シェア／2026-09-28）──
+  "投稿を届きやすくする設定": "Reach settings",
+  "お店の場所を投稿に付けたり、Instagramのストーリーズにも同時に出したりできます": "Tag your store location on posts and share them to Instagram Stories at the same time",
+  "場所のタグ": "Location tag",
+  "投稿に付ける場所": "Location tagged on posts",
+  "外す": "Remove",
+  "まだ場所は付いていません。お店の名前か住所で探してください。": "No location yet. Search by store name or address.",
+  "お店の名前・住所": "Store name or address",
+  "検索中…": "Searching…",
+  "場所を探す": "Search location",
+  "見つかりませんでした。別の言葉でお試しください。": "No results. Try another keyword.",
+  "この場所を付ける": "Use this location",
+  "Instagramのストーリーズにも同時に出す": "Also share to Instagram Stories",
+  "Threadsの投稿を、つながっているInstagramのストーリーズにも出します（24時間で消えます）": "Each Threads post is also shared to your linked Instagram account's Stories (disappears after 24 hours)",
+  "保存しました": "Saved",
 };

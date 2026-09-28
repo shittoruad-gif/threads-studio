@@ -642,6 +642,9 @@ export default function ThreadsConnect() {
             {/* プロフィールの点検と提案（2026-09-06）。作ったばかりのアカウント向けに、貼るだけの文章を出す */}
             <ProfileAdviceCard accountId={account.id} />
 
+            {/* 場所のタグ・Instagramストーリーズ同時シェア（2026-09-28）。その権限で連携したアカウントだけに出す */}
+            {(account as any).grantedExtraScopes && <ReachOptionsCard account={account as any} />}
+
             {/* Token Status */}
             {account.tokenExpiresAt && (() => {
               const expiresAt = new Date(account.tokenExpiresAt);
@@ -1029,6 +1032,90 @@ function ProfileAdviceCard({ accountId }: { accountId: number }) {
               )}
             </>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 投稿のリーチを広げる設定（2026-09-28）。
+ *   場所のタグ … threads_location_tagging。店の場所を探して選ぶと、このアカウントの投稿に場所が付く
+ *   Instagramストーリーズ … threads_share_to_instagram。投稿をつながっているInstagramのストーリーズにも出す
+ * どちらも、その権限で連携したアカウントにだけ出す（Meta審査の承認前は録画用のアカウントだけ）。
+ */
+function ReachOptionsCard({ account }: { account: { id: number; grantedExtraScopes?: string | null; locationId?: string | null; locationName?: string | null; shareToIgStories?: boolean | null } }) {
+  const { t } = useLang();
+  const utils = trpc.useUtils();
+  const scopes = String(account.grantedExtraScopes ?? "").split(",");
+  const canLocation = scopes.includes("threads_location_tagging");
+  const canIg = scopes.includes("threads_share_to_instagram");
+  const [q, setQ] = useState("");
+  const search = trpc.threads.searchLocation.useMutation({ onError: (e) => toast.error(e.message) });
+  const setLocation = trpc.threads.setLocation.useMutation({
+    onSuccess: () => { utils.threads.list.invalidate(); toast.success(t("保存しました")); },
+    onError: (e) => toast.error(e.message),
+  });
+  const setIg = trpc.threads.setShareToIg.useMutation({
+    onSuccess: () => { utils.threads.list.invalidate(); toast.success(t("保存しました")); },
+    onError: (e) => toast.error(e.message),
+  });
+  if (!canLocation && !canIg) return null;
+  return (
+    <div className="mb-4 p-3 rounded-lg border border-border bg-background space-y-4">
+      <div>
+        <p className="text-sm font-medium text-foreground">{t("投稿を届きやすくする設定")}</p>
+        <p className="text-xs text-muted-foreground">{t("お店の場所を投稿に付けたり、Instagramのストーリーズにも同時に出したりできます")}</p>
+      </div>
+      {canLocation && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{t("場所のタグ")}</p>
+          {account.locationId ? (
+            <div className="flex items-center justify-between gap-2 p-2 rounded bg-muted/50">
+              <span className="text-sm break-words">{t("投稿に付ける場所")}：<b>{account.locationName || account.locationId}</b></span>
+              <Button size="sm" variant="ghost" onClick={() => setLocation.mutate({ accountId: account.id, locationId: null, locationName: null })}>{t("外す")}</Button>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">{t("まだ場所は付いていません。お店の名前か住所で探してください。")}</p>
+          )}
+          <div className="flex gap-2">
+            <input
+              className="flex-1 min-w-0 h-9 rounded-md border border-input bg-background px-3 text-sm"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={t("お店の名前・住所")}
+            />
+            <Button size="sm" variant="outline" disabled={!q.trim() || search.isPending} onClick={() => search.mutate({ accountId: account.id, q: q.trim() })}>
+              {search.isPending ? t("検索中…") : t("場所を探す")}
+            </Button>
+          </div>
+          {search.data && search.data.length === 0 && <p className="text-xs text-muted-foreground">{t("見つかりませんでした。別の言葉でお試しください。")}</p>}
+          {search.data && search.data.length > 0 && (
+            <ul className="space-y-1">
+              {search.data.map((l) => (
+                <li key={l.id} className="flex items-center justify-between gap-2 p-2 rounded border border-border">
+                  <span className="text-sm min-w-0 break-words"><b>{l.name}</b>{l.address ? <span className="text-xs text-muted-foreground"> ・ {l.address}</span> : null}</span>
+                  <Button size="sm" onClick={() => setLocation.mutate({ accountId: account.id, locationId: l.id, locationName: l.name })}>{t("この場所を付ける")}</Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {canIg && (
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{t("Instagramのストーリーズにも同時に出す")}</p>
+            <p className="text-xs text-muted-foreground">{t("Threadsの投稿を、つながっているInstagramのストーリーズにも出します（24時間で消えます）")}</p>
+          </div>
+          <Button
+            size="sm"
+            variant={account.shareToIgStories ? "default" : "outline"}
+            disabled={setIg.isPending}
+            onClick={() => setIg.mutate({ accountId: account.id, enabled: !account.shareToIgStories })}
+          >
+            {account.shareToIgStories ? t("オン") : t("オフ")}
+          </Button>
         </div>
       )}
     </div>

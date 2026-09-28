@@ -381,6 +381,14 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   // 2026-08-30の審査でこの権限のみ非承認→新規連携では要求しないため false。
   // 返信を伴う機能（ツリー2件目以降・追い投稿・計測コメント・コメント返信送信）の出し分けに使う。
   hasReplyScope: boolean("hasReplyScope").notNull().default(false),
+  // 連携時に求めた追加の権限（カンマ区切り：threads_location_tagging,threads_share_to_instagram）。
+  //   審査の承認前は録画用のユーザーだけが持つ（server/threadsAuth.ts wantsExtraScopes）
+  grantedExtraScopes: varchar("grantedExtraScopes", { length: 255 }),
+  // 投稿に付ける場所のタグ（location_search で選んだもの）。null なら付けない
+  locationId: varchar("locationId", { length: 64 }),
+  locationName: varchar("locationName", { length: 200 }),
+  // 投稿をInstagramストーリーズにも同時にシェアするか（連携しているInstagramがあるときだけ働く）
+  shareToIgStories: boolean("shareToIgStories"),
   // どの店舗(プロジェクト)の内容を自動投稿するか。複数店舗運用時に
   // 「店舗Aのアカウントに店舗Bの内容」を防ぐための紐付け。
   // null の場合は全プロジェクトを日替わりローテーション（従来挙動）。

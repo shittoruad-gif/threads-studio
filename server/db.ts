@@ -430,7 +430,10 @@ export async function createThreadsAccount(data: InsertThreadsAccount): Promise<
         accessToken: encryptedData.accessToken,
         tokenExpiresAt: encryptedData.tokenExpiresAt,
         isActive: true,
-      })
+        // 連携し直したときは、その時に求めた権限で記録し直す（前の連携の記録が残らないように）
+        ...((data as any).hasReplyScope !== undefined ? { hasReplyScope: (data as any).hasReplyScope } : {}),
+        ...((data as any).grantedExtraScopes !== undefined ? { grantedExtraScopes: (data as any).grantedExtraScopes } : {}),
+      } as any)
       .where(eq(threadsAccounts.id, existing[0].id));
     return;
   }
