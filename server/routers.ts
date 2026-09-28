@@ -2389,19 +2389,27 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
             if (proj) topicTag = deriveTopicTag(proj) ?? undefined;
           }
 
-          const result = (!isMedia && segments.length > 1)
+          // 場所のタグ・Instagramストーリーズ同時シェア（その権限で連携したアカウントだけ・2026-09-28）
+          const { hasExtraScope, LOCATION_SCOPE, IG_SHARE_SCOPE } = await import('./threadsAuth');
+          const acc: any = account;
+          const reach = {
+            locationId: acc.locationId && hasExtraScope(acc.grantedExtraScopes, LOCATION_SCOPE) ? String(acc.locationId) : undefined,
+            crossreshareToIg: acc.shareToIgStories && hasExtraScope(acc.grantedExtraScopes, IG_SHARE_SCOPE) ? true : undefined,
+          };
+          const result = (!isMedia)
             ? await createAndPublishThread(
-                { accessToken: account.accessToken, threadsUserId: account.threadsUserId, topicTag },
+                { accessToken: account.accessToken, threadsUserId: account.threadsUserId, topicTag, ...reach },
                 segments,
               )
             : await createAndPublishPost({
                 accessToken: account.accessToken,
                 threadsUserId: account.threadsUserId,
-                text: isMedia ? input.text : (segments[0] ?? input.text),
+                text: input.text,
                 mediaType: input.mediaType,
                 imageUrl: input.imageUrl,
                 videoUrl: input.videoUrl,
                 topicTag,
+                ...reach,
               });
 
           // ★固定投稿：公式LINEのURLを1件目のコメントとして自動添付。
