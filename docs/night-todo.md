@@ -7,6 +7,12 @@
 > 過去の経緯は `git log docs/night-todo.md` から追える。ここには **これからやること** と
 > **忘れると事故になること** だけを残す。
 
+## 2026-09-28 昼：返信権限の再審査の準備（三上様指示・★今夜 push して反映する e467ec0）
+
+- e467ec0：`THREADS_REVIEW_REPLY_SCOPE_USER_IDS` に書いたユーザーの連携だけ threads_manage_replies を求める。Coolify の env に `78` を設定ずみ（反映はデプロイ時）。一般のお客様の連携は変わらない。
+- 反映後に確かめる：user 78 でログインし `threads.getAuthUrl` の scope に threads_manage_replies が入ること／別ユーザーでは入らないこと。
+- 録画は 9/29 以降に三上様と行う（手順は docs/meta-review-2026-09-manage-replies.md の「9/28 版」）。承認されたら `THREADS_MANAGE_REPLIES_APPROVED=true` にし、`THREADS_REVIEW_REPLY_SCOPE_USER_IDS` は消す。
+
 ## 2026-09-28 朝の点検で見つけたこと（夜間整備で対応）
 
 - **UnivaPay の解約で「失敗」と誤報**：7:20 の照合で `cancelSubscription` が空の応答（本文なし）を JSON として読んで `Unexpected end of JSON input` → 「契約ID 8：反映できません」と運営メールが出た。**実際は UnivaPay 側で canceled 済み**（API で status=canceled を確認・webhook subscription_canceled も受信）。DB は active・cancelAtPeriodEnd=1・10/1 まで利用可のままで正しい。直すこと：`univapayRequest` で本文が空（204 等）なら成功扱い。明朝の照合で同じ誤報が再度出ないかも見る。

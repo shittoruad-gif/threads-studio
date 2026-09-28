@@ -122,3 +122,30 @@ posts. Nothing is posted to other users' content.
 
 ### 申請文（最終版・textareaへ貼るもの）
 （この下の英文をそのまま。リロードすると旧文に戻るので、動画添付後に貼り直すこと）
+
+
+## 2026-09-28：8/30 不承認の本当の原因と、撮り直しの手順（9/28 版・これが最新）
+
+### 原因（前回動画 seg_final_small.mp4 をフレームで確認）
+- 9:00〜11:10 の字幕「Three reply drafts are proposed」「The reply is published to Threads」の**下に映っているのは投稿分析（Post Analytics）の画面**だった。字幕と映像が約1分ずれている。
+- 返信の文案ダイアログは 9:00 前後に「threads_read_replies」の字幕の下で一瞬出るだけで、**返信を公開する操作と、Threads 上に返信が載った画面はどこにも映っていない**。
+- 公開（content_publish）と分析（manage_insights）は映っていたので承認され、返信だけが「エンドツーエンドが実証されていない」で落ちた、で説明がつく。
+- 9/3 に準備した「8/20 の動画をそのまま再提出」は、同じ理由でまた落ちるので**使わない**。
+
+### アプリ側（e467ec0・9/28 夜に反映）
+- 承認前でも user 78（三上様）の連携だけ threads_manage_replies を求める。同意画面に5権限が出る。@shittoru_official はテスター登録ずみ。
+
+### 三上様にお願いすること（録画の前）
+1. 別のアカウント（例：@moveact_seitai）から、@shittoru_official の投稿にコメントを1件付ける
+2. @shittoru_official で Threads → 設定 → ウェブサイトのアクセス許可 → Threads Studio を削除 → Threads からログアウト
+   （@shittoru_official は録画の中で連携し直すまで自動投稿が止まる。予定の無い時間に行う）
+3. 録画中、Threads のログイン画面で ID とパスワードを入力する（AI は入力しない）
+
+### 撮る順序（返信だけに絞った5分程度・字幕は撮った後に実時刻で付ける）
+1. https://threads-studio.com/dashboard?lang=en → Connect Threads
+2. Threads ログイン画面 → 同意画面（threads_manage_replies を含む5権限）→ 許可 → 連携完了
+3. Comment Manager → コメントを選ぶ → Generate AI reply → 1つ選ぶ → Publish → 「Replied」
+4. **threads.com でその投稿を開き、コメントの下に返信が載っていることを映す**（前回欠けていたもの）
+5. 長文（500字超）を予約・公開 → threads.com で2件目以降が返信として連なっていることを映す
+- 字幕は必ず録画後にフレームを見て秒数を決め、焼き込み後にもう一度フレームで照合する。
+- 申請文には、動画に映したもの（コメントへの返信・ツリー投稿）だけを書く。映していない機能（固定投稿のリンクコメント・追い投稿）は書かない。
