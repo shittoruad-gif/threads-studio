@@ -457,9 +457,10 @@ export function initDailyOpsSchedulers(): void {
     const { runClientFollowupJob } = await import("./clientFollowup");
     await runTrackedJob("client_followup", runClientFollowupJob);
   });
-  // 木曜 11:00 JST = 2:00 UTC — 有料会員向けの読み物（2026-09-29 三上様指示・server/newsletter.ts）。
+  // 火曜 11:00 JST = 2:00 UTC — 有料会員向けの読み物（2026-09-29 三上様指示・server/newsletter.ts）。
   //   次の回の下見を三上様のLINEへ。「送る」を押した回だけ、有料会員（無料・解約ずみ・解約予約ありは除く）へ届く。
-  cron.schedule("0 2 * * 4", async () => {
+  //   9/29（火）を起点に1週間おき（同日「今日を起点として1週間おきに」。当初は木曜）。
+  cron.schedule("0 2 * * 2", async () => {
     const { runTrackedJob } = await import("./jobRunner");
     const { runNewsletterJob } = await import("./newsletter");
     await runTrackedJob("newsletter_preview", runNewsletterJob);

@@ -1,7 +1,8 @@
 /**
  * 有料会員向けの読み物（週1回）（2026-09-29 三上様指示）。判断と文面は shared/newsletter.ts。
  *
- * 毎週木曜11:00（JST）：まだ送っていない次の回を、三上様の公式LINEへ下見として送る
+ * 毎週火曜11:00（JST）：まだ送っていない次の回を、三上様の公式LINEへ下見として送る
+ *   （2026-09-29 三上様「今日を起点として1週間おきに」。第1回は同日8:41に手で下見を出した）
  *   （「有料会員◯名に送る／この回は送らない」ボタン付き）。
  * 三上様が「送る」を押した時点で、あらためて配信先を数え直してから送る
  *   （下見のあとに解約・無料へ変わった方には届かない）。
@@ -186,7 +187,7 @@ export async function decideNewsletter(issueNo: number, action: "send" | "skip",
   return `第${issue.no}回をお送りしました（LINE ${line}名・メール ${mail}名${failed ? `・届かなかった方 ${failed}名` : ""}）。`;
 }
 
-/** 週の定例（木曜11:00 JST） */
+/** 週の定例（火曜11:00 JST） */
 export async function runNewsletterJob(): Promise<void> {
   const r = await runNewsletterPreview();
   console.log(`[Newsletter] 下見 第${r.issueNo ?? "-"}回・配信先${r.recipients}名`);
