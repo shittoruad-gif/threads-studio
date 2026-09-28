@@ -608,6 +608,8 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   forDate: date("forDate", { mode: "string" }),
   // ★他店の当たり型（hitPatterns）で作った投稿なら、その型のID（2026-09-28・型ごとの効果を測る）
   hitPatternId: int("hitPatternId"),
+  // アンケートの選択肢（JSON配列・shared/threadsFeatures.ts）。null ならアンケートなし
+  pollOptions: text("pollOptions"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [

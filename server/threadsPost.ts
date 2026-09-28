@@ -28,6 +28,10 @@ export interface CreatePostParams {
   topicTag?: string;
   /** 引用投稿：この投稿IDを引用する（自分の固定投稿の再露出などに使う） */
   quotePostId?: string;
+  /** アンケート：{ option_a, option_b, option_c?, option_d? }（shared/threadsFeatures.ts） */
+  pollAttachment?: Record<string, string>;
+  /** ネタバレなど、本文の一部に付ける印（text_entities） */
+  textEntities?: Array<{ entity_type: string; offset: number; length: number }>;
 }
 
 /** topic_tag のAPI制約に合わせて整形（不正なら null＝付けない） */
@@ -52,13 +56,16 @@ export interface PublishResponse {
 export async function createMediaContainer(
   params: CreatePostParams
 ): Promise<MediaContainer> {
-  const { accessToken, threadsUserId, text, mediaType = "TEXT", imageUrl, videoUrl, children, replyToId, topicTag, quotePostId } = params;
+  const { accessToken, threadsUserId, text, mediaType = "TEXT", imageUrl, videoUrl, children, replyToId, topicTag, quotePostId, pollAttachment, textEntities } = params;
 
   const body: Record<string, string> = {
     media_type: mediaType,
     access_token: accessToken,
   };
   if (quotePostId) body.quote_post_id = quotePostId;
+  // アンケート（テキストのみの投稿・選択肢2〜4個）とネタバレ（text_entities）。shared/threadsFeatures.ts
+  if (pollAttachment && mediaType === "TEXT" && !replyToId) body.poll_attachment = JSON.stringify(pollAttachment);
+  if (textEntities && textEntities.length > 0) body.text_entities = JSON.stringify(textEntities);
 
   // Add text content
   if (text) {
@@ -292,7 +299,10 @@ export class PartialThreadError extends Error {
 }
 
 export async function createAndPublishThread(
-  base: { accessToken: string; threadsUserId: string; topicTag?: string; quotePostId?: string },
+  base: {
+    accessToken: string; threadsUserId: string; topicTag?: string; quotePostId?: string;
+    pollAttachment?: Record<string, string>; textEntities?: Array<{ entity_type: string; offset: number; length: number }>;
+  },
   segments: string[],
 ): Promise<{ id: string; replyIds: string[] }> {
   const clean = segments.map((s) => (s || '').trim()).filter(Boolean);
@@ -306,6 +316,8 @@ export async function createAndPublishThread(
     mediaType: 'TEXT',
     topicTag: base.topicTag,
     quotePostId: base.quotePostId, // 引用投稿（固定投稿の再露出）
+    pollAttachment: base.pollAttachment,
+    textEntities: base.textEntities,
   });
 
   // ルート投稿後に失敗した場合は PartialThreadError を投げる（再試行で二重投稿しない）

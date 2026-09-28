@@ -11,6 +11,7 @@
  *     lineChatStates に「次のテキストの意味」を1行だけ保存して受け取る。
  *   - 返信は原則1通。選択肢はクイックリプライ、投稿はFlexカードで見せる。
  */
+import { featureNote } from "../shared/threadsFeatures";
 import * as db from "./db";
 
 // ── 返信メッセージの組み立て ───────────────────────────────────
@@ -68,7 +69,7 @@ export function fmtJst(v: Date | string | null): string {
  * 本文は全文を載せる（見に行かせない）。1カード=1投稿・最大5件。
  */
 export function buildPostCards(
-  posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null; accountName?: string | null; accountEmphasis?: boolean; angle?: string | null; choiceGroupId?: string | null }>,
+  posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null; accountName?: string | null; accountEmphasis?: boolean; angle?: string | null; choiceGroupId?: string | null; pollOptions?: string | null }>,
   opts: { one?: boolean; bulk?: boolean; choice?: boolean } = {},
 ): unknown {
   // ★3案からお選びいただく形（shared/threeChoice.ts）。
@@ -133,6 +134,10 @@ export function buildPostCards(
           size: "xs", color: "#0E8388", weight: "bold", wrap: true,
         },
         { type: "text", text: (p.postContent || "（本文なし）").slice(0, 900), wrap: true, size: "sm", color: "#13343B" },
+        // ★アンケート・答えを隠すクイズ（shared/threadsFeatures.ts）は、本文だけでは分からないので一言添える
+        ...(featureNote(p as any) ? [{
+          type: "text", wrap: true, size: "xs", color: "#0B6E72", text: featureNote(p as any)!,
+        }] : []),
         ...(isCall ? [{
           type: "text", wrap: true, size: "xs", color: "#8A6D3B",
           text: "Meta AIに呼びかけて、その返事でお店を広めてもらう投稿です。「@meta.ai」を残したまま、このまま公開するのがおすすめです。返事が付くかはThreads側の段階提供によります。",

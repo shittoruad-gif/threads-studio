@@ -307,8 +307,18 @@ export async function executePendingPosts() {
           const topicTag = postUser?.autoTopicTag !== false && postProject
             ? (await import('./reachBoost')).deriveTopicTag(postProject) ?? undefined
             : undefined;
+          // ★Threads の機能（2026-09-28・shared/threadsFeatures.ts）：アンケートの選択肢／クイズの答えを隠す。
+          //   決まりに合わなければ付けずに、ふつうの投稿として出す（投稿そのものは止めない）。
+          const { parsePollOptions, pollAttachment, spoilerEntities, SPOILER_QUIZ_ANGLE_ID } = await import('../shared/threadsFeatures');
+          let pollOpts: string[] | null = null;
+          try { pollOpts = (post as any).pollOptions ? parsePollOptions(JSON.parse((post as any).pollOptions)) : null; } catch { pollOpts = null; }
+          const spoilers = (post as any).angle === SPOILER_QUIZ_ANGLE_ID ? spoilerEntities(segments[0] ?? '') : null;
           result = await createAndPublishThread(
-            { accessToken, threadsUserId: account.threadsUserId, topicTag, quotePostId: (post as any).quotePostId || undefined },
+            {
+              accessToken, threadsUserId: account.threadsUserId, topicTag, quotePostId: (post as any).quotePostId || undefined,
+              pollAttachment: pollOpts ? pollAttachment(pollOpts) : undefined,
+              textEntities: spoilers ?? undefined,
+            },
             segments,
           );
         }

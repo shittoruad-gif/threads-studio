@@ -445,6 +445,13 @@ export function initDailyOpsSchedulers(): void {
   // 11:00 JST = 2:00 UTC — 動いていないお客様のフォロー（2026-09-25 三上様指示・server/clientFollowup.ts）。
   //   ご契約中で「投稿が出ない工程のまま3日」「設定は終わっているのに3日公開ゼロ」の方を、
   //   事実のまとめと送る文の案つきで三上様のLINEへ。三上様が「この文で送る」を押したものだけお客様へ届く。
+  // ★Threads の機能の試し：日曜12:30（日本時間）に、よく読まれた自分の投稿を1本再投稿（shared/threadsFeatures.ts・10/28〜）
+  cron.schedule("30 3 * * 0", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runWeeklyRepostJob } = await import("./threadsFeatureJobs");
+    await runTrackedJob("weekly_repost", () => runWeeklyRepostJob());
+  });
+
   cron.schedule("0 2 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");
     const { runClientFollowupJob } = await import("./clientFollowup");

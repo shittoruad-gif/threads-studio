@@ -216,6 +216,9 @@ export interface ApprovalPushPost {
   accountEmphasis?: boolean;
   /** 3案からお選びいただく枠の印（shared/threeChoice.ts）。同じ印＝同じ枠の選択肢 */
   choiceGroupId?: string | null;
+  /** 切り口とアンケートの選択肢（カードに一言添える・shared/threadsFeatures.ts） */
+  angle?: string | null;
+  pollOptions?: string | null;
 }
 
 function fmtTime(v: Date | string | null): string {

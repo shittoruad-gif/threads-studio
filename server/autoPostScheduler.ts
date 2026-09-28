@@ -455,6 +455,32 @@ export function buildSameDaySlots(count: number, preferred: number[] | null | un
 /**
  * Generate a single auto-post for a user
  */
+/**
+ * アンケートの選択肢を本文から作る（shared/threadsFeatures.ts の決まりで検査）。合わなければ null。
+ * 健康系のお店で結果を約束する選択肢（治る・改善 等）は付けない。
+ */
+async function generatePollOptions(postText: string, project: any): Promise<string[] | null> {
+  const { parsePollOptions, POLL_OPTION_MAX } = await import('../shared/threadsFeatures');
+  const prompt = [
+    'Threadsの投稿に付けるアンケートの選択肢を作ってください。',
+    `- 選択肢は3個か4個。1つ${POLL_OPTION_MAX}文字以内（短いほどよい。10文字前後が目安）。`,
+    '- 投稿の最後の質問に、読む人が自分のこととして答えられるものにする。どれかを正解・おすすめにしない。',
+    '- 「その他」「特になし」のような逃げ道を1つ入れてよい。',
+    '- 効果・結果を約束する言葉（治る・改善・必ず 等）、URL、店名の宣伝は入れない。',
+    `- 業種：${String(project?.businessType ?? '')}`,
+    '- JSONの配列だけを返す。例：["A","B","C"]',
+    '',
+    '【投稿】',
+    postText,
+  ].join('\n');
+  const res = await invokeLLM({ messages: [{ role: 'user', content: prompt }] });
+  const raw = String((res as any)?.choices?.[0]?.message?.content ?? '');
+  const opts = parsePollOptions(raw);
+  if (!opts) return null;
+  if (opts.some((o) => /(治る|治り|完治|改善|必ず|根本)/.test(o))) return null;
+  return opts;
+}
+
 async function generateAutoPost(
   userId: number,
   project: any,
@@ -481,7 +507,7 @@ async function generateAutoPost(
   // ★3案からお選びいただく形（2026-09-22 三上様指示・shared/threeChoice.ts）。
   //   choiceGroupId を渡すと「1つの枠に対する選択肢」として作る（必ず承認カード）。
   //   forcedAngleId は3案の切り口を散らすため（同じ材料から3本作ると同じ所へ戻るため）。
-  opts: { choiceGroupId?: string | null; forcedAngleId?: string | null; hitPatternId?: number | null } = {},
+  opts: { choiceGroupId?: string | null; forcedAngleId?: string | null; hitPatternId?: number | null; feature?: import('../shared/threadsFeatures').FeatureKind | null } = {},
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
   const purpose = PURPOSES[purposeIndex % PURPOSES.length];
@@ -553,6 +579,12 @@ async function generateAutoPost(
           console.log(`[AutoPost] 他店の当たり型 account=${threadsAccountId} pattern=${opts.hitPatternId}`);
         }
       } catch (e) { console.warn(`[AutoPost] 当たり型を読めませんでした account=${threadsAccountId}: ${(e as Error)?.message}`); }
+    }
+    // ★Threads の機能の投稿（アンケート・答えを隠すクイズ／2026-09-28 三上様指示・shared/threadsFeatures.ts）
+    if (!forced && opts.feature) {
+      const { featureAngle } = await import('../shared/threadsFeatures');
+      angle = featureAngle(opts.feature) as any;
+      console.log(`[AutoPost] Threadsの機能の投稿 account=${threadsAccountId} → ${opts.feature}`);
     }
     if (studyExperiment && angle) console.log(`[AutoPost] 試験中（勉強会の型） userId=${userId} account=${threadsAccountId} → ${angle.id}`);
     if (forced) console.log(`[AutoPost] 3案：切り口を指定 account=${threadsAccountId} → ${forced.id}`);
@@ -1382,6 +1414,8 @@ async function generateAutoPost(
     // 固定文にしていた頃、公式LINEを持たない店舗が「LINEへどうぞ」と
     // 案内してしまう事故が起きた（2026-08-22 検出）。
     // 案内先が1つも登録されていなければ null が返り、CTAを付けない。
+    // アンケート・クイズは最後の行（質問／答え）で終える必要があるので、案内の一文は付けない
+    if (opts.feature) includeCta = false;
     const ctaText = includeCta ? (buildCtaText(project as any) ?? '') : '';
 
     // ★読みやすさ予算（300字）を機械的に強制する。
@@ -1438,12 +1472,31 @@ async function generateAutoPost(
     // ★3案は必ず承認カード。押されなければ1件も公開しない（shared/threeChoice.ts）。
     const needsApproval = requireApproval || guarantee || Boolean(opts.choiceGroupId);
 
+    // ★アンケートの選択肢は、出来上がった本文から別に作る（本文の作り直し・整形で消えないように）。
+    //   決まり（2〜4個・各25文字）に合わなければ、作り直しに回す。最後の作り直しではアンケートなしで出す。
+    let pollOptions: string[] | null = null;
+    if (opts.feature === 'poll') {
+      pollOptions = await generatePollOptions(fullContent, project).catch(() => null);
+      if (!pollOptions) {
+        if (!lastAttempt) {
+          console.warn(`[AutoPost] アンケートの選択肢を作れず → 作り直し account=${threadsAccountId}`);
+          return false;
+        }
+        console.warn(`[AutoPost] アンケートの選択肢を作れず、最後の作り直しのためアンケートなしで公開へ account=${threadsAccountId}`);
+      }
+    }
+    if (opts.feature === 'spoiler_quiz') {
+      const { spoilerRange } = await import('../shared/threadsFeatures');
+      if (!spoilerRange(fullContent)) console.warn(`[AutoPost] クイズの「答え：」が見つからず、隠さずに公開 account=${threadsAccountId}`);
+    }
+
     await db.createScheduledPost({
       userId,
       projectId: project.id,
       threadsAccountId,
       scheduledAt,
       postContent: fullContent,
+      pollOptions: pollOptions ? JSON.stringify(pollOptions) : null,
       // ★承認モードON時は awaiting_approval で作成し、ユーザーが承認するまで投稿しない
       status: needsApproval ? 'awaiting_approval' : 'pending',
       // 3案の印（同じ枠の選択肢。選ばれた1件以外は公開しない）
@@ -1833,6 +1886,16 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
               }
             } catch (e) { console.warn(`[AutoPost] 当たり型を選べませんでした account=${account.id}: ${(e as Error)?.message}`); }
 
+            // ★Threads の機能の投稿（2026-09-28 三上様指示・shared/threadsFeatures.ts）。
+            //   試しのアカウントだけ、2本目を曜日で決めた機能（火=アンケート・金=答えを隠すクイズ）で作る。本数は変えない。
+            let feature: import('../shared/threadsFeatures').FeatureKind | null = null;
+            try {
+              const { featureForSlot } = await import('../shared/threadsFeatures');
+              const day = opts.forTomorrow ? new Date(Date.now() + 86400_000) : new Date();
+              feature = !opts.fillToday && !hitPatternId ? featureForSlot(account.id, i, day) : null;
+              if (feature) console.log(`[AutoPost] Threadsの機能の枠 account=${account.id} slot=${i} → ${feature}`);
+            } catch (e) { console.warn(`[AutoPost] 機能の枠を判定できませんでした account=${account.id}: ${(e as Error)?.message}`); }
+
             // ★品質ガードで落ちた日に「投稿ゼロ」で終わらせない（2026-09-08 比嘉先生の当日補充で
             //   1回目が健康表現ガードに落ち、generated=0 のまま終わっていた）。最大3回まで作り直す。
             let success = false;
@@ -1854,7 +1917,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                 hint,
                 attempt === 3,
                 false,
-                hitPatternId ? { hitPatternId } : {},
+                hitPatternId ? { hitPatternId } : feature ? { feature } : {},
               );
               if (!success && attempt < 3) console.log(`[AutoPost] user=${user.id} account=${account.id} slot=${i} 作り直し ${attempt + 1}回目${hint ? '（前回の理由を渡す）' : ''}`);
             }
@@ -1983,7 +2046,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                   const { sendApprovalPush } = await import('./lineNotify');
                   const { createApprovalToken } = await import('./approvalToken');
                   const base = process.env.APP_BASE_URL || 'https://threads-studio.com';
-                  const posts = fresh.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt, threadsAccountId: (p as any).threadsAccountId, choiceGroupId: (p as any).choiceGroupId ?? null }));
+                  const posts = fresh.map((p) => ({ id: p.id, postContent: p.postContent, scheduledAt: p.scheduledAt, threadsAccountId: (p as any).threadsAccountId, choiceGroupId: (p as any).choiceGroupId ?? null, angle: (p as any).angle ?? null, pollOptions: (p as any).pollOptions ?? null }));
                   const urlFor = (postId: number) => `${base}/api/post-approval?token=${createApprovalToken(postId, user.id, 'approve')}`;
                   let sentCount = 0;
                   for (const lineId of lineIds) {
