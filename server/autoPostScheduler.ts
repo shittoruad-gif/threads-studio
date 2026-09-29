@@ -11,13 +11,13 @@ import * as db from "./db";
 import { getPlan } from "../shared/plans";
 import { buildCtaText } from "../shared/autoPostCta";
 import { charBudgetFor, resolveWithAlternation, POST_LENGTHS, trimToBudget } from "../shared/postLength";
-import { checkNaturalized, findAgreementQuestion, findBannedTic, findRepeatedHookNumber, findRepeatedPhrase, polishPunctuation } from "../shared/jpQualityGuard";
+import { checkNaturalized, endsWithQuestion, findAgreementQuestion, findBannedTic, findRepeatedHookNumber, findRepeatedPhrase, polishPunctuation } from "../shared/jpQualityGuard";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
 import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM, hasRecruitingMarker } from "../shared/recruitingPost";
 import { touchesDeclined, filterStyleSamples, normalizeForPatterns, filterCounseling } from "../shared/declinedPatterns";
-import { overusedHits, dropOverusedLines, dropFramedSentences, framesOf, hitsSurveyAvoid, lineHitsFrames } from "../shared/freshTopic";
+import { overusedHits, dropOverusedLines, dropFramedSentences, framesOf, hitsSurveyAvoid, lineHitsFrames, stickyHits, coversTopic } from "../shared/freshTopic";
 import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
 import { stripRawUrls } from "../shared/sanitize";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
@@ -810,9 +810,21 @@ async function generateAutoPost(
 
     let freshPlan: import('../shared/freshTopic').FreshTopicPlan | null = null;
     let freshNote = '';
+    // ★見送りの予防（2026-09-30 三上様「1〜3を今夜進めて」・shared/freshTopic.ts の末尾）。
+    //   直近7日に3回以上見送った方は、「同じ」の理由をお聞きできていなくても話題を回す（理由の返事は7件だけ）。
+    //   その方には、見送った投稿の主役の言葉を1語でも使わせない（今までは2語以上で作り直し＝主役の1語が残っていた）。
+    let stickyWords: string[] = [];
+    let topicAnchors: string[] = [];
+    const freshProtect = [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title];
     try {
       const ft = await import('../shared/freshTopic');
-      if (ft.saidSameContent(skipReasons)) {
+      const declined7 = await db.getRecentDeclinedContents(threadsAccountId, 7, 10).catch(() => [] as string[]);
+      const repeatDecliner = declined7.length >= 3;
+      if (ft.saidSameContent(skipReasons) || repeatDecliner) {
+        stickyWords = ft.stickyDeclinedWords({ declined: declined7, recentPosts, protect: freshProtect });
+        if (stickyWords.length > 0) console.log(`[AutoPost] 見送られた主役の言葉を今日は使わない account=${threadsAccountId} ${stickyWords.join('・')}`);
+      }
+      if (ft.saidSameContent(skipReasons) || repeatDecliner) {
         const cr: any = counselingResult || {};
         const plan = ft.planFreshTopic({
           recentPosts,
@@ -826,10 +838,19 @@ async function generateAutoPost(
         if (plan.overused.length > 0 || (plan.frames?.length ?? 0) > 0) {
           freshPlan = plan;
           freshNote = ft.buildFreshTopicNote(plan);
+          topicAnchors = ft.topicAnchorWords(plan.topic, freshProtect);
           console.log(`[AutoPost] 話題を変える account=${threadsAccountId} 使いすぎ=${plan.overused.join('・') || 'なし'} 型=${(plan.frames ?? []).join('・') || 'なし'} 今日の主題=${plan.topic ?? '指定なし'}`);
         }
       }
+      freshNote += ft.buildStickyNote(stickyWords);
     } catch (e) { console.warn(`[AutoPost] 話題の偏りを数えられませんでした account=${threadsAccountId}: ${(e as Error)?.message}`); }
+    // ★問いかけの締めは3本に1本まで（2026-09-30）。直近2本のどちらかが問いかけで終わっていれば、今日は問いかけで締めない。
+    //   アンケート・クイズ（opts.feature）は最後の行の形が決まっているので対象外。
+    let noQuestionEnding = false;
+    try {
+      const { questionEndingBlocked } = await import('../shared/freshTopic');
+      noQuestionEnding = !opts.feature && questionEndingBlocked(recentPosts, endsWithQuestion);
+    } catch { noQuestionEnding = false; }
     // N1顧客像・お客様の声は「そのまま使う」「★最優先」と指示される欄なので、
     // 使いすぎの言葉が1つでもある行と、直近の投稿ですでに使った行は渡さない。
     // ★試しに作った案では「お客様の変化を一緒に喜べる」（お客様の声）が毎回入り、重複ガードで落ちていた（2026-09-25）
@@ -1021,7 +1042,8 @@ async function generateAutoPost(
           + freshNote
           // ★◯✕アンケートで✕が付いた題材（2026-09-26）
           + surveyAvoidNote
-          + (CONVERSATION_POST_TYPES.has(postType) ? CONVERSATION_ENDING_ADDENDUM : '')
+          + (CONVERSATION_POST_TYPES.has(postType) && !noQuestionEnding ? CONVERSATION_ENDING_ADDENDUM : '')
+          + (noQuestionEnding ? (await import('../shared/freshTopic')).QUESTION_ENDING_NOTE : '')
           // ★求人（採用）の投稿を、集客と同じ型で書かせない（shared/recruitingPost.ts・2026-09-23）。
           //   プレステージ様は2晩続けて naturalnessReview で3回落ち、枠を捨てていた。
           + (looksLikeRecruiting(project) ? RECRUITING_POST_ADDENDUM : '')
@@ -1247,6 +1269,33 @@ async function generateAutoPost(
           { detail: fr.join('・') });
         return false;
       }
+      // ★今日の主題（まだ使っていない材料）を書いていなければ作り直す（2026-09-30）
+      if (freshPlan.topic && !coversTopic(naturalMain, topicAnchors)) {
+        console.warn(`[AutoPost] freshTopic: 今日の主題「${freshPlan.topic}」を書いていない → 作り直し userId=${userId} account=${threadsAccountId}`);
+        noteReject('freshTopic', userId, threadsAccountId, postingTimeIndex,
+          `- 今日の主題「${freshPlan.topic}」を書いていない。この材料を主役にして書く（${topicAnchors.slice(0, 3).map((w) => `「${w}」`).join('')}のどれかを必ず入れる）。`,
+          { detail: freshPlan.topic.slice(0, 40) });
+        return false;
+      }
+    }
+    // ★見送られた投稿の主役の言葉が1語でも残っていたら作り直す（2026-09-30）。最後の作り直しでは止めない（枠を捨てない）。
+    if (stickyWords.length > 0 && !lastAttempt) {
+      const hits = stickyHits(naturalMain, stickyWords);
+      if (hits.length > 0) {
+        console.warn(`[AutoPost] stickyDeclined:「${hits.join('・')}」は見送られた投稿の主役 → 作り直し userId=${userId} account=${threadsAccountId}`);
+        noteReject('stickyDeclined', userId, threadsAccountId, postingTimeIndex,
+          `- 「${hits.join('」「')}」は、オーナーが見送った投稿の中心になっていた言葉。1語も使わず、別の材料を主役にして書く。`,
+          { detail: hits.join('・') });
+        return false;
+      }
+    }
+    // ★問いかけの締めは3本に1本まで（2026-09-30）。最後の作り直し・保証パスでは止めない。
+    if (noQuestionEnding && !lastAttempt && endsWithQuestion(naturalMain)) {
+      console.warn(`[AutoPost] questionEnding: 直近も問いかけで終わっている → 作り直し userId=${userId} account=${threadsAccountId}`);
+      noteReject('questionEnding', userId, threadsAccountId, postingTimeIndex,
+        '- 直近の投稿が問いかけで終わっている。今日は問いかけで締めない。言い切るか、お店からのひとことで終える。',
+        { detail: 'question-ending' });
+      return false;
     }
 
     // ★求人のアカウントで、求人だと読めない下書きは作り直す（2026-09-26 三上様指示「今後は求人向けに書いてください」）。

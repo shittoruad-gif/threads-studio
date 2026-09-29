@@ -189,7 +189,10 @@ export function planFreshTopic(params: {
     const used = words.length === 0 ? 1 : words.filter((w) => docs.some((d) => d.includes(w))).length / words.length;
     // 使いすぎの型の言い回しを含む材料（「技術を覚えられるか不安」）は主題にしない
     const hitFrame = lineHitsFrames(s, frames) ? 2 : 0;
-    return { s, score: hitOverused * 2 + hitFrame + used, words: words.length };
+    // ★直近3本の主役だった材料（言葉の半分以上が直近3本に出ている）は、今日は主題にしない（2026-09-30 三上様「1〜3を今夜」）
+    const last3 = docs.slice(0, 3);
+    const inLast3 = words.length > 0 && words.filter((w) => last3.some((d) => d.includes(w))).length / words.length >= 0.5 ? 2 : 0;
+    return { s, score: hitOverused * 2 + hitFrame + used + inLast3, words: words.length };
   }).filter((x) => x.words > 0);
   if (scored.length === 0) return { ...empty, overused, frames };
   const best = Math.min(...scored.map((x) => x.score));
@@ -325,3 +328,83 @@ export function buildFreshTopicNote(plan: FreshTopicPlan | null): string {
   }
   return `\n\n【★話題を変える（最優先・厳守）】\n${lines.join("\n")}`;
 }
+
+// ==================== 見送りの予防（2026-09-30 三上様「1〜3を今夜進めて」） ====================
+//
+// ★きっかけ（実データ・9/30）：直近7日の見送り理由7件がすべて「同じような内容ばかり」。
+//   14日の投稿案で、香取様 acc21 は「エコー」10/25本、プレステージ様 acc22 は「先輩」24/68本、
+//   岩根様 acc25 は「正絹」25/43本。上の sameTopic は「使いすぎの言葉が2つ以上」で作り直すため、
+//   主役の1語だけが毎回残っていた。どの方も投稿案の約4割が問いかけで終わっていた。
+
+/**
+ * 今日の主題（材料の1行）を表す言葉。下書きにこのどれかが無ければ、主題を書いていない。
+ * 店名・地名など毎回出てよい言葉は外す。
+ */
+export function topicAnchorWords(topic: string | null | undefined, protect: readonly (string | null | undefined)[]): string[] {
+  if (!topic) return [];
+  const pw = protectWordsOf(protect);
+  return topicWordsOf(topic).filter((w) => !pw.some((p) => p.includes(w) || w.includes(p)));
+}
+
+/** 下書きが今日の主題を書いているか（主題の言葉を1つでも含むか）。言葉が取れない主題は確かめない */
+export function coversTopic(text: string, anchors: readonly string[]): boolean {
+  // 3字以上の言葉が無い主題（「購入して頂いている。」「前向きに努めている。」のような切れ端）は、確かめない
+  if (!anchors.some((w) => w.length >= 3)) return true;
+  const t = norm(text);
+  return anchors.some((w) => t.includes(w));
+}
+
+/**
+ * 見送られた投稿の主役だった言葉（1語でも今日は使わない）。
+ * 直近7日に見送った投稿の2本以上に出ていて、しかも直近の投稿の3割以上（最低3本）に出ている言葉。
+ * 店名・地名・業種・対象のお客様は外す。多い順に最大 max 語。
+ */
+export function stickyDeclinedWords(params: {
+  declined: readonly string[];
+  recentPosts: readonly string[];
+  protect: readonly (string | null | undefined)[];
+  max?: number;
+}): string[] {
+  const declined = params.declined.map(norm).filter((d) => d.length >= 10);
+  const docs = params.recentPosts.map(norm).filter((d) => d.length >= 10).slice(0, 12);
+  if (declined.length < 2 || docs.length < 4) return [];
+  const pw = protectWordsOf(params.protect);
+  const isProtected = (w: string) => pw.some((p) => p.includes(w) || w.includes(p));
+  const minDocs = Math.max(3, Math.ceil(docs.length * 0.3));
+  const cand = new Set<string>();
+  for (const d of declined) for (const w of topicWordsOf(d)) if (!isProtected(w)) cand.add(w);
+  const scored = Array.from(cand)
+    .map((w) => ({ w, dec: declined.filter((d) => d.includes(w)).length, rec: docs.filter((d) => d.includes(w)).length }))
+    .filter((x) => x.dec >= 2 && x.rec >= minDocs)
+    .sort((a, b) => b.dec - a.dec || b.rec - a.rec || a.w.length - b.w.length);
+  const out: string[] = [];
+  for (const x of scored) {
+    if (out.some((o) => x.w.includes(o) || o.includes(x.w))) continue;
+    out.push(x.w);
+    if (out.length >= (params.max ?? 3)) break;
+  }
+  return out;
+}
+
+/** 見送られた主役の言葉への指示 */
+export function buildStickyNote(words: readonly string[]): string {
+  if (words.length === 0) return "";
+  return `\n\n【★見送られた投稿の主役の言葉（今日は1つも使わない）】\n- ${words.map((w) => `「${w}」`).join("")}は、オーナーが見送った投稿の中心になっていた言葉。今日の投稿では1語も使わず、別の材料を主役にする。言い換えて同じ話を書くのも不可。`;
+}
+
+/** 下書きに残っている、見送られた主役の言葉 */
+export function stickyHits(text: string, words: readonly string[]): string[] {
+  const t = norm(text);
+  return words.filter((w) => t.includes(w));
+}
+
+/**
+ * 問いかけの締めは3本に1本まで。直近2本（新しい順）のどちらかが問いかけで終わっていれば、今日は問いかけで締めない。
+ * @param endsWithQuestion 末尾が問いかけかを判定する関数（jpQualityGuard.endsWithQuestion）
+ */
+export function questionEndingBlocked(recentPosts: readonly string[], endsWithQuestion: (t: string) => boolean): boolean {
+  return recentPosts.slice(0, 2).some((t) => endsWithQuestion(String(t ?? "")));
+}
+
+export const QUESTION_ENDING_NOTE =
+  "\n\n【締め方（厳守）】\n- 直近の投稿が問いかけで終わっている。今日は問いかけ（〜ですか？／〜ませんか？）で締めない。言い切るか、お店からのひとことで終える。";
