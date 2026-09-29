@@ -24,3 +24,25 @@ describe('当日補充の不足の数え方', () => {
     expect(sameDayShortfall(slots.length, slots.length - 1)).toBe(1);
   });
 });
+
+// 2026-09-29 川邊様（acc34）：当日補充の枠を、同じアカウントに今日すでにある投稿から60分以上離す。
+describe('当日補充の時刻は既存の投稿から離す', () => {
+  it('既存の投稿の前後60分には置かない', () => {
+    const now = new Date('2026-09-29T01:00:00Z'); // 10:00 JST
+    const occupied = [new Date('2026-09-29T06:20:00Z'), new Date('2026-09-29T09:15:00Z')]; // 15:20 / 18:15
+    for (let k = 0; k < 20; k++) {
+      const slots = buildSameDaySlots(3, [15, 18, 16], now, occupied);
+      expect(slots.length).toBe(3);
+      for (const s of slots) for (const o of occupied) {
+        expect(Math.abs(s.getTime() - o.getTime())).toBeGreaterThanOrEqual(60 * 60_000);
+      }
+      for (let i = 1; i < slots.length; i++) expect(slots[i].getTime() - slots[i - 1].getTime()).toBeGreaterThanOrEqual(25 * 60_000);
+    }
+  });
+
+  it('空きが無ければ置かない（詰め込まない）', () => {
+    const now = new Date('2026-09-29T14:00:00Z'); // 23:00 JST
+    const occupied = [new Date('2026-09-29T14:30:00Z')]; // 23:30
+    expect(buildSameDaySlots(2, null, now, occupied)).toEqual([]);
+  });
+});

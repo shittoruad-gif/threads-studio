@@ -1118,6 +1118,27 @@ export async function countAccountAutoPostsScheduledToday(accountId: number, day
   return Number(row?.n ?? 0);
 }
 
+/**
+ * 今日（JST）このアカウントに置かれている投稿の時刻（自動・手動とも・取り消し以外）。
+ * 当日補充の時刻を既存の投稿から離すために使う（2026-09-29 川邊様 acc34：9分差で2本）。
+ */
+export async function getAccountScheduledTimesToday(accountId: number): Promise<Date[]> {
+  const database = await getDb();
+  if (!database) return [];
+  const rows = await database
+    .select({ at: scheduledPosts.scheduledAt })
+    .from(scheduledPosts)
+    .where(
+      and(
+        eq(scheduledPosts.threadsAccountId, accountId),
+        sql`${scheduledPosts.status} IN ('pending', 'awaiting_approval', 'posted', 'processing')`,
+        sql`${scheduledPosts.replyToThreadsId} IS NULL`,
+        sql`DATE(DATE_ADD(${scheduledPosts.scheduledAt}, INTERVAL 9 HOUR)) = DATE(DATE_ADD(NOW(), INTERVAL 9 HOUR))`,
+      ),
+    );
+  return rows.map((r) => r.at).filter((d): d is Date => d instanceof Date);
+}
+
 export async function countAccountMonthlyUsage(threadsAccountId: number): Promise<number> {
   const db = await getDb();
   if (!db) return 0;

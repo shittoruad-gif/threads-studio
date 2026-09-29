@@ -3310,6 +3310,17 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
       }
     }
   }
+  // ★担当者が「〜を一言お知らせください」とお願いした後のお返事は、自動応答に回さず担当者へ（2026-09-29 川邊様 #50：
+  //   「もう一つが『骨盤底筋などのインナーマッスル』でお願いします」に「はじめの設定から登録を」と自動で返していた）。
+  {
+    const { isAwaitingStaffAnswer, STAFF_ANSWER_ACK_TEXT } = await import("../shared/awaitingStaffAnswer");
+    let recent: any[] = [];
+    try { recent = (await db.getRecentSupportQuestionsByUser(user.id, 48)) ?? []; } catch { recent = []; }
+    if (isAwaitingStaffAnswer(recent)) {
+      await forwardToStaff(user.id, lineUserId, `【担当者へのお返事】担当者のお願いへのお返事です。（お客様の文面：${t}）`);
+      return [textWithQuick(STAFF_ANSWER_ACK_TEXT, MENU_HINT)];
+    }
+  }
   // ★紹介コードをそのまま送られた場合は、その場で適用して料金ページへご案内する。
   if (looksLikeReferralCode(t)) return referralLink(lineUserId, t, user.id);
 

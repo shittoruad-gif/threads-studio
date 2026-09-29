@@ -412,11 +412,16 @@ export function postingTimeOnDay(index: number, customHours: number[] | null | u
  *      スパム扱いで到達が落ちる。Moveact IGで連投分だけ消された実例あり）。
  *   3. 間隔を守ると入りきらない場合（深夜のお申し込み）は、入る本数だけにする。
  *      無理に詰め込んで投稿を消されるより、翌朝から満額のほうが良い。
+ *   4. ★同じアカウントに今日すでに置かれている投稿（occupied）から OCCUPIED_GAP_MINUTES 以上離す（2026-09-29）。
+ *      川邊様 acc34 で、当日補充の #2255（15:29）が既存の #2251（15:20）と9分差で置かれた。
  */
 const SAME_DAY_EXTRA_HOURS = [23];
 const MIN_GAP_MINUTES = 25;
+const OCCUPIED_GAP_MINUTES = 60;
 
-export function buildSameDaySlots(count: number, preferred: number[] | null | undefined, now: Date = new Date()): Date[] {
+export function buildSameDaySlots(
+  count: number, preferred: number[] | null | undefined, now: Date = new Date(), occupied: Date[] = [],
+): Date[] {
   if (count <= 0) return [];
   const jst = new Date(now.getTime() + JST_OFFSET_MS);
   const y = jst.getUTCFullYear(), m = jst.getUTCMonth(), d = jst.getUTCDate();
@@ -425,6 +430,9 @@ export function buildSameDaySlots(count: number, preferred: number[] | null | un
   const latest = at(23, 50);
   if (latest <= earliest) return [];
   const gap = MIN_GAP_MINUTES * 60_000;
+  const occGap = OCCUPIED_GAP_MINUTES * 60_000;
+  const taken = occupied.map((t) => t.getTime());
+  const free = (t: number) => taken.every((o) => Math.abs(t - o) >= occGap);
 
   // 1. 勝ち時間帯のうち今日まだ来ていないもの
   const base = preferred && preferred.length > 0 ? preferred : POSTING_HOURS;
@@ -432,7 +440,7 @@ export function buildSameDaySlots(count: number, preferred: number[] | null | un
   const preferredSlots: number[] = [];
   for (const h of pool) {
     const t = at(h, Math.floor(Math.random() * 30));
-    if (t >= earliest && t <= latest) preferredSlots.push(t);
+    if (t >= earliest && t <= latest && free(t)) preferredSlots.push(t);
   }
   preferredSlots.sort((a, b) => a - b);
   const spaced: number[] = [];
@@ -442,14 +450,24 @@ export function buildSameDaySlots(count: number, preferred: number[] | null | un
   }
   if (spaced.length >= count) return spaced.slice(0, count).map((t) => new Date(t));
 
-  // 2. 足りない分は残り時間を等間隔に割る（最低間隔は守る）
-  const span = latest - earliest;
-  const maxFit = Math.floor(span / gap) + 1;
-  const n = Math.max(1, Math.min(count, maxFit));
-  const step = n > 1 ? span / (n - 1) : 0;
-  const even: Date[] = [];
-  for (let i = 0; i < n; i++) even.push(new Date(Math.round(earliest + step * i)));
-  return even;
+  // 2. 足りない分は残り時間を割る（最低間隔を守り、既存の投稿の前後は空ける）
+  const step5 = 5 * 60_000;
+  const cands: number[] = [];
+  for (let t = earliest; t <= latest; t += step5) if (free(t)) cands.push(t);
+  if (cands.length === 0) return [];
+  const pickSpaced = (g: number) => {
+    const out: number[] = [];
+    for (const t of cands) {
+      if (out.length === 0 || t - out[out.length - 1] >= g) out.push(t);
+      if (out.length >= count) break;
+    }
+    return out;
+  };
+  // なるべく広く散らす（残り時間を本数で割った間隔）→入りきらなければ最低間隔で詰める
+  const wide = count > 1 ? Math.max(gap, Math.floor((cands[cands.length - 1] - cands[0]) / (count - 1))) : gap;
+  let chosen = pickSpaced(wide);
+  if (chosen.length < count) chosen = pickSpaced(gap);
+  return chosen.map((t) => new Date(t));
 }
 
 /**
@@ -1253,8 +1271,23 @@ async function generateAutoPost(
       }
     }
 
+    // ★答えを伏せたまま終わる「〜とは？」は、最後の作り直し・保証パスでも出さない（2026-09-29 川邊様 #2252）。
+    //   アンケート・クイズ（opts.feature）は最後の行の形が決まっているので対象外。
+    if (!opts.feature) {
+      const { findDeadEndTeaser } = await import('../shared/jpQualityGuard');
+      const teaser = findDeadEndTeaser(naturalMain);
+      if (teaser) {
+        console.warn(`[AutoPost] deadEndTeaser:「${teaser}」で答えを書かずに終わっている → 作り直し userId=${userId} account=${threadsAccountId}`);
+        noteReject('deadEndTeaser', userId, threadsAccountId, postingTimeIndex,
+          `- 「${teaser}」のように答えを伏せた問いで終わらせない。言いたい答えを本文にそのまま書く。問いかけで締めるなら、読み手が自分のことを答えられる質問にする。`,
+          { detail: teaser, gaveUp: lastAttempt });
+        return false;
+      }
+    }
+
     // ★自然さの採点（server/naturalnessReview.ts）。正規表現で取れない不自然さの最終関門。
     //   基準未満は公開せず作り直す。採点できないとき（API障害）は止めない。
+    //   ただし保証パスは採点できないまま出さない（2026-09-29：保証パスの文は作り直しで落ちた後の1本なので、無検査で届けない）。
     try {
       const { reviewNaturalness, NATURALNESS_MIN_SCORE } = await import('./naturalnessReview');
       const rv = await reviewNaturalness(naturalMain, {
@@ -1276,6 +1309,12 @@ async function generateAutoPost(
         return false;
       }
       if (rv) console.log(`[AutoPost] naturalnessReview: ${rv.score}/5 userId=${userId}`);
+      if (!rv && guarantee) {
+        console.warn(`[AutoPost] naturalnessReview: 採点できず、保証パスのため出さない（明日の生成で補填） userId=${userId} account=${threadsAccountId}`);
+        noteReject('naturalnessReview', userId, threadsAccountId, postingTimeIndex, '',
+          { detail: '採点できず（保証パス）', gaveUp: true });
+        return false;
+      }
     } catch (e) { console.warn(`[AutoPost] naturalnessReview skipped: ${(e as Error)?.message}`); }
 
     // ★健康系の断定・治療結果の体験談・価格連呼のガード（shared/healthClaimGuard.ts）。
@@ -1804,7 +1843,8 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             // ★自動投稿だけを数える（手動の固定投稿の下書きを「既存」に数えない。2026-09-11 廿日市様）
             const already = await db.countAccountAutoPostsScheduledToday(account.id).catch(() => 0);
             const shortfall = Math.max(0, postCount - already);
-            sameDaySlots = buildSameDaySlots(shortfall, acctHours);
+            const occupied = shortfall > 0 ? await db.getAccountScheduledTimesToday(account.id).catch(() => [] as Date[]) : [];
+            sameDaySlots = buildSameDaySlots(shortfall, acctHours, new Date(), occupied);
             todayCount = sameDaySlots.length;
             fillTarget = already + todayCount;
             console.log(

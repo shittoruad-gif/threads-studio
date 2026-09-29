@@ -225,6 +225,27 @@ export function endsWithQuestion(text: string): boolean {
   return /[？?]$/.test(t);
 }
 
+/**
+ * 答えを伏せたまま終わる「じらし」の問い（2026-09-29 川邊様 acc34 #2252）。
+ *   「産後の骨盤を回復させるためには、骨盤矯正だけでなくもう一つ重要なものがあります。そのもう一つとは？」
+ * 店が答えを知っている問いを最後に置いて答えを書かない形。読み手には答えようがなく、
+ * 保証パス（最後の1本）でこのまま承認カードになり、お客様がLINEに貼って送ってきた。
+ * 読み手に本当に聞く問い（「どんな時に〜と感じますか？」）は当たらない。
+ * 最後の段落に当たった部分を返す（無ければ null）。
+ */
+export const DEAD_END_TEASER_RE =
+  /(?:とは|って何|何だと思いますか|なんだと思いますか|何でしょう(?:か)?|なんでしょう(?:か)?|分かりますか|わかりますか)[？?]$/;
+// 「〜、知っていますか？」は公開済み1500本に3本あり、案内の締めとして通っているので対象にしない
+export function findDeadEndTeaser(text: string): string | null {
+  const tail = new RegExp('(?:[\\s。！!]|' + EMOJI_SRC + ')+$');
+  const paras = String(text ?? '').trim().split(/\n\s*\n/);
+  const last = (paras[paras.length - 1] ?? '').trim().replace(tail, '');
+  // 最後の段落の最後の文だけを見る
+  const sentence = last.split(/(?<=[。！!])/).pop()?.trim() ?? '';
+  const m = sentence.match(DEAD_END_TEASER_RE);
+  return m ? sentence : null;
+}
+
 /** 「んです」系の出現回数 */
 export function countNdesu(text: string): number {
   return (text.match(NDESU_RE) ?? []).length;
