@@ -57,6 +57,7 @@ const FAQ = lazy(() => import("./pages/FAQ"));
 const CommercialTransaction = lazy(() => import("./pages/CommercialTransaction"));
 const Settings = lazy(() => import("./pages/Settings"));
 const TryGenerate = lazy(() => import("./pages/TryGenerate"));
+const MaterialForm = lazy(() => import("./pages/MaterialForm"));
 import { ThreadsAccountProvider } from "./components/ThreadsAccountSwitcher";
 import { PWAInstallBanner } from "./components/PWAInstallBanner";
 import { CelebrationProvider } from "./components/Celebration";
@@ -135,6 +136,7 @@ function Router() {
       <Route path="/liff" component={Liff} />
       <Route path="/help" component={Help} />
       <Route path="/try" component={TryGenerate} />
+      <Route path="/neta" component={MaterialForm} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/faq" component={FAQ} />

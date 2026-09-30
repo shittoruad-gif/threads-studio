@@ -855,7 +855,42 @@ async function generateAutoPost(
     try {
       const { questionEndingBlocked } = await import('../shared/freshTopic');
       noQuestionEnding = !opts.feature && questionEndingBlocked(recentPosts, endsWithQuestion);
+      // ★フォームで「言い切りで終える」を選んだ方は、毎回問いかけで締めない（2026-09-30・ネタ帳フォーム）
+      if (!opts.feature && counselingResult?.closingStyle === 'statement') noQuestionEnding = true;
     } catch { noQuestionEnding = false; }
+
+    // ★ネタ帳（2026-09-30 三上様「解決できる仕組みを考えて作って」・shared/materialLedger.ts）。
+    //   お客様が教えてくださった話・よくある質問を1件ずつ持ち、1本の投稿には使える状態のネタを1件だけ渡す。
+    //   どのネタから作ったかは投稿に記録し（materialItemId）、使ったネタは休ませる（話30日・質問14日）。
+    //   ネタ帳が無い方は今までどおり。◯✕アンケートの案づくり（opts.collect）では使わない（記録が残らないため）。
+    let ledgerItem: import('../shared/materialLedger').LedgerItem | null = null;
+    let ledgerActive = false;
+    let ledgerNote = '';
+    let ledgerAnchors: string[] = [];
+    if (!opts.collect) {
+      try {
+        const { pickLedgerItem } = await import('./materialLedger');
+        const r = await pickLedgerItem(String(project.id), [...ngWords, ...stickyWords]);
+        if (r) {
+          ledgerActive = true;
+          ledgerItem = r.item;
+          if (ledgerItem) {
+            const { buildMaterialNote } = await import('../shared/materialLedger');
+            const ft = await import('../shared/freshTopic');
+            ledgerNote = buildMaterialNote(ledgerItem);
+            ledgerAnchors = ft.topicAnchorWords(ledgerItem.content, freshProtect);
+            // 話題を変える指示の「今日の主題」は、ネタ帳の今日のネタに置き換える（主題が2つにならないように）
+            if (freshPlan) {
+              freshNote = ft.buildFreshTopicNote(freshPlan, { omitTopic: true }) + ft.buildStickyNote(stickyWords);
+              topicAnchors = [];
+            }
+            console.log(`[AutoPost] ネタ帳 account=${threadsAccountId} 今日のネタ #${ledgerItem.id}（${ledgerItem.kind}）「${ledgerItem.content.replace(/\s+/g, ' ').slice(0, 30)}」`);
+          } else {
+            console.log(`[AutoPost] ネタ帳 account=${threadsAccountId} 使えるネタなし（すべて休み中・見送り）→ お店の情報から書く`);
+          }
+        }
+      } catch (e) { console.warn(`[AutoPost] ネタ帳を読めませんでした account=${threadsAccountId}: ${(e as Error)?.message}`); }
+    }
     // N1顧客像・お客様の声は「そのまま使う」「★最優先」と指示される欄なので、
     // 使いすぎの言葉が1つでもある行と、直近の投稿ですでに使った行は渡さない。
     // ★試しに作った案では「お客様の変化を一緒に喜べる」（お客様の声）が毎回入り、重複ガードで落ちていた（2026-09-25）
@@ -943,6 +978,12 @@ async function generateAutoPost(
         v = { ...v };
         for (const k of ['realEpisodes', 'faq', 'realProofs', 'benefitsDaily']) if (Array.isArray(v[k])) v[k] = dropAvoidedList(v[k]);
       }
+      // ★ネタ帳のある方は、体験談・よくある質問を全部は渡さない。今日のネタ1件だけ（2026-09-30）
+      if (ledgerActive) {
+        v = { ...(v || {}) };
+        v.realEpisodes = ledgerItem?.kind === 'episode' ? [ledgerItem.content] : [];
+        v.faq = ledgerItem?.kind === 'faq' ? [ledgerItem.content] : [];
+      }
       return v;
     })();
     const beliefForToday = dropIfRecentlyUsed((project as any).belief, '信条');
@@ -962,7 +1003,8 @@ async function generateAutoPost(
       strength: strengthForToday,
       // ★登録された悩み・強みが複数あるときは、今日の1本で取り上げるものを日替わりで指定する。
       //   これが無いと、材料を全部渡していても毎回いちばん上の1つだけが使われる（shared/topicRotation.ts）。
-      focusProblem: pickRotatingTopic(mainProblemForToday, postTypeIndex + purposeIndex) || undefined,
+      // ★ネタ帳の今日のネタがある日は、今日の悩み・お客様像の指定を出さない（ネタと別の人物・悩みが混ざるため・2026-09-30 ローカル確認）
+      focusProblem: ledgerItem ? undefined : (pickRotatingTopic(mainProblemForToday, postTypeIndex + purposeIndex) || undefined),
       focusStrength: pickRotatingTopic(strengthForToday, postTypeIndex) || undefined,
       // ★悩み・強みが1行しか無い方でも、N1顧客像に複数行の材料があることがある
       //   （岩根様＝悩み1行・強みは文の折り返しで取り出せず・N1顧客像に7行。2026-09-18）
@@ -970,7 +1012,7 @@ async function generateAutoPost(
       //   purposeIndex だけだと 0〜3 しか取らず、7行のうち4行しか回らなかった
       //   （2026-09-18 昼に本番データで実測）。
       // ★「同じような内容ばかり」と言われた方は、使いすぎの話題の行を外したN1顧客像から選ぶ（2026-09-25）
-      focusN1: pickRotatingTopic(n1ForToday, postTypeIndex * PURPOSES.length + purposeIndex) || undefined,
+      focusN1: ledgerItem ? undefined : (pickRotatingTopic(n1ForToday, postTypeIndex * PURPOSES.length + purposeIndex) || undefined),
       // ★健康系のお店では、はじめの設定に書かれた結果表現を渡す前に落とす（2026-09-15 三上様指示）。
       //   落としたことはログに残す（誰の設定を洗ったかが分からないと、材料の足りない方に
       //   気づけない。岩根様のように登録内容そのものが薄い方は朝の報告に載せる）。
@@ -1045,6 +1087,8 @@ async function generateAutoPost(
           + declinedNote
           // ★「同じような内容ばかり」と言われた方への、話題の指定（2026-09-25）。見送りの共通点より後ろ＝より優先
           + freshNote
+          // ★ネタ帳の今日のネタ（2026-09-30）。話題を変える指示より後ろ＝より優先
+          + ledgerNote
           // ★◯✕アンケートで✕が付いた題材（2026-09-26）
           + surveyAvoidNote
           + (CONVERSATION_POST_TYPES.has(postType) && !noQuestionEnding ? CONVERSATION_ENDING_ADDENDUM : '')
@@ -1295,6 +1339,14 @@ async function generateAutoPost(
           { detail: hits.join('・'), gaveUp: lastAttempt });
         return false;
       }
+    }
+    // ★ネタ帳の今日のネタを書いていなければ作り直す（2026-09-30）。最後の作り直しでは止めない。
+    if (ledgerItem && !lastAttempt && !coversTopic(naturalMain, ledgerAnchors)) {
+      console.warn(`[AutoPost] ledgerMissing: 今日のネタ #${ledgerItem.id} を書いていない → 作り直し userId=${userId} account=${threadsAccountId}`);
+      noteReject('ledgerMissing', userId, threadsAccountId, postingTimeIndex,
+        `- 今日のネタ「${ledgerItem.content.replace(/\s+/g, ' ').slice(0, 60)}」を書いていない。このネタを主役にして書く。`,
+        { detail: `#${ledgerItem.id}` });
+      return false;
     }
     // ★問いかけの締めは3本に1本まで（2026-09-30）。最後の作り直し・保証パスでは止めない。
     if (noQuestionEnding && !lastAttempt && endsWithQuestion(naturalMain)) {
@@ -1618,6 +1670,8 @@ async function generateAutoPost(
       // 使った長さ条件を記録（A/Bテストの集計に使う。設定は後から変わるため投稿側に残す）
       postLength: effectiveLength,
       metaAiAskText,
+      // ★ネタ帳のどのネタから作ったか（使った記録・2026-09-30）
+      materialItemId: ledgerItem?.id ?? null,
     } as any);
 
     if (adminReviewRequired) {

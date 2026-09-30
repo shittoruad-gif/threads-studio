@@ -316,7 +316,7 @@ export function saidSameContent(reasons: ReadonlyArray<{ reason: string; reasonT
 }
 
 /** 生成プロンプトに足す指示。使いすぎの話題が無ければ空文字 */
-export function buildFreshTopicNote(plan: FreshTopicPlan | null): string {
+export function buildFreshTopicNote(plan: FreshTopicPlan | null, opts: { omitTopic?: boolean } = {}): string {
   const frames = plan?.frames ?? [];
   if (!plan || (plan.overused.length === 0 && frames.length === 0)) return "";
   const lines: string[] = [];
@@ -329,7 +329,9 @@ export function buildFreshTopicNote(plan: FreshTopicPlan | null): string {
     lines.push(`- 直近${plan.sampleSize}本の投稿の多くが、同じ流れになっている。オーナーから「同じような内容ばかり」と言われている。`);
   }
   for (const f of FRAMES) if (frames.includes(f.key)) lines.push(`- ${f.note}`);
-  if (plan.topic) {
+  if (opts.omitTopic) {
+    // 主題はネタ帳の「今日のネタ」で指定する（shared/materialLedger.ts）
+  } else if (plan.topic) {
     lines.push(`- ★今日の主題（必須）：「${plan.topic}」\n  ご登録の材料のうち、直近の投稿でまだ使っていないもの。この1つだけを主題にして書く。書いてある事実だけを使い、足さない。`);
   } else {
     lines.push("- 直近の投稿で使っていない材料（メニュー・よくあるご質問・季節・お店ごとの違い）から、1つだけを主題にして書く。");

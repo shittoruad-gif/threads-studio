@@ -109,6 +109,21 @@ async function main() {
     console.log(`\n■ 見送りが続いているお客様: 取得できませんでした（${String(e).slice(0, 80)}）`);
   }
 
+  // ── 2.6 ネタ帳の残り（2026-09-30・フォームで教えていただいた話を1本に1つずつ使う）
+  try {
+    const ml = (await get('admin.materialLedgers')) || [];
+    if (ml.length > 0) {
+      const low = ml.filter((m) => m.available <= 1);
+      console.log(`\n■ ネタ帳: ${ml.length}店（残り1件以下 ${low.length}店）`);
+      for (const m of ml) {
+        const next = m.nextFreeAt ? ` / 次に使えるのは${new Date(m.nextFreeAt).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })}` : '';
+        console.log(`  ${m.storeName}（user ${m.userId}） 使える${m.available}件／お休み中${m.cooling}件／見送り${m.declined}件${next}${m.available <= 1 ? ' → ★ネタ切れ間近：フォームのリンクを送るか三上様に確認' : ''}`);
+      }
+    }
+  } catch (e) {
+    console.log(`\n■ ネタ帳: 取得できませんでした（${String(e).slice(0, 80)}）`);
+  }
+
   // ── 3. 直近のご質問（自動応答が答えられているか）
   const recent = await get('admin.listQuestions', { limit: 30 });
   const rq = recent?.questions || [];

@@ -3935,6 +3935,21 @@ ${input.commentText}
     // Get all users (admin only)
     // ── お客様からのご質問（自動応答の記録・担当者返信・よくある質問への反映）──
     // 見送りが続くお客様（直近7日に3回以上）と、足す材料の案の状態（2026-09-24・朝の点検で使う）
+    // ★ネタ帳の残り（2026-09-30・server/materialLedger.ts）。朝の点検で「ネタ切れ」を出す
+    materialLedgers: adminProcedure.query(async () => {
+      const database = await db.getDb();
+      if (!database) return [];
+      const { sql } = await import('drizzle-orm');
+      const rows: any = await database.execute(sql`
+        SELECT mi.projectId, p.storeName, p.userId FROM materialItems mi JOIN projects p ON p.id = mi.projectId
+        WHERE mi.status = 'active' GROUP BY mi.projectId, p.storeName, p.userId`);
+      const { getLedgerStatus } = await import('./materialLedger');
+      const out: any[] = [];
+      for (const r of ((rows as any)[0] ?? []) as any[]) {
+        out.push({ projectId: String(r.projectId), storeName: String(r.storeName ?? ''), userId: Number(r.userId), ...(await getLedgerStatus(String(r.projectId))) });
+      }
+      return out;
+    }),
     repeatDecliners: adminProcedure
       .query(async () => {
         const { listRepeatDecliners } = await import('./declineFollowup');
@@ -4865,6 +4880,45 @@ ${input.commentText}
           });
         } catch (e) { console.error('[survey] 通知失敗:', e); }
         return { success: true };
+      }),
+  }),
+
+  // ============ ネタ帳フォーム（2026-09-30 三上様指示・server/materialLedger.ts） ============
+  //   お客様ご本人が、LINEで届いたリンク（署名つき・ログイン不要）から、
+  //   実際にあった話・よくある質問・書いてほしくない言葉・お手本・締め方を入れる。
+  //   入れたネタは1件ずつ、使った記録を残しながら1本に1件だけ使う（同じ話を繰り返さない）。
+  materialForm: router({
+    get: publicProcedure
+      .input(z.object({ t: z.string().max(600) }))
+      .query(async ({ input }) => {
+        const { verifyMaterialFormToken, getLedgerStatus } = await import('./materialLedger');
+        const projectId = verifyMaterialFormToken(input.t);
+        if (!projectId) return { ok: false as const };
+        const project: any = await db.getProjectById(projectId);
+        if (!project) return { ok: false as const };
+        const status = await getLedgerStatus(projectId);
+        let closing: string | null = null;
+        try { closing = project.counselingResult ? JSON.parse(project.counselingResult)?.closingStyle ?? null : null; } catch { closing = null; }
+        return { ok: true as const, storeName: String(project.storeName || project.title || ''), status, closing };
+      }),
+    submit: publicProcedure
+      .input(z.object({
+        t: z.string().max(600),
+        dislikes: z.array(z.enum(['same', 'claim', 'tone', 'length'])).max(4).optional(),
+        dislikeText: z.string().max(500).optional(),
+        episodes: z.array(z.string().max(300)).max(5).optional(),
+        faqs: z.array(z.object({ q: z.string().max(150), a: z.string().max(300).optional() })).max(5).optional(),
+        topics: z.array(z.string().max(150)).max(5).optional(),
+        ngWords: z.string().max(300).optional(),
+        styleSample: z.string().max(1000).optional(),
+        closing: z.enum(['question', 'statement', 'any']).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { verifyMaterialFormToken, submitMaterialForm } = await import('./materialLedger');
+        const projectId = verifyMaterialFormToken(input.t);
+        if (!projectId) throw new TRPCError({ code: 'FORBIDDEN', message: 'リンクの有効期限が切れています。担当者に新しいリンクをお送りするようお伝えください。' });
+        const { t: _t, ...rest } = input;
+        return await submitMaterialForm(projectId, rest);
       }),
   }),
 

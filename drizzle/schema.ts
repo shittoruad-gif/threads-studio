@@ -618,6 +618,8 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   hitPatternId: int("hitPatternId"),
   // アンケートの選択肢（JSON配列・shared/threadsFeatures.ts）。null ならアンケートなし
   pollOptions: text("pollOptions"),
+  // ★ネタ帳のどのネタから作った投稿か（2026-09-30・shared/materialLedger.ts）。使った記録はこの列だけで持つ
+  materialItemId: int("materialItemId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [
@@ -1138,3 +1140,25 @@ export const clientFollowups = mysqlTable("clientFollowups", {
 }, (table) => [
   index("idx_clientFollowups_user").on(table.userId, table.createdAt),
 ]);
+
+/**
+ * ネタ帳（2026-09-30 三上様指示・shared/materialLedger.ts）。
+ * お客様がフォームで教えてくださった話・よくある質問を1件ずつ持つ。
+ * 使った記録は scheduledPosts.materialItemId（ここには回数を持たない＝ずれない）。
+ */
+export const materialItems = mysqlTable("materialItems", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  projectId: varchar("projectId", { length: 50 }).notNull(),
+  // episode＝実際にあった話／faq＝よくある質問と答え／topic＝書いてほしい話題
+  kind: varchar("kind", { length: 12 }).notNull(),
+  content: text("content").notNull(),
+  // form＝フォーム／counseling＝はじめの設定から移した／manual＝運営
+  source: varchar("source", { length: 12 }).notNull().default("form"),
+  // active＝使う／retired＝使わない
+  status: varchar("status", { length: 12 }).notNull().default("active"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  index("idx_mi_project").on(table.projectId, table.status),
+]);
+export type MaterialItem = typeof materialItems.$inferSelect;
