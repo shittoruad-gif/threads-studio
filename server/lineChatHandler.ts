@@ -371,15 +371,21 @@ async function rewritePost(userId: number, postId: number, instruction: string, 
     });
     const next = String((res as any)?.choices?.[0]?.message?.content ?? "").trim().replace(/^["「]|["」]$/g, "");
     if (!next) throw new Error("empty");
-    await db.updateScheduledPost(postId, { postContent: next });
+    // ★書き直しの指示も「直した内容」として残し、次に作る投稿に活かす（直す前の文は最初のAIの文を残す）
+    await db.updateScheduledPost(postId, {
+      postContent: next,
+      ...((post as any).originalContent ? {} : { originalContent: post.postContent || null }),
+      editedByUserAt: new Date(),
+    } as any);
     const updated = await db.getScheduledPostById(postId);
     const [withName] = await withAccountNames(userId, [updated as any]);
     // ★3案のうちの1案を書き直したときは、選択肢の表記のままにする
     const rewroteChoice = Boolean((withName as any)?.choiceGroupId);
     return [
-      { type: "text", text: rewroteChoice
+      { type: "text", text: (rewroteChoice
         ? "書き直しました。この案でよろしければ「この案にする」を押してください。"
-        : "書き直しました。こちらでよろしければ「これで投稿する」を押してください。" },
+        : "書き直しました。こちらでよろしければ「これで投稿する」を押してください。")
+        + `\n${(await import("@shared/postPreference")).EDIT_LEARN_NOTE}` },
       buildPostCards([withName], { one, choice: rewroteChoice }),
     ];
   } catch {
@@ -3207,7 +3213,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
       editedByUserAt: new Date(),
     } as any);
     return [
-      { type: "text", text: "直しました。この内容でよろしければ「これで投稿する」を押してください。" },
+      { type: "text", text: `直しました。この内容でよろしければ「これで投稿する」を押してください。\n${(await import("@shared/postPreference")).EDIT_LEARN_NOTE}` },
       { type: "text", text: next },
       textWithQuick("さらに直す場合は「一部修正」を押してください。", [
         { label: "これで投稿する", data: `a=ok&i=${postId}${one ? "&o=1" : ""}` },

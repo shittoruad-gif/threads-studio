@@ -1,3 +1,4 @@
+import { EDIT_LEARN_NOTE } from '@shared/postPreference';
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -108,7 +109,7 @@ export default function PostHistory() {
   });
   const editPost = trpc.scheduledPost.editContent.useMutation({
     onSuccess: () => {
-      toast.success('内容を更新しました');
+      toast.success('内容を更新しました', { description: EDIT_LEARN_NOTE });
       setEditTarget(null);
       refetch();
     },

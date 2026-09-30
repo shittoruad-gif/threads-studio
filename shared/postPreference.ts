@@ -83,3 +83,13 @@ export function buildPreferenceNote(edits: PostEdit[]): string {
   }
   return note;
 }
+
+/**
+ * お客様が投稿を直したとき、「直した内容をもとに、次から作り直している」ことを伝える一文（2026-09-30 三上様指示
+ * 「修正したものをもとに、また新しく作り直す日以降作り直していますというのが相手に伝わるように1文を入れて」）。
+ *   EDIT_LEARN_NOTE … 直した直後の返事に添える
+ *   EDITED_RECENTLY_NOTE … 直してから7日以内に作った投稿のお知らせの先頭に添える（生成は直近の手直しを必ず材料にしている）
+ */
+export const EDIT_LEARN_NOTE = "直していただいた内容は、次に作る投稿から反映して、その書き方に寄せて作り直していきます。";
+export const EDITED_RECENTLY_NOTE = "先日直していただいた内容をもとに、その書き方に寄せて作り直しています。";
+export const EDIT_NOTE_DAYS = 7;

@@ -373,8 +373,20 @@ export async function sendApprovalPush(
   const tail = normal.length > 1
     ? "内容をご確認ください。「見送る」を押さない限り、予定時刻にそのまま公開されます。直したいときは「書き直す」、出したくないときだけ「見送る」を押してください。"
     : "内容をご確認ください。「見送る」を押さない限り、予定時刻にそのまま公開されます。直したいときは「書き直す」を押してください。";
+  // ★直してから7日以内なら「直した内容をもとに作り直している」ことを先に伝える（2026-09-30 三上様指示）
+  let editNote = "";
+  try {
+    const anyId = normal.find((p) => p.threadsAccountId)?.threadsAccountId;
+    if (anyId) {
+      const db = await import("./db");
+      const acc: any = await db.getThreadsAccountById(Number(anyId));
+      const { EDITED_RECENTLY_NOTE, EDIT_NOTE_DAYS } = await import("@shared/postPreference");
+      const last = acc?.userId ? await db.getLatestUserEditAt(Number(acc.userId)) : null;
+      if (last && Date.now() - new Date(last).getTime() <= EDIT_NOTE_DAYS * 86400_000) editNote = `${EDITED_RECENTLY_NOTE}\n`;
+    }
+  } catch { editNote = ""; }
   const sentNormal = await pushMessage(lineUserId, [
-    { type: "text", text: `${label}の投稿が${normal.length}件できました。\n${tail}` },
+    { type: "text", text: `${label}の投稿が${normal.length}件できました。\n${editNote}${tail}` },
     buildPostCards(normal as any, { bulk: true }),
   ]);
   return ok || sentNormal;

@@ -4019,6 +4019,15 @@ export async function getUserEditedPosts(userId: number, limit = 5): Promise<Arr
   }));
 }
 
+/** お客様がいちばん最後に投稿を直した時刻（無ければ null）。お知らせに「直した内容をもとに作っています」を添えるかの判定 */
+export async function getLatestUserEditAt(userId: number): Promise<Date | null> {
+  const database = await getDb();
+  if (!database) return null;
+  const rows: any = await database.execute(sql`SELECT MAX(editedByUserAt) AS m FROM scheduledPosts WHERE userId = ${userId} AND editedByUserAt IS NOT NULL`);
+  const m = ((rows as any)[0] ?? [])[0]?.m;
+  return m ? new Date(m) : null;
+}
+
 /** そのアカウントで実際に公開された自動投稿の数（最初の3本は運営が先に確認する、の判定に使う） */
 export async function countAccountPublishedAutoPosts(accountId: number): Promise<number> {
   const database = await getDb();
