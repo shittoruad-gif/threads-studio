@@ -196,6 +196,12 @@ export default function AICounseling() {
 
   const utils = trpc.useUtils();
 
+  // このお店の情報を使っているアカウント（2つ以上なら、書き直す前に注意を出す）
+  const { data: myAccounts } = trpc.threads.list.useQuery(undefined, { enabled: !isNew });
+  const sharedAccounts = ((myAccounts ?? []) as any[])
+    .filter((a) => a.isActive !== false && a.defaultProjectId === projectId)
+    .map((a) => String(a.threadsUsername));
+
   const { data: project } = trpc.project.get.useQuery(
     { id: projectId },
     { enabled: !!projectId && !isNew },
@@ -490,6 +496,17 @@ export default function AICounseling() {
 
   return (
     <div className="container max-w-2xl py-6 px-4 space-y-4">
+      {/* ★このお店の情報を2つ以上のアカウントで使っているときは、書き直す前に知らせる（2026-09-30 三上様指示）。
+          片方のために直すと、もう片方の投稿の内容も変わる（9/17 佐々木様で2つのアカウントが同じ内容になった） */}
+      {!isNew && sharedAccounts.length >= 2 && (
+        <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-bold text-amber-900">このお店の情報は {sharedAccounts.map((u) => `@${u}`).join('・')} で使っています</p>
+          <p className="mt-1 text-sm text-amber-800 leading-relaxed break-words">
+            ここで書き直すと、どのアカウントの投稿も新しい内容に変わります。1つのアカウントだけ別の内容にしたいときは、
+            「新しい店舗を追加する」で別に登録し、Threads連携の画面でそのアカウントに選んでください。
+          </p>
+        </div>
+      )}
       {/* 既存ユーザーが「新店舗追加」画面に迷い込んだときの案内（入力が消えたと誤解させない） */}
       {strayedIntoCreate && (
         <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4">

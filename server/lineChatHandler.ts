@@ -1262,8 +1262,9 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
 }
 
 /** はじめの設定を開始（まず目的を選んでもらう） */
-async function startCounseling(lineUserId: string, accountId?: number | null): Promise<unknown[]> {
-  const a = accountId ? `&a=${accountId}` : "";
+async function startCounseling(lineUserId: string, accountId?: number | null, opts: { forceNew?: boolean } = {}): Promise<unknown[]> {
+  // forceNew … 「新しく登録する」「このアカウントだけ変える」から来たとき。共有中のお店の情報を上書きせず、新しく作る
+  const a = (accountId ? `&a=${accountId}` : "") + (opts.forceNew ? "&new=1" : "");
   // ★はじめての方は実際には「まず5問」で終わる（2026-09-10 デプロイの quick 経路）のに、
   //   この入口だけ「10〜15分・全20問」と告げていた。設定に入る前に諦める方が出るので、
   //   これから通る道と同じ案内にする。前回の登録内容がある方（やり直し）は従来どおり。
@@ -1470,7 +1471,8 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   if (q.c === "newpj" && q.a) {
     const own: any = await db.getThreadsAccountById(Number(q.a));
     if (!own || own.userId !== user.id) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
-    return startCounseling(lineUserId, Number(q.a));
+    // 「新しく登録する」は必ず新しく作る（すでに他のアカウントと共有している情報を上書きしない）
+    return startCounseling(lineUserId, Number(q.a), { forceNew: true });
   }
   // はじめの設定の最後で「自動投稿を始めますか？」にお答えいただいたとき。
   if (q.c === "setupauto") {
@@ -1596,9 +1598,29 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     //   どちらも無ければ新規に作る（他のアカウントの情報を上書きしない）。
     const accountId = q.a ? Number(q.a) : null;
     let projectId: string | undefined;
-    if (accountId) {
+    if (accountId && !q.new) {
       const acct = await db.getThreadsAccountById(accountId);
       if (acct && acct.userId === user.id) projectId = (acct as any).defaultProjectId ?? undefined;
+    }
+    // ★このお店の情報を別のアカウントでも使っていたら、書き直す前に必ずお尋ねする（2026-09-30 三上様指示）。
+    //   9/17 佐々木様：2つ目のアカウントに既存の情報を「使う」を選んだあと、そのアカウント用に登録し直したら、
+    //   1つ目のアカウントのコンサルの内容まで珠由良族（ゲーム）の内容に上書きされ、2つとも同じ投稿になっていた。
+    if (accountId && projectId && !q.sh) {
+      const others = (await db.getThreadsAccountsByUserId(user.id))
+        .filter((x: any) => x.isActive && x.id !== accountId && (x as any).defaultProjectId === projectId);
+      if (others.length > 0) {
+        const { sharedProjectQuestion } = await import("@shared/sharedProject");
+        const me: any = await db.getThreadsAccountById(accountId);
+        const base = `c=start&mode=${q.mode}&a=${accountId}${q.fresh ? "&fresh=1" : ""}`;
+        return [textWithQuick(
+          sharedProjectQuestion(String(me?.threadsUsername ?? ""), others.map((x: any) => String(x.threadsUsername))),
+          [
+            { label: "このアカウントだけ変える", data: `${base}&new=1` },
+            { label: "両方とも変える", data: `${base}&sh=1` },
+            { label: "やめる", data: "m=cancel" },
+          ],
+        )];
+      }
     }
     if (!projectId) {
       const projects = await db.getProjectsByUserId(user.id);
