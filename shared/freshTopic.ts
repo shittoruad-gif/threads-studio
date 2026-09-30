@@ -132,6 +132,8 @@ export function planFreshTopic(params: {
   protect: readonly (string | null | undefined)[];
   index?: number;
   maxOverused?: number;
+  /** 主題にしない言葉（NGワード・見送られた主役の言葉）。含む材料は主題の候補から外す（2026-09-30） */
+  avoid?: readonly string[];
 }): FreshTopicPlan {
   const docs = params.recentPosts.map(norm).filter((d) => d.length >= 10).slice(0, 12);
   const empty: FreshTopicPlan = { overused: [], frames: [], topic: null, sampleSize: docs.length };
@@ -179,6 +181,8 @@ export function planFreshTopic(params: {
       // 文の途中で改行されただけの行（「お茶をされている方に、」）は主題にできない
       if (looksLikeFragment(s.replace(/[。．.]$/, ""))) continue;
       if (items.some((x) => norm(x) === norm(s))) continue;
+      // ★NGワード・見送られた主役の言葉を含む材料は主題にしない（9/30 香取様：NGの「11年」の行が主題に選ばれていた）
+      if ((params.avoid ?? []).some((w) => w && norm(s).includes(norm(w)))) continue;
       items.push(s);
     }
   }
@@ -195,9 +199,13 @@ export function planFreshTopic(params: {
     return { s, score: hitOverused * 2 + hitFrame + used + inLast3, words: words.length };
   }).filter((x) => x.words > 0);
   if (scored.length === 0) return { ...empty, overused, frames };
-  const best = Math.min(...scored.map((x) => x.score));
   // いちばん使われていない材料の中から、枠ごとに順に選ぶ（同じ日の3案が同じ主題にならないように）
-  const pool = scored.filter((x) => x.score <= best + 0.34);
+  // ★3字以上の言葉が無い切れ端（「購入して頂いている。」）は、ほかに候補があれば主題にしない（9/30 岩根様）
+  //   使いすぎの言葉を含む材料（score 2以上）しか残らないなら、切れ端でも今までどおり候補に残す
+  const solid = scored.filter((x) => x.score < 2 && topicWordsOf(x.s).some((w) => w.length >= 3 && !isProtected(w)));
+  const base = solid.length > 0 ? solid : scored;
+  const bestSolid = Math.min(...base.map((x) => x.score));
+  const pool = base.filter((x) => x.score <= bestSolid + 0.34);
   const i = Math.abs(Math.trunc(params.index ?? 0)) % pool.length;
   const topic = pool[i].score < 2 ? pool[i].s : null; // 使いすぎの言葉を含む材料しか無ければ指定しない
   return { overused, frames, topic, sampleSize: docs.length };
@@ -375,7 +383,9 @@ export function stickyDeclinedWords(params: {
   for (const d of declined) for (const w of topicWordsOf(d)) if (!isProtected(w)) cand.add(w);
   const scored = Array.from(cand)
     .map((w) => ({ w, dec: declined.filter((d) => d.includes(w)).length, rec: docs.filter((d) => d.includes(w)).length }))
-    .filter((x) => x.dec >= 2 && x.rec >= minDocs)
+    // ★9/30 昼：「直近の投稿の3割以上」だけでは、生成が一度散ると外れてしまい（プレステージ様の朝の生成で「先輩」が外れ、
+    //   保証パスの #2299 と代わりの #2330 に「先輩」が戻って2本とも見送り）、見送り3本以上に出た言葉は直近の数に関わらず止める
+    .filter((x) => x.dec >= 3 || (x.dec >= 2 && x.rec >= Math.min(minDocs, 2)))
     .sort((a, b) => b.dec - a.dec || b.rec - a.rec || a.w.length - b.w.length);
   const out: string[] = [];
   for (const x of scored) {

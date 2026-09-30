@@ -814,6 +814,9 @@ async function generateAutoPost(
     //   直近7日に3回以上見送った方は、「同じ」の理由をお聞きできていなくても話題を回す（理由の返事は7件だけ）。
     //   その方には、見送った投稿の主役の言葉を1語でも使わせない（今までは2語以上で作り直し＝主役の1語が残っていた）。
     let stickyWords: string[] = [];
+    // 主題を選ぶときに避ける言葉は、下書きで止める言葉（3語）より広く取る（6語）。
+    //   下書きで6語も止めると書ける範囲が狭くなりすぎる（プレステージ様：先輩・不安・技術・現場・チーム・未経験）。
+    let stickyAvoid: string[] = [];
     let topicAnchors: string[] = [];
     const freshProtect = [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title];
     try {
@@ -822,6 +825,7 @@ async function generateAutoPost(
       const repeatDecliner = declined7.length >= 3;
       if (ft.saidSameContent(skipReasons) || repeatDecliner) {
         stickyWords = ft.stickyDeclinedWords({ declined: declined7, recentPosts, protect: freshProtect });
+        stickyAvoid = ft.stickyDeclinedWords({ declined: declined7, recentPosts, protect: freshProtect, max: 6 });
         if (stickyWords.length > 0) console.log(`[AutoPost] 見送られた主役の言葉を今日は使わない account=${threadsAccountId} ${stickyWords.join('・')}`);
       }
       if (ft.saidSameContent(skipReasons) || repeatDecliner) {
@@ -834,6 +838,7 @@ async function generateAutoPost(
           // 毎回出てよい言葉（店名・地名・業種・対象のお客様）は数えない
           protect: [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title],
           index: postTypeIndex * PURPOSES.length + purposeIndex,
+          avoid: [...ngWords, ...stickyAvoid],
         });
         if (plan.overused.length > 0 || (plan.frames?.length ?? 0) > 0) {
           freshPlan = plan;
@@ -1278,14 +1283,16 @@ async function generateAutoPost(
         return false;
       }
     }
-    // ★見送られた投稿の主役の言葉が1語でも残っていたら作り直す（2026-09-30）。最後の作り直しでは止めない（枠を捨てない）。
-    if (stickyWords.length > 0 && !lastAttempt) {
+    // ★見送られた投稿の主役の言葉が1語でも残っていたら作り直す（2026-09-30）。
+    //   最後の作り直し・保証パスでも止める（9/30 プレステージ様：保証パスの #2299 に「先輩」が残り、承認カードで届いて見送られた。
+    //   出しても見送られるだけなので、翌朝の補填に回す方がよい）。
+    if (stickyWords.length > 0) {
       const hits = stickyHits(naturalMain, stickyWords);
       if (hits.length > 0) {
         console.warn(`[AutoPost] stickyDeclined:「${hits.join('・')}」は見送られた投稿の主役 → 作り直し userId=${userId} account=${threadsAccountId}`);
         noteReject('stickyDeclined', userId, threadsAccountId, postingTimeIndex,
           `- 「${hits.join('」「')}」は、オーナーが見送った投稿の中心になっていた言葉。1語も使わず、別の材料を主役にして書く。`,
-          { detail: hits.join('・') });
+          { detail: hits.join('・'), gaveUp: lastAttempt });
         return false;
       }
     }
