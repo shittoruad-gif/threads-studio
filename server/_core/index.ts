@@ -539,6 +539,10 @@ async function startServer() {
             if (p.priceMonthly > 0 && p.priceMonthly === planAmount) { matchedPlanId = pid; break; }
           }
         }
+        // ★三上様への確認通知は、プロ・ライト（通常・モニター・セミナー価格）の額の決済だけ。
+        //   それ以外の額は他事業の決済なので送らない（2026-09-30 三上様指示。
+        //   梅原様16,500円・香取様1円の「二重契約の可能性」が届いていた）。
+        const notifyWorthy = !!matchedPlanId && /^(pro|light)(_|$)/.test(matchedPlanId);
 
         const db = await import('../db');
 
@@ -563,7 +567,7 @@ async function startServer() {
           console.warn('[Univapay Webhook] メール特定不可。手動確認が必要（生ログ参照）');
           // 200で返す（Univapayのリトライ嵐回避）。
           // ★共用ストアのため、Threads Studioのプラン金額に一致する決済のみ通知。
-          if (matchedPlanId) {
+          if (notifyWorthy) {
             try {
               const { notifyOwner } = await import('./notification');
               await notifyOwner({
@@ -597,7 +601,7 @@ async function startServer() {
           console.warn(`[Univapay Webhook] 未登録メール: ${email}（決済したがアプリ未登録の可能性）`);
           // ★UnivaPayストアは他事業（LP制作・Keiro等）と共用のため、Threads Studioの
           //   プラン金額に一致しない決済は他事業のもの＝通知しない（ノイズ防止）。
-          if (matchedPlanId) {
+          if (notifyWorthy) {
             try {
               const { notifyOwner } = await import('./notification');
               await notifyOwner({
@@ -740,8 +744,8 @@ async function startServer() {
           if (existing?.univapaySubscriptionId && univapaySubId &&
               existing.univapaySubscriptionId !== univapaySubId &&
               existing.status === 'active') {
-            console.warn(`[Univapay Webhook] 別契約の課金を検知（二重契約の可能性）: user=${user.id} event.sub=${univapaySubId} app.sub=${existing.univapaySubscriptionId} amount=${amount}`);
-            try {
+            console.warn(`[Univapay Webhook] 別契約の課金を検知（二重契約の可能性）: user=${user.id} event.sub=${univapaySubId} app.sub=${existing.univapaySubscriptionId} amount=${amount}${notifyWorthy ? '' : '（プロ・ライトの額ではないため通知しない）'}`);
+            if (notifyWorthy) try {
               const { notifyOwner } = await import('./notification');
               await notifyOwner({
                 title: '⚠️ Univapay: 同一メールで別サブスクの課金（二重契約の可能性）',
