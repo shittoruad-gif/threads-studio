@@ -3604,13 +3604,15 @@ export async function getRecentAwaitingApprovalPosts(
 export async function getAnglePerformanceStats(
   userId: number,
   projectId?: string,
-): Promise<{ perAngle: Record<string, { avgImpressions: number; count: number }>; overallAvg: number }> {
+): Promise<{ perAngle: Record<string, { avgImpressions: number; count: number; avgReactions: number }>; overallAvg: number; overallAvgReactions: number }> {
   const db = await getDb();
-  if (!db) return { perAngle: {}, overallAvg: 0 };
+  if (!db) return { perAngle: {}, overallAvg: 0, overallAvgReactions: 0 };
 
   const rows = await db.select({
     angle: scheduledPosts.angle,
     impressions: postAnalytics.impressions,
+    likes: postAnalytics.likes,
+    reposts: postAnalytics.reposts,
   })
     .from(scheduledPosts)
     .innerJoin(postAnalytics, and(
@@ -3625,24 +3627,34 @@ export async function getAnglePerformanceStats(
       sql`${scheduledPosts.postedAt} < DATE_SUB(NOW(), INTERVAL 24 HOUR)`,
     ));
 
-  const sums: Record<string, { total: number; count: number }> = {};
+  // ★反応（いいね＋再投稿）も集める（2026-10-02 三上様指示・shared/reactionBoost.ts）。
+  //   返信数は自分のリンクのコメントも数えてしまうので入れない。
+  const sums: Record<string, { total: number; count: number; reactions: number }> = {};
   let grandTotal = 0;
   let grandCount = 0;
+  let grandReactions = 0;
   for (const r of rows) {
     if (!r.angle) continue;
     const imp = Number(r.impressions) || 0;
-    if (!sums[r.angle]) sums[r.angle] = { total: 0, count: 0 };
+    const re = (Number(r.likes) || 0) + (Number(r.reposts) || 0);
+    if (!sums[r.angle]) sums[r.angle] = { total: 0, count: 0, reactions: 0 };
     sums[r.angle].total += imp;
     sums[r.angle].count += 1;
+    sums[r.angle].reactions += re;
     grandTotal += imp;
     grandCount += 1;
+    grandReactions += re;
   }
 
-  const perAngle: Record<string, { avgImpressions: number; count: number }> = {};
+  const perAngle: Record<string, { avgImpressions: number; count: number; avgReactions: number }> = {};
   for (const [angle, v] of Object.entries(sums)) {
-    perAngle[angle] = { avgImpressions: Math.round(v.total / v.count), count: v.count };
+    perAngle[angle] = { avgImpressions: Math.round(v.total / v.count), count: v.count, avgReactions: v.reactions / v.count };
   }
-  return { perAngle, overallAvg: grandCount > 0 ? Math.round(grandTotal / grandCount) : 0 };
+  return {
+    perAngle,
+    overallAvg: grandCount > 0 ? Math.round(grandTotal / grandCount) : 0,
+    overallAvgReactions: grandCount > 0 ? grandReactions / grandCount : 0,
+  };
 }
 
 /** ◯（good）/✕（bad）が付いた投稿本文のサンプルを新しい順に返す（プロンプトの好み学習用）。
@@ -4993,4 +5005,43 @@ export async function markForDate(threadsAccountId: number, afterId: number, for
     UPDATE scheduledPosts SET forDate = ${forDate}
     WHERE threadsAccountId = ${threadsAccountId} AND id > ${afterId} AND source = 'auto' AND forDate IS NULL`);
   return Number((r as any)?.[0]?.affectedRows ?? 0);
+}
+
+
+/**
+ * 全アカウントの実測：切り口ごとの反応（いいね＋再投稿）の比（2026-10-02・shared/reactionBoost.ts）。
+ * 直近45日・公開から24時間以上たった自動投稿。6時間だけ覚えておく（朝の生成で何十回も呼ばれるため）。
+ */
+let pooledReactionsCache: { at: number; value: import("../shared/reactionBoost").PooledReactions } | null = null;
+export async function getPooledAngleReactions(): Promise<import("../shared/reactionBoost").PooledReactions> {
+  if (pooledReactionsCache && Date.now() - pooledReactionsCache.at < 6 * 3600_000) return pooledReactionsCache.value;
+  const database = await getDb();
+  if (!database) return {};
+  const res: any = await database.execute(sql`
+    SELECT sp.threadsAccountId AS accountId, sp.angle AS angle, (pa.likes + pa.reposts) AS reactions
+    FROM scheduledPosts sp
+    JOIN postAnalytics pa ON pa.threadsPostId = sp.publishedThreadsPostId AND pa.userId = sp.userId
+    WHERE sp.angle IS NOT NULL AND sp.threadsAccountId IS NOT NULL
+      AND sp.postedAt >= DATE_SUB(NOW(), INTERVAL 45 DAY)
+      AND sp.postedAt < DATE_SUB(NOW(), INTERVAL 24 HOUR)`);
+  const rows: any[] = Array.isArray(res?.[0]) ? res[0] : (res ?? []);
+  const { computePooledReactions } = await import("../shared/reactionBoost");
+  const value = computePooledReactions(rows.map((r) => ({ accountId: Number(r.accountId), angle: r.angle ? String(r.angle) : null, reactions: Number(r.reactions) || 0 })));
+  pooledReactionsCache = { at: Date.now(), value };
+  return value;
+}
+
+/** アカウントの連携日数と、直近30日の投稿数・反応（いいね＋再投稿）の合計（反応が取れていないかの判定用） */
+export async function getAccountReactionStatus(threadsAccountId: number): Promise<import("../shared/reactionBoost").ReactionStatus | null> {
+  const database = await getDb();
+  if (!database) return null;
+  const res: any = await database.execute(sql`
+    SELECT DATEDIFF(NOW(), ta.createdAt) AS linkedDays,
+      (SELECT COUNT(*) FROM postAnalytics pa WHERE pa.threadsAccountId = ta.id AND pa.postedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS posts,
+      (SELECT COALESCE(SUM(pa.likes + pa.reposts), 0) FROM postAnalytics pa WHERE pa.threadsAccountId = ta.id AND pa.postedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS reactions
+    FROM threadsAccounts ta WHERE ta.id = ${threadsAccountId} LIMIT 1`);
+  const rows: any[] = Array.isArray(res?.[0]) ? res[0] : (res ?? []);
+  const r = rows[0];
+  if (!r) return null;
+  return { linkedDays: Number(r.linkedDays) || 0, posts: Number(r.posts) || 0, reactions: Number(r.reactions) || 0 };
 }

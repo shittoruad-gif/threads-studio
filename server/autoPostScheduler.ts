@@ -550,6 +550,7 @@ async function generateAutoPost(
   // ★切り口の多様化：◯✕フィードバックで重み付けした切り口をランダムに1つ選ぶ。
   //   ◯が付いた切り口は出やすく、✕が付いた切り口は出にくくなる（完全にゼロにはしない）。
   let angle: ReturnType<typeof pickAngle> | null = null;
+  let lowReaction = false;
   let preferenceNote = '';
   let likedSamples: string[] = [];
   let dislikedSamples: string[] = [];
@@ -574,7 +575,18 @@ async function generateAutoPost(
     const recentAngles = await db.getRecentAngles(threadsAccountId, 12).catch(() => [] as string[]);
     // ★実績学習：実際に見られた回数（インプレッション）でも重みを補正する。
     //   クライアントが◯✕を押さなくても、結果そのものから伸びる型が増えていく。
-    const perf = await db.getAnglePerformanceStats(userId, project.id);
+    const perf: any = await db.getAnglePerformanceStats(userId, project.id);
+    // ★1か月動かして反応が取れていないアカウントは、他店で反応が取れている切り口に寄せる（2026-10-02 三上様指示）
+    try {
+      const { isLowReaction } = await import('../shared/reactionBoost');
+      const status = await db.getAccountReactionStatus(threadsAccountId);
+      if (isLowReaction(status)) {
+        lowReaction = true;
+        perf.lowReaction = true;
+        perf.pooled = await db.getPooledAngleReactions();
+        console.log(`[AutoPost] 反応が取れていないため改善の回 account=${threadsAccountId} 連携${status?.linkedDays}日 30日で${status?.posts}本・反応${status?.reactions}`);
+      }
+    } catch (e) { console.warn(`[AutoPost] 反応の判定をとばしました account=${threadsAccountId}: ${(e as Error)?.message}`); }
     // ★健康系のお店には、ビフォーアフター・お客様の声を書かせない。
     //   2026-09-08 @haisaiseikotsuin（整骨院・連携2日目）の公開3件がThreads側で削除された。
     //   消された投稿も承認待ちの投稿も change_story / customer_voice で作られていた。
@@ -649,6 +661,15 @@ async function generateAutoPost(
   // 'alternate' のときは、日と枠の両方で短め/長めを交互にする（A/Bテスト）。
   const effectiveLength = resolveWithAlternation(postLength, postingTimeIndex);
   const lengthNote = `\n\n【今回の長さ（厳守）】\n- ${POST_LENGTHS[effectiveLength].guide}`;
+  // ★反応が取れていないアカウントの回（短め・来てもらうための言葉なし・地域名・本人の目線。shared/reactionBoost.ts）
+  const lowReactionText = lowReaction
+    ? await (async () => {
+        const { lowReactionNote, isOneLinerTurn } = await import('../shared/reactionBoost');
+        const oneLiner = isOneLinerTurn(angle?.id ?? null, postingTimeIndex, fixedScheduledAt ?? new Date());
+        if (oneLiner) console.log(`[AutoPost] 反応の改善：ひとことの回 account=${threadsAccountId} → ${angle?.id}`);
+        return lowReactionNote({ angleId: angle?.id ?? null, area: (project as any).area ?? null, shortLength: effectiveLength === 'short', oneLiner });
+      })()
+    : '';
 
   try {
     // Auto-posts also reuse the user's registered URL set so LINE/予約 links
@@ -1092,6 +1113,7 @@ async function generateAutoPost(
           + seasonContextJST()
           + recentNote
           + lengthNote
+          + lowReactionText
           + traitsNote
           + (retryHint ? `\n\n【前回の下書きが不合格だった理由（厳守・同じ形にしない）】\n${retryHint}\n- 上の型の締めは書かない。締めは${allowEmoji ? '' : '絵文字なしで、'}この投稿の内容に固有の1文にする。` : '')
           + preferenceNote

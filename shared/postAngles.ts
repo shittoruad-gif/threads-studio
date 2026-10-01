@@ -1,3 +1,4 @@
+import { reactionMultiplier, type PooledReactions } from "./reactionBoost";
 /**
  * 自動投稿の「切り口」カタログ＋◯✕フィードバックによる重み付け選択。
  *
@@ -209,6 +210,14 @@ export const STUDY_EXPERIMENT_ANGLES: PostAngle[] = [
       + '★健康系のお店では、他の施術・方法（揉みほぐし・湿布・マッサージ・薬など）を否定・批判しない。「体が変わる」「繰り返す」「逆効果」「意味がない」など、結果や効果を言い切らない。',
   },
   {
+    id: 'invite_reply',
+    label: '返信で教えて（試験）',
+    hint: '読んだ人が返信で気軽に答えられる「参加のお願い」の投稿にする（2026-10-02 三上様共有の伸びているアカウントの型）。'
+      + '1行目で、地元の人なら誰でも一言で答えられる小さなお題を1つ出す（例の方向性：この辺りで好きな散歩道・朝のルーティン）。'
+      + '最後の行は「返信で教えてください。」のように、何を返信すればよいかが分かる言い切りで締める（「？」で終えない）。'
+      + 'お題は店の専門に近い日常にとどめ、売り込み・予約の案内はしない。答えにくいお題（体の悩み・病名・個人情報）は出さない。',
+  },
+  {
     id: 'dialogue',
     label: '会話でオチ（試験）',
     hint: '鍵かっこの短いやりとり（2〜4往復）で書く。お客様からよく言われる一言→店主の返し→最後にちょっと笑える、または腑に落ちるオチ。'
@@ -246,10 +255,16 @@ export function getAngle(id: string | null | undefined): PostAngle | undefined {
  * 好みは変わるので、たまに出して再確認できる余地を残す）
  */
 export interface AnglePerformance {
-  /** 切り口ごとの実測平均インプレッションと母数 */
-  perAngle: Record<string, { avgImpressions: number; count: number }>;
+  /** 切り口ごとの実測平均インプレッションと母数（avgReactions＝いいね＋再投稿の平均・2026-10-02〜） */
+  perAngle: Record<string, { avgImpressions: number; count: number; avgReactions?: number }>;
   /** 全切り口をならした平均インプレッション（比較の基準） */
   overallAvg: number;
+  /** 全切り口をならした平均反応（いいね＋再投稿） */
+  overallAvgReactions?: number;
+  /** 全アカウントの実測（反応が取れていないアカウントだけ使う。shared/reactionBoost.ts） */
+  pooled?: PooledReactions;
+  /** 1か月動かして反応が取れていないアカウントか */
+  lowReaction?: boolean;
 }
 
 /**
@@ -268,6 +283,17 @@ function performanceMultiplier(angleId: string, perf?: AnglePerformance): number
   const confidence = Math.min(1, (p.count - 2) / 6); // 3件=0.17 … 8件=1.0
   const raw = Math.min(1.8, Math.max(0.5, ratio));
   return 1 + (raw - 1) * confidence;
+}
+
+/**
+ * 表示回数の倍率 × 反応（いいね＋再投稿）の倍率（2026-10-02 三上様指示・shared/reactionBoost.ts）。
+ * 反応が取れていないアカウントは、全アカウントの実測を先に効かせる。
+ */
+function performanceAndReactionMultiplier(angleId: string, perf?: AnglePerformance): number {
+  const views = performanceMultiplier(angleId, perf);
+  if (!perf) return views;
+  const r = reactionMultiplier(angleId, perf.perAngle[angleId], perf.overallAvgReactions, perf.pooled, !!perf.lowReaction);
+  return views * r;
 }
 
 /**
@@ -386,7 +412,7 @@ export function pickAngle(
     const s = stats[a.id] ?? { good: 0, bad: 0 };
     // 好み（◯✕）× 結果（実測インプレッション）× 偏り防止 の掛け合わせ
     const preference = Math.max(0.1, 1 + 0.6 * s.good - 0.5 * s.bad);
-    return Math.max(0.05, preference * performanceMultiplier(a.id, perf) * exploration(a.id));
+    return Math.max(0.05, preference * performanceAndReactionMultiplier(a.id, perf) * exploration(a.id));
   });
   const prefSum = pool.reduce((sum, a, i) => sum + (preferred.has(a.id) ? base[i] : 0), 0);
   const otherSum = pool.reduce((sum, a, i) => sum + (preferred.has(a.id) ? 0 : base[i]), 0);
