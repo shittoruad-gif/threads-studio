@@ -3317,7 +3317,17 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   // ★「Zoom希望」とお送りくださいとご案内しているのに、受け取り口が無く
   //   「ご用件を下から選んでください」で終わっていた（2026-09-10 夜間整備で検出）。
   //   担当者へお伝えする経路に乗せ、朝の報告で日程調整として拾えるようにする。
-  if (/(zoom|ズーム|ずーむ)/i.test(t) && Array.from(t).length <= 40) {
+  // ★Zoomの日程が決まった後の「URLを教えて」などは、長さに関わらず担当者へ（2026-10-01 川邊様 #51）。
+  //   送ったURLが記録にあれば、その場でお返しする。
+  if (/(zoom|ズーム|ずーむ)/i.test(t)) {
+    const { isZoomThread, latestZoomUrl, zoomFollowUpAckText } = await import("../shared/zoomScheduling");
+    const recent = await db.getRecentSupportQuestionsByUser(user.id, 240, 10).catch(() => []);
+    if ((recent || []).some((r: any) => isZoomThread(r))) {
+      await forwardToStaff(user.id, lineUserId, `【Zoom日程】Zoomについてのご連絡です。（お客様の文面：${t}）`);
+      return [textWithQuick(zoomFollowUpAckText(latestZoomUrl(recent || []), t), MENU_HINT)];
+    }
+  }
+  if (/(zoom|ズーム|ずーむ)/i.test(t) && Array.from(t).length <= 120) {
     await forwardToStaff(user.id, lineUserId, `【Zoom希望】画面を一緒に見ながらの説明をご希望です。（お客様の文面：${t}）`);
     return [textWithQuick(
       "承りました。Zoomで画面を一緒に見ながら進めます（プロプラン以上・期間限定・初回30分）。\n" +

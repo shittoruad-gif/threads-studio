@@ -75,3 +75,45 @@ describe("Zoomのあとの日程のお返事は担当者へ", () => {
     expect(answerQuestion).toHaveBeenCalled();
   });
 });
+
+/**
+ * 2026-10-01 川邊様 #51：日程が決まり担当者がURLを送った後、当日に
+ * 「お世話になっております。本日のzoomのURL教えていただきたいです。よろしくお願い致します」（40字超）
+ * → 「Zoom希望」の受け取り口に入らず自動応答へ。「この画面からはお伝えできません。『Zoom希望』と送って」と返していた。
+ */
+describe("Zoomの約束の後の「URLを教えて」", () => {
+  const ASK = "お世話になっております。\n本日のzoomのURL教えていただきたいです。\nよろしくお願い致します";
+  const URL = "https://us06web.zoom.us/j/87107752102?pwd=abc.1";
+  beforeEach(() => { createSupportQuestion.mockClear(); answerQuestion.mockClear(); state.recent = []; });
+
+  it("送ったURLが記録にあれば、その場でお返しし、担当者にも渡す", async () => {
+    state.recent = [
+      { question: "10/1の12:30にお願いします！", staffReply: `日時：10月1日（木）12:30〜13:00\n${URL}\n\nパスコード：776163` },
+      { question: "【Zoom希望】画面を一緒に見ながらの説明をご希望です。", staffReply: "Zoomでのご説明のご希望、ありがとうございます。" },
+    ];
+    const res = await handler.handleFreeText("Uzoom", ASK);
+    expect(textOf(res)).toContain(URL);
+    expect(textOf(res)).not.toContain("お伝えすることができません");
+    expect(answerQuestion).not.toHaveBeenCalled();
+    expect(String((createSupportQuestion.mock.calls[0] as any[])[0].question)).toContain("【Zoom日程】");
+  });
+
+  it("URLが記録に無ければ、担当者からお送りする旨を返す", async () => {
+    state.recent = [{ question: "【Zoom希望】画面を一緒に見ながらの説明をご希望です。", staffReply: null }];
+    const res = await handler.handleFreeText("Uzoom", ASK);
+    expect(textOf(res)).toContain("担当者からこのトークにお送りします");
+    expect(answerQuestion).not.toHaveBeenCalled();
+  });
+
+  it("Zoomのやりとりが無い方の長めの「Zoomで教えて」も、Zoom希望として受ける", async () => {
+    const res = await handler.handleFreeText("Uzoom", "お世話になっております。使い方などをzoomで教えていただくことはできますでしょうか。よろしくお願いいたします。");
+    expect(textOf(res)).toContain("Zoomで画面を一緒に見ながら進めます");
+    expect(String((createSupportQuestion.mock.calls[0] as any[])[0].question)).toContain("【Zoom希望】");
+  });
+
+  it("もう一度のZoom希望には、古いURLを返さない", async () => {
+    state.recent = [{ question: "10/1の12:30", staffReply: `${URL}` }];
+    const res = await handler.handleFreeText("Uzoom", "またZoomお願いしたいです");
+    expect(textOf(res)).not.toContain(URL);
+  });
+});

@@ -52,6 +52,22 @@ export function isScheduleItem(s: string): boolean {
   return /([0-9０-９]{1,2}\s*[時:：]|24時間|午前|午後|営業時間|受付|定休|休診|休業|[月火水木金土日祝]曜|予約(制|優先|なし|不要)|予約が(なく|なくて|いらな))/.test(t);
 }
 
+/**
+ * 使わない言葉（NGワード）を含む案を外す（2026-10-01 夜間整備で検出：
+ * 「学会」をNGにした方の案に、ホームページの「〜医学会にて学会発表」がそのまま入っていた）。
+ * 足せば翌朝からNGの言葉が材料に戻るので、案には入れず、外したことだけ確認事項に残す。
+ */
+export function splitNgItems(items: readonly string[], ngWords: string | null | undefined): { kept: string[]; dropped: Array<{ item: string; word: string }> } {
+  const words = String(ngWords ?? "").split(/[、,，\n]/).map((w) => w.trim()).filter((w) => w.length >= 1);
+  const kept: string[] = [];
+  const dropped: Array<{ item: string; word: string }> = [];
+  for (const item of items) {
+    const hit = words.find((w) => String(item).includes(w));
+    if (hit) dropped.push({ item, word: hit }); else kept.push(item);
+  }
+  return { kept, dropped };
+}
+
 /** 案に何件あるか（食い違いは数えない） */
 export function proposalSize(p: MaterialProposal): number {
   return p.strength.length + p.realEpisodes.length + p.faq.length + p.menu.length + p.realProofs.length;

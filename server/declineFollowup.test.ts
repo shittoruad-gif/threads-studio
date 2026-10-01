@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  mergeProposal, removeProposal, isScheduleItem, dropAlreadyRegistered, proposalMessage, proposalSize,
+  mergeProposal, removeProposal, isScheduleItem, dropAlreadyRegistered, splitNgItems, proposalMessage, proposalSize,
   EMPTY_PROPOSAL, FOLLOWUP_DAYS, FOLLOWUP_MIN_DECLINES, type MaterialProposal,
 } from "@shared/declineFollowup";
 import { websiteUrlOf } from "./declineFollowup";
@@ -182,5 +182,17 @@ describe("登録を優先する：時間・予約の決まりはホームペー�
       "4か月の子どもを連れて初めて来院した患者さん",
       "パラ卓球日本代表選手の指導実績",
     ]) expect(isScheduleItem(s), s).toBe(false);
+  });
+});
+
+describe("使わない言葉（NGワード）を含む案は入れない（2026-10-01）", () => {
+  it("NGの言葉を含む案は外し、どの言葉で外したかを返す", () => {
+    const r = splitNgItems(["整形外科病院で培った整復技術", "〇〇医学会にて学会発表", "夜間の急患対応の経験"], "学会、11年");
+    expect(r.kept).toEqual(["整形外科病院で培った整復技術", "夜間の急患対応の経験"]);
+    expect(r.dropped).toEqual([{ item: "〇〇医学会にて学会発表", word: "学会" }]);
+  });
+  it("NGワードが無ければそのまま", () => {
+    expect(splitNgItems(["a案", "b案"], null).kept).toEqual(["a案", "b案"]);
+    expect(splitNgItems(["a案"], "").kept).toEqual(["a案"]);
   });
 });

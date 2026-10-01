@@ -15,7 +15,7 @@ import { sql } from "drizzle-orm";
 import * as db from "./db";
 import {
   FOLLOWUP_DAYS, FOLLOWUP_MIN_DECLINES, FOLLOWUP_COOLDOWN_DAYS,
-  EMPTY_PROPOSAL, dropAlreadyRegistered, isScheduleItem, mergeProposal, removeProposal, proposalMessage, proposalSize,
+  EMPTY_PROPOSAL, dropAlreadyRegistered, isScheduleItem, splitNgItems, mergeProposal, removeProposal, proposalMessage, proposalSize,
   type MaterialProposal,
 } from "@shared/declineFollowup";
 
@@ -143,9 +143,14 @@ export async function buildMaterialProposal(project: any, url: string): Promise<
     const regList = registered.split(/[\n／、]/);
     // ★登録を優先する：時間・曜日・予約の決まりに触れる文は足さず、確認事項に回す（2026-09-24 三上様指示）
     const schedule: string[] = [];
-    const clean = (xs: unknown) => dropAlreadyRegistered(
-      (Array.isArray(xs) ? xs.map(String) : []).filter((x) => (isScheduleItem(x) ? (schedule.push(x), false) : true)),
-      regList);
+    const ngDropped: Array<{ item: string; word: string }> = [];
+    const clean = (xs: unknown) => {
+      const r = splitNgItems(dropAlreadyRegistered(
+        (Array.isArray(xs) ? xs.map(String) : []).filter((x) => (isScheduleItem(x) ? (schedule.push(x), false) : true)),
+        regList), project.ngWords);
+      ngDropped.push(...r.dropped);
+      return r.kept;
+    };
     const proposal: MaterialProposal = {
       strength: clean(raw.strength),
       realEpisodes: clean(raw.realEpisodes).filter((x) => !OUTCOME_WORDS.test(x)),
@@ -155,6 +160,7 @@ export async function buildMaterialProposal(project: any, url: string): Promise<
       discrepancies: [
         ...(Array.isArray(raw.discrepancies) ? raw.discrepancies.map(String) : []).slice(0, 5),
         ...schedule.slice(0, 5).map((x) => `ページの時間・予約の記載（登録を優先して入れていない）：${x}`),
+        ...ngDropped.slice(0, 5).map((d) => `使わない言葉「${d.word}」を含むため入れていない：${d.item}`),
       ],
     };
     return { proposal, url: fetched.url };
