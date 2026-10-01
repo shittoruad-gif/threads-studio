@@ -499,6 +499,17 @@ async function generatePollOptions(postText: string, project: any): Promise<stri
   return opts;
 }
 
+/**
+ * その日の何本目かで、取り上げるお悩みを決める番号（shared/topicRotation.ts の pickRotatingTopic に渡す）。
+ * 同じ日の枠どうしは必ず別の番号になり、日が変わると1つずつずれる。枠の番号が無い経路は fallback を使う。
+ */
+export function topicIndexForSlot(slot: number, scheduledAt: Date | null, fallback: number, now: Date = new Date()): number {
+  if (!Number.isFinite(slot) || slot < 0 || slot >= 90) return fallback;
+  const base = scheduledAt ?? now;
+  const jstDay = Math.floor((base.getTime() + 9 * 3600_000) / 86400_000);
+  return jstDay + slot;
+}
+
 async function generateAutoPost(
   userId: number,
   project: any,
@@ -1004,7 +1015,10 @@ async function generateAutoPost(
       // ★登録された悩み・強みが複数あるときは、今日の1本で取り上げるものを日替わりで指定する。
       //   これが無いと、材料を全部渡していても毎回いちばん上の1つだけが使われる（shared/topicRotation.ts）。
       // ★ネタ帳の今日のネタがある日は、今日の悩み・お客様像の指定を出さない（ネタと別の人物・悩みが混ざるため・2026-09-30 ローカル確認）
-      focusProblem: ledgerItem ? undefined : (pickRotatingTopic(mainProblemForToday, postTypeIndex + purposeIndex) || undefined),
+      // ★1日の中では、枠ごとに別のお悩みを取り上げる（2026-10-01 三上様指示「1日3投稿のうち1つずつテーマごとに分けて」・川邊様）。
+      //   枠の番号＋日付で選ぶので、お悩みが3つで1日3本なら、毎日3つとも1本ずつ出る（どの枠に何が来るかは日替わり）。
+      //   当日補充など枠の番号が無い経路（99）は、これまでどおりの回し方。
+      focusProblem: ledgerItem ? undefined : (pickRotatingTopic(mainProblemForToday, topicIndexForSlot(postingTimeIndex, fixedScheduledAt, postTypeIndex + purposeIndex)) || undefined),
       focusStrength: pickRotatingTopic(strengthForToday, postTypeIndex) || undefined,
       // ★悩み・強みが1行しか無い方でも、N1顧客像に複数行の材料があることがある
       //   （岩根様＝悩み1行・強みは文の折り返しで取り出せず・N1顧客像に7行。2026-09-18）
