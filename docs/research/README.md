@@ -51,7 +51,7 @@ Threadsの実投稿を定期収集し、生成日本語の品質基準と業種�
    ssh root@163.44.103.9 'docker exec x10e9syw5oydt9pqw6hqwiij-051438583558 node -e "
    const db=require(\"better-sqlite3\")(\"/app/data/keiro.db\",{readonly:true});
    const since=Date.now()-7*86400000;
-   const bot=/facebookexternalhit|curl|bot|crawler|spider|preview|meta-externalagent/i;
+   const bot=/facebookexternalhit|curl|bot|crawler|spider|preview|meta-externalagent|wordpress/i;
    for(const t of db.prepare(\"SELECT id,name FROM tenants\").all()){
      const rows=db.prepare(\"SELECT ua FROM clicks WHERE tenant_id=? AND created_at>?\").all(t.id,since);
      const real=rows.filter(r=>!bot.test(String(r.ua))).length;
@@ -59,6 +59,10 @@ Threadsの実投稿を定期収集し、生成日本語の品質基準と業種�
      if(rows.length||f)console.log(t.name+\": 実クリック\"+real+\"(生\"+rows.length+\") 友だち追加\"+f);
    }"'
    ```
+   ★2026-10-01: Moveact の blog リンク（lnk_ma_*_blog）に `WordPress/x.x; https://moveact.net` の
+     サーバー間アクセスが週1,572件あり、旧の正規表現では「実クリック」に数えられていた
+     （実の人は両店で計24件）。`wordpress` を除外に加えた。コンテナ名の末尾は再デプロイで変わるので
+     `docker ps --format "{{.Names}}" | grep x10e9syw5oydt9pqw6hqwiij` で引くこと。
    ※ Moveactの計測データは keiro.s-toru.com（上記コンテナ）側にある。
      line.moveact.net 側のテナントはクリック・追加とも累計0で休眠状態（2026-08-29確認）。
 2. **合言葉ヒット** — 投稿別コメントの合言葉（shared/inquiryKeywords.ts）が
@@ -93,6 +97,9 @@ Threadsの実投稿を定期収集し、生成日本語の品質基準と業種�
   ノウハウ収集は隔週ルールにより休み。**公開リポジトリのため、この回から
   アカウント名を役割ラベルに置き換え、電話番号・住所・個人名・消費者の私的な吐露は要約に留めた**。
   業種インサイトの変更なし（ペットは未エントリだが店舗投稿の反応がほぼ0で根拠不足）。
+
+- `2026-10-01/` … 料理教室18本・着付け教室12本、ノウハウ／オーナーの悩み20本（検索語「スレッズ 集客 店舗」）。
+  両業種とも既存の `school` でカバー。業種インサイトの変更なし。ノウハウは4週連続で採用ゼロ。
 
 ## ノウハウ収集の検索語について（2026-09-10の方針変更）
 

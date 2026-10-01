@@ -1204,16 +1204,24 @@ async function generateAutoPost(
     //   ★2026-09-24 週次リサーチ：記録だけでは止まらなかった（直近7日287本中、決まり文句4本・
     //   い抜き等の別表記を含む同意確認疑問9本が公開）。最後の作り直し以外では、
     //   きれいな方（リライト前）に戻すか、戻せなければ作り直す。最後の1回は枠を捨てない。
+    //   ★2026-10-01 週次リサーチ：それでも直近7日387本中5本が公開された（id 1945/2099/2127/2205/2231）。
+    //   作り直しの記録と突き合わせると5本とも3回目（最後の作り直し）か保証パス（常に lastAttempt=true）で、
+    //   lastAttempt の判定を先に置いていたため「リライト前がきれいなら戻す」が最後の1回では効かなかった。
+    //   また公開した事実がログ（再デプロイで消える）にしか残らず、postRejectLog で数えられなかった。
+    //   → きれいな方に戻すのを先に判定し、最後の1回で両方汚れて公開するときも DB に残す。
     const ticLeft = findBannedTic(naturalMain) || findAgreementQuestion(naturalMain);
     if (ticLeft) {
       const beforeClean = !findBannedTic(beforeNaturalize) && !findAgreementQuestion(beforeNaturalize);
-      if (lastAttempt) {
+      if (beforeClean && naturalMain !== beforeNaturalize) {
+        console.warn(`[AutoPost] bannedTic「${ticLeft}」→ リライト前の文に戻す userId=${userId}`);
+        naturalMain = beforeNaturalize;
+      } else if (lastAttempt) {
         console.warn(
           `[AutoPost] bannedTic「${ticLeft}」が残存（最後の作り直しのため公開） userId=${userId} projectId=${project.id}`,
         );
-      } else if (beforeClean && naturalMain !== beforeNaturalize) {
-        console.warn(`[AutoPost] bannedTic「${ticLeft}」→ リライト前の文に戻す userId=${userId}`);
-        naturalMain = beforeNaturalize;
+        void db
+          .recordPostReject({ userId, threadsAccountId, guard: 'bannedTicPublished', detail: ticLeft, gaveUp: false })
+          .catch(() => undefined);
       } else {
         console.warn(`[AutoPost] bannedTic「${ticLeft}」が生成本文に残存 → 作り直し userId=${userId} projectId=${project.id}`);
         noteReject('bannedTic', userId, threadsAccountId, postingTimeIndex,

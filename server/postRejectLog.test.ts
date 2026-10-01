@@ -62,6 +62,24 @@ describe("作り直しの理由はDBに残す", () => {
   });
 });
 
+describe("決まり文句・同意確認疑問の最後の1回（2026-10-01 週次リサーチ）", () => {
+  const at = src.indexOf("const ticLeft = findBannedTic(naturalMain)");
+  const block = src.slice(at, at + 1600);
+
+  it("きれいなリライト前の文に戻す判定が、最後の作り直しの公開より先にある", () => {
+    // 逆順だと保証パス（常に lastAttempt）と3回目で、戻せる文があっても汚れた方を公開する
+    expect(at).toBeGreaterThan(-1);
+    const revert = block.indexOf("beforeClean && naturalMain !== beforeNaturalize");
+    const last = block.indexOf("else if (lastAttempt)");
+    expect(revert).toBeGreaterThan(-1);
+    expect(last).toBeGreaterThan(revert);
+  });
+
+  it("最後の1回で公開したときも DB に残す（ログは再デプロイで消える）", () => {
+    expect(block).toContain("guard: 'bannedTicPublished'");
+  });
+});
+
 describe("postRejectLog のマイグレーション", () => {
   const sql = readFileSync(join(__dirname, "..", "drizzle", "0093_post_reject_log.sql"), "utf8");
 
