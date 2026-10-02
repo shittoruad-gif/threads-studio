@@ -3877,6 +3877,15 @@ async function autoAnswer(userId: number, lineUserId: string, question: string):
   const res = await answerQuestion({ question, userId, lineUserId, source: "line" });
 
   if (res.confident && res.answer) {
+    // ★ご不満の声は、自動で答えられても担当者にも知らせる（shared/dissatisfactionDetect.ts・2026-10-01 香取様 #52）
+    const { isDissatisfaction } = await import("../shared/dissatisfactionDetect");
+    if (isDissatisfaction(question) && await escalateUnanswered(userId, lineUserId, question, res.questionId)) {
+      return [textWithQuick(
+        res.answer + "\n\n" +
+        "いただいたお声は担当者にもお伝えしました。確認のうえ、このトークでご連絡します。",
+        MENU_HINT,
+      )];
+    }
     return [textWithQuick(
       res.answer + "\n\n解決しない場合は「担当者に聞く」を押してください。",
       [
