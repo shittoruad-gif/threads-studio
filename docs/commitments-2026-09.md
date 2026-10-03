@@ -216,3 +216,4 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - healthClaimGuard（直近12時間）：髙木様（2768）2件＋短くなり見送り1／滝本様（556）1件／78 1件／12800 1件。
 - AccountHealth 完了（accounts=24 restricted=0）。デプロイは 57aea6f9＝origin/main の先頭と一致。/api/health 200。
 - 担当者の返信待ち 0件。LINE 残り 4,863 通 / 5,000 通。
+- 齋藤様（user 10043・pro_campaign・Threads未連携）へ、次の工程（連携）と https://threads-studio.com/threads-connect を公式LINEで送付（三上様承諾済み・宛名は齋藤）。9/28 の自動フォロー案 #2 は押されないまま（同じ内容のため送らない）。
