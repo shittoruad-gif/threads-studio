@@ -4,6 +4,8 @@ import type { TrpcContext } from "./_core/context";
 
 // Mock the database module
 vi.mock('./db', () => ({
+  isFreeGrace: vi.fn(async () => false),
+  withFreeGrace: vi.fn(async (_u: number, plan: any) => plan),
   getSubscriptionByUserId: vi.fn(),
   getProjectsByUserId: vi.fn(),
   getProjectById: vi.fn(),

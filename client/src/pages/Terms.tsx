@@ -25,7 +25,7 @@ export default function Terms() {
           <h1 className="text-3xl font-bold text-foreground">利用規約</h1>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-8">最終更新日：2026年9月1日</p>
+        <p className="text-sm text-muted-foreground mb-8">最終更新日：2026年10月3日（改定の効力発生日：2026年10月4日。ただし附則のとおり、改定前にご登録の方へのフリープラン終了の適用は2026年11月1日）</p>
 
         <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
           <section>
@@ -150,7 +150,8 @@ export default function Terms() {
             <h2 className="text-xl font-semibold text-foreground mb-3">第6条（料金と支払い）</h2>
             <div className="space-y-3 text-muted-foreground leading-relaxed">
               <p>
-                1. 本サービスには無料プランと有料プランがあります。
+                1. 本サービスの料金プランは、有料プランのみとします（無料プランはありません）。有料プランには第4項の7日間の無料トライアルがあります。
+                有料プランのお申し込み前は、アカウントの登録、お店の情報の登録、Threadsアカウントおよび当社公式LINEアカウントとの連携のみをご利用いただけます。
               </p>
               <p>
                 2. 有料プランの料金は、サービス内の料金ページに記載されたとおりとします。
@@ -282,10 +283,11 @@ export default function Terms() {
 
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-3">第12条（規約の変更）</h2>
-            <p className="text-muted-foreground leading-relaxed">
-              本規約は、必要に応じて変更される場合があります。
-              変更後の規約は、本サービス上に掲載した時点で効力を生じるものとします。
-            </p>
+            <div className="space-y-3 text-muted-foreground leading-relaxed">
+              <p>1. 当社は、民法第548条の4の規定に基づき、本規約を変更することがあります。</p>
+              <p>2. 本規約を変更するときは、変更後の内容と、変更の効力が生じる日を、その日より前に本サービス上に掲載します。ユーザーに不利となる変更の場合は、登録されたメールアドレスまたは当社公式LINEアカウントでもお知らせします。</p>
+              <p>3. 変更の効力が生じる日以降に本サービスをご利用いただいた場合、変更後の規約に同意いただいたものとみなします。</p>
+            </div>
           </section>
 
           <section>
@@ -294,6 +296,19 @@ export default function Terms() {
               本規約の解釈および適用は日本法に準拠するものとし、
               本サービスに関する紛争については、日本国内の裁判所を第一審の専属的合意管轄裁判所とします。
             </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold text-foreground mb-3">附則（2026年10月3日改定）</h2>
+            <div className="space-y-3 text-muted-foreground leading-relaxed">
+              <p>
+                1. 第6条第1項（無料プランの終了）は、2026年10月4日以降にご登録の方に適用します。
+              </p>
+              <p>
+                2. 2026年10月3日までにご登録いただき、有料プランをお申し込みでない方は、2026年10月31日まで、改定前の無料プラン（お店の情報1件・Threadsアカウント1件・月3件までの投稿・月3回までのAI投稿生成）をご利用いただけます。
+                2026年11月1日以降は、第6条第1項のとおりとなります。登録済みのお店の情報、連携、作成・公開済みの投稿は削除されません。
+              </p>
+            </div>
           </section>
 
           <section>

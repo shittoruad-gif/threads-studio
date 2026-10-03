@@ -296,7 +296,7 @@ async function isEndedCustomerSafe(userId: number): Promise<boolean> {
 
 /** 使える契約があるか（判定に失敗したら止めない） */
 async function isSubscribedSafe(userId: number): Promise<boolean> {
-  try { return await db.hasUsableSubscription(userId); } catch { return true; }
+  try { return await db.hasServiceAccess(userId); } catch { return true; }
 }
 
 /** お申し込み前の方へのお返事 */

@@ -28,7 +28,7 @@ export const NOT_SUBSCRIBED_MESSAGE =
  */
 export async function assertSubscribed(userId: number | null | undefined): Promise<void> {
   if (!userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "ログインしてください" });
-  if (await db.hasUsableSubscription(Number(userId))) return;
+  if (await db.hasServiceAccess(Number(userId))) return; // 使える契約 or 今いるフリーの方の猶予（10/31まで）
   const ended = await db.isEndedCustomer(Number(userId));
   throw new TRPCError({ code: "FORBIDDEN", message: ended ? ENDED_MESSAGE : NOT_SUBSCRIBED_MESSAGE });
 }
@@ -36,7 +36,7 @@ export async function assertSubscribed(userId: number | null | undefined): Promi
 /** 定期処理・LINE用：使える契約があるか（判定に失敗したら止めない） */
 export async function isSubscribed(userId: number | null | undefined): Promise<boolean> {
   if (!userId) return false;
-  try { return await db.hasUsableSubscription(Number(userId)); } catch { return true; }
+  try { return await db.hasServiceAccess(Number(userId)); } catch { return true; }
 }
 
 /** 定期処理・LINE用：契約が終わった方か（例外を投げない） */

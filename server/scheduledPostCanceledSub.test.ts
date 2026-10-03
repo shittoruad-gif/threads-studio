@@ -49,6 +49,7 @@ vi.mock("./db", () => ({
   updateThreadsAccountToken: vi.fn(),
   getUserById: vi.fn(async () => ({ id: 4851, email: "x@example.test" })),
   hasUsableSubscription: vi.fn(async () => usable),
+  hasServiceAccess: vi.fn(async () => usable),
   isEndedCustomer: vi.fn(async () => true),
 }));
 

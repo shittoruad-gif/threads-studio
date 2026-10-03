@@ -190,8 +190,11 @@ describe('AI Generation Usage Tracking', () => {
     if (!freeUser) throw new Error('Failed to create free user');
 
     const usage = await db.getAiGenerationUsage(freeUser.id);
-    // お申し込み前の枠は shared/plans.ts が唯一の正（2026-10-03 フリープラン廃止で0回）
-    expect(usage.limit).toBe(PLANS.free.features.maxAiGenerations);
+    // お申し込み前の枠は shared/plans.ts が唯一の正（2026-10-03 フリープラン廃止で0回）。
+    // 10/3までに登録した方は10/31まで、これまでのフリーの枠（shared/freePlanSunset.ts）
+    const { LEGACY_FREE_PLAN } = await import('../shared/freePlanSunset');
+    const grace = await db.isFreeGrace(freeUser.id);
+    expect(usage.limit).toBe(grace ? LEGACY_FREE_PLAN.features.maxAiGenerations : PLANS.free.features.maxAiGenerations);
 
     const canGenerate = await db.checkAiGenerationLimit(freeUser.id);
     expect(canGenerate).toBe(usage.count < usage.limit);

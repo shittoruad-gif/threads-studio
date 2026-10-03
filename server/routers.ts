@@ -596,9 +596,13 @@ export const appRouter = router({
       
       if (!subscription) {
         // No subscription - return free plan status
+        // ★今いるフリーの方は10/31まで、これまでのフリープラン（shared/freePlanSunset.ts）
+        const grace = await db.isFreeGrace(ctx.user.id);
+        const { LEGACY_FREE_PLAN, FREE_PLAN_SUNSET } = await import('../shared/freePlanSunset');
         return {
           planId: 'free',
-          plan: PLANS.free,
+          plan: grace ? LEGACY_FREE_PLAN : PLANS.free,
+          freeGraceEndsAt: grace ? new Date(FREE_PLAN_SUNSET.getTime() - 1000).toISOString() : null,
           status: 'active' as const,
           isTrialing: false,
           trialEndsAt: null,
@@ -784,7 +788,7 @@ export const appRouter = router({
         // Check project limit
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
         const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
-        const plan = getPlan(planId);
+        const plan = await db.withFreeGrace(ctx.user.id, getPlan(planId)); // 今いるフリーの方は10/31までこれまでの上限
         
         if (plan && plan.features.maxProjects !== -1) {
           const projectCount = await db.countUserProjects(ctx.user.id);
@@ -1208,7 +1212,7 @@ export const appRouter = router({
         // Check AI generation feature
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
         const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
-        const plan = getPlan(planId);
+        const plan = await db.withFreeGrace(ctx.user.id, getPlan(planId)); // 今いるフリーの方は10/31までこれまでの上限
 
         // デモモードではAI生成を許可
         // ★#2 デモモードの場合は 10 回までで打ち切り → 自動的に通常判定へ。
@@ -1665,7 +1669,7 @@ JSON配列で返してください: { "posts": ["投稿1", "投稿2", ...] }`;
         // Check AI generation feature (same as generatePost)
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
         const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
-        const plan = getPlan(planId);
+        const plan = await db.withFreeGrace(ctx.user.id, getPlan(planId)); // 今いるフリーの方は10/31までこれまでの上限
 
         if (!ctx.user.isDemoMode && (!plan || plan.features.maxAiGenerations === 0)) {
           throw new TRPCError({
@@ -2149,7 +2153,7 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         if (!isReconnection) {
           const subscription = await db.getSubscriptionByUserId(ctx.user.id);
           const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
-          const plan = getPlan(planId);
+          const plan = await db.withFreeGrace(ctx.user.id, getPlan(planId)); // 今いるフリーの方は10/31までこれまでの上限
 
           if (plan && plan.features.maxThreadsAccounts !== -1) {
             if (existingAccounts.length >= plan.features.maxThreadsAccounts) {
@@ -2345,7 +2349,7 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         // Check monthly post limit
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
         const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
-        const plan = getPlan(planId);
+        const plan = await db.withFreeGrace(ctx.user.id, getPlan(planId)); // 今いるフリーの方は10/31までこれまでの上限
         
         // 月間上限は「連携アカウント単位」で適用（複数アカウントで枠を共有しない）。
         // B-5: 当月公開済み＋当月予約済みの合計で判定し、予約だけで枠を超過するのを防ぐ。
@@ -2672,7 +2676,7 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         // Check AI generation feature
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
         const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
-        const plan = getPlan(planId);
+        const plan = await db.withFreeGrace(ctx.user.id, getPlan(planId)); // 今いるフリーの方は10/31までこれまでの上限
 
         if (!ctx.user.isDemoMode && (!plan || plan.features.maxAiGenerations === 0)) {
           throw new TRPCError({
@@ -2850,7 +2854,7 @@ ${input.commentText}
         // Check scheduled post limit
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
         const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
-        const plan = getPlan(planId);
+        const plan = await db.withFreeGrace(ctx.user.id, getPlan(planId)); // 今いるフリーの方は10/31までこれまでの上限
 
         // 予約中の件数・月間投稿数の上限は「連携アカウント単位」で適用
         if (plan && plan.features.maxScheduledPosts !== -1) {
@@ -5359,7 +5363,7 @@ ${CONCEPT_DESIGN_PROMPT}`;
         // 月間投稿数の上限（連携アカウント単位）: 逆算分をまとめて予約できるか確認
         const subscription = await db.getSubscriptionByUserId(ctx.user.id);
         const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
-        const plan = getPlan(planId);
+        const plan = await db.withFreeGrace(ctx.user.id, getPlan(planId)); // 今いるフリーの方は10/31までこれまでの上限
         if (plan && plan.features.maxScheduledPosts !== -1) {
           const monthlyCount = await db.countAccountMonthlyUsage(input.threadsAccountId);
           if (monthlyCount + slots.length > plan.features.maxScheduledPosts) {

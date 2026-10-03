@@ -923,6 +923,34 @@ export async function isEndedCustomer(userId: number, at: Date = new Date()): Pr
   return Number(r?.ended ?? 0) > 0 && Number(r?.usable ?? 0) === 0;
 }
 
+/**
+ * 今いるフリーの方の猶予中か（2026-10-04 より前に登録・契約の行が1つも無い・10/31 まで）。shared/freePlanSunset.ts
+ */
+export async function isFreeGrace(userId: number, now: Date = new Date()): Promise<boolean> {
+  const { inFreeGrace, FREE_PLAN_SUNSET } = await import('../shared/freePlanSunset');
+  if (now.getTime() >= FREE_PLAN_SUNSET.getTime()) return false;
+  const db = await getDb();
+  if (!db) return false;
+  const u = await getUserById(userId);
+  const rows: any = await db.execute(sql`SELECT COUNT(*) AS n FROM subscriptions WHERE userId = ${userId}`);
+  const n = Number((rows as any)?.[0]?.[0]?.n ?? 0);
+  return inFreeGrace(u as any, n > 0, now);
+}
+
+/** 機能を使える状態か＝使える契約がある、または今いるフリーの方の猶予中（2026-10-03） */
+export async function hasServiceAccess(userId: number): Promise<boolean> {
+  if (await hasUsableSubscription(userId)) return true;
+  return await isFreeGrace(userId);
+}
+
+/** 上限の判定に使うプラン。猶予中のフリーの方には、これまでのフリープランの上限を返す */
+export async function withFreeGrace<P extends { id: string } | undefined>(userId: number, plan: P): Promise<P> {
+  if (plan?.id !== 'free') return plan;
+  if (!(await isFreeGrace(userId))) return plan;
+  const { LEGACY_FREE_PLAN } = await import('../shared/freePlanSunset');
+  return LEGACY_FREE_PLAN as unknown as P;
+}
+
 export async function getPendingScheduledPosts(): Promise<ScheduledPost[]> {
   const db = await getDb();
   if (!db) return [];
@@ -1435,7 +1463,7 @@ export async function getAiGenerationUsage(userId: number): Promise<{ count: num
   // Get user's plan limit from PLANS
   const subscription = await getSubscriptionByUserId(userId);
   // ★解約後・決済失敗中は無料の上限にする（planId だけを見て有料の上限のままになっていた・2026-10-03）
-  const plan = PLANS[resolveEffectivePlanId(subscription?.planId, subscription?.status)] ?? PLANS.free;
+  const plan = await withFreeGrace(userId, PLANS[resolveEffectivePlanId(subscription?.planId, subscription?.status)] ?? PLANS.free);
   const limit = plan?.features.maxAiGenerations ?? 0;
 
   return { count, limit };

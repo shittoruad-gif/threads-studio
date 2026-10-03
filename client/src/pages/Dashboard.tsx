@@ -349,10 +349,10 @@ export default function Dashboard() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <div className="min-w-0 flex-1">
                 <p className="text-sm sm:text-base font-bold text-emerald-800">
-                  {t("いまはお申し込み前です")}
+                  {(subscription as any)?.freeGraceEndsAt ? t("フリープランは10月31日で終わります") : t("いまはお申し込み前です")}
                 </p>
                 <p className="text-xs sm:text-sm text-emerald-700 mt-1 leading-relaxed">
-                  {t("はじめの設定とThreadsの連携まではお使いいただけます。投稿づくりと毎日の自動投稿は、お申し込みから始まります（最初の7日間は無料）。")}
+                  {(subscription as any)?.freeGraceEndsAt ? t("10月31日までは、これまでどおりお使いいただけます。11月からは、投稿づくりと毎日の自動投稿はお申し込み（最初の7日間は無料）からのご利用になります。登録したお店の情報と連携はそのまま残ります。") : t("はじめの設定とThreadsの連携まではお使いいただけます。投稿づくりと毎日の自動投稿は、お申し込みから始まります（最初の7日間は無料）。")}
                 </p>
               </div>
               <a
