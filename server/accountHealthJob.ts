@@ -19,6 +19,8 @@ export async function runAccountHealthJob(): Promise<void> {
   let restricted = 0, missing = 0;
   for (const a of accounts) {
     try {
+      // ★ご契約が終わった方には点検のお知らせ（消えた投稿・補填・制限）を送らない（2026-10-03）
+      if (await db.isEndedCustomer(Number(a.userId))) continue;
       const acct: any = await db.getThreadsAccountById(Number(a.id)); // トークンは復号済み
       if (!acct?.accessToken) continue;
       const me: any = await (await fetch(`${THREADS}/me?fields=id,username,threads_profile_picture_url,threads_biography&access_token=${acct.accessToken}`)).json();

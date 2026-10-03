@@ -233,6 +233,16 @@ export function scrubSettingList(list: readonly string[] | null | undefined): { 
  */
 export function softenMedicalWords(text: string): string {
   return String(text ?? "")
+    // ★機器の名前は「チェック」にすると「超音波画像チェック装置」という無い言葉になる（2026-10-03 香取様の試し生成）。
+    //   登録の「エコー（超音波画像診断装置）」はエコーと呼ぶ。
+    .replace(/エコー[（(]超音波画像診断装置[）)]/g, "エコー")
+    .replace(/(?:超音波)?画像診断装置/g, "エコー")
+    // ★医師・病院がする診断（「整形外科で診断を受ける」「診断書」）は、そのまま書くのが正しい言い方。
+    //   接骨院・整体院が自分で診断すると書くことだけを避ける。
+    .replace(/(医師|医者|病院|整形外科|医療機関|クリニック)((?:(?!当院|当店|うち|私)[^。！？\n]){0,8}?)診断/g, "$1$2\u0000")
+    .replace(/診断書/g, "\u0001")
     .replace(/(?<!健康)診断/g, "チェック")
+    .replace(/\u0000/g, "診断")
+    .replace(/\u0001/g, "診断書")
     .replace(/治療(?!院|家|師|法)/g, "施術");
 }

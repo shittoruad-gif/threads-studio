@@ -210,6 +210,11 @@ export async function decideFollowup(id: number, action: "send" | "skip", adminU
     return "送らずにおきました。3日後も止まっていれば、また事実をお知らせします。";
   }
 
+  // ★案を作ったあとに解約された方には送らない（2026-10-03）
+  if (await db.isEndedCustomer(Number(row.userId))) {
+    await database.execute(sql`UPDATE clientFollowups SET status = 'skipped', decidedAt = NOW(), decidedBy = ${adminUserId} WHERE id = ${id}`);
+    return "このお客様はご契約が終了しているため、送りませんでした。";
+  }
   const targets = await db.getLineUserIdsForUser(Number(row.userId)).catch(() => [] as string[]);
   if (targets.length === 0) return "このお客様は公式LINEがつながっていないため、送れませんでした（メールや電話でのご連絡をご検討ください）。";
 

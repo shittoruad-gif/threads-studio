@@ -23,6 +23,9 @@ async function notifyTokenRefreshFailure(
 ): Promise<void> {
   try {
     if (!userId) return;
+    // ★ご契約が終わった方には再連携のお願いを送らない（2026-10-03）
+    const { isEndedCustomer } = await import("./db");
+    if (await isEndedCustomer(userId)) return;
     const user = await getUserById(userId);
     if (!user?.email) return;
     const acc = threadsUsername ? `@${threadsUsername}` : "Threadsアカウント";

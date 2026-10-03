@@ -162,6 +162,17 @@ export async function executePendingPosts() {
           continue;
         }
 
+        // ★契約が終わった方の自動の投稿は公開しない（2026-10-03 氷見様：解約後に2本公開されていた）。
+        //   ご自身で予約した投稿（source='manual'）は無料でも使える機能なので対象外。
+        if (post.source === 'auto' && !(await db.hasUsableSubscription(post.userId))) {
+          await db.updateScheduledPost(post.id, {
+            status: 'canceled',
+            errorMessage: 'ご契約が終了しているため自動の投稿を見送り',
+          });
+          console.log(`[Scheduled Post] 契約終了のため見送り: post=${post.id} user=${post.userId}`);
+          continue;
+        }
+
         // Check token expiration and attempt refresh if expiring soon (within 24 hours)
         let accessToken = account.accessToken;
         const expiresAt = account.tokenExpiresAt ? new Date(account.tokenExpiresAt) : null;

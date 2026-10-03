@@ -34,7 +34,7 @@ describe("週1回の◯✕アンケート：判断", () => {
 });
 
 // ── 三上様の「この8案を送る」：二度押しでも1回だけ送る ──
-const state = { status: "pending" as string };
+const state = { status: "pending" as string, ended: false };
 const pushMessages = vi.fn(async () => true);
 vi.mock("./lineNotify", () => ({ pushMessages }));
 vi.mock("./db", () => ({
@@ -56,10 +56,19 @@ vi.mock("./db", () => ({
   }),
   getProjectById: async () => ({ storeName: "プレステージ" }),
   getLineUserIdsForUser: async () => ["Ucustomer"],
+  isEndedCustomer: async () => state.ended,
 }));
 
 describe("週1回の◯✕アンケート：三上様の判断", () => {
-  beforeEach(() => { state.status = "pending"; pushMessages.mockClear(); });
+  beforeEach(() => { state.status = "pending"; state.ended = false; pushMessages.mockClear(); });
+
+  it("案を作ったあとにご契約が終わった方には送らない（2026-10-03）", async () => {
+    state.ended = true;
+    const { decideWeeklySurvey } = await import("./draftSurveyWeekly");
+    expect(await decideWeeklySurvey("sv-22-x", "send", 1)).toContain("ご契約が終了");
+    expect(pushMessages).not.toHaveBeenCalled();
+    expect(state.status).toBe("skipped");
+  });
 
   it("「送る」を2回押しても、お客様へは1回だけ", async () => {
     const { decideWeeklySurvey } = await import("./draftSurveyWeekly");

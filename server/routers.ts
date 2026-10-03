@@ -172,7 +172,13 @@ export const appRouter = router({
   }),
 
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    // ★パスワードの暗号文・メール確認の鍵・自前アプリの秘密（暗号化済み）は画面に返さない（2026-10-03 点検）
+    me: publicProcedure.query(opts => {
+      const u: any = opts.ctx.user;
+      if (!u) return u;
+      const { passwordHash: _p, emailVerificationToken: _e, threadsAppSecretEnc: _s, ...safe } = u;
+      return { ...safe, hasPassword: !!_p } as typeof u;
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });

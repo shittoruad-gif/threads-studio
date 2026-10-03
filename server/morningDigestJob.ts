@@ -76,6 +76,8 @@ export async function runMorningDigestJob(): Promise<void> {
     try {
       const user: any = await db.getUserById(userId);
       if (!user) continue;
+      // ★ご契約が終わった方には送らない（2026-10-03 三上様「解約済みの人には送られてないよね」）
+      if (await db.isEndedCustomer(userId)) { console.log(`[MorningDigest] user=${userId} はご契約終了のため送らない`); continue; }
       // ★お試し（デモ）の方には送らない。ただし **お支払いのある方は「お試し」ではない**（2026-09-19）。
       //   isDemoMode はデモの生成枠を使い切ったときにしか下りない作りで、ご契約後も 1 のまま残る方がいた。
       //   斎藤様（有料・9/16〜）はここで黙って飛ばされ、「次にやること」が3日間1通も届かないまま

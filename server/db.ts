@@ -880,6 +880,41 @@ export async function countAccountPostsPostedToday(accountId: number): Promise<n
   return Number((rows as any)?.[0]?.[0]?.c ?? 0);
 }
 
+/**
+ * 今この時点で有料の契約が生きているか（active/trialing で、解約の予約の期限を過ぎていない）。
+ * ★2026-10-03 氷見様：期限（10/2 0時）を過ぎてから状態が canceled に切り替わる（10/2 7:20）までの間に
+ *   自動の投稿が3本作られ、2本が解約後に公開されていた。状態の切り替えを待たずに期限で判断する。
+ */
+export async function hasUsableSubscription(userId: number, at: Date = new Date()): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return true; // DBに届かないときは止めない（公開側の別の失敗で止まる）
+  const rows: any = await db.execute(sql`
+    SELECT 1 FROM subscriptions
+    WHERE userId = ${userId} AND status IN ('active', 'trialing')
+      AND NOT (cancelAtPeriodEnd = 1 AND currentPeriodEnd IS NOT NULL AND currentPeriodEnd <= ${at.toISOString().slice(0, 19).replace('T', ' ')})
+    LIMIT 1`);
+  return ((rows as any)?.[0] ?? []).length > 0;
+}
+
+/**
+ * ご契約が終わった元のお客様か（解約ずみ、または解約の予約の期限を過ぎた契約があり、使える契約が1つも無い）。
+ * 一度も契約していない方・お支払いの失敗中（past_due など）の方は false（今までどおりご案内する）。
+ * ★2026-10-03 三上様「解約済みの人には送られてないよね」。朝のまとめ・アカウント点検・再連携メールなどが
+ *   契約の状態を見ずに届く作りだったため、送る前にここで止める。
+ */
+export async function isEndedCustomer(userId: number, at: Date = new Date()): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const t = at.toISOString().slice(0, 19).replace('T', ' ');
+  const rows: any = await db.execute(sql`
+    SELECT
+      COALESCE(SUM(status IN ('active', 'trialing') AND NOT (cancelAtPeriodEnd = 1 AND currentPeriodEnd IS NOT NULL AND currentPeriodEnd <= ${t})), 0) AS usable,
+      COALESCE(SUM(status = 'canceled' OR (cancelAtPeriodEnd = 1 AND currentPeriodEnd IS NOT NULL AND currentPeriodEnd <= ${t})), 0) AS ended
+    FROM subscriptions WHERE userId = ${userId}`);
+  const r = (rows as any)?.[0]?.[0];
+  return Number(r?.ended ?? 0) > 0 && Number(r?.usable ?? 0) === 0;
+}
+
 export async function getPendingScheduledPosts(): Promise<ScheduledPost[]> {
   const db = await getDb();
   if (!db) return [];
@@ -2850,6 +2885,8 @@ export async function getAutoPostEligibleUsers(onlyUserId?: number) {
         // 共通設定がONか、いずれかのアカウントで個別にONにしている（アカウント別設定）
         sql`(${users.autoPostEnabled} = true OR ${threadsAccounts.autoPostEnabled} = true)`,
         sql`${subscriptions.status} IN ('active', 'trialing')`,
+        // ★解約の予約の期限を過ぎたら、状態の切り替え（毎日の照合）を待たずに対象外（2026-10-03 氷見様）
+        sql`NOT (${subscriptions.cancelAtPeriodEnd} = 1 AND ${subscriptions.currentPeriodEnd} IS NOT NULL AND ${subscriptions.currentPeriodEnd} <= UTC_TIMESTAMP())`,
         eq(threadsAccounts.isActive, true),
         // 1人だけ対象にするとき（お申し込み直後の当日補充・「今すぐ作る」ボタン）
         ...(onlyUserId ? [eq(users.id, onlyUserId)] : []),

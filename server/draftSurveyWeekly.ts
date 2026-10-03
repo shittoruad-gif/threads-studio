@@ -122,6 +122,15 @@ export async function decideWeeklySurvey(surveyKey: string, action: "send" | "sk
     const r: any = await database.execute(sql`UPDATE draftSurveyItems SET status = 'skipped' WHERE surveyKey = ${key} AND status = 'pending'`);
     return Number((r as any)[0]?.affectedRows ?? 0) > 0 ? "今回はお送りしません。お客様には何も届いていません。" : "この案はすでに処理ずみです。";
   }
+  // ★案を作ったあとに解約された方には送らない（2026-10-03）
+  {
+    const owner: any = await database.execute(sql`SELECT userId FROM draftSurveyItems WHERE surveyKey = ${key} LIMIT 1`);
+    const ownerId = Number((owner as any)[0]?.[0]?.userId ?? 0);
+    if (ownerId && await db.isEndedCustomer(ownerId)) {
+      await database.execute(sql`UPDATE draftSurveyItems SET status = 'skipped' WHERE surveyKey = ${key} AND status = 'pending'`);
+      return "このお客様はご契約が終了しているため、お送りしませんでした。";
+    }
+  }
   // ★先に pending → sent に変える（同時に2回押されても、2回目はここで0件になり送らない）
   const upd: any = await database.execute(sql`UPDATE draftSurveyItems SET status = 'sent', sentAt = NOW() WHERE surveyKey = ${key} AND status = 'pending'`);
   if (Number((upd as any)[0]?.affectedRows ?? 0) === 0) return "この案はすでに処理ずみです（送信ずみ・送らない・次の週の案に置き換わった のいずれか）。";

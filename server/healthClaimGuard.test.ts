@@ -322,6 +322,13 @@ describe("2026-09-19 追加：原因の断定", () => {
 describe("2026-09-19 追加：「診断」「治療」の語の置き換え", () => {
   it("診断→チェック、治療→施術", () => {
     expect(softenMedicalWords("あなたの根本原因、LINEで診断できます。")).toBe("あなたの根本原因、LINEでチェックできます。");
+    // 2026-10-03 機器の名前・医師の診断は言い換えない
+    expect(softenMedicalWords("エコー（超音波画像診断装置）で、体の中をその場で確認できる")).toBe("エコーで、体の中をその場で確認できる");
+    expect(softenMedicalWords("超音波画像診断装置を使って確認します")).toBe("エコーを使って確認します");
+    expect(softenMedicalWords("骨折は整形外科で確定診断を受けました")).toBe("骨折は整形外科で確定診断を受けました");
+    expect(softenMedicalWords("交通事故は病院で診断書をもらってください")).toBe("交通事故は病院で診断書をもらってください");
+    expect(softenMedicalWords("診断書が必要です")).toBe("診断書が必要です");
+    expect(softenMedicalWords("整形外科ではなく当院で診断します")).toBe("整形外科ではなく当院でチェックします");
     expect(softenMedicalWords("僕の治療は、マッサージだけではありません。")).toBe("僕の施術は、マッサージだけではありません。");
   });
   it("固有の言い方（健康診断・治療院・治療家・治療法）は置き換えない", () => {
