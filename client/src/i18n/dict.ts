@@ -674,6 +674,7 @@ export const dict: Record<string, string> = {
   "はじめの設定とThreadsの連携まではお使いいただけます。投稿づくりと毎日の自動投稿は、お申し込みから始まります（最初の7日間は無料）。": "You can complete the initial setup and connect Threads. Post creation and daily auto-posting start once you subscribe (the first 7 days are free).",
   "7日間無料で始める": "Start your 7-day free trial",
   "ありません（お申し込み前）": "None (not subscribed yet)",
+  "ありません": "None",
   "お支払いずみの期間が終わるまで、投稿はこれまでどおり続きます。その後は投稿などの機能が止まります。再開したくなったら料金プランから再登録してください。": "Posting continues as usual until the end of your paid period. After that, posting and other features stop. To resume, subscribe again from the Pricing page.",
   "ONにすると、AIが毎日自動で投稿を生成してThreadsに投稿します": "When on, AI generates and publishes a post to Threads every day",
   "AIが毎日自動で投稿を生成・公開中": "AI is generating and publishing daily",
