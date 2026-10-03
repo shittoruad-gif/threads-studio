@@ -8,6 +8,14 @@
 > **忘れると事故になること** だけを残す。
 
 
+## 2026-10-03 夜に反映：クーポンの無料体験を期限で止める（三上様「クーポンの期限切れで止める処理も直しといて」）
+
+- 画面の説明は「14日・30日の体験は期間終了後に課金なしで停止」だが、止める処理が無く trialing のまま使えていた（10/3 時点で該当0件）
+- shared/plans.ts effectiveSubscriptionStatus：trialing・trialEndsAt を過ぎた・決済の契約（UnivaPay/Stripe）なし → canceled 扱い。db の SQL 判定（自動投稿の対象・公開直前・契約終了・週次レポート）も同じ条件
+- billingReconcile のはじめに、該当する契約を canceled に落とす（テスト server/billingReconcile.test.ts）
+- 触らないもの：期限なしの PROST2026（trialEndsAt なし・5件）／カード登録の7日間体験（UnivaPayの契約あり・初回決済で active）
+- 10/3 本番で確認：使える契約 18/19・契約終了は 2907 だけ・自動投稿の対象14人で、直す前と同じ
+
 ## 2026-10-03 夜に反映：解約後は有料機能をすべて止める（三上様「解約後は有料機能が全て使えないように徹底」）
 
 - 根本：db.getSubscriptionByUserId が、使える期間を過ぎた解約の予約を canceled として返す（shared/plans.ts effectiveSubscriptionStatus）。resolveEffectivePlanId を使う判定（routers・LINEの planOf・Meta AI・日の上限・LINE連携枠）はすべてこれ経由。毎朝7:20の照合を待たない

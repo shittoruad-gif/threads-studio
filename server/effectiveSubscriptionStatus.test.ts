@@ -17,3 +17,15 @@ describe('契約のいまの状態', () => {
     expect(effectiveSubscriptionStatus({ status: 'past_due', cancelAtPeriodEnd: 1, currentPeriodEnd: '2026-09-01 00:00:00Z' }, now)).toBe('past_due');
   });
 });
+
+describe('クーポンの無料体験の終わり（2026-10-03）', () => {
+  const now = new Date('2026-10-10T00:00:00Z');
+  it('決済の契約が無い体験は、終わりの日を過ぎたら canceled', () => {
+    expect(effectiveSubscriptionStatus({ status: 'trialing', trialEndsAt: '2026-10-09T00:00:00Z', univapaySubscriptionId: null }, now)).toBe('canceled');
+  });
+  it('終わりの日の前・期限なし（PROST2026）・カード登録の7日間体験は止めない', () => {
+    expect(effectiveSubscriptionStatus({ status: 'trialing', trialEndsAt: '2026-10-11T00:00:00Z' }, now)).toBe('trialing');
+    expect(effectiveSubscriptionStatus({ status: 'trialing', trialEndsAt: null }, now)).toBe('trialing');
+    expect(effectiveSubscriptionStatus({ status: 'trialing', trialEndsAt: '2026-10-09T00:00:00Z', univapaySubscriptionId: 'uv-1' }, now)).toBe('trialing');
+  });
+});

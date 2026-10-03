@@ -896,6 +896,8 @@ export async function hasUsableSubscription(userId: number, at: Date = new Date(
     SELECT 1 FROM subscriptions
     WHERE userId = ${userId} AND status IN ('active', 'trialing')
       AND NOT (cancelAtPeriodEnd = 1 AND currentPeriodEnd IS NOT NULL AND currentPeriodEnd <= ${at.toISOString().slice(0, 19).replace('T', ' ')})
+      AND NOT (status = 'trialing' AND trialEndsAt IS NOT NULL AND trialEndsAt <= ${at.toISOString().slice(0, 19).replace('T', ' ')}
+               AND COALESCE(univapaySubscriptionId, '') = '' AND COALESCE(stripeSubscriptionId, '') = '')
     LIMIT 1`);
   return ((rows as any)?.[0] ?? []).length > 0;
 }
@@ -912,8 +914,10 @@ export async function isEndedCustomer(userId: number, at: Date = new Date()): Pr
   const t = at.toISOString().slice(0, 19).replace('T', ' ');
   const rows: any = await db.execute(sql`
     SELECT
-      COALESCE(SUM(status IN ('active', 'trialing') AND NOT (cancelAtPeriodEnd = 1 AND currentPeriodEnd IS NOT NULL AND currentPeriodEnd <= ${t})), 0) AS usable,
-      COALESCE(SUM(status = 'canceled' OR (cancelAtPeriodEnd = 1 AND currentPeriodEnd IS NOT NULL AND currentPeriodEnd <= ${t})), 0) AS ended
+      COALESCE(SUM(status IN ('active', 'trialing') AND NOT (cancelAtPeriodEnd = 1 AND currentPeriodEnd IS NOT NULL AND currentPeriodEnd <= ${t})
+        AND NOT (status = 'trialing' AND trialEndsAt IS NOT NULL AND trialEndsAt <= ${t} AND COALESCE(univapaySubscriptionId, '') = '' AND COALESCE(stripeSubscriptionId, '') = '')), 0) AS usable,
+      COALESCE(SUM(status = 'canceled' OR (cancelAtPeriodEnd = 1 AND currentPeriodEnd IS NOT NULL AND currentPeriodEnd <= ${t})
+        OR (status = 'trialing' AND trialEndsAt IS NOT NULL AND trialEndsAt <= ${t} AND COALESCE(univapaySubscriptionId, '') = '' AND COALESCE(stripeSubscriptionId, '') = '')), 0) AS ended
     FROM subscriptions WHERE userId = ${userId}`);
   const r = (rows as any)?.[0]?.[0];
   return Number(r?.ended ?? 0) > 0 && Number(r?.usable ?? 0) === 0;
@@ -2892,6 +2896,8 @@ export async function getAutoPostEligibleUsers(onlyUserId?: number) {
         sql`${subscriptions.status} IN ('active', 'trialing')`,
         // ★解約の予約の期限を過ぎたら、状態の切り替え（毎日の照合）を待たずに対象外（2026-10-03 氷見様）
         sql`NOT (${subscriptions.cancelAtPeriodEnd} = 1 AND ${subscriptions.currentPeriodEnd} IS NOT NULL AND ${subscriptions.currentPeriodEnd} <= UTC_TIMESTAMP())`,
+        // ★クーポンの無料体験の終わり（決済の契約なし）を過ぎたら対象外（2026-10-03）
+        sql`NOT (${subscriptions.status} = 'trialing' AND ${subscriptions.trialEndsAt} IS NOT NULL AND ${subscriptions.trialEndsAt} <= UTC_TIMESTAMP() AND COALESCE(${subscriptions.univapaySubscriptionId}, '') = '' AND COALESCE(${subscriptions.stripeSubscriptionId}, '') = '')`,
         eq(threadsAccounts.isActive, true),
         // 1人だけ対象にするとき（お申し込み直後の当日補充・「今すぐ作る」ボタン）
         ...(onlyUserId ? [eq(users.id, onlyUserId)] : []),
@@ -3098,7 +3104,8 @@ export async function getProPlusUsers() {
       and(
         sql`${subscriptions.planId} NOT IN ('free', 'light')`,
         sql`${subscriptions.status} IN ('active', 'trialing')`,
-        sql`NOT (${subscriptions.cancelAtPeriodEnd} = 1 AND ${subscriptions.currentPeriodEnd} IS NOT NULL AND ${subscriptions.currentPeriodEnd} <= UTC_TIMESTAMP())`
+        sql`NOT (${subscriptions.cancelAtPeriodEnd} = 1 AND ${subscriptions.currentPeriodEnd} IS NOT NULL AND ${subscriptions.currentPeriodEnd} <= UTC_TIMESTAMP())`,
+        sql`NOT (${subscriptions.status} = 'trialing' AND ${subscriptions.trialEndsAt} IS NOT NULL AND ${subscriptions.trialEndsAt} <= UTC_TIMESTAMP() AND COALESCE(${subscriptions.univapaySubscriptionId}, '') = '' AND COALESCE(${subscriptions.stripeSubscriptionId}, '') = '')`
       )
     );
 }

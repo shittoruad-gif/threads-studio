@@ -64,6 +64,7 @@ describe("billingReconcile: ジョブ本体", () => {
     const updates: any[] = [];
     const notified: any[] = [];
     const fakeDb = {
+      execute: async () => [[]],
       select: () => ({
         from: () => ({
           where: async () => [
@@ -105,6 +106,7 @@ describe("billingReconcile: ジョブ本体", () => {
     const updates: any[] = [];
     const notified: any[] = [];
     const fakeDb = {
+      execute: async () => [[]],
       select: () => ({
         from: () => ({
           where: async () => [
@@ -133,6 +135,7 @@ describe("billingReconcile: ジョブ本体", () => {
 
   it("Univapayに無いIDでも落ちず、失敗として記録する", async () => {
     const fakeDb = {
+      execute: async () => [[]],
       social: null,
       select: () => ({
         from: () => ({
@@ -165,6 +168,7 @@ describe("billingReconcile: ジョブ本体", () => {
     const canceled: string[] = [];
     const future = new Date(Date.now() + 5 * 86400_000);
     const fakeDb = {
+      execute: async () => [[]],
       select: () => ({
         from: () => ({
           where: async () => [
@@ -196,5 +200,24 @@ describe("billingReconcile: ジョブ本体", () => {
     expect(paidThroughFromDueDate("2026-10-02")?.toISOString()).toBe("2026-10-01T15:00:00.000Z");
     expect(paidThroughFromDueDate(null)).toBeNull();
     expect(paidThroughFromDueDate("なし")).toBeNull();
+  });
+});
+
+describe("billingReconcile: クーポンの無料体験の終わり（2026-10-03）", () => {
+  beforeEach(() => { vi.resetModules(); });
+  it("決済の契約が無い体験が終わっていたら canceled に落とす", async () => {
+    const updates: any[] = [];
+    const fakeDb = {
+      execute: async () => [[{ id: 31, userId: 900 }]],
+      select: () => ({ from: () => ({ where: async () => [] }) }),
+      update: () => ({ set: (patch: any) => ({ where: async () => { updates.push(patch); } }) }),
+    };
+    vi.doMock("./db", () => ({ getDb: async () => fakeDb }));
+    vi.doMock("./univapay", () => ({ getSubscription: async () => ({}) }));
+    vi.doMock("./_core/notification", () => ({ notifyOwner: async () => true }));
+    const { runBillingReconcileJob } = await import("./billingReconcile");
+    const r = await runBillingReconcileJob();
+    expect(r.updated).toEqual([{ subscriptionId: 31, userId: 900, from: "trialing", to: "canceled" }]);
+    expect(updates).toEqual([{ status: "canceled" }]);
   });
 });

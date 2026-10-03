@@ -74,6 +74,23 @@ export async function runBillingReconcileJob(): Promise<ReconcileResult> {
     return result;
   }
 
+  // ★クーポンの無料体験（決済の契約なし）が終わった契約を canceled に落とす（2026-10-03 三上様指示）。
+  //   画面の説明「期間終了後は課金なしで停止」の実行役が無く、終わっても trialing のまま使えていた。
+  //   期限なしのクーポン（trialEndsAt なし）とカード登録の7日間体験（UnivaPayの契約あり）は触らない。
+  try {
+    const expired: any = await db.execute(sql`
+      SELECT id, userId FROM subscriptions
+      WHERE status = 'trialing' AND trialEndsAt IS NOT NULL AND trialEndsAt <= UTC_TIMESTAMP()
+        AND COALESCE(univapaySubscriptionId, '') = '' AND COALESCE(stripeSubscriptionId, '') = ''`);
+    for (const r of ((expired as any)[0] ?? []) as any[]) {
+      await db.update(subscriptions).set({ status: 'canceled' }).where(eq(subscriptions.id, Number(r.id)));
+      result.updated.push({ subscriptionId: Number(r.id), userId: Number(r.userId), from: 'trialing', to: 'canceled' });
+      console.log(`[BillingReconcile] sub=${r.id} クーポンの無料体験が終了 → canceled`);
+    }
+  } catch (e: any) {
+    result.failed.push({ subscriptionId: 0, reason: `クーポン体験の終了処理に失敗: ${String(e?.message ?? e).slice(0, 150)}` });
+  }
+
   const rows = await db
     .select()
     .from(subscriptions)

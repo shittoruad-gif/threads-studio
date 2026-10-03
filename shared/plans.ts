@@ -418,12 +418,21 @@ export function getMaxLineLinks(planId: string | null | undefined): number {
  *   毎朝7:20の照合のときなので、それまでの数時間は有料機能が使えてしまっていた（氷見様）。
  */
 export function effectiveSubscriptionStatus<S extends string | null | undefined>(
-  sub: { status: S; cancelAtPeriodEnd?: boolean | number | null; currentPeriodEnd?: Date | string | null },
+  sub: {
+    status: S; cancelAtPeriodEnd?: boolean | number | null; currentPeriodEnd?: Date | string | null;
+    trialEndsAt?: Date | string | null; univapaySubscriptionId?: string | null; stripeSubscriptionId?: string | null;
+  },
   now: Date = new Date(),
 ): S | 'canceled' {
-  const ended = !!sub.cancelAtPeriodEnd && sub.currentPeriodEnd != null
-    && new Date(sub.currentPeriodEnd as any).getTime() <= now.getTime();
+  const past = (d: Date | string | null | undefined) => d != null && new Date(d as any).getTime() <= now.getTime();
+  const ended = !!sub.cancelAtPeriodEnd && past(sub.currentPeriodEnd);
   if (ended && (sub.status === 'active' || sub.status === 'trialing')) return 'canceled';
+  // ★クーポンの無料体験（14日・30日など）は、決済の契約が無いので終わっても課金されない。
+  //   画面の説明どおり「期間が終わったら課金なしで停止」にする（2026-10-03 三上様「クーポンの期限切れで止める処理も直して」）。
+  //   カード登録の7日間体験（UnivaPayの契約あり）は、初回決済の通知で active に変わるのでここでは止めない。
+  //   期限なしのクーポン（PROST2026・trialEndsAt なし）は対象外。
+  const hasPaymentContract = !!(sub.univapaySubscriptionId || sub.stripeSubscriptionId);
+  if (sub.status === 'trialing' && !hasPaymentContract && past(sub.trialEndsAt)) return 'canceled';
   return sub.status;
 }
 
