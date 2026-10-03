@@ -32,7 +32,7 @@ import {
   emailLogs, EmailLog, InsertEmailLog
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
-import { PLANS } from '../shared/plans';
+import { PLANS, effectiveSubscriptionStatus, resolveEffectivePlanId } from '../shared/plans';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -343,7 +343,11 @@ export async function getSubscriptionByUserId(userId: number): Promise<Subscript
     .orderBy(desc(subscriptions.createdAt))
     .limit(1);
 
-  return result.length > 0 ? result[0] : undefined;
+  // ★使える期間を過ぎた解約の予約は、DBの切り替え（毎朝の照合）を待たずに canceled として返す（2026-10-03）。
+  //   有料機能の判定（resolveEffectivePlanId 等）はすべてこの status を見るため、ここで一括して止まる。
+  if (result.length === 0) return undefined;
+  const row = result[0];
+  return { ...row, status: effectiveSubscriptionStatus(row) as Subscription['status'] };
 }
 
 /**
@@ -1426,7 +1430,8 @@ export async function getAiGenerationUsage(userId: number): Promise<{ count: num
 
   // Get user's plan limit from PLANS
   const subscription = await getSubscriptionByUserId(userId);
-  const plan = subscription ? PLANS[subscription.planId] : PLANS.free;
+  // ★解約後・決済失敗中は無料の上限にする（planId だけを見て有料の上限のままになっていた・2026-10-03）
+  const plan = PLANS[resolveEffectivePlanId(subscription?.planId, subscription?.status)] ?? PLANS.free;
   const limit = plan?.features.maxAiGenerations ?? 0;
 
   return { count, limit };
@@ -3092,7 +3097,8 @@ export async function getProPlusUsers() {
     .where(
       and(
         sql`${subscriptions.planId} NOT IN ('free', 'light')`,
-        sql`${subscriptions.status} IN ('active', 'trialing')`
+        sql`${subscriptions.status} IN ('active', 'trialing')`,
+        sql`NOT (${subscriptions.cancelAtPeriodEnd} = 1 AND ${subscriptions.currentPeriodEnd} IS NOT NULL AND ${subscriptions.currentPeriodEnd} <= UTC_TIMESTAMP())`
       )
     );
 }

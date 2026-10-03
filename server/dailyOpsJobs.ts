@@ -139,8 +139,11 @@ async function archiveHitPostsForUser(userId: number): Promise<number> {
 export async function runAnalyticsSnapshotJob(): Promise<void> {
   const users = await getAllUsers();
   let processed = 0, fetched = 0, archivedTotal = 0;
+  const { isEnded } = await import("./endedGuard");
   for (const user of users) {
     try {
+      // ★ご契約が終わった方の数字は取りに行かない（2026-10-03）
+      if (await isEnded(user.id)) continue;
       const accounts = await getThreadsAccountsByUserId(user.id);
       if (!accounts || accounts.length === 0) continue;
       processed++;
@@ -213,8 +216,11 @@ export async function runCommentWatchJob(): Promise<void> {
   const users = await getAllUsers();
   let notified = 0;
 
+  const { isEnded } = await import("./endedGuard");
   for (const u of users) {
     try {
+      // ★ご契約が終わった方にはコメントの通知・返信の文案を作らない（2026-10-03）
+      if (await isEnded(u.id)) continue;
       const accounts = await getThreadsAccountsByUserId(u.id);
       if (!accounts || accounts.length === 0) continue;
       const fullUser = await getUserById(u.id);

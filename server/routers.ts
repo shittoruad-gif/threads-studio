@@ -12,6 +12,7 @@ import bcrypt from "bcryptjs";
 import * as couponService from "./coupon";
 import { PLANS, TRIAL_DAYS, getPlan, resolveEffectivePlanId } from "../shared/plans";
 import { TRPCError } from "@trpc/server";
+import { assertNotEnded } from "./endedGuard";
 import { approvedLocalTerms } from './localGeo';
 import { buildShowcase, MIN_IMPRESSIONS } from './showcase';
 
@@ -1437,7 +1438,8 @@ export const appRouter = router({
           cta: z.string().optional().default(''),
         })).min(2).max(5),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        await assertNotEnded(ctx.user.id); // ★ご契約が終わった方は使えない（2026-10-03）
         const optionsText = input.options.map((o, i) => {
           const body = [o.mainPost, ...(o.treePosts ?? []), o.cta].filter(Boolean).join('\n');
           return `案${i + 1}:\n${body}`;
@@ -1511,6 +1513,7 @@ ${optionsText}`;
         count: z.number().min(3).max(5).optional().default(5),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertNotEnded(ctx.user.id); // ★ご契約が終わった方は使えない（2026-10-03）
         const project = await db.getProjectById(input.projectId);
         if (!project || project.userId !== ctx.user.id) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
@@ -2139,8 +2142,9 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         const allAccounts = await db.getAllThreadsAccountsByUserId(ctx.user.id);
         const isReactivation = !isReconnection && allAccounts.some(a => a.threadsUserId === profile.id);
         
-        // Check account limit only for truly new accounts (not re-connections or re-activations)
-        if (!isReconnection && !isReactivation) {
+        // Check account limit for new accounts and re-activations (re-connection of an active account is fine)
+        // ★解除ずみのアカウントの再連携も上限に数える（解約後に昔のアカウントを全部戻せていた・2026-10-03）
+        if (!isReconnection) {
           const subscription = await db.getSubscriptionByUserId(ctx.user.id);
           const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
           const plan = getPlan(planId);
@@ -3546,6 +3550,7 @@ ${input.commentText}
 
     // Fetch and store analytics from Threads API for a user's posts
     fetchAndStoreAnalytics: protectedProcedure.mutation(async ({ ctx }) => {
+        await assertNotEnded(ctx.user.id); // ★ご契約が終わった方は使えない（2026-10-03）
       const accounts = await db.getThreadsAccountsByUserId(ctx.user.id);
       if (accounts.length === 0) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Threadsアカウントが連携されていません。' });
@@ -4923,6 +4928,7 @@ ${input.commentText}
         const { verifyMaterialFormToken, submitMaterialForm } = await import('./materialLedger');
         const projectId = verifyMaterialFormToken(input.t);
         if (!projectId) throw new TRPCError({ code: 'FORBIDDEN', message: 'リンクの有効期限が切れています。担当者に新しいリンクをお送りするようお伝えください。' });
+        { const pj: any = await db.getProjectById(projectId); await assertNotEnded(pj?.userId); }
         const { t: _t, ...rest } = input;
         return await submitMaterialForm(projectId, rest);
       }),
@@ -4945,6 +4951,7 @@ ${input.commentText}
     collect: protectedProcedure
       .input(z.object({ projectId: z.string() }))
       .mutation(async ({ ctx, input }) => {
+        await assertNotEnded(ctx.user.id); // ★ご契約が終わった方は使えない（2026-10-03）
         const project = await db.getProjectById(input.projectId);
         if (!project || project.userId !== ctx.user.id) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'プロジェクトが見つかりません' });
@@ -5189,6 +5196,7 @@ ${input.commentText}
         message: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertNotEnded(ctx.user.id); // ★ご契約が終わった方は使えない（2026-10-03）
         let conversationId = input.conversationId;
 
         // Create new conversation if not provided
@@ -5327,6 +5335,7 @@ ${CONCEPT_DESIGN_PROMPT}`;
         offer: z.string().max(300).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await assertNotEnded(ctx.user.id); // ★ご契約が終わった方は使えない（2026-10-03）
         const { planCountdownSlots } = await import('../shared/eventCountdown');
         const slots = planCountdownSlots(input.eventDate, new Date());
         if (slots.length === 0) {

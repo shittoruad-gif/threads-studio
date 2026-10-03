@@ -411,6 +411,22 @@ export function getMaxLineLinks(planId: string | null | undefined): number {
   return p?.features.maxLineLinks ?? 1;
 }
 
+/**
+ * 契約の「いまの」状態。解約の予約が付いていて、使える期間（currentPeriodEnd）を過ぎていれば
+ * DB上はまだ active でも 'canceled' として扱う。
+ * ★2026-10-03 三上様「解約後は有料機能が全て使えないように徹底」。DBの状態が canceled に変わるのは
+ *   毎朝7:20の照合のときなので、それまでの数時間は有料機能が使えてしまっていた（氷見様）。
+ */
+export function effectiveSubscriptionStatus<S extends string | null | undefined>(
+  sub: { status: S; cancelAtPeriodEnd?: boolean | number | null; currentPeriodEnd?: Date | string | null },
+  now: Date = new Date(),
+): S | 'canceled' {
+  const ended = !!sub.cancelAtPeriodEnd && sub.currentPeriodEnd != null
+    && new Date(sub.currentPeriodEnd as any).getTime() <= now.getTime();
+  if (ended && (sub.status === 'active' || sub.status === 'trialing')) return 'canceled';
+  return sub.status;
+}
+
 export function resolveEffectivePlanId(
   planId: string | null | undefined,
   status: string | null | undefined,

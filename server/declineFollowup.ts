@@ -51,10 +51,15 @@ export async function listRepeatDecliners(): Promise<RepeatDecliner[]> {
     FROM threadsAccounts a JOIN users u ON u.id = a.userId
     HAVING declines >= ${FOLLOWUP_MIN_DECLINES}
     ORDER BY declines DESC`);
-  return (((rows as any)[0] ?? []) as any[]).map((r) => ({
+  const list = (((rows as any)[0] ?? []) as any[]).map((r) => ({
     accountId: Number(r.accountId), userId: Number(r.userId), username: String(r.username ?? ""),
     userName: String(r.userName ?? ""), declines: Number(r.declines), published: Number(r.published),
   }));
+  // ★ご契約が終わった方は、フォロー・◯✕アンケートの案を作らない（AIも呼ばない・2026-10-03）
+  const { isEnded } = await import("./endedGuard");
+  const out: typeof list = [];
+  for (const t of list) if (!(await isEnded(t.userId))) out.push(t);
+  return out;
 }
 
 /** そのアカウントの、直近 days 日の見送り回数（3案は1回として数える） */

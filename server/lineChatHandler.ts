@@ -289,6 +289,24 @@ async function repliesForPosts(userId: number, mode?: "one" | "all"): Promise<un
 }
 
 /** ご契約プラン（実効プラン）を取得する。プランごとの上限判定に使う。 */
+/** ご契約が終わった方か（判定に失敗したら止めない） */
+async function isEndedCustomerSafe(userId: number): Promise<boolean> {
+  try { return await db.isEndedCustomer(userId); } catch { return false; }
+}
+
+/** ご契約が終わった方へのお返事 */
+function endedReply() {
+  return textWithQuick(
+    "ご契約が終了しているため、この機能はお使いいただけません。\n" +
+    "再開をご希望の場合や、ご不明な点があれば「担当者に聞く」からお知らせください。",
+    [
+      { label: "ご契約内容", data: "s=plan" },
+      { label: "担当者に聞く", data: "m=staff" },
+      { label: "使い方", data: "m=help" },
+    ],
+  );
+}
+
 async function planOf(userId: number) {
   try {
     const sub = await db.getSubscriptionByUserId(userId);
@@ -1348,6 +1366,17 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   //   「はじめの設定」(counseling) と連携の途中(link_email/signup_code)は、
   //   ボタン操作も含めて流れの一部なので消さない。
   await clearPendingTextInput(lineUserId, q);
+
+  // ★ご契約が終わった方は、有料の機能を動かさない（2026-10-03 三上様「解約後は有料機能が全て使えないように徹底」）。
+  //   ご契約内容・使い方・お問い合わせ・連携の解除・数字や登録内容を見ることだけは残す。
+  if (await isEndedCustomerSafe(user.id)) {
+    const allowed = q.s === "plan"
+      || ["menu", "help", "support", "staff", "sendq", "cancel", "unlink", "stats", "profile"].includes(String(q.m ?? ""));
+    if (!allowed) {
+      await db.clearLineChatState(lineUserId).catch(() => undefined);
+      return [endedReply()];
+    }
+  }
 
   // ── メニュー ──
   // ★連携済みの方が、切り替え前の登録用メニューの「紹介コードを入力」を押したとき。
@@ -3003,6 +3032,12 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     //   （英数字・ハイフン・アンダースコアだけの短い文字列＝コードの見た目）
     if (looksLikeReferralCode(text)) return referralLink(lineUserId, text);
     return notLinked();
+  }
+
+  // ★ご契約が終わった方の打ち言葉は、ご質問としてだけ受ける（書き直し・設定・URL登録などの有料の機能は動かさない・2026-10-03）
+  if (await isEndedCustomerSafe(user.id)) {
+    await db.clearLineChatState(lineUserId).catch(() => undefined);
+    return (await autoAnswer(user.id, lineUserId, text)) ?? [endedReply()];
   }
 
   const st = await db.getLineChatState(lineUserId);

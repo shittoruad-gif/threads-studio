@@ -164,7 +164,13 @@ export async function executePendingPosts() {
 
         // ★契約が終わった方の自動の投稿は公開しない（2026-10-03 氷見様：解約後に2本公開されていた）。
         //   ご自身で予約した投稿（source='manual'）は無料でも使える機能なので対象外。
-        if (post.source === 'auto' && !(await db.hasUsableSubscription(post.userId))) {
+        //   ただし固定投稿の案・イベント告知は、こちらのAIが作った投稿なので manual でも止める。
+        //   （固定投稿・イベント告知は無料のお試し中にも作れるので、そちらは「契約が終わった方」だけ止める）
+        const systemMadeManual = post.source !== 'auto' && ((post as any).angle === 'pinned' || (post as any).eventId != null);
+        const blocked = post.source === 'auto'
+          ? !(await db.hasUsableSubscription(post.userId))
+          : systemMadeManual && await db.isEndedCustomer(post.userId);
+        if (blocked) {
           await db.updateScheduledPost(post.id, {
             status: 'canceled',
             errorMessage: 'ご契約が終了しているため自動の投稿を見送り',
