@@ -511,7 +511,7 @@ export async function sendPlanGuideEmail(params: {
 
 /**
  * 決済失敗が続き、猶予期間を過ぎてサービスを自動停止したときの通知メール。
- * フリープランに戻った旨と、再開（再登録）の導線を案内する。
+ * 有料機能が止まった旨と、再開（再登録）の導線を案内する。
  */
 export async function sendSubscriptionStoppedEmail(
   to: string,
@@ -527,7 +527,7 @@ export async function sendSubscriptionStoppedEmail(
       `
         <p>いつも Threads Studio をご利用いただきありがとうございます。</p>
         <p><strong>${planName}プラン</strong>のお支払いが確認できない状態が続いたため、
-        本日付で有料プランを一時停止し、フリープランに切り替えました。</p>
+        本日付で有料プランを一時停止しました。</p>
         <p>自動投稿などの有料機能は現在ご利用いただけません。引き続きご利用になる場合は、
         以下のボタンからカード情報を登録のうえ、プランを再開してください。</p>
         <p>ご不明な点がございましたら、お気軽にサポートまでご連絡ください。</p>

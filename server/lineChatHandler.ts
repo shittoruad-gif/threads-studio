@@ -56,7 +56,7 @@ function signupGuide(): unknown[] {
     "こちらのページから、会員登録をお願いします（3分ほどで終わります）。\n" +
     `${base}/register\n\n` +
     "ご登録が終わると、そのまま料金プランの画面が開きます。\n" +
-    "無料のフリープランから始めることもできます。\n\n" +
+    "最初の7日間は無料です（期間中に解約すれば料金はかかりません）。\n\n" +
     "登録が終わったら、このトークで「登録済みの方はこちら」を押してください。",
     [
       { label: "紹介コードをお持ちの方", data: "m=refcode" },
@@ -292,6 +292,25 @@ async function repliesForPosts(userId: number, mode?: "one" | "all"): Promise<un
 /** ご契約が終わった方か（判定に失敗したら止めない） */
 async function isEndedCustomerSafe(userId: number): Promise<boolean> {
   try { return await db.isEndedCustomer(userId); } catch { return false; }
+}
+
+/** 使える契約があるか（判定に失敗したら止めない） */
+async function isSubscribedSafe(userId: number): Promise<boolean> {
+  try { return await db.hasUsableSubscription(userId); } catch { return true; }
+}
+
+/** お申し込み前の方へのお返事 */
+function notSubscribedReply() {
+  const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+  return textWithQuick(
+    "この機能は、お申し込みのあとにお使いいただけます。\n" +
+    "最初の7日間は無料です。お申し込みの翌朝6時に、1本目の投稿が届きます。\n\n" +
+    `▼ 7日間無料で始める（1分）\n${base}/pricing?openExternalBrowser=1`,
+    [
+      { label: "担当者に聞く", data: "m=staff" },
+      { label: "使い方", data: "m=help" },
+    ],
+  );
 }
 
 /** ご契約が終わった方へのお返事 */
@@ -1118,7 +1137,7 @@ async function advanceCounseling(userId: number, lineUserId: string, st: Counsel
         const base = process.env.APP_BASE_URL || "https://threads-studio.com";
         if (perDay <= 0) {
           return [textWithQuick(
-            "ありがとうございます。これで投稿づくりの材料がそろいました。\n\n" + planUpgradeExitText(pl?.name ?? "フリープラン", base),
+            "ありがとうございます。これで投稿づくりの材料がそろいました。\n\n" + planUpgradeExitText(pl?.name ?? "お申し込み前", base),
             [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT],
           )];
         }
@@ -1231,7 +1250,7 @@ async function saveCounselingFromChat(userId: number, lineUserId: string, st: Co
   if (maxPerDay <= 0) {
     // ★断りで終わらせず、次の行動（7日間無料→明日の朝6時に1本目）を示す（2026-09-19）
     return [textWithQuick(
-      head + planUpgradeExitText(plan?.name ?? "フリープラン", base),
+      head + planUpgradeExitText(plan?.name ?? "お申し込み前", base),
       [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT],
     )];
   }
@@ -1376,6 +1395,10 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       await db.clearLineChatState(lineUserId).catch(() => undefined);
       return [endedReply()];
     }
+  } else if (!(await isSubscribedSafe(user.id))) {
+    // ★お申し込み前の方は、はじめの設定と連携だけ（2026-10-03 三上様「フリープランは不要」）。
+    //   投稿の操作（a=）・固定投稿の案（m=makepin）・コメント返信の文案（cr=）はAIで作るので動かさない。
+    if (q.a || q.cr || q.m === "makepin") return [notSubscribedReply()];
   }
 
   // ── メニュー ──

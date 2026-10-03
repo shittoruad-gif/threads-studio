@@ -201,7 +201,7 @@ export default function Settings() {
   //   表示には使わず planId から引く（状態は括弧書きで添える）。
   const planLabel = (() => {
     const contract = subscription?.planId ? getPlan(subscription.planId) : undefined;
-    if (!contract || contract.id === "free") return t("無料プラン");
+    if (!contract || contract.id === "free") return t("お申し込み前");
     const name = t(contract.name);
     if (subscription?.isTrialing) return `${name}（${t("無料お試し中")}）`;
     if (subscription?.isPaymentPastDue) return `${name}（${t("お支払い確認中")}）`;

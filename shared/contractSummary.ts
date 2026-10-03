@@ -50,11 +50,11 @@ export function formatJpDate(v: Date | string | null | undefined): string | null
 
 export function contractSummary(c: ContractInfo | null | undefined): string {
   if (!c || !c.planName) {
-    return "ご契約：フリープラン（無料）\nお支払いはございません。";
+    return "ご契約：お申し込み前（7日間無料で始められます）\nお支払いはございません。";
   }
   const price = typeof c.priceMonthly === "number" ? c.priceMonthly : null;
   if (price === 0) {
-    return "ご契約：フリープラン（無料）\nお支払いはございません。";
+    return "ご契約：お申し込み前（7日間無料で始められます）\nお支払いはございません。";
   }
 
   const lines: string[] = [`ご契約：${c.planName}`];

@@ -21,7 +21,7 @@ export default function BillingSummary({ subscription }: { subscription: any }) 
 
   const rows: Array<[string, string]> = [];
   if (!contract || contract.id === "free") {
-    rows.push([t("お支払い"), t("ありません（無料プラン）")]);
+    rows.push([t("お支払い"), t("ありません（お申し込み前）")]);
   } else {
     if (typeof contract.priceMonthly === "number" && contract.priceMonthly > 0) {
       rows.push([t("月額"), `${contract.priceMonthly.toLocaleString("ja-JP")}${t("円（税込）")}`]);

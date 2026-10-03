@@ -247,7 +247,8 @@ export default function Pricing() {
 
   // キャンペーンプランはカードとして直接表示しない（コード適用時に通常カードの価格を切替）
   // agency_client（代理店が発行するクライアント枠）は購入対象ではないので料金表に出さない
-  const plans = Object.values(PLANS).filter((p) => !p.isCampaign && p.id !== 'agency_client');
+  // ★フリープランは出さない（2026-10-03 三上様「フリープランは不要・1で進めて」）。お申し込み前の方は7日間無料から
+  const plans = Object.values(PLANS).filter((p) => !p.isCampaign && p.id !== 'agency_client' && p.id !== 'free');
 
   return (
     <div className="min-h-screen bg-muted/50">
@@ -382,7 +383,7 @@ export default function Pricing() {
                     下の価格はプレビューです。申し込みには以下の手順でお進みください：
                   </p>
                   <ol className="mt-2 text-sm text-amber-700 space-y-1 list-decimal list-inside">
-                    <li>「無料で始める」から無料アカウントを作成</li>
+                    <li>「7日間無料で始める」からアカウントを作成（登録だけでは料金はかかりません）</li>
                     <li>ダッシュボード右上のアカウントメニューから「紹介コード」を入力（<span className="font-mono font-bold">{urlCouponCode}</span>）</li>
                     <li>この料金ページに戻ってお申し込みボタンを押す</li>
                   </ol>
@@ -400,7 +401,7 @@ export default function Pricing() {
           </div>
         )}
         {/* Plan Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 max-w-7xl mx-auto mb-20">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 max-w-7xl mx-auto mb-20">
           {plans.map((plan) => {
             const colors = PLAN_COLORS[plan.id] || PLAN_COLORS.free;
             // コード適用時、このプランに対応するキャンペーンプランがあれば価格を切替
@@ -567,7 +568,7 @@ export default function Pricing() {
                     <Fragment key={`cat-${catIndex}`}>
                       <tr className="bg-muted/50">
                         <td
-                          colSpan={6}
+                          colSpan={5}
                           className="p-3 text-foreground font-semibold text-sm border-b border-border"
                         >
                           {category.category}
@@ -580,9 +581,6 @@ export default function Pricing() {
                         >
                           <td className="p-4 text-muted-foreground text-sm">
                             {feature.name}
-                          </td>
-                          <td className="p-4 text-center text-sm">
-                            {renderCellValue(feature.free)}
                           </td>
                           <td className="p-4 text-center text-sm">
                             {renderCellValue(feature.light)}

@@ -77,15 +77,17 @@ const FEATURES_BUSINESS: PlanFeatures = {
 export const PLANS: Record<string, PlanConfig> = {
   free: {
     id: 'free',
-    name: 'フリープラン',
-    description: '無料でお試し',
+    // ★2026-10-03 三上様「フリープランは不要（1で進めて）」：プランとしては見せず、「お申し込み前」の状態だけ残す。
+    //   お申し込み前・解約後・クーポン体験の終了後はこの扱い。できるのは、はじめの設定と連携だけ（投稿・AI生成なし）。
+    name: 'お申し込み前',
+    description: '7日間無料で始められます',
     priceMonthly: 0,
     features: {
       maxProjects: 1,
       maxThreadsAccounts: 1,
-      maxAutoPostsPerDay: 0,     // フリーは自動投稿なし（手動でお試し）
-      maxScheduledPosts: 3,
-      maxAiGenerations: 3,
+      maxAutoPostsPerDay: 0,
+      maxScheduledPosts: 0,
+      maxAiGenerations: 0,
       hasPrioritySupport: false,
       hasApiAccess: false,
       maxLineLinks: 1,

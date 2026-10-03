@@ -2,9 +2,10 @@ import { describe, it, expect } from "vitest";
 import { contractSummary } from "../shared/contractSummary";
 
 describe("ご契約内容の文面", () => {
-  it("フリープランはお支払いなしと伝える", () => {
-    const t = contractSummary({ planName: "フリー", priceMonthly: 0 });
-    expect(t).toContain("フリープラン");
+  it("お申し込み前はお支払いなしと伝える（2026-10-03 フリープラン廃止）", () => {
+    const t = contractSummary({ planName: "お申し込み前", priceMonthly: 0 });
+    expect(t).toContain("お申し込み前");
+    expect(t).toContain("7日間無料");
     expect(t).toContain("お支払いはございません");
   });
 

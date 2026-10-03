@@ -680,7 +680,7 @@ async function startServer() {
                   subject: '【Threads Studio】キャンペーン期間が終了しました',
                   html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
                     <h2>キャンペーン期間（${endedPlan.campaignCharges ?? 3}回分）が終了しました</h2>
-                    <p>${endedPlan.name} のキャンペーン課金が完了し、現在フリープランに戻っています。</p>
+                    <p>${endedPlan.name} のキャンペーン課金が完了し、現在は有料機能が止まっています。</p>
                     <p>引き続き有料機能（自動投稿・無制限AI生成など）をご利用になる場合は、
                     ${normal ? `「${normal.name}（月¥${normal.priceMonthly.toLocaleString()}）」` : '通常プラン'}
                     へのご登録をお願いいたします。</p>

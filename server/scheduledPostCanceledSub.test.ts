@@ -49,6 +49,7 @@ vi.mock("./db", () => ({
   updateThreadsAccountToken: vi.fn(),
   getUserById: vi.fn(async () => ({ id: 4851, email: "x@example.test" })),
   hasUsableSubscription: vi.fn(async () => usable),
+  isEndedCustomer: vi.fn(async () => true),
 }));
 
 describe("契約が終わった方の自動の投稿（2026-10-03）", () => {
@@ -64,11 +65,12 @@ describe("契約が終わった方の自動の投稿（2026-10-03）", () => {
     expect(u?.patch.errorMessage).toMatch(/ご契約が終了/);
   });
 
-  it("ご自身で予約した投稿は止めない", async () => {
+  it("使える契約が無ければ、ご自身で予約した投稿も公開しない（2026-10-03 フリープラン廃止）", async () => {
     usable = false; source = "manual";
     const { executePendingPosts } = await import("./scheduledPostExecutor");
     await executePendingPosts();
-    expect(updates.find((x) => x.patch.status === "canceled")).toBeUndefined();
+    expect(publish).not.toHaveBeenCalled();
+    expect(updates.find((x) => x.id === 2417)?.patch.status).toBe("canceled");
   });
 
   it("契約が生きていれば止めない", async () => {

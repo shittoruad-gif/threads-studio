@@ -342,24 +342,24 @@ export default function Dashboard() {
         </div>
 
         {/* Trial Banner */}
-        {/* 無料プランのまま止まっている人への、プラン選択への導線。
+        {/* お申し込み前のまま止まっている人への、プラン選択への導線（2026-10-03 フリープラン廃止で文言を変更）。
             サイドメニューの「料金プラン」だけだと気づかれず「プランを選べない」と言われたため追加。 */}
         {!subLoading && (subscription?.planId ?? 'free') === 'free' && !subscription?.isTrialing && (
           <div className="mb-6 bg-emerald-50 border-2 border-emerald-200 rounded-xl p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <div className="min-w-0 flex-1">
                 <p className="text-sm sm:text-base font-bold text-emerald-800">
-                  {t("いまは無料プランです")}
+                  {t("いまはお申し込み前です")}
                 </p>
                 <p className="text-xs sm:text-sm text-emerald-700 mt-1 leading-relaxed">
-                  {t("自動投稿・AI生成の回数を増やすには、有料プランをお選びください。")}
+                  {t("はじめの設定とThreadsの連携まではお使いいただけます。投稿づくりと毎日の自動投稿は、お申し込みから始まります（最初の7日間は無料）。")}
                 </p>
               </div>
               <a
                 href="/pricing"
                 className="shrink-0 inline-flex items-center justify-center rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 text-sm transition-colors"
               >
-                {t("料金プランを見る")}
+                {t("7日間無料で始める")}
               </a>
             </div>
           </div>
@@ -519,7 +519,7 @@ export default function Dashboard() {
             </p>
           </div>
           <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-sm px-3 py-1 shrink-0 self-start">
-            {subscription?.plan?.name ? t(subscription.plan.name) : t('無料プラン')}
+            {subscription?.plan?.name ? t(subscription.plan.name) : t('お申し込み前')}
           </Badge>
         </div>
 
@@ -1053,7 +1053,7 @@ export default function Dashboard() {
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <p className="text-muted-foreground text-sm mb-1">{t("現在のプラン")}</p>
-                <p className="text-2xl font-bold text-foreground">{subscription?.plan?.name ? t(subscription.plan.name) : t('無料プラン')}</p>
+                <p className="text-2xl font-bold text-foreground">{subscription?.plan?.name ? t(subscription.plan.name) : t('お申し込み前')}</p>
                 {subscription?.plan?.priceMonthly ? (
                   <p className="text-muted-foreground">¥{subscription.plan.priceMonthly.toLocaleString()}{t('/月')}</p>
                 ) : null}
@@ -1124,7 +1124,7 @@ export default function Dashboard() {
                   <p className="text-yellow-700 text-sm">
                     {subscription?.status === 'canceled'
                       ? t("再度ご利用になる場合は、料金プランから再登録してください。")
-                      : t("お支払いずみの期間が終わるまで、投稿はこれまでどおり続きます。その後は無料プランに切り替わります。再開したくなったら料金プランから再登録してください。")}
+                      : t("お支払いずみの期間が終わるまで、投稿はこれまでどおり続きます。その後は投稿などの機能が止まります。再開したくなったら料金プランから再登録してください。")}
                   </p>
                 </div>
               </div>

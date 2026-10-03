@@ -174,7 +174,7 @@ export default function Guide() {
     },
     {
       q: 'プロジェクトを増やしたい / 削除したい',
-      a: 'AI投稿生成画面の「プロジェクトを切り替え」から新規作成。削除は各プロジェクトの設定から（無料プランは1プロジェクトまで）。',
+      a: 'AI投稿生成画面の「プロジェクトを切り替え」から新規作成。削除は各プロジェクトの設定から（お店の登録数はプランごとに上限があります）。',
     },
     {
       q: 'コメントへの返信を効率化したい',
@@ -321,7 +321,7 @@ export default function Guide() {
             <a href={getLoginUrl()}>
               <Button size="sm" className="neon-border">
                 <Sparkles className="w-4 h-4 mr-2" />
-                無料で始める
+                7日間無料で始める
               </Button>
             </a>
           </nav>

@@ -38,7 +38,7 @@ const demoSteps = [
     step: 1,
     title: "会員登録",
     time: "3分",
-    description: "お名前・メールアドレス・パスワードだけで登録できます。紹介コードをお持ちの方は、ここで入力します。無料のフリープランから始められます。",
+    description: "お名前・メールアドレス・パスワードだけで登録できます。紹介コードをお持ちの方は、ここで入力します。登録だけでは料金はかかりません。最初の7日間は無料でお試しいただけます。",
     image: "/demo/register.jpg",
     alt: "Threads Studio の会員登録画面",
     portrait: true,
@@ -310,7 +310,7 @@ export default function Landing() {
   ];
 
   const faqItems = [
-    { question: "無料プランでどこまで使えますか？", answer: "無料プランではお店の情報を1件登録でき、AI投稿の生成を月3回までお試しいただけます。毎日の自動投稿・予約投稿・複数アカウント管理は有料プラン（7日間無料）でご利用いただけます。" },
+    { question: "無料で試せますか？", answer: "はい。お申し込みから7日間は無料で、すべての機能をお試しいただけます。期間中に解約されれば料金はかかりません。お申し込み前でも、はじめの設定とThreadsの連携まではお使いいただけます。" },
     { question: "Threadsアカウントの連携は安全ですか？", answer: "Meta（旧Facebook）の公式OAuth認証を使用しており、お客様のパスワードを当社が保持することはありません。連携はいつでも解除できます。" },
     { question: "どのような業種に対応していますか？", answer: "整体院、美容サロン、飲食店、エステサロン、ネイルサロン、ジム・フィットネス、歯科医院など、幅広い店舗ビジネスに対応した投稿の型をご用意しています。" },
     { question: "解約はいつでもできますか？", answer: "はい、ダッシュボードからいつでも解約できます。解約後も契約期間中はサービスをご利用いただけます。7日間の無料トライアル中に解約すれば料金は一切発生せず、解約手数料もかかりません。" },
@@ -345,7 +345,7 @@ export default function Landing() {
             )}
             <Button size="sm" onClick={handleSignupClick} disabled={loading}>
               <Sparkles className="w-4 h-4 mr-1" />
-              {loading ? "読み込み中..." : isAuthenticated ? "ダッシュボードへ" : "無料で始める"}
+              {loading ? "読み込み中..." : isAuthenticated ? "ダッシュボードへ" : "7日間無料で始める"}
             </Button>
           </nav>
           <button className="md:hidden p-2 text-foreground/80 hover:text-foreground transition-colors" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="メニュー">
@@ -370,7 +370,7 @@ export default function Landing() {
                 )}
                 <Button size="sm" className="w-full" onClick={() => { setMobileMenuOpen(false); handleSignupClick(); }} disabled={loading}>
                   <Sparkles className="w-4 h-4 mr-1" />
-                  {loading ? "読み込み中..." : isAuthenticated ? "ダッシュボードへ" : "無料で始める"}
+                  {loading ? "読み込み中..." : isAuthenticated ? "ダッシュボードへ" : "7日間無料で始める"}
                 </Button>
               </div>
             </nav>

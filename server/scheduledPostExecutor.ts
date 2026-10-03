@@ -162,20 +162,16 @@ export async function executePendingPosts() {
           continue;
         }
 
-        // ★契約が終わった方の自動の投稿は公開しない（2026-10-03 氷見様：解約後に2本公開されていた）。
-        //   ご自身で予約した投稿（source='manual'）は無料でも使える機能なので対象外。
-        //   ただし固定投稿の案・イベント告知は、こちらのAIが作った投稿なので manual でも止める。
-        //   （固定投稿・イベント告知は無料のお試し中にも作れるので、そちらは「契約が終わった方」だけ止める）
-        const systemMadeManual = post.source !== 'auto' && ((post as any).angle === 'pinned' || (post as any).eventId != null);
-        const blocked = post.source === 'auto'
-          ? !(await db.hasUsableSubscription(post.userId))
-          : systemMadeManual && await db.isEndedCustomer(post.userId);
-        if (blocked) {
+        // ★使える契約が無い方の投稿は公開しない（2026-10-03）。
+        //   氷見様：解約後に自動の投稿が2本公開されていた。フリープラン廃止（三上様「1で進めて」）で、
+        //   お申し込み前の方にも投稿の機能は無いため、自動・手動・固定投稿・イベント告知を問わず止める。
+        if (!(await db.hasUsableSubscription(post.userId))) {
+          const ended = await db.isEndedCustomer(post.userId);
           await db.updateScheduledPost(post.id, {
             status: 'canceled',
-            errorMessage: 'ご契約が終了しているため自動の投稿を見送り',
+            errorMessage: ended ? 'ご契約が終了しているため投稿を見送り' : 'お申し込み前のため投稿を見送り',
           });
-          console.log(`[Scheduled Post] 契約終了のため見送り: post=${post.id} user=${post.userId}`);
+          console.log(`[Scheduled Post] 使える契約が無いため見送り: post=${post.id} user=${post.userId}`);
           continue;
         }
 

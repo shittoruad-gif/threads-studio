@@ -44,7 +44,7 @@ export async function handleReplyEvents(events: ReplyEvent[]): Promise<number> {
       const acct: any = ((await d.execute(sql`SELECT id, userId, threadsUsername FROM threadsAccounts WHERE threadsUserId = ${ev.rootOwnerId} AND isActive = 1 LIMIT 1`)) as any)[0][0];
       if (!acct) continue;
       // ★ご契約が終わった方には返信の文案を作らない（AIも呼ばない・2026-10-03）
-      if (await (await import("./endedGuard")).isEnded(Number(acct.userId))) continue;
+      if (!(await (await import("./endedGuard")).isSubscribed(Number(acct.userId)))) continue;
       if (ev.username && (ev.username === acct.threadsUsername || /^meta\.ai$/i.test(ev.username))) continue;
       const full: any = await db.getThreadsAccountById(Number(acct.id));
       const targets = await db.getLineUserIdsForUser(Number(acct.userId));
