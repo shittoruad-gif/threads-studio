@@ -65,6 +65,11 @@ export type InvokeParams = {
    * 事実厳守が重要な生成（投稿・返信）は呼び出し側でさらに低く(0.4〜0.5)指定する。
    */
   temperature?: number;
+  /**
+   * この呼び出しだけ使うモデル（未指定は GEMINI_MODEL／既定）。
+   * 失敗したら既定のモデルで1回やり直す（モデルの提供終了で投稿が止まらないように）。
+   */
+  model?: string;
   maxTokens?: number;
   max_tokens?: number;
   outputSchema?: OutputSchema;
@@ -280,7 +285,21 @@ const normalizeResponseFormat = ({
   };
 };
 
+const MODEL_NAME_RE = /^[a-z0-9][a-z0-9.\-]{1,63}$/;
+
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
+  const wanted = params.model && MODEL_NAME_RE.test(params.model) ? params.model : undefined;
+  if (params.model && !wanted) console.warn(`[LLM] 使えないモデル名を無視しました: ${String(params.model).slice(0, 40)}`);
+  if (!wanted || wanted === resolveModel()) return invokeOnce({ ...params, model: undefined });
+  try {
+    return await invokeOnce({ ...params, model: wanted });
+  } catch (e) {
+    console.warn(`[LLM] ${wanted} で失敗したため既定のモデルでやり直します: ${(e as Error)?.message?.slice(0, 200)}`);
+    return invokeOnce({ ...params, model: undefined });
+  }
+}
+
+async function invokeOnce(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
 
   const {
@@ -295,7 +314,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const payload: Record<string, unknown> = {
-    model: resolveModel(),
+    model: params.model || resolveModel(),
     messages: messages.map(normalizeMessage),
   };
 

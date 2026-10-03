@@ -184,6 +184,14 @@ const lastRejectReason = new Map<string, string>();
 const rejectKey = (userId: number, accountId: number, slot: number) => `${userId}:${accountId}:${slot}`;
 
 /**
+ * 試し生成（AUTOPOST_DRY_RUN=1）。本番データを読むだけで、記録・投稿は一切書かない。
+ * 反映後の確認や、お客様に見せる前の試作に使う（collect と一緒に使う）。
+ */
+function isDryRun(): boolean {
+  return process.env.AUTOPOST_DRY_RUN === '1';
+}
+
+/**
  * 作り直しの理由を、次の作り直しへ渡すと同時にDBへ残す（2026-09-22）。
  *
  * ★ログだけでは数えられない。本番のコンテナは再デプロイのたびに作り直され、
@@ -207,6 +215,7 @@ function noteReject(
   opts: { detail?: string; gaveUp?: boolean } = {},
 ): void {
   lastRejectReason.set(rejectKey(userId, accountId, slot), hint);
+  if (isDryRun()) return;
   void db
     .recordPostReject({ userId, threadsAccountId: accountId, guard, detail: opts.detail ?? hint, gaveUp: opts.gaveUp })
     .catch(() => undefined);
@@ -220,6 +229,8 @@ export async function naturalizeContent(
   keepWords: string[] = [],
   /** 文体のお手本（projects.styleSamples）。絵文字を消してよいかの判断に使う。 */
   styleSamples?: string | null,
+  /** お客様ごとの長さ（shared/sampleLength.ts）。null なら従来の50〜100字 */
+  lengthRange?: import('../shared/sampleLength').LengthRange | null,
 ): Promise<string> {
   try {
     const persona = personal ? 'あなたは自分の名前で発信している個人事業主です' : 'あなたはお店のオーナーです';
@@ -293,7 +304,8 @@ ${voiceNote}
 ---
 ${text}
 ---`;
-    const res = await invokeLLM({ messages: [{ role: 'user', content: prompt }] });
+    const { applyLengthRange } = await import('../shared/sampleLength');
+    const res = await invokeLLM({ messages: [{ role: 'user', content: applyLengthRange(prompt, lengthRange ?? null) }] });
     const out = (res.choices[0]?.message?.content ?? '').toString().trim();
     // 空・異常長（増えた/極端に短い）は失敗扱いで元文を使う
     const inLen = Array.from(text).length;
@@ -510,7 +522,7 @@ export function topicIndexForSlot(slot: number, scheduledAt: Date | null, fallba
   return jstDay + slot;
 }
 
-async function generateAutoPost(
+export async function generateAutoPost(
   userId: number,
   project: any,
   postTypeIndex: number,
@@ -633,6 +645,17 @@ async function generateAutoPost(
       angle = featureAngle(opts.feature) as any;
       console.log(`[AutoPost] Threadsの機能の投稿 account=${threadsAccountId} → ${opts.feature}`);
     }
+    // ★自然な書き方モードの方は「1行目に数字」の切り口を使わない（shared/naturalStyle.ts・2026-10-03）
+    if (!forced && !opts.feature && !opts.hitPatternId && angle?.id === 'number_result') {
+      const { isNaturalStyleUser } = await import('../shared/naturalStyle');
+      if (isNaturalStyleUser(userId)) {
+        for (let k = 0; k < 6 && angle?.id === 'number_result'; k++) {
+          angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment });
+        }
+        if (angle?.id === 'number_result') angle = null;
+        console.log(`[AutoPost] 自然な書き方モード：数字で始める切り口を外した account=${threadsAccountId} → ${angle?.id ?? 'なし'}`);
+      }
+    }
     if (studyExperiment && angle) console.log(`[AutoPost] 試験中（勉強会の型） userId=${userId} account=${threadsAccountId} → ${angle.id}`);
     if (forced) console.log(`[AutoPost] 3案：切り口を指定 account=${threadsAccountId} → ${forced.id}`);
     if (preferredAngles.length) console.log(`[AutoPost] 希望の型を優先 userId=${userId} ${preferredAngles.join('/')} → ${angle?.id}`);
@@ -660,7 +683,16 @@ async function generateAutoPost(
   // 投稿の長さ指示（既定は短め。長めは本人が選んだときだけ）
   // 'alternate' のときは、日と枠の両方で短め/長めを交互にする（A/Bテスト）。
   const effectiveLength = resolveWithAlternation(postLength, postingTimeIndex);
-  const lengthNote = `\n\n【今回の長さ（厳守）】\n- ${POST_LENGTHS[effectiveLength].guide}`;
+  // ★お客様ごとの長さ（2026-10-03 三上様「相手の平均的な文字数に合わせて」）。
+  //   文体のお手本が3本以上あれば、その平均字数に合わせる。「長め」を選んだ方・反応改善の試験中の方は従来どおり。
+  const { sampleLengthRange, applyLengthRange, budgetForRange } = await import('../shared/sampleLength');
+  const lengthRange = effectiveLength === 'short' && !lowReaction
+    ? sampleLengthRange((project as any).styleSamples || null)
+    : null;
+  if (lengthRange) console.log(`[AutoPost] 長さをお手本に合わせる account=${threadsAccountId} 平均${lengthRange.avg}字（${lengthRange.n}本）→ ${lengthRange.lo}〜${lengthRange.hi}字`);
+  const lengthNote = lengthRange
+    ? `\n\n【今回の長さ（厳守）】\n- 本文は${lengthRange.lo}〜${lengthRange.hi}字（この方の文体のお手本の平均${lengthRange.avg}字に合わせる）。1文は短く、言い切って終わる。字数を埋めるための水増し（同じ内容の言い換え・一般論の付け足し）は禁止。`
+    : `\n\n【今回の長さ（厳守）】\n- ${POST_LENGTHS[effectiveLength].guide}`;
   // ★反応が取れていないアカウントの回（短め・来てもらうための言葉なし・地域名・本人の目線。shared/reactionBoost.ts）
   const lowReactionText = lowReaction
     ? await (async () => {
@@ -889,6 +921,8 @@ async function generateAutoPost(
       noQuestionEnding = !opts.feature && questionEndingBlocked(recentPosts, endsWithQuestion);
       // ★フォームで「言い切りで終える」を選んだ方は、毎回問いかけで締めない（2026-09-30・ネタ帳フォーム）
       if (!opts.feature && counselingResult?.closingStyle === 'statement') noQuestionEnding = true;
+      // ★自然な書き方モードの方は、毎回問いかけで締めない（shared/naturalStyle.ts・2026-10-03 試し生成で4本中3本が「？」締め）
+      if (!opts.feature && (await import('../shared/naturalStyle')).isNaturalStyleUser(userId)) noQuestionEnding = true;
     } catch { noQuestionEnding = false; }
 
     // ★ネタ帳（2026-09-30 三上様「解決できる仕組みを考えて作って」・shared/materialLedger.ts）。
@@ -1106,10 +1140,14 @@ async function generateAutoPost(
     // Call LLM
     // ★自動投稿は人の目を通らず公開されるため、短文・会話調の最終指示を
     //   プロンプト末尾に追加する（末尾の指示が最も遵守されやすい）。
+    const { isNaturalStyleUser, naturalStyleAddendum, NATURAL_STYLE_MODEL } = await import('../shared/naturalStyle');
+    const naturalStyle = isNaturalStyleUser(userId);
+    if (naturalStyle) console.log(`[AutoPost] 自然な書き方モード userId=${userId} account=${threadsAccountId} model=${NATURAL_STYLE_MODEL}`);
     const response = await invokeLLM({
+      ...(naturalStyle ? { model: NATURAL_STYLE_MODEL } : {}),
       messages: [{
         role: 'user',
-        content: promptWithMode + AUTO_POST_STYLE_ADDENDUM
+        content: applyLengthRange(promptWithMode + (naturalStyle ? naturalStyleAddendum({ allowEmoji }) : AUTO_POST_STYLE_ADDENDUM), lengthRange)
           + seasonContextJST()
           + recentNote
           + lengthNote
@@ -1206,8 +1244,10 @@ async function generateAutoPost(
       const { checkIdentity } = await import('../shared/identityGuard');
       keepIdentityWords = checkIdentity(beforeNaturalize, project).found.slice(0, 3);
     } catch { keepIdentityWords = []; }
-    let naturalMain = await naturalizeContent(
-      beforeNaturalize, personal, brandVoice, keepIdentityWords, (project as any).styleSamples || null,
+    // ★自然な書き方モードでは、短く崩すリライト（1文30字・1文1行）をかけない。
+    //   試作（2026-10-03）ではリライト無しの文がお手本にいちばん近かった。
+    let naturalMain = naturalStyle ? beforeNaturalize : await naturalizeContent(
+      beforeNaturalize, personal, brandVoice, keepIdentityWords, (project as any).styleSamples || null, lengthRange,
     );
 
     // ★日本語品質ガード（shared/jpQualityGuard.ts）。
@@ -1255,7 +1295,7 @@ async function generateAutoPost(
         console.warn(
           `[AutoPost] bannedTic「${ticLeft}」が残存（最後の作り直しのため公開） userId=${userId} projectId=${project.id}`,
         );
-        void db
+        if (!isDryRun()) void db
           .recordPostReject({ userId, threadsAccountId, guard: 'bannedTicPublished', detail: ticLeft, gaveUp: false })
           .catch(() => undefined);
       } else {
@@ -1393,6 +1433,15 @@ async function generateAutoPost(
       return false;
     }
     // ★問いかけの締めは3本に1本まで（2026-09-30）。最後の作り直し・保証パスでは止めない。
+    // ★自然な書き方モードでは、最後の作り直しでも「？」締めを残さない。最後の問いかけの段落を外す（外すと短すぎるなら残す）
+    if (noQuestionEnding && lastAttempt && naturalStyle && endsWithQuestion(naturalMain)) {
+      const { dropTrailingQuestion } = await import('../shared/naturalStyle');
+      const dropped = dropTrailingQuestion(naturalMain);
+      if (dropped) {
+        console.log(`[AutoPost] 自然な書き方モード：最後の問いかけを外した userId=${userId} account=${threadsAccountId}`);
+        naturalMain = dropped;
+      }
+    }
     if (noQuestionEnding && !lastAttempt && endsWithQuestion(naturalMain)) {
       console.warn(`[AutoPost] questionEnding: 直近も問いかけで終わっている → 作り直し userId=${userId} account=${threadsAccountId}`);
       noteReject('questionEnding', userId, threadsAccountId, postingTimeIndex,
@@ -1573,7 +1622,7 @@ async function generateAutoPost(
       const dup = findRepeatedPhrase(strip(naturalMain), recentPosts.map(strip));
       // ★書き直した回数を残す（2026-09-18）。お客様に追記をお願いするとき、
       //   「なぜ必要か」を数えた事実で示すために使う（shared/materialDepth.ts）。
-      if (dup) { try { await db.bumpDupReject(threadsAccountId); } catch { /* 記録できなくても続ける */ } }
+      if (dup && !isDryRun()) { try { await db.bumpDupReject(threadsAccountId); } catch { /* 記録できなくても続ける */ } }
       // ★保証パスでは「同じ言い回し」で落とさない（落とすと契約本数を割る）。
       //   代わりに materialGuarantee の印を付け、必ず承認カードにしてお客様が見送れるようにする。
       if (dup && guarantee) {
@@ -1606,6 +1655,56 @@ async function generateAutoPost(
       }
     }
 
+    // ★作り話チェック（2026-10-03 三上様「作り話チェックも入れて」・shared/fabricationCheck.ts）。
+    //   登録情報に無い出来事・気持ち・日付・数字・料金・経歴を、登録情報と突き合わせて探す。
+    //   見つかったら作り直し。最後の作り直しでは該当の文を外し、外せなければ公開しない（作り話は出さない）。
+    //   確認そのものが失敗したときは、既存の機械ガード（factGuard・数字ガード）だけで進める。
+    {
+      const { checkFabrication, factsText } = await import('./fabricationCheck');
+      const { fabricationRetryHint, removeFabricatedSentences, fabricationSummary } = await import('../shared/fabricationCheck');
+      const facts = factsText([
+        ['お店の名前', project.storeName], ['業種', project.businessType], ['地域', project.area],
+        ['地域の言葉', (project as any).localTerms], ['お客様像', (project as any).target],
+        ['お悩み', (project as any).mainProblem], ['強み', project.strength], ['実績', project.proof],
+        ['ほかとの違い', (project as any).usp], ['実際のお客様の話', (project as any).n1Customer],
+        ['考え方', (project as any).belief], ['お客様の言葉', (project as any).customerWords],
+        ['はじめの設定の答え', counselingResult],
+        ['ネタ帳の話', ledgerItem?.content ?? null],
+        ['本人が書いた文体のお手本', (project as any).styleSamples],
+      ]);
+      const found = await checkFabrication(naturalMain, facts);
+      if (found && found.length > 0) {
+        const summary = fabricationSummary(found);
+        if (!lastAttempt) {
+          console.warn(`[AutoPost] 作り話チェック：${summary} → 作り直し userId=${userId} projectId=${project.id}`);
+          noteReject('fabricationCheck', userId, threadsAccountId, postingTimeIndex,
+            fabricationRetryHint(found), { detail: summary });
+          return false;
+        }
+        const cleaned = removeFabricatedSentences(naturalMain, found);
+        if (!cleaned) {
+          console.warn(`[AutoPost] 作り話チェック：${summary} → 外すと文が成り立たないため公開しない userId=${userId} projectId=${project.id}`);
+          noteReject('fabricationCheck', userId, threadsAccountId, postingTimeIndex,
+            fabricationRetryHint(found), { detail: summary, gaveUp: true });
+          return false;
+        }
+        // 外したあとの文をもう一度確かめる（残りに別の作り話が無いか）
+        const again = await checkFabrication(cleaned, facts);
+        if (again && again.length > 0) {
+          console.warn(`[AutoPost] 作り話チェック：外したあとも ${fabricationSummary(again)} → 公開しない userId=${userId} projectId=${project.id}`);
+          noteReject('fabricationCheck', userId, threadsAccountId, postingTimeIndex,
+            fabricationRetryHint(again), { detail: fabricationSummary(again), gaveUp: true });
+          return false;
+        }
+        console.warn(`[AutoPost] 作り話チェック：最後の作り直しのため該当の文を外して公開へ（${summary}） userId=${userId} projectId=${project.id}`);
+        naturalMain = cleaned;
+      } else if (found) {
+        console.log(`[AutoPost] 作り話チェック：問題なし userId=${userId} account=${threadsAccountId}`);
+      } else if (found === null) {
+        console.warn(`[AutoPost] 作り話チェックができなかったため、機械ガードだけで進めます userId=${userId} projectId=${project.id}`);
+      }
+    }
+
     // 「。」の直後に絵文字が続く形（「〜しますね。✨」）は人間の投稿に無い機械の癖。
     // 誤爆しない決定的な整形なので、どちらの経路（リライト採用/差し戻し）にも適用する。
     const mainText = polishPunctuation(naturalMain);
@@ -1621,7 +1720,7 @@ async function generateAutoPost(
     //   プロンプト指示をAIが超過した場合、文の途中でぶつ切りにせず
     //   段落単位で後ろから削る（CTAを付ける投稿ではCTA段落は保持）。
     // 上限は利用者の「投稿の長さ」設定で決まる（既定=短め140字 / 長め300字）。
-    const charBudget = charBudgetFor(effectiveLength);
+    const charBudget = budgetForRange(lengthRange, charBudgetFor(effectiveLength));
     let fullContent = trimToBudget(mainText, ctaText || null, charBudget);
     if (Array.from(fullContent).length < Array.from([mainText, ctaText].filter(Boolean).join('\n\n')).length) {
       console.warn(
@@ -1658,6 +1757,7 @@ async function generateAutoPost(
       opts.collect({ content: fullContent, angleId: angle?.id ?? null });
       return true;
     }
+    if (isDryRun()) throw new Error('試し生成（AUTOPOST_DRY_RUN=1）では投稿を保存しません。collect を渡してください');
 
     // Schedule the post
     const scheduledAt = fixedScheduledAt ?? getNextPostingTime(postingTimeIndex, bestHours);
