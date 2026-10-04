@@ -231,3 +231,4 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
   - 補填を設定：@black_eyes_1896 13件（10/5〜10/17）、@esthe_prestige_r 9件（〜10/13）、@miraiseitai.diet 3件（〜10/7）、いずれも1日＋1件。@shin_honetugi は見送り6回・公開0のため補填を足さず保留（承認カードが増えるだけになる）。
   - 自動フォロー案 #2（斎藤様）は 10/3 に同じ内容を送付済みのため「送らない」に。#1 香取様・#3 大木様は送信の承諾待ち。
   - 不自然な投稿の点検：「初心者さんも」「◯代のお客様も」を拾う誤検知を修正（scripts/ops/unnatural-check.mts）。
+  - 自動フォロー案 #3（大木慎也様）を公式LINEで送付（10/4 三上様承諾「2だけ送って」）。#1 香取様は送らず保留のまま。
