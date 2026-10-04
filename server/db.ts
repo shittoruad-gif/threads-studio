@@ -4295,6 +4295,15 @@ export async function restoreChoiceGroup(choiceGroupId: string): Promise<number>
  * 3案の印を外す（3案として成立しなかったとき）。
  * 印が残ったままだと自動公開の対象から外れ、誰にも選ばれないまま消えてしまう。
  */
+/** 同じ枠の3案の本文（作った順）。2案目以降を前の案と違う話題にするために使う（2026-10-04） */
+export async function getChoiceGroupContents(choiceGroupId: string): Promise<string[]> {
+  const database = await getDb();
+  if (!database || !choiceGroupId) return [];
+  const rows: any = await database.execute(sql`
+    SELECT postContent FROM scheduledPosts WHERE choiceGroupId = ${choiceGroupId} ORDER BY id`);
+  return (((rows as any)?.[0] ?? []) as any[]).map((r) => String(r.postContent ?? '')).filter(Boolean);
+}
+
 export async function clearChoiceGroup(choiceGroupId: string): Promise<number> {
   const database = await getDb();
   if (!database || !choiceGroupId) return 0;

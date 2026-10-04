@@ -554,6 +554,11 @@ export async function generateAutoPost(
     //   投稿（scheduledPosts）にはせず本文だけを受け取る。
     collect?: (d: { content: string; angleId: string | null }) => void;
     extraRecent?: string[];
+    // ★3案の何案目か（0〜2）と、同じ枠ですでに作った案の本文（2026-10-04 三上様「テーマが偏らないように」）。
+    //   3案は切り口だけ散らしていて、悩み・強み・お客様の話は3案とも同じものを渡していたため、
+    //   香取様の3案がすべて「24時間の電話受付」になった。案ごとに材料をずらし、前の案と同じ話題を主役にしない。
+    choiceIndex?: number;
+    siblingTexts?: string[];
   } = {},
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
@@ -768,6 +773,8 @@ export async function generateAutoPost(
     try { recentPosts = await db.getRecentPostContents(threadsAccountId, 10); } catch { recentPosts = []; }
     // ★◯✕アンケートの案づくりでは、同じ回にすでに作った案も「直近の投稿」として扱う（同じ題材に寄らないように）
     if (opts.extraRecent?.length) recentPosts = [...opts.extraRecent, ...recentPosts];
+    // ★3案の2案目以降は、同じ枠の前の案も「直近の投稿」として扱う（同じ言い回し・同じ題材に寄らないように）
+    if (opts.siblingTexts?.length) recentPosts = [...opts.siblingTexts, ...recentPosts];
     // ★ご本人がThreadsアプリから投稿した分も見る（2026-09-11 香取様「同じ内容だったので自分で投稿していた」）。
     //   こちらの下書きだけでなく、ご本人の直近の投稿とも話題・言い回しを重ねない。1日1回だけ取りに行く。
     try {
@@ -1017,6 +1024,8 @@ export async function generateAutoPost(
       }
       return picked;
     };
+    // 3案の何案目か。悩み・強み・お客様の話の日替わりの選び方を、案ごとにずらす（3案とも同じ材料にしない）
+    const choiceOffset = Math.max(0, Math.min(2, Number(opts.choiceIndex ?? 0) || 0));
     const styleSamplesForToday: string = (() => {
       const raw = String((project as any).styleSamples || '');
       if (!raw) return raw;
@@ -1074,15 +1083,15 @@ export async function generateAutoPost(
       // ★1日の中では、枠ごとに別のお悩みを取り上げる（2026-10-01 三上様指示「1日3投稿のうち1つずつテーマごとに分けて」・川邊様）。
       //   枠の番号＋日付で選ぶので、お悩みが3つで1日3本なら、毎日3つとも1本ずつ出る（どの枠に何が来るかは日替わり）。
       //   当日補充など枠の番号が無い経路（99）は、これまでどおりの回し方。
-      focusProblem: ledgerItem ? undefined : (pickRotatingTopic(mainProblemForToday, topicIndexForSlot(postingTimeIndex, fixedScheduledAt, postTypeIndex + purposeIndex)) || undefined),
-      focusStrength: pickRotatingTopic(strengthForToday, postTypeIndex) || undefined,
+      focusProblem: ledgerItem ? undefined : (pickRotatingTopic(mainProblemForToday, topicIndexForSlot(postingTimeIndex, fixedScheduledAt, postTypeIndex + purposeIndex) + choiceOffset) || undefined),
+      focusStrength: pickRotatingTopic(strengthForToday, postTypeIndex + choiceOffset * 5) || undefined,
       // ★悩み・強みが1行しか無い方でも、N1顧客像に複数行の材料があることがある
       //   （岩根様＝悩み1行・強みは文の折り返しで取り出せず・N1顧客像に7行。2026-09-18）
       //   指数は postTypeIndex * PURPOSES.length + purposeIndex（0〜23）にする。
       //   purposeIndex だけだと 0〜3 しか取らず、7行のうち4行しか回らなかった
       //   （2026-09-18 昼に本番データで実測）。
       // ★「同じような内容ばかり」と言われた方は、使いすぎの話題の行を外したN1顧客像から選ぶ（2026-09-25）
-      focusN1: ledgerItem ? undefined : (pickRotatingTopic(n1ForToday, postTypeIndex * PURPOSES.length + purposeIndex) || undefined),
+      focusN1: ledgerItem ? undefined : (pickRotatingTopic(n1ForToday, postTypeIndex * PURPOSES.length + purposeIndex + choiceOffset * 2) || undefined),
       // ★健康系のお店では、はじめの設定に書かれた結果表現を渡す前に落とす（2026-09-15 三上様指示）。
       //   落としたことはログに残す（誰の設定を洗ったかが分からないと、材料の足りない方に
       //   気づけない。岩根様のように登録内容そのものが薄い方は朝の報告に載せる）。
@@ -1162,6 +1171,8 @@ export async function generateAutoPost(
           + declinedNote
           // ★「同じような内容ばかり」と言われた方への、話題の指定（2026-09-25）。見送りの共通点より後ろ＝より優先
           + freshNote
+          // ★同じ枠の前の案（3案の2案目以降）。末尾に近いほど守られるので、話題の指定のあとに置く（2026-10-04）
+          + (opts.siblingTexts?.length ? (await import('../shared/threeChoice')).choiceSiblingNote(opts.siblingTexts) : '')
           // ★ネタ帳の今日のネタ（2026-09-30）。話題を変える指示より後ろ＝より優先
           + ledgerNote
           // ★◯✕アンケートで✕が付いた題材（2026-09-26）
@@ -2153,6 +2164,8 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                 const project = pinnedProject || eligibleProjects[dayOffset % eligibleProjects.length];
                 let made = 0;
                 for (let k = 0; k < CHOICE_COUNT; k++) {
+                  // 同じ枠ですでに作った案（前の案と同じ話題を主役にしないため）
+                  const siblingTexts: string[] = await db.getChoiceGroupContents(groupId).catch(() => [] as string[]);
                   // 枠は1つなので作り直しは2回まで（時間を掛けすぎない）
                   let ok = false;
                   const rk = rejectKey(user.id, account.id, 100 + k);
@@ -2162,7 +2175,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                       user.id, project, typeIdx, purposeIdx, account.id, 0,
                       true, acctHours, eff.postLength, opts.forTomorrow ? postingTimeOnDay(0, acctHours, 1) : null,
                       lastRejectReason.get(rk) ?? null, attempt === 2, false,
-                      { choiceGroupId: groupId, forcedAngleId: CHOICE_ANGLE_IDS[k] },
+                      { choiceGroupId: groupId, forcedAngleId: CHOICE_ANGLE_IDS[k], choiceIndex: k, siblingTexts },
                     );
                   }
                   lastRejectReason.delete(rk);

@@ -104,3 +104,14 @@ export function newChoiceGroupId(accountId: number, jstDate: string, rand: () =>
   const suffix = Math.floor(rand() * 1e6).toString(36);
   return `${CHOICE_GROUP_PREFIX}-${accountId}-${jstDate.replace(/-/g, "")}-${suffix}`.slice(0, 40);
 }
+
+/**
+ * 3案の2案目以降に付ける指示：同じ枠の前の案と同じ話題を主役にしない（2026-10-04 三上様「テーマが偏らないように」）。
+ * 香取様の3案がすべて「24時間の電話受付」になった（切り口は違っても、渡す材料が3案とも同じだった）。
+ */
+export function choiceSiblingNote(siblings: readonly string[]): string {
+  const list = siblings.slice(0, 2).map((t, i) => `${i + 1}. ${String(t).replace(/\s+/g, ' ').slice(0, 100)}`).join('\n');
+  return `\n\n【同じ枠の他の案（この案は別の話題で書く・厳守）】\n${list}\n` +
+    '- この案は、上の案とは別の選択肢としてお客様に選んでいただく。上の案と同じ話題・同じ材料（同じ設備・同じ受付時間や電話・同じ症例・同じお悩み）を主役にしない。\n' +
+    '- 登録されている別のお悩み・別の場面・別の強み・別の実際のお話から書く。読んだ人が「さっきの案と同じ話だ」と感じたら失敗。';
+}
