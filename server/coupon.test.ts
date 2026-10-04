@@ -7,7 +7,8 @@ import type { TrpcContext } from "./_core/context";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
-function createTestContext(userId: number = 1): TrpcContext {
+// ★クーポンを使ったことがない利用者で確かめる（ID 1 は使用ずみのため「お一人さま1回」で断られる・2026-10-04）
+function createTestContext(userId: number = 987654321): TrpcContext {
   const user: AuthenticatedUser = {
     id: userId,
     openId: "test-coupon-user",
