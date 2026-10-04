@@ -3014,8 +3014,15 @@ ${input.commentText}
     // Validate coupon code
     validate: protectedProcedure
       .input(z.object({ code: z.string() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const result = await couponService.validateCoupon(input.code);
+        // ★お一人さま1回：別のコードをすでに使っている方には、適用前の確認の時点で伝える（2026-10-04）
+        if (result.valid && result.coupon) {
+          const used = await couponService.usedCouponCodeOf(ctx.user.id);
+          if (used && used.toUpperCase() !== String(result.coupon.code).toUpperCase()) {
+            return { valid: false, error: `クーポン・紹介コードは、お一人さま1回までです（すでに「${used}」をお使いです）。` } as typeof result;
+          }
+        }
         return result;
       }),
 

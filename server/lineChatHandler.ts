@@ -128,13 +128,17 @@ async function referralLink(lineUserId: string, code: string, userId?: number): 
   // 料金ページ（キャンペーン価格が出た状態）へご案内する。
   if (userId) {
     let applied = false;
+    let refusedMessage: string | null = null;
     try {
       const { applyCoupon } = await import("./coupon");
       const res = await applyCoupon(userId, c);
       applied = Boolean(res.success);
+      // ★お一人さま1回（別のコードをすでに使っている）・有料のご契約中などで受け付けなかったときは、その理由をそのままお伝えする（2026-10-04）
+      if (!res.success && /お一人さま1回|有料のご契約中/.test(res.message ?? "")) refusedMessage = res.message;
     } catch (e) {
       console.error("[LineChat] 紹介コードの適用に失敗:", e);
     }
+    if (refusedMessage) return [textWithQuick(refusedMessage, MENU_HINT)];
     return [textWithQuick(
       (applied
         ? `紹介コード「${c}」を適用しました。`

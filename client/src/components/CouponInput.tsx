@@ -15,6 +15,11 @@ export function CouponInput({ onSuccess }: CouponInputProps) {
 
   const applyCouponMutation = trpc.coupon.applyCode.useMutation({
     onSuccess: (data) => {
+      // ★適用できなかったとき（お一人さま1回・期限切れなど）も成功の表示になっていた（2026-10-04）
+      if (!data.success) {
+        toast.error(data.message);
+        return;
+      }
       // 適用した紹介コードを分かりやすく見出しに出す
       toast.success(data.message, {
         description: data.code ? `適用コード：${data.code}` : undefined,

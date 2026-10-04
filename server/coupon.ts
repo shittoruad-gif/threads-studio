@@ -45,6 +45,19 @@ export async function validateCoupon(code: string): Promise<{ valid: boolean; co
 /**
  * Check if a user has already used a coupon
  */
+/** その方がすでに使ったコード（どれか1つ）。使っていなければ null（2026-10-04 お一人さま1回） */
+export async function usedCouponCodeOf(userId: number): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select({ code: coupons.code })
+    .from(userCoupons)
+    .innerJoin(coupons, eq(coupons.id, userCoupons.couponId))
+    .where(eq(userCoupons.userId, userId))
+    .limit(1);
+  return rows[0]?.code ?? null;
+}
+
 export async function hasUserUsedCoupon(userId: number, couponId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) {
@@ -104,6 +117,13 @@ export async function applyCoupon(
       return { success: true, message: "モニター登録は既に有効です。ダッシュボード右下のボタンからフィードバックを送信いただけます。", code: coupon.code };
     }
     return { success: false, message: "このクーポンは既に使用されています" };
+  }
+
+  // ★クーポン・紹介コードは、種類を問わずお一人さま1回まで（2026-10-04 三上様「全ユーザ、クーポンコードが使えるのは一度切り」）。
+  //   別のコードをすでに使っている方には、新しいコードを適用しない（同じコードの再入力は上で扱う）。
+  const usedOther = await usedCouponCodeOf(userId);
+  if (usedOther) {
+    return { success: false, message: `クーポン・紹介コードは、お一人さま1回までです（すでに「${usedOther}」をお使いです）。ご不明な点は公式LINEの「担当者に聞く」からお知らせください。` };
   }
 
   // Calculate trial end date based on coupon type
