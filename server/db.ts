@@ -3633,6 +3633,22 @@ export async function getAngleFeedbackStats(userId: number, projectId?: string):
 }
 
 /** いまの投稿IDの最大値（このあと作られる分だけを見分けるための目印） */
+/**
+ * sinceId より後にこのアカウントへ作られた自動投稿の数（3案の選択肢は除く）。
+ * ★作り直しの前に「その枠はもう保存されているか」を確かめるため（2026-10-04 比嘉様 acc26）。
+ *   保存の後の処理が失敗すると「作れなかった」と判定され、同じ枠をもう1件作って契約本数を超えていた。
+ */
+export async function countAccountAutoPostsSinceId(accountId: number, sinceId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows: any = await db.execute(sql`
+    SELECT COUNT(*) AS n FROM scheduledPosts
+    WHERE threadsAccountId = ${accountId} AND id > ${sinceId} AND source = 'auto'
+      AND choiceGroupId IS NULL AND replyToThreadsId IS NULL
+      AND status IN ('pending', 'awaiting_approval', 'posted', 'processing')`);
+  return Number((rows as any)[0]?.[0]?.n ?? 0);
+}
+
 export async function getMaxScheduledPostId(): Promise<number> {
   const db = await getDb();
   if (!db) return 0;

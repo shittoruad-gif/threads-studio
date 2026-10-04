@@ -226,3 +226,8 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - 試験投稿を公開前に読んだ（#2584・#2563・#2580）。取り消しなし。玉島の「マシンが支える」は0件。
 - 不自然な投稿5件はすべて「初心者さんも」「お客様も」を敬称三人称と拾ったもの（誤検知の見込み）。
 - AccountHealth 完了（accounts=24 restricted=0）。デプロイは 5e6bf52e＝origin/main の先頭と一致。/api/health 200。返信待ち 0件。LINE 残り 4,816 通。
+- 【10/4 三上様「すべて改善して」を受けて】
+  - 比嘉様（acc26）の契約超過：投稿を保存した後の処理が失敗すると「作れなかった」扱いで同じ枠をもう1件作る作りを修正（server/autoPostScheduler.ts・db.countAccountAutoPostsSinceId）。本番反映は夜間整備。今日の4件はお客様が承認済みのため残した。
+  - 補填を設定：@black_eyes_1896 13件（10/5〜10/17）、@esthe_prestige_r 9件（〜10/13）、@miraiseitai.diet 3件（〜10/7）、いずれも1日＋1件。@shin_honetugi は見送り6回・公開0のため補填を足さず保留（承認カードが増えるだけになる）。
+  - 自動フォロー案 #2（斎藤様）は 10/3 に同じ内容を送付済みのため「送らない」に。#1 香取様・#3 大木様は送信の承諾待ち。
+  - 不自然な投稿の点検：「初心者さんも」「◯代のお客様も」を拾う誤検知を修正（scripts/ops/unnatural-check.mts）。

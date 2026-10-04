@@ -579,6 +579,7 @@ export async function generateAutoPost(
     }
     return note;
   };
+  let saved = false;
   try {
     // ★店舗（project）単位で学習：複数店舗ユーザーで別店舗の好みを混ぜない
     const stats = await db.getAngleFeedbackStats(userId, project.id);
@@ -1817,6 +1818,9 @@ export async function generateAutoPost(
       // ★ネタ帳のどのネタから作ったか（使った記録・2026-09-30）
       materialItemId: ledgerItem?.id ?? null,
     } as any);
+    // ★ここから先で失敗しても、投稿は保存済み。false を返すと呼び出し側が同じ枠をもう1件作り、
+    //   契約本数を超える（2026-10-04 比嘉様 acc26：契約3件で4件の日が続いた）。
+    saved = true;
 
     if (adminReviewRequired) {
       try {
@@ -1849,6 +1853,10 @@ export async function generateAutoPost(
     return true;
   } catch (error) {
     console.error(`[AutoPost] Failed to generate post for user ${userId}:`, error);
+    if (saved) {
+      console.warn(`[AutoPost] 投稿は保存済みのため作れた扱いにする user=${userId} account=${threadsAccountId}`);
+      return true;
+    }
     return false;
   }
 }
@@ -2179,8 +2187,18 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             }
           }
 
+          // ★作り直しの前に「その枠はもう保存されているか」を確かめる（2026-10-04 比嘉様 acc26）。
+          //   作れなかったと判定されても実は保存されていた場合に、同じ枠をもう1件作らない。
+          const loopIdBefore = await db.getMaxScheduledPostId().catch(() => 0);
+          const countSavedInLoop = async (): Promise<number> =>
+            loopIdBefore ? await db.countAccountAutoPostsSinceId(account.id, loopIdBefore).catch(() => -1) : -1;
           for (let i = startIndex; i < regularCount; i++) {
             const project = pinnedProject || eligibleProjects[(dayOffset + i) % eligibleProjects.length];
+            const savedBeforeSlot = await countSavedInLoop();
+            const slotAlreadySaved = async (): Promise<boolean> => {
+              if (savedBeforeSlot < 0) return false;
+              return (await countSavedInLoop()) > savedBeforeSlot;
+            };
 
             // ★他店の当たり型の試し（2026-09-28 三上様指示・shared/hitPatterns.ts）。
             //   試しのアカウントだけ、契約の本数より後ろの枠（4本目・5本目）を当たり型で作る。契約の3本は今までどおり。
@@ -2211,6 +2229,11 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             const rk = rejectKey(user.id, account.id, i);
             lastRejectReason.delete(rk);
             for (let attempt = 1; attempt <= 3 && !success; attempt++) {
+              if (attempt > 1 && await slotAlreadySaved()) {
+                console.warn(`[AutoPost] slot=${i} は保存済みのため作り直さない account=${account.id}`);
+                success = true;
+                break;
+              }
               const hint = lastRejectReason.get(rk) ?? null;
               success = await generateAutoPost(
                 user.id,
@@ -2235,6 +2258,10 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             //   3回作り直しても書けなかった枠を捨てない。材料が尽きて同じ言い回しへ戻るのが原因なので、
             //   まだ投稿に使っていない材料を名指しで渡して、もう1回だけ書かせる。
             //   ここで作った投稿は必ず承認カードになる（黙って似た投稿を公開しない）。
+            if (!success && await slotAlreadySaved()) {
+              console.warn(`[AutoPost] slot=${i} は保存済みのため保証パスに進まない account=${account.id}`);
+              success = true;
+            }
             if (!success) {
               try {
                 const { unusedMaterials } = await import('../shared/materialDepth');
