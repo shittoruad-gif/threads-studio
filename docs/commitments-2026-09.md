@@ -217,3 +217,12 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - AccountHealth 完了（accounts=24 restricted=0）。デプロイは 57aea6f9＝origin/main の先頭と一致。/api/health 200。
 - 担当者の返信待ち 0件。LINE 残り 4,863 通 / 5,000 通。
 - 齋藤様（user 10043・pro_campaign・Threads未連携）へ、次の工程（連携）と https://threads-studio.com/threads-connect を公式LINEで送付（三上様承諾済み・宛名は齋藤）。9/28 の自動フォロー案 #2 は押されないまま（同じ内容のため送らない）。
+
+## 2026-10-04 朝の点検メモ（日曜）
+
+- 当日補充：@takimoto_sora（user 556）2件不足→+2件で5件（2回目の --fill で到達）、@yusuke_seitai（user 3521）1件不足→+1件で4件。落ちた理由は健康表現（healthClaimGuard：睡眠改善の体験談・寝起き改善の断定）と採点2/5・3/5・同じ言い回し。
+- 昨日（10/3）の公開数：**@haisaiseikotsuin（acc26・比嘉様・契約3件）が4件公開**（08:24/10:26/14:19/19:24）。補填設定なし。ログ「今日すでに4件（翌日へ送られた分・前の晩に作った分など）」。**今日（10/4）も4件予定**。10/1 にも4件あり＝3回目。三上様へ報告。
+- 投稿時間の試験 11日目：4アカウント（10/11/12/36）とも 7〜23時台・持ち越し無し。
+- 試験投稿を公開前に読んだ（#2584・#2563・#2580）。取り消しなし。玉島の「マシンが支える」は0件。
+- 不自然な投稿5件はすべて「初心者さんも」「お客様も」を敬称三人称と拾ったもの（誤検知の見込み）。
+- AccountHealth 完了（accounts=24 restricted=0）。デプロイは 5e6bf52e＝origin/main の先頭と一致。/api/health 200。返信待ち 0件。LINE 残り 4,816 通。
