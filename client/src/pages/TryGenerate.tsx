@@ -181,7 +181,7 @@ export default function TryGenerate() {
   const handleTemplateSelect = (template: IndustryTemplate) => {
     if (tryMutation.isPending) return;
     if (trialExhausted) {
-      toast.error('無料お試しの上限に達しました。無料登録すると回数無制限でご利用いただけます。');
+      toast.error('無料お試しの上限に達しました。お申し込み（最初の7日間は無料）で、あなたのお店の投稿を毎日お届けします。');
       return;
     }
     setSelectedTemplate(template);
@@ -202,7 +202,7 @@ export default function TryGenerate() {
   const handleSelectPurpose = (newPurpose: Purpose) => {
     if (!selectedTemplate || tryMutation.isPending || newPurpose === purpose) return;
     if (trialExhausted) {
-      toast.error('無料お試しの上限に達しました。無料登録すると回数無制限でご利用いただけます。');
+      toast.error('無料お試しの上限に達しました。お申し込み（最初の7日間は無料）で、あなたのお店の投稿を毎日お届けします。');
       return;
     }
     setPurpose(newPurpose);
@@ -238,7 +238,7 @@ export default function TryGenerate() {
             <Link href="/register">
               <Button size="sm">
                 <UserPlus className="w-4 h-4 mr-1" />
-                無料登録
+                会員登録
               </Button>
             </Link>
           </div>
@@ -283,13 +283,13 @@ export default function TryGenerate() {
                         無料お試しは{FREE_TRIAL_LIMIT}回まで体験いただけます
                       </h3>
                       <p className="text-sm text-muted-foreground mb-6">
-                        無料登録すると、公式LINEで5つの質問に答えるだけで、あなたのお店の投稿が作れます。
+                        会員登録して公式LINEで5つの質問に答え、お申し込み（最初の7日間は無料）いただくと、あなたのお店の投稿が届きます。
                         毎日の自動投稿は有料プラン（7日間無料）で始められます。
                       </p>
                       <Link href="/register">
                         <Button size="lg" className="w-full text-base py-6 shadow-lg">
                           <UserPlus className="w-5 h-5 mr-2" />
-                          無料登録して続ける
+                          会員登録して続ける
                           <ArrowRight className="w-5 h-5 ml-2" />
                         </Button>
                       </Link>
@@ -386,7 +386,7 @@ export default function TryGenerate() {
                     </p>
                     <p className="text-xs text-muted-foreground mb-3">
                       {trialExhausted
-                        ? '無料お試しの上限に達しました。無料登録すると回数無制限で生成できます。'
+                        ? '無料お試しの上限に達しました。お申し込み（最初の7日間は無料）で、あなたのお店の投稿を毎日お届けします。'
                         : `狙いを選ぶと、その目的に合わせてAIが投稿を作り直します（残り${trialRemaining}回）`}
                     </p>
                     <div className="grid grid-cols-2 gap-2">
@@ -434,17 +434,17 @@ export default function TryGenerate() {
                       <Sparkles className="w-7 h-7 text-primary" />
                     </div>
                     <h3 className="text-lg md:text-xl font-bold mb-2">
-                      無料登録して、あなたのお店で試す
+                      7日間無料で、あなたのお店で試す
                     </h3>
                     <p className="text-sm text-muted-foreground mb-6">
-                      無料登録すると、公式LINEで5つの質問に答えるだけで、あなたのお店の投稿が作れます。
+                      会員登録して公式LINEで5つの質問に答え、お申し込み（最初の7日間は無料）いただくと、あなたのお店の投稿が届きます。
                       毎日の自動投稿は有料プラン（7日間無料）で始められます
                     </p>
                     <div className="space-y-3">
                       <Link href="/register">
                         <Button size="lg" className="w-full text-base py-6 shadow-lg">
                           <UserPlus className="w-5 h-5 mr-2" />
-                          無料登録して始める
+                          7日間無料で始める
                           <ArrowRight className="w-5 h-5 ml-2" />
                         </Button>
                       </Link>

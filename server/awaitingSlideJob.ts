@@ -52,6 +52,8 @@ export async function runEveningApprovalReminderJob(): Promise<void> {
     try {
       const user: any = await db.getUserById(userId);
       if (!user || user.isDemoMode) continue;
+      // ★ご契約が終わった方には送らない（期限の直前に作られた承認待ちが残っていても・2026-10-04 点検）
+      if (await db.isEndedCustomer(userId).catch(() => false)) continue;
       const lineIds = await db.getLineUserIdsForUser(userId);
       if (lineIds.length > 0) {
         const none = Number(r.postedToday ?? 0) === 0;

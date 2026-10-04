@@ -58,7 +58,7 @@ export function naturalStyleAddendum(opts: { allowEmoji: boolean }): string {
 export function dropTrailingQuestion(text: string): string | null {
   const t = String(text || '').trimEnd();
   // 最後の文＝最後の 。！？ の手前までをさかのぼる（改行も文の区切りとみなす）
-  const m = t.match(/^([\s\S]*?[。！!？?\n])([^。！!？?\n]*[？?][\s️‍\uD800-\uDFFF☀-➿]*)$/);
+  const m = t.match(/^([\s\S]*?[。！!？?\n])([^。！!？?\n]*[？?]+[\s️‍\uD800-\uDFFF☀-➿]*)$/);
   if (!m) return null;
   const rest = m[1].trimEnd();
   if (Array.from(rest.replace(/\s+/g, '')).length < 40) return null;

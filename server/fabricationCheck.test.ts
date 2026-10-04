@@ -75,3 +75,14 @@ describe('注意書きは料金の言葉として拾わない（2026-10-04 点�
     expect(ruleBasedFabrications('返金保証つきです。', '整骨院').map((x) => x.quote)).toEqual(['保証', '返金']);
   });
 });
+
+describe('ひらがなだけの短い引用は採らない（2026-10-04 点検）', () => {
+  it('「ます」「でした」は捨て、「今日は」は採る', async () => {
+    const { parseFabricationResult } = await import('../shared/fabricationCheck');
+    const d = '今日は寒いです。体を温めました。';
+    const r = parseFabricationResult(JSON.stringify({ items: [
+      { quote: 'ます', kind: 'event', reason: '' }, { quote: 'でした', kind: 'event', reason: '' }, { quote: '今日は', kind: 'timing', reason: '' },
+    ] }), d)!;
+    expect(r.map((x) => x.quote)).toEqual(['今日は']);
+  });
+});

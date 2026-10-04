@@ -188,6 +188,11 @@ const rejectKey = (userId: number, accountId: number, slot: number) => `${userId
  * 反映後の確認や、お客様に見せる前の試作に使う（collect と一緒に使う）。
  */
 function isDryRun(): boolean {
+  // ★本番（NODE_ENV=production）では効かない。誤って環境変数に入っても投稿が黙って止まらないように（2026-10-04 点検）
+  if (process.env.AUTOPOST_DRY_RUN === '1' && process.env.NODE_ENV === 'production') {
+    console.error('[AutoPost] AUTOPOST_DRY_RUN は本番では無視します（環境変数から外してください）');
+    return false;
+  }
   return process.env.AUTOPOST_DRY_RUN === '1';
 }
 
@@ -774,7 +779,8 @@ export async function generateAutoPost(
     // ★◯✕アンケートの案づくりでは、同じ回にすでに作った案も「直近の投稿」として扱う（同じ題材に寄らないように）
     if (opts.extraRecent?.length) recentPosts = [...opts.extraRecent, ...recentPosts];
     // ★3案の2案目以降は、同じ枠の前の案も「直近の投稿」として扱う（同じ言い回し・同じ題材に寄らないように）
-    if (opts.siblingTexts?.length) recentPosts = [...opts.siblingTexts, ...recentPosts];
+    //   後ろに足す：前に足すと「直近2本が問いかけか」の判定や、AIに見せる直近6本から本物の投稿が押し出される（2026-10-04 点検）
+    if (opts.siblingTexts?.length) recentPosts = [...recentPosts, ...opts.siblingTexts];
     // ★ご本人がThreadsアプリから投稿した分も見る（2026-09-11 香取様「同じ内容だったので自分で投稿していた」）。
     //   こちらの下書きだけでなく、ご本人の直近の投稿とも話題・言い回しを重ねない。1日1回だけ取りに行く。
     try {
@@ -1084,14 +1090,14 @@ export async function generateAutoPost(
       //   枠の番号＋日付で選ぶので、お悩みが3つで1日3本なら、毎日3つとも1本ずつ出る（どの枠に何が来るかは日替わり）。
       //   当日補充など枠の番号が無い経路（99）は、これまでどおりの回し方。
       focusProblem: ledgerItem ? undefined : (pickRotatingTopic(mainProblemForToday, topicIndexForSlot(postingTimeIndex, fixedScheduledAt, postTypeIndex + purposeIndex) + choiceOffset) || undefined),
-      focusStrength: pickRotatingTopic(strengthForToday, postTypeIndex + choiceOffset * 5) || undefined,
+      focusStrength: pickRotatingTopic(strengthForToday, postTypeIndex + choiceOffset) || undefined,
       // ★悩み・強みが1行しか無い方でも、N1顧客像に複数行の材料があることがある
       //   （岩根様＝悩み1行・強みは文の折り返しで取り出せず・N1顧客像に7行。2026-09-18）
       //   指数は postTypeIndex * PURPOSES.length + purposeIndex（0〜23）にする。
       //   purposeIndex だけだと 0〜3 しか取らず、7行のうち4行しか回らなかった
       //   （2026-09-18 昼に本番データで実測）。
       // ★「同じような内容ばかり」と言われた方は、使いすぎの話題の行を外したN1顧客像から選ぶ（2026-09-25）
-      focusN1: ledgerItem ? undefined : (pickRotatingTopic(n1ForToday, postTypeIndex * PURPOSES.length + purposeIndex + choiceOffset * 2) || undefined),
+      focusN1: ledgerItem ? undefined : (pickRotatingTopic(n1ForToday, postTypeIndex * PURPOSES.length + purposeIndex + choiceOffset) || undefined),
       // ★健康系のお店では、はじめの設定に書かれた結果表現を渡す前に落とす（2026-09-15 三上様指示）。
       //   落としたことはログに残す（誰の設定を洗ったかが分からないと、材料の足りない方に
       //   気づけない。岩根様のように登録内容そのものが薄い方は朝の報告に載せる）。
@@ -1449,7 +1455,9 @@ export async function generateAutoPost(
     if (noQuestionEnding && lastAttempt && naturalStyle && endsWithQuestion(naturalMain)) {
       const { dropTrailingQuestion } = await import('../shared/naturalStyle');
       const dropped = dropTrailingQuestion(naturalMain);
-      if (dropped) {
+      // 外した結果、店名・地名などが1つも残らないなら外さない（2026-10-04 点検）
+      const { checkIdentity: ci } = await import('../shared/identityGuard');
+      if (dropped && ci(dropped, project).ok) {
         console.log(`[AutoPost] 自然な書き方モード：最後の問いかけを外した userId=${userId} account=${threadsAccountId}`);
         naturalMain = dropped;
       }
@@ -1675,6 +1683,8 @@ export async function generateAutoPost(
       const { checkFabrication, factsText } = await import('./fabricationCheck');
       const { fabricationRetryHint, removeFabricatedSentences, fabricationSummary } = await import('../shared/fabricationCheck');
       const facts = factsText([
+        ['本人が書いた文体のお手本', String((project as any).styleSamples || '').slice(0, 2500)],
+        ['キャッチコピー', (project as any).catchphrase], ['案内先（リンク）', (project as any).links],
         ['お店の名前', project.storeName], ['業種', project.businessType], ['地域', project.area],
         ['地域の言葉', (project as any).localTerms], ['お客様像', (project as any).target],
         ['お悩み', (project as any).mainProblem], ['強み', project.strength], ['実績', project.proof],
@@ -1682,7 +1692,6 @@ export async function generateAutoPost(
         ['考え方', (project as any).belief], ['お客様の言葉', (project as any).customerWords],
         ['はじめの設定の答え', counselingResult],
         ['ネタ帳の話', ledgerItem?.content ?? null],
-        ['本人が書いた文体のお手本', (project as any).styleSamples],
       ]);
       const found = await checkFabrication(naturalMain, facts);
       if (found && found.length > 0) {
@@ -1693,8 +1702,29 @@ export async function generateAutoPost(
             fabricationRetryHint(found), { detail: summary });
           return false;
         }
-        const cleaned = removeFabricatedSentences(naturalMain, found);
-        if (!cleaned) {
+        // ★アンケート・クイズは、文を外すと質問や答えの行が崩れるので、外さずに見送る（2026-10-04 点検）
+        // ★外すだけだと「その方は…」のように前の文を指す言葉が宙に浮くので、まずAIに最小限の直しを頼む
+        const cleaned = opts.feature ? null : (await (async () => {
+          try {
+            const { invokeLLM } = await import('./_core/llm');
+            const res = await invokeLLM({
+              temperature: 0.2,
+              messages: [{ role: 'user', content:
+                `次のSNS投稿から、下の「取り除く部分」だけを取り除き、残りの文が自然につながるよう最小限だけ直してください。\n` +
+                `- 新しい事実・出来事・数字・気持ちを足さない。言い回しは変えすぎない。改行の入れ方はそのまま。\n- 本文だけを出力する。\n\n` +
+                `【取り除く部分】\n${found.map((x) => `・${x.quote}`).join('\n')}\n\n【投稿】\n${naturalMain}` }],
+            });
+            const t = String(res.choices[0]?.message?.content ?? '').trim();
+            const len = (s: string) => Array.from(s.replace(/\s+/g, '')).length;
+            if (!t || found.some((x) => t.replace(/\s+/g, '').includes(x.quote.replace(/\s+/g, ''))) || len(t) < 40 || len(t) > len(naturalMain) * 1.1) return null;
+            return t;
+          } catch { return null; }
+        })()) ?? removeFabricatedSentences(naturalMain, found);
+        // 直したあとも、お店を指す言葉（店名・地名など）が残っているか確かめる
+        const idOk = cleaned ? await (async () => {
+          try { const { checkIdentity } = await import('../shared/identityGuard'); return checkIdentity(cleaned, project).ok !== false; } catch { return true; }
+        })() : false;
+        if (!cleaned || !idOk) {
           console.warn(`[AutoPost] 作り話チェック：${summary} → 外すと文が成り立たないため公開しない userId=${userId} projectId=${project.id}`);
           noteReject('fabricationCheck', userId, threadsAccountId, postingTimeIndex,
             fabricationRetryHint(found), { detail: summary, gaveUp: true });

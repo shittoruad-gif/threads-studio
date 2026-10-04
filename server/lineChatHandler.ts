@@ -294,6 +294,11 @@ async function isEndedCustomerSafe(userId: number): Promise<boolean> {
   try { return await db.isEndedCustomer(userId); } catch { return false; }
 }
 
+/** お支払い確認中で、使える契約が無い方か（判定に失敗したら false） */
+async function isDunningOnlySafe(userId: number): Promise<boolean> {
+  try { return await db.isInDunning(userId); } catch { return false; }
+}
+
 /** 使える契約があるか（判定に失敗したら止めない） */
 async function isSubscribedSafe(userId: number): Promise<boolean> {
   // お支払い確認中（決済失敗）の方は、承認などの操作を今までどおり（2026-10-04 点検）
@@ -344,7 +349,17 @@ async function contractOf(userId: number): Promise<ContractInfo | null> {
     const { getPlan, resolveEffectivePlanId } = await import("@shared/plans");
     const plan = getPlan(resolveEffectivePlanId(sub?.planId, sub?.status));
     if (!plan) return null;
+    // ★契約の「いまの」扱い（2026-10-04 点検：解約した方・猶予中の方に「お申し込み前」と答えていた）
+    const state = (await db.isEndedCustomer(userId).catch(() => false)) ? "ended" as const
+      : (await db.isInDunning(userId).catch(() => false)) ? "dunning" as const
+      : (await db.isFreeGrace(userId).catch(() => false)) ? "grace" as const
+      : null;
+    const contractPlanName = sub?.planId ? (getPlan(sub.planId)?.name ?? null) : null;
     return {
+      state,
+      contractPlanName,
+      planId: plan.id,
+      hasPaymentContract: !!(sub?.univapaySubscriptionId || (sub as any)?.stripeSubscriptionId),
       planName: plan.name,
       priceMonthly: plan.priceMonthly,
       status: sub?.status ?? null,
@@ -1391,15 +1406,25 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   //   ご契約内容・使い方・お問い合わせ・連携の解除・数字や登録内容を見ることだけは残す。
   if (await isEndedCustomerSafe(user.id)) {
     const allowed = q.s === "plan"
-      || ["menu", "help", "support", "staff", "sendq", "cancel", "unlink", "stats", "profile"].includes(String(q.m ?? ""));
+      || ["menu", "help", "support", "staff", "sendq", "cancel", "unlink", "stats", "profile", "refcode"].includes(String(q.m ?? ""))
+      // よくある質問（カテゴリ hc=・質問 h=）と、案内を止めるボタン（n=off）は使える（2026-10-04 点検）
+      || q.hc != null || q.h != null || q.n === "off";
     if (!allowed) {
       await db.clearLineChatState(lineUserId).catch(() => undefined);
       return [endedReply()];
     }
+  } else if (await isDunningOnlySafe(user.id)) {
+    // ★お支払い確認中の方は、予約ずみの投稿の承認・見送り・取り消しだけ（新しく作る操作はAIを使うので止める・2026-10-04 点検）
+    const NEW_WORK = ["alt", "rw", "rw2"];
+    if (NEW_WORK.includes(String(q.a ?? "")) || (q.cr && q.cr !== "ignore") || q.m === "makepin") {
+      return [textWithQuick("お支払いの確認ができていないため、この操作は一時的にお使いいただけません。カード情報を更新いただくと、すぐに再開します（予約ずみの投稿はそのまま公開されます）。", [{ label: "ご契約内容", data: "s=plan" }, { label: "担当者に聞く", data: "m=staff" }])];
+    }
   } else if (!(await isSubscribedSafe(user.id))) {
     // ★お申し込み前の方は、はじめの設定と連携だけ（2026-10-03 三上様「フリープランは不要」）。
     //   投稿の操作（a=）・固定投稿の案（m=makepin）・コメント返信の文案（cr=）はAIで作るので動かさない。
-    if (q.a || q.cr || q.m === "makepin") return [notSubscribedReply()];
+    //   ★a= はアカウントIDとしても使われる（c=start&a=ID など）ので、投稿の操作の値だけを止める（2026-10-04 点検）
+    const POST_ACTIONS = ["ok", "okall", "alt", "rw", "rw2", "selfedit", "skip", "skipwhy", "undo", "undoall", "rate"];
+    if (POST_ACTIONS.includes(String(q.a ?? "")) || (q.cr && q.cr !== "ignore") || q.m === "makepin") return [notSubscribedReply()];
   }
 
   // ── メニュー ──
@@ -3060,7 +3085,12 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
 
   // ★ご契約が終わった方の打ち言葉は、ご質問としてだけ受ける（書き直し・設定・URL登録などの有料の機能は動かさない・2026-10-03）
   if (await isEndedCustomerSafe(user.id)) {
+    // ★「担当者に聞く」のあとに打たれた文は、待ち状態を消す前に担当者へ届ける（消すと自動応答に流れて届かなかった・2026-10-04 点検）
+    const endedSt = await db.getLineChatState(lineUserId).catch(() => null);
     await db.clearLineChatState(lineUserId).catch(() => undefined);
+    if (endedSt?.state === "staff_message" && !/^(やめる|中止|キャンセル)$/.test(text.trim())) {
+      return await forwardToStaff(user.id, lineUserId, text.slice(0, 2000), endedSt.payload ? Number(endedSt.payload) : undefined);
+    }
     // ★紹介コード・クーポンは受ける（再開の入口を塞がない・2026-10-04 点検）
     if (looksLikeReferralCode(text)) return referralLink(lineUserId, text.trim(), user.id);
     return (await autoAnswer(user.id, lineUserId, text)) ?? [endedReply()];

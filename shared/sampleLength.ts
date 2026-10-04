@@ -39,8 +39,9 @@ export function sampleLengthRange(styleSamples: string | null | undefined): Leng
   if (lens.length < MIN_SAMPLES) return null;
   const avg = Math.round(lens.reduce((a, b) => a + b, 0) / lens.length);
   const clamp = (n: number) => Math.min(CEIL, Math.max(FLOOR, n));
-  const lo = clamp(Math.round(avg * 0.88));
-  const hi = clamp(Math.max(lo + 10, Math.round(avg * 1.13)));
+  // 上限を先に決め、下限はそれより短くする（平均が長い方で「300〜300字」にならないように・2026-10-04 点検）
+  const hi = Math.max(FLOOR + 10, clamp(Math.round(avg * 1.13)));
+  const lo = Math.max(FLOOR, Math.min(clamp(Math.round(avg * 0.88)), hi - (hi >= CEIL ? 30 : 10)));
   return { avg, lo, hi, n: lens.length };
 }
 
@@ -62,8 +63,9 @@ export function applyLengthRange(prompt: string, range: LengthRange | null): str
     // 実測の一般論の行は、この方には当てはまらないので丸ごと差し替える
     .replace(/^.*実測データ（114アカウント・3\.2万投稿の分析）.*$/m,
       `★この方の文体のお手本は平均${range.avg}字。お手本と同じくらいの長さで書く（短く削りすぎて説明が飛ぶと、本人の文に見えない）。`)
-    .replace(/^.*実測（114アカウント・3\.2万投稿）では50字までが最も見られ.*$/gm,
-      `- この方のお手本は平均${range.avg}字。お手本と同じくらいの長さで書く。水増しはしない。`)
+    // 行の頭（「固定投稿のような長文は作らない」など）は残し、実測の一般論の部分だけ差し替える（2026-10-04 点検）
+    .replace(/実測（114アカウント・3\.2万投稿）では50字までが最も見られ.*$/gm,
+      `この方のお手本は平均${range.avg}字。お手本と同じくらいの長さで書く。水増しはしない。`)
     .replace(/^\s*実測（3\.2万投稿）では50字までが最も見られ.*$/gm,
       `  この方のお手本は平均${range.avg}字。お手本と同じくらいの長さで書く。`)
     .replace(/理想は50字前後で言い切る。/g, `お手本と同じくらい（${range.avg}字前後）で言い切る。`)

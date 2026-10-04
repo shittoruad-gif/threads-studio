@@ -142,10 +142,10 @@ export async function runAnalyticsSnapshotJob(): Promise<void> {
   const { isSubscribed } = await import("./endedGuard");
   for (const user of users) {
     try {
-      // ★お申し込み前・ご契約が終わった方の数字は取りに行かない（2026-10-03）
-      if (!(await isSubscribed(user.id))) continue;
       const accounts = await getThreadsAccountsByUserId(user.id);
       if (!accounts || accounts.length === 0) continue;
+      // ★お申し込み前・ご契約が終わった方の数字は取りに行かない（2026-10-03）
+      if (!(await isSubscribed(user.id))) continue;
       processed++;
       fetched += await fetchAndStoreAnalyticsForUser(user.id);
       await snapshotFollowersForUser(user.id);
@@ -219,10 +219,11 @@ export async function runCommentWatchJob(): Promise<void> {
   const { isSubscribed } = await import("./endedGuard");
   for (const u of users) {
     try {
-      // ★お申し込み前・ご契約が終わった方にはコメントの通知・返信の文案を作らない（2026-10-03）
-      if (!(await isSubscribed(u.id))) continue;
       const accounts = await getThreadsAccountsByUserId(u.id);
       if (!accounts || accounts.length === 0) continue;
+      // ★お申し込み前・ご契約が終わった方にはコメントの通知・返信の文案を作らない（2026-10-03）。
+      //   契約の判定はアカウントがある方だけにする（15分ごとに全員分を数えないように・2026-10-04 点検）
+      if (!(await isSubscribed(u.id))) continue;
       const fullUser = await getUserById(u.id);
       if (!fullUser?.email) continue;
 

@@ -78,3 +78,19 @@ describe("次回の決済日は UnivaPay の日付を使う（2026-09-25：curre
     expect(formatDueDate("10/2")).toBeNull();
   });
 });
+
+describe("ご契約内容：状態ごとの文面（2026-10-04 点検）", () => {
+  it("解約・猶予・お支払い確認中・クーポン・代理店クライアント", () => {
+    expect(contractSummary({ planName: "お申し込み前", priceMonthly: 0, state: "ended", contractPlanName: "プロプラン" })).toMatch(/終了しています（プロプラン）/);
+    expect(contractSummary({ planName: "お申し込み前", priceMonthly: 0, state: "grace" })).toMatch(/フリープラン（10月31日まで）/);
+    expect(contractSummary({ planName: "お申し込み前", priceMonthly: 0, state: "dunning", contractPlanName: "プロプラン" })).toMatch(/お支払いの確認ができていません/);
+    expect(contractSummary({ planName: "プロプラン", priceMonthly: 9800, status: "trialing", planId: "pro", hasPaymentContract: false })).toMatch(/期限なし・無料/);
+    expect(contractSummary({ planName: "プロプラン", priceMonthly: 9800, status: "trialing", planId: "pro", hasPaymentContract: false, trialEndsAt: "2026-11-01T00:00:00Z" })).toMatch(/無料の体験・2026年11月1日まで/);
+    expect(contractSummary({ planName: "代理店クライアント", priceMonthly: 0, planId: "agency_client" })).toMatch(/代理店のご契約に含まれています/);
+  });
+  it("キャンペーン価格は4回目から通常価格（無料に戻らない）", () => {
+    const t = contractSummary({ planName: "プロ セミナー価格", priceMonthly: 6980, status: "active", isCampaign: true, nextPaymentDate: "2026-11-01" });
+    expect(t).toMatch(/4回目から通常価格/);
+    expect(t).not.toMatch(/無料に戻ります/);
+  });
+});

@@ -159,22 +159,22 @@ export default function CouponModal({ open, onClose, onSuccess }: CouponModalPro
                 {validationResult.valid && validationResult.type && (
                   <div className="mt-2 text-sm">
                     {validationResult.type === "forever_free" && (
-                      <p className="font-medium">✨ 永久無料プランが適用されます（全機能無制限）</p>
+                      <p className="font-medium">プロプランを期限なし・無料でお使いいただけます（全機能）</p>
                     )}
                     {validationResult.type === "special_price" && (
-                      <p className="font-medium">🎁 特別価格！180日間プロプランが無料になります</p>
+                      <p className="font-medium">特別価格：180日間、プロプランを無料でお使いいただけます</p>
                     )}
                     {validationResult.type === "discount_50" && (
-                      <p className="font-medium">🎉 50%OFF！90日間プロプランが無料になります</p>
+                      <p className="font-medium">90日間、プロプランを無料でお使いいただけます</p>
                     )}
                     {validationResult.type === "discount_30" && (
                       <p className="font-medium">💫 30%OFF！60日間プロプランが無料になります</p>
                     )}
                     {validationResult.type === "trial_30" && (
-                      <p className="font-medium">🎁 30日間無料トライアルが開始されます</p>
+                      <p className="font-medium">30日間の無料トライアルが始まります（期間が終わると、課金なしで止まります）</p>
                     )}
                     {validationResult.type === "trial_14" && (
-                      <p className="font-medium">🎁 14日間無料トライアルが開始されます</p>
+                      <p className="font-medium">14日間の無料トライアルが始まります（期間が終わると、課金なしで止まります）</p>
                     )}
                   </div>
                 )}

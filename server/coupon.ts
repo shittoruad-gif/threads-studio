@@ -166,6 +166,13 @@ export async function applyCoupon(
     //   クーポンが使えなかった。古い行（UnivaPayの契約ID）は、遅れて届く通知の照合のためそのまま残す。
     const latest = existingSubscription[0];
     const latestEnded = !!latest && effectiveSubscriptionStatus(latest as any) === "canceled";
+    // ★有料のご契約中（UnivaPayの契約あり・解約予約の期間内を含む）にクーポンで上書きすると、
+    //   毎朝の照合がUnivaPay側の状態で書き戻し、残りの期間まで失うことがある（2026-10-04 点検）。ここでは受け付けない。
+    const latestPaidLive = !!latest && !latestEnded && !!(latest as any).univapaySubscriptionId
+      && ((latest as any).status === "active" || (latest as any).status === "trialing" || (latest as any).status === "past_due");
+    if (latestPaidLive) {
+      return { success: false, message: "有料のご契約中のため、このクーポンは使えません。プランのご相談は公式LINEの「担当者に聞く」からお知らせください。" };
+    }
     if (latest && !latestEnded) {
       // Update existing subscription
       await db
@@ -229,7 +236,7 @@ export async function applyCoupon(
   let message = "";
   switch (coupon.type) {
     case "forever_free":
-      message = "永久無料プランが適用されました！全機能を無制限でご利用いただけます。";
+      message = "プロプランを期限なし・無料でお使いいただけるようになりました。全機能をご利用いただけます。";
       break;
     case "trial_30":
       message = "30日間無料トライアルが開始されました！";
@@ -272,14 +279,14 @@ export async function seedCoupons() {
     {
       code: "PROST2026",
       type: "forever_free",
-      description: "永久無料プラン - 全機能無制限",
+      description: "プロプラン（期限なし・無料）- 全機能",
       maxUses: 10,
       isActive: true,
     },
     {
       code: "VIP-MEMBER",
       type: "forever_free",
-      description: "VIPメンバー永久無料プラン",
+      description: "VIPメンバー プロプラン（期限なし・無料）",
       maxUses: 5,
       isActive: true,
     },

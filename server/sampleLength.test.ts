@@ -24,6 +24,7 @@ describe('お手本の平均字数から長さを決める', () => {
   it('下限50字・上限300字で止める／極端に長い1本は外す', () => {
     expect(sampleLengthRange(mk(3, 30))!.lo).toBe(50);
     expect(sampleLengthRange(mk(3, 400))!.hi).toBe(300);
+    expect(sampleLengthRange(mk(3, 400))!.lo).toBe(270); // 「300〜300字」にしない（2026-10-04 点検）
     const withOutlier = [mk(3, 100), 'い'.repeat(900)].join('\n---\n');
     expect(sampleLengthRange(withOutlier)!.avg).toBe(100);
   });

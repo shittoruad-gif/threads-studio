@@ -16,7 +16,8 @@ export function UsageProgress({
   icon,
   className = '',
 }: UsageProgressProps) {
-  const percentage = limit === -1 ? 0 : Math.min((current / limit) * 100, 100);
+  // 上限0（お申し込み前）で 0/0 の NaN% にならないように（2026-10-04 点検）
+  const percentage = limit === -1 ? 0 : limit <= 0 ? 100 : Math.min((current / limit) * 100, 100);
   const isUnlimited = limit === -1;
   
   const getColor = () => {

@@ -917,10 +917,12 @@ export async function isEndedCustomer(userId: number, at: Date = new Date()): Pr
       COALESCE(SUM(status IN ('active', 'trialing') AND NOT (cancelAtPeriodEnd = 1 AND currentPeriodEnd IS NOT NULL AND currentPeriodEnd <= ${t})
         AND NOT (status = 'trialing' AND trialEndsAt IS NOT NULL AND trialEndsAt <= ${t} AND COALESCE(univapaySubscriptionId, '') = '' AND COALESCE(stripeSubscriptionId, '') = '')), 0) AS usable,
       COALESCE(SUM(status = 'canceled' OR (cancelAtPeriodEnd = 1 AND currentPeriodEnd IS NOT NULL AND currentPeriodEnd <= ${t})
-        OR (status = 'trialing' AND trialEndsAt IS NOT NULL AND trialEndsAt <= ${t} AND COALESCE(univapaySubscriptionId, '') = '' AND COALESCE(stripeSubscriptionId, '') = '')), 0) AS ended
+        OR (status = 'trialing' AND trialEndsAt IS NOT NULL AND trialEndsAt <= ${t} AND COALESCE(univapaySubscriptionId, '') = '' AND COALESCE(stripeSubscriptionId, '') = '')), 0) AS ended,
+      COALESCE(SUM(status IN ('past_due', 'unpaid')), 0) AS dunning
     FROM subscriptions WHERE userId = ${userId}`);
   const r = (rows as any)?.[0]?.[0];
-  return Number(r?.ended ?? 0) > 0 && Number(r?.usable ?? 0) === 0;
+  // ★お支払い確認中（past_due/unpaid）の行があれば、古い解約の行があっても「終わった方」にしない（2026-10-04 点検）
+  return Number(r?.ended ?? 0) > 0 && Number(r?.usable ?? 0) === 0 && Number(r?.dunning ?? 0) === 0;
 }
 
 /**

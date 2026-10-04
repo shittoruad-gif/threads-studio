@@ -122,7 +122,9 @@ export function parseFabricationResult(raw: string, draft: string): FabricationI
   for (const it of obj.items.slice(0, 10)) {
     const quote = String(it?.quote ?? '').trim().slice(0, 60);
     const kind = String(it?.kind ?? '') as FabricationKind;
-    if (!quote || Array.from(squash(quote)).length < 2) continue;
+    // 短すぎる引用（「ます」など）やひらがなだけの引用は、ほぼ全文に当たって投稿を壊すので採らない（2026-10-04 点検）
+    //   「今日は」「先日」のような日付の言葉は短くても漢字を含むので採る。
+    if (!quote || Array.from(squash(quote)).length < 2 || /^[\u3040-\u309f、。！？「」\s]+$/.test(quote)) continue;
     if (!FABRICATION_KINDS.includes(kind)) continue;
     if (!body.includes(squash(quote))) continue;
     out.push({ quote, kind, reason: String(it?.reason ?? '').slice(0, 60) });
@@ -131,11 +133,12 @@ export function parseFabricationResult(raw: string, draft: string): FabricationI
 }
 
 /** 料金・保証の言葉。登録情報に同じ言葉が無ければ、AIの判断を待たずに作り話とする */
-const PRICE_WORDS = ['無料', '0円', '０円', 'タダ', '割引', '半額', '値引', '保証', '返金', '初回限定', '今だけ', 'キャンペーン'];
+// 「今だけ」は「今だけでなく」の誤検出が出るので外した（2026-10-04 点検）
+const PRICE_WORDS = ['無料', '0円', '０円', 'タダ', '割引', '半額', '値引', '保証', '返金', '初回限定', 'キャンペーン'];
 
 export function ruleBasedFabrications(draft: string, facts: string): FabricationItem[] {
   // ★「効果を保証するものではありません」のような打ち消しの注意書きは約束ではないので、先に外してから見る（2026-10-04 点検）
-  const d = String(draft || '').replace(/(無料|保証|返金|割引)(する|される|を|は|が|も)?(ものでは|わけでは|では)?(ありません|ございません|しません|できません|いたしかねます)/g, '');
+  const d = String(draft || '').replace(/(無料|保証|返金|割引)(する|される|を|は|が|も)?(ものでは|わけでは|では)?(ありません|ございません|しません|できません|いたしません|いたしかねます)/g, '');
   const f = String(facts || '');
   return PRICE_WORDS.filter((w) => d.includes(w) && !f.includes(w))
     .map((w) => ({ quote: w, kind: 'price' as const, reason: `「${w}」は登録に無い` }));

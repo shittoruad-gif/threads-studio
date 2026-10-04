@@ -26,6 +26,17 @@ export interface ContractInfo {
   nextPaymentDate?: string | null;
   /** 次回の金額（円・税込） */
   nextPaymentAmount?: number | null;
+  /**
+   * 契約の「いまの」扱い（2026-10-04 点検）。
+   *  ended＝ご契約終了／grace＝今いるフリーの方の猶予（10/31まで）／dunning＝お支払いの確認中
+   */
+  state?: 'ended' | 'grace' | 'dunning' | null;
+  /** 実際のご契約プラン名（ended・dunning のとき。実効プランは「お申し込み前」になるため） */
+  contractPlanName?: string | null;
+  /** プランID（free・agency_client の見分けに使う） */
+  planId?: string | null;
+  /** UnivaPay などの決済の契約があるか（無い trialing はクーポン＝お支払いなし） */
+  hasPaymentContract?: boolean;
 }
 
 /** 「2026年10月2日（金）」（YYYY-MM-DD から。タイムゾーンに左右されない） */
@@ -49,8 +60,30 @@ export function formatJpDate(v: Date | string | null | undefined): string | null
 }
 
 export function contractSummary(c: ContractInfo | null | undefined): string {
-  if (!c || !c.planName) {
+  if (c?.state === 'ended') {
+    return `ご契約：終了しています${c.contractPlanName ? `（${c.contractPlanName}）` : ''}\nお支払いはございません。\n` +
+      "再開をご希望の場合は、料金プランからもう一度お申し込みいただけます。登録したお店の情報と連携はそのまま残っています。";
+  }
+  if (c?.state === 'grace') {
+    return "ご契約：フリープラン（10月31日まで）\nお支払いはございません。\n" +
+      "11月1日からは、投稿づくりと毎日の自動投稿はお申し込み（最初の7日間は無料）からのご利用になります。";
+  }
+  if (c?.state === 'dunning') {
+    return `ご契約：${c.contractPlanName ?? '有料プラン'}\nお支払いの確認ができていません。カード情報を更新いただくと、すぐに再開します（予約ずみの投稿はそのまま公開されます）。`;
+  }
+  if (!c || !c.planName || c.planId === "free") {
     return "ご契約：お申し込み前（7日間無料で始められます）\nお支払いはございません。";
+  }
+  // ★代理店から発行されたアカウント・クーポン（決済の契約なし）は、お支払いが無い（2026-10-04 点検：
+  //   代理店のクライアントに「お申し込み前」、期限なしクーポンの方に「月額9,800円・次回の請求日は確認中」と出ていた）
+  if (c.planId === "agency_client") {
+    return `ご契約：${c.planName}\n料金は代理店のご契約に含まれています（お支払いはございません）。`;
+  }
+  if (c.status === "trialing" && c.hasPaymentContract === false) {
+    const end = formatJpDate(c.trialEndsAt);
+    return end
+      ? `ご契約：${c.planName}（無料の体験・${end}まで）\nお支払いはございません。期間が終わると止まります（課金はありません）。`
+      : `ご契約：${c.planName}（期限なし・無料）\nお支払いはございません。`;
   }
   const price = typeof c.priceMonthly === "number" ? c.priceMonthly : null;
   if (price === 0) {
@@ -82,7 +115,8 @@ export function contractSummary(c: ContractInfo | null | undefined): string {
   }
 
   if (c.isCampaign) {
-    lines.push("※ キャンペーン価格でのご契約です（3回のお支払いで終了し、無料に戻ります）。");
+    // ★規約 第6条7項のとおり、4回目のお支払いから通常価格に切り替わる（「無料に戻ります」は誤りだった・2026-10-04 点検）
+    lines.push("※ キャンペーン価格でのご契約です（3回分のお支払いまでキャンペーン価格で、4回目から通常価格に切り替わります。切り替えの前にメールでお知らせします）。");
   }
   return lines.join("\n");
 }

@@ -620,6 +620,12 @@ async function startServer() {
           //   イベントのサブスクIDがアプリに記録されたIDと食い違う場合、それは
           //   「別契約」の解約通知なので、アプリの契約は触らない
           //   （2026-08-14 滝本さんの旧契約解約で新契約まで解約扱いになった事故の再発防止）。
+          // ★アプリの契約にUnivaPayの契約IDが無い（期限なしクーポン・代理店クライアント・解約後のクーポンの新しい行）のに
+          //   UnivaPayの解約通知が来たら、それは別の（古い）契約の通知なので触らない（2026-10-04 点検）
+          if (univapaySubId && !existing?.univapaySubscriptionId && existing) {
+            console.log(`[Univapay Webhook] 決済の契約IDが無い契約への解約通知を無視: user=${user.id} event.sub=${univapaySubId}`);
+            return res.json({ received: true, note: 'canceled event for a contract without univapay id' });
+          }
           if (existing?.univapaySubscriptionId && univapaySubId &&
               existing.univapaySubscriptionId !== univapaySubId) {
             console.log(`[Univapay Webhook] 別契約の解約通知を無視: user=${user.id} event.sub=${univapaySubId} app.sub=${existing.univapaySubscriptionId}`);
@@ -696,6 +702,11 @@ async function startServer() {
           // ★別契約（サブスクID不一致）の失敗通知は無視。
           //   同一メールで他サービス・旧契約の決済失敗が来ても、アプリの契約を
           //   past_dueにしたり督促メールを送ったりしない。
+          // ★決済の契約IDが無い契約（期限なしクーポン・代理店クライアントなど）への失敗通知も別契約として無視（2026-10-04 点検）
+          if (univapaySubId && !existing?.univapaySubscriptionId && existing) {
+            console.log(`[Univapay Webhook] 決済の契約IDが無い契約への決済失敗通知を無視: user=${user.id} event.sub=${univapaySubId}`);
+            return res.json({ received: true, note: 'failed event for a contract without univapay id' });
+          }
           if (existing?.univapaySubscriptionId && univapaySubId &&
               existing.univapaySubscriptionId !== univapaySubId) {
             console.log(`[Univapay Webhook] 別契約の決済失敗通知を無視: user=${user.id} event.sub=${univapaySubId} app.sub=${existing.univapaySubscriptionId}`);

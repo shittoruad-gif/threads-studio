@@ -2925,6 +2925,7 @@ ${input.commentText}
     approve: protectedProcedure
       .input(z.object({ postId: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        if (!(await db.hasServiceAccess(ctx.user.id)) && !(await db.isInDunning(ctx.user.id))) await assertSubscribed(ctx.user.id); // ★公開側で黙って取り消されないよう、その場で止める（お支払い確認中は通す・2026-10-04 点検）
         const post = await db.getScheduledPostById(input.postId);
         if (!post || post.userId !== ctx.user.id) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Post not found' });
@@ -2978,6 +2979,7 @@ ${input.commentText}
     retry: protectedProcedure
       .input(z.object({ postId: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        if (!(await db.hasServiceAccess(ctx.user.id)) && !(await db.isInDunning(ctx.user.id))) await assertSubscribed(ctx.user.id); // ★公開側で黙って取り消されないよう、その場で止める（お支払い確認中は通す・2026-10-04 点検）
         // ★所有権チェック（他人の失敗投稿を再実行させない / IDOR対策）
         const post = await db.getScheduledPostById(input.postId);
         if (!post || post.userId !== ctx.user.id) {
@@ -3346,7 +3348,7 @@ ${input.commentText}
         if (currentPlanId === 'free') {
           throw new TRPCError({
             code: 'BAD_REQUEST',
-            message: '無料プランからの変更は、料金プランから新規にお申し込みください。',
+            message: 'お申し込み前の方は、料金プランから新規にお申し込みください（最初の7日間は無料）。',
           });
         }
 
@@ -4937,7 +4939,8 @@ ${input.commentText}
         const { verifyMaterialFormToken, submitMaterialForm } = await import('./materialLedger');
         const projectId = verifyMaterialFormToken(input.t);
         if (!projectId) throw new TRPCError({ code: 'FORBIDDEN', message: 'リンクの有効期限が切れています。担当者に新しいリンクをお送りするようお伝えください。' });
-        { const pj: any = await db.getProjectById(projectId); if (pj?.userId) await assertSubscribed(pj.userId); }
+        // ★お店の契約の状態（お支払い確認中など）を、フォームを開いた方に見せない（2026-10-04 点検）
+        { const pj: any = await db.getProjectById(projectId); if (pj?.userId && !(await db.hasServiceAccess(pj.userId))) throw new TRPCError({ code: 'FORBIDDEN', message: '現在このフォームは受け付けていません。お手数ですが担当者にお知らせください。' }); }
         const { t: _t, ...rest } = input;
         return await submitMaterialForm(projectId, rest);
       }),
@@ -5205,7 +5208,7 @@ ${input.commentText}
         message: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
-        await assertSubscribed(ctx.user.id); // ★お申し込み前・解約後は使えない（2026-10-03）
+        await assertSubscribed(ctx.user.id); // ★お申し込み前・解約後は使えない（投稿の改善案まで書くAIのため。使い方の質問は support.ask で誰でも・2026-10-04 点検）
         let conversationId = input.conversationId;
 
         // Create new conversation if not provided

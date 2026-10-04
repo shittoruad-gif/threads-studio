@@ -1356,11 +1356,21 @@ export default function AIGenerate() {
                               ? 'bg-yellow-500'
                               : 'bg-primary'
                           }`}
-                          style={{ width: `${Math.min((aiUsage.count / aiUsage.limit) * 100, 100)}%` }}
+                          style={{ width: `${aiUsage.limit > 0 ? Math.min((aiUsage.count / aiUsage.limit) * 100, 100) : 0}%` }}
                         />
                       </div>
                     )}
-                    {aiUsage.limit !== null && aiUsage.limit !== -1 && aiUsage.count >= aiUsage.limit && (() => {
+                    {/* ★お申し込み前（上限0回）の方には「使い切りました・◯月1日にリセット」ではなく、お申し込みの案内（2026-10-04 点検） */}
+                    {aiUsage.limit === 0 && (
+                      <div className="mt-3 bg-emerald-50 border-2 border-emerald-200 rounded-lg p-3">
+                        <p className="text-sm font-bold text-emerald-800">{t("AIでの投稿づくりは、お申し込みからご利用いただけます")}</p>
+                        <p className="text-xs text-emerald-700 mt-1">{t("最初の7日間は無料です。期間中に解約されれば料金はかかりません。")}</p>
+                        <Button size="sm" className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setLocation('/pricing')}>
+                          {t("7日間無料で始める")}
+                        </Button>
+                      </div>
+                    )}
+                    {aiUsage.limit !== null && aiUsage.limit !== -1 && aiUsage.limit !== 0 && aiUsage.count >= aiUsage.limit && (() => {
                       const now = new Date();
                       const reset = new Date(now.getFullYear(), now.getMonth() + 1, 1);
                       const resetStr = `${reset.getMonth() + 1}月1日`;

@@ -135,6 +135,12 @@ export default function Dashboard() {
     undefined,
     { enabled: isAuthenticated }
   );
+  // ★表示用のプラン名（2026-10-04 点検）：決済失敗中・解約後に「お申し込み前」と出ていた
+  const planDisplayName = (subscription as any)?.isPaymentPastDue
+    ? `${(subscription as any)?.contractPlanName ? t((subscription as any).contractPlanName) : t('有料プラン')}${t('（お支払い確認中）')}`
+    : (subscription as any)?.status === 'canceled'
+      ? t('ご契約終了')
+      : (subscription?.plan?.name ? t(subscription.plan.name) : t('お申し込み前'));
   // ★次回の決済日と金額（UnivaPay が正・2026-09-25）
   const { data: nextPayment } = trpc.subscription.nextPayment.useQuery(undefined, {
     enabled: !!subscription && subscription.status === 'active' && !subscription.cancelAtPeriodEnd && !subscription.isTrialing,
@@ -519,7 +525,7 @@ export default function Dashboard() {
             </p>
           </div>
           <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-sm px-3 py-1 shrink-0 self-start">
-            {subscription?.plan?.name ? t(subscription.plan.name) : t('お申し込み前')}
+            {planDisplayName}
           </Badge>
         </div>
 
@@ -1053,7 +1059,7 @@ export default function Dashboard() {
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <p className="text-muted-foreground text-sm mb-1">{t("現在のプラン")}</p>
-                <p className="text-2xl font-bold text-foreground">{subscription?.plan?.name ? t(subscription.plan.name) : t('お申し込み前')}</p>
+                <p className="text-2xl font-bold text-foreground">{planDisplayName}</p>
                 {subscription?.plan?.priceMonthly ? (
                   <p className="text-muted-foreground">¥{subscription.plan.priceMonthly.toLocaleString()}{t('/月')}</p>
                 ) : null}

@@ -2,6 +2,7 @@ import { AlertTriangle, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useLocation } from 'wouter';
+import { getPlan } from '@shared/plans';
 
 /**
  * SubscriptionAlertBanner
@@ -30,22 +31,25 @@ export function SubscriptionAlertBanner() {
     return null;
   }
 
-  const planName = plan?.name ?? subscription.planId;
+  // ★表示は実際のご契約プラン名（実効プランは決済失敗中「お申し込み前」になるため使わない・2026-10-04 点検）。
+  //   それまで「フリープランプランの自動更新に失敗しました」と出ていた。
+  const contractName = (subscription as any).contractPlanName ?? getPlan(String(subscription.planId ?? ''))?.name ?? null;
+  const planName = contractName ? String(contractName).replace(/プラン$/, '') + 'プラン' : 'ご契約のプラン';
 
   // ステータスごとにメッセージを変える
   const headline =
     status === 'past_due'
-      ? '⚠ お支払いができていません'
+      ? 'お支払いができていません'
       : status === 'unpaid'
-      ? '⛔ サブスクリプションが停止されています'
-      : '⏳ 初回決済が完了していません';
+      ? 'ご契約が一時停止しています'
+      : '初回のお支払いが完了していません';
 
   const detail =
     status === 'past_due'
-      ? `${planName}プランの自動更新に失敗しました。Univapay側で数回自動リトライしますが、このままだとサービスが停止します。クレジットカードの有効期限切れ・残高不足が主な原因です。`
+      ? `${planName}の自動更新に失敗しました。Univapay側で数回自動リトライしますが、このままだとサービスが停止します。クレジットカードの有効期限切れ・残高不足が主な原因です。`
       : status === 'unpaid'
-      ? `${planName}プランの決済が完了せず、有料機能（自動投稿・無制限AI生成等）が一時停止しています。料金プランから再登録すると再開できます。`
-      : `${planName}プランの初回決済が確定していません。カード情報の認証が必要な場合があります。`;
+      ? `${planName}の決済が完了せず、有料機能（自動投稿・無制限AI生成等）が一時停止しています。料金プランから再登録すると再開できます。`
+      : `${planName}の初回決済が確定していません。カード情報の認証が必要な場合があります。`;
 
   return (
     <div className="bg-red-500/10 border-b-2 border-red-500/40 px-4 py-3">
