@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Calendar, CheckCircle2, CheckSquare, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, Square, Trash2, AlertTriangle, Link2, Search, Download, Pencil } from "lucide-react";
+import { ArrowLeft, Calendar, CheckCircle2, CheckSquare, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, Filter, RotateCcw, Square, Trash2, AlertTriangle, Link2, Search, Download, Pencil, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { translatePostError } from "@/lib/postErrors";
@@ -31,6 +31,7 @@ import { useThreadsAccount } from "@/components/ThreadsAccountSwitcher";
 import PageGuide from "@/components/PageGuide";
 import { useLang } from "@/i18n";
 import { getAngle } from "@shared/postAngles";
+import PostVariationsDialog from "@/components/PostVariationsDialog";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -54,6 +55,7 @@ export default function PostHistory() {
   const [bulkCanceling, setBulkCanceling] = useState(false);
   // ID of the post pending delete confirmation. null = no dialog shown.
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [variationsTarget, setVariationsTarget] = useState<{ id: number; postContent?: string | null; threadsAccountId?: number | null; projectId?: string | null } | null>(null);
   // 承認待ち投稿の編集用（id と編集中の本文）
   const [editTarget, setEditTarget] = useState<{ id: number; content: string; projectId?: string } | null>(null);
   const editProjectId = editTarget?.projectId;
@@ -599,6 +601,18 @@ export default function PostHistory() {
                               </Button>
                             );
                           })()}
+                          {/* ★似たパターンを作る（2026-10-04 三上様指示・プロプラン以上。プランの判定は画面とサーバーの両方） */}
+                          {(post.postContent ?? '').trim().length > 0 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="glass hover-lift col-span-2 sm:col-span-1"
+                              onClick={() => setVariationsTarget(post as any)}
+                            >
+                              <Sparkles className="w-3 h-3 mr-1" />
+                              {t('似たパターンを作る')}
+                            </Button>
+                          )}
                           {/* Delete: available for any status. For pending posts
                               this prevents the cron from posting them. For
                               failed/canceled posts it cleans up history. */}
@@ -731,6 +745,7 @@ export default function PostHistory() {
       </AlertDialog>
 
       {/* 承認待ち投稿の内容編集ダイアログ */}
+      <PostVariationsDialog open={!!variationsTarget} onOpenChange={(v) => { if (!v) setVariationsTarget(null); }} post={variationsTarget} />
       <Dialog open={editTarget !== null} onOpenChange={(open) => !open && setEditTarget(null)}>
         <DialogContent className="bg-background border border-border">
           <DialogHeader>

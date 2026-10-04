@@ -2956,6 +2956,53 @@ ${input.commentText}
       }),
 
     // Edit the content of a post that is awaiting approval (then it can be approved).
+    // ★1つの投稿から、同じ内容でいろいろな形の投稿を作る（2026-10-04 三上様指示・プロプラン以上・server/postVariations.ts）
+    variations: protectedProcedure
+      .input(z.object({ postId: z.number(), count: z.union([z.literal(3), z.literal(5), z.literal(10)]).default(5), offset: z.number().int().min(0).max(9).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        await assertSubscribed(ctx.user.id);
+        const subscription = await db.getSubscriptionByUserId(ctx.user.id);
+        const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
+        const { isProOrAbove } = await import('../shared/postVariations');
+        if (!isProOrAbove(planId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'この機能はプロプラン以上でご利用いただけます。料金プランからプランの変更ができます。' });
+        }
+        // 所有権チェック（他人の投稿から作らせない）
+        const post: any = await db.getScheduledPostById(input.postId);
+        if (!post || post.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '投稿が見つかりません' });
+        }
+        const source = String(post.postContent || '').trim();
+        if (Array.from(source.replace(/\s+/g, '')).length < 15) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '元の投稿が短すぎるため、パターンを作れません。' });
+        }
+        // AI生成の回数（1本＝1回で数える。残りが足りなければ作れる本数だけ）
+        const canGenerate = await db.checkAiGenerationLimit(ctx.user.id);
+        if (!canGenerate) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: `今月のAI生成回数の上限に達しました。利用が異常に多い場合はサポートまでご連絡ください。` });
+        }
+        const { count: aiUsed, limit: aiLimit } = await db.getAiGenerationUsage(ctx.user.id);
+        const cap = aiLimit === null || aiLimit === -1 ? db.HARD_AI_GEN_CAP_PER_MONTH : Math.min(aiLimit, db.HARD_AI_GEN_CAP_PER_MONTH);
+        const count = Math.max(1, Math.min(input.count, cap - aiUsed));
+        // 材料のお店の情報：投稿のプロジェクト → なければアカウントの既定
+        let project: any = post.projectId ? await db.getProjectById(String(post.projectId)) : null;
+        if (!project || project.userId !== ctx.user.id) {
+          const acct: any = post.threadsAccountId ? await db.getThreadsAccountById(Number(post.threadsAccountId)) : null;
+          project = acct?.defaultProjectId ? await db.getProjectById(String(acct.defaultProjectId)) : null;
+          if (project && project.userId !== ctx.user.id) project = null;
+        }
+        const { generatePostVariations } = await import('./postVariations');
+        const r = await generatePostVariations({ source, project: project ?? {}, count, offset: input.offset ?? 0 });
+        if (r.drafts.length > 0) await db.incrementAiGenerationUsage(ctx.user.id, r.drafts.length);
+        console.log(`[Variations] user=${ctx.user.id} post=${post.id} 頼んだ${count}本 → 出した${r.drafts.length}本（検査で外した${r.dropped}本）`);
+        return {
+          drafts: r.drafts,
+          dropped: r.dropped,
+          threadsAccountId: post.threadsAccountId ?? null,
+          projectId: project?.id ?? post.projectId ?? null,
+        };
+      }),
+
     editContent: protectedProcedure
       .input(z.object({ postId: z.number(), postContent: z.string().min(1).max(5000) }))
       .mutation(async ({ ctx, input }) => {

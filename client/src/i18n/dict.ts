@@ -676,6 +676,7 @@ export const dict: Record<string, string> = {
   "10月31日までは、これまでどおりお使いいただけます。11月からは、投稿づくりと毎日の自動投稿はお申し込み（最初の7日間は無料）からのご利用になります。登録したお店の情報と連携はそのまま残ります。": "You can keep using it as before until October 31. From November, post creation and daily auto-posting require a subscription (the first 7 days are free). Your store information and connections will remain.",
   "はじめの設定とThreadsの連携まではお使いいただけます。投稿づくりと毎日の自動投稿は、お申し込みから始まります（最初の7日間は無料）。": "You can complete the initial setup and connect Threads. Post creation and daily auto-posting start once you subscribe (the first 7 days are free).",
   "7日間無料で始める": "Start your 7-day free trial",
+  "似たパターンを作る": "Make variations",
   "AIでの投稿づくりは、お申し込みからご利用いただけます": "AI post creation is available once you subscribe",
   "最初の7日間は無料です。期間中に解約されれば料金はかかりません。": "The first 7 days are free. Cancel during that period and you won't be charged.",
   "ありません（お申し込み前）": "None (not subscribed yet)",
