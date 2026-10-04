@@ -937,6 +937,19 @@ export async function isFreeGrace(userId: number, now: Date = new Date()): Promi
   return inFreeGrace(u as any, n > 0, now);
 }
 
+/**
+ * お支払いの確認中（決済失敗・past_due／unpaid）で、使える契約が無い方か。
+ * ★2026-10-04 点検：お支払い失敗中の有料のお客様を「お申し込み前」と同じに扱い、予約ずみの投稿を取り消してしまう作りだった。
+ *   月末の決済失敗は毎月2〜5件あるため、この方々は予約ずみの投稿の公開・承認・コメントの通知を今までどおり続ける。
+ */
+export async function isInDunning(userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows: any = await db.execute(sql`SELECT COUNT(*) AS n FROM subscriptions WHERE userId = ${userId} AND status IN ('past_due', 'unpaid')`);
+  if (Number((rows as any)?.[0]?.[0]?.n ?? 0) === 0) return false;
+  return !(await hasUsableSubscription(userId));
+}
+
 /** 機能を使える状態か＝使える契約がある、または今いるフリーの方の猶予中（2026-10-03） */
 export async function hasServiceAccess(userId: number): Promise<boolean> {
   if (await hasUsableSubscription(userId)) return true;

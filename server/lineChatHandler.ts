@@ -296,7 +296,8 @@ async function isEndedCustomerSafe(userId: number): Promise<boolean> {
 
 /** 使える契約があるか（判定に失敗したら止めない） */
 async function isSubscribedSafe(userId: number): Promise<boolean> {
-  try { return await db.hasServiceAccess(userId); } catch { return true; }
+  // お支払い確認中（決済失敗）の方は、承認などの操作を今までどおり（2026-10-04 点検）
+  try { return (await db.hasServiceAccess(userId)) || (await db.isInDunning(userId)); } catch { return true; }
 }
 
 /** お申し込み前の方へのお返事 */
@@ -3060,6 +3061,8 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   // ★ご契約が終わった方の打ち言葉は、ご質問としてだけ受ける（書き直し・設定・URL登録などの有料の機能は動かさない・2026-10-03）
   if (await isEndedCustomerSafe(user.id)) {
     await db.clearLineChatState(lineUserId).catch(() => undefined);
+    // ★紹介コード・クーポンは受ける（再開の入口を塞がない・2026-10-04 点検）
+    if (looksLikeReferralCode(text)) return referralLink(lineUserId, text.trim(), user.id);
     return (await autoAnswer(user.id, lineUserId, text)) ?? [endedReply()];
   }
 

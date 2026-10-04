@@ -19,6 +19,9 @@ export async function assertNotEnded(userId: number | null | undefined): Promise
   }
 }
 
+export const DUNNING_MESSAGE =
+  "お支払いの確認ができていないため、この機能は一時的にお使いいただけません。カード情報を更新いただくと、すぐに再開します（予約ずみの投稿はそのまま公開されます）。";
+
 export const NOT_SUBSCRIBED_MESSAGE =
   "この機能は、お申し込みのあとにお使いいただけます。最初の7日間は無料です（料金プランからお申し込みください）。";
 
@@ -29,14 +32,17 @@ export const NOT_SUBSCRIBED_MESSAGE =
 export async function assertSubscribed(userId: number | null | undefined): Promise<void> {
   if (!userId) throw new TRPCError({ code: "UNAUTHORIZED", message: "ログインしてください" });
   if (await db.hasServiceAccess(Number(userId))) return; // 使える契約 or 今いるフリーの方の猶予（10/31まで）
+  if (await db.isInDunning(Number(userId))) {
+    throw new TRPCError({ code: "FORBIDDEN", message: DUNNING_MESSAGE });
+  }
   const ended = await db.isEndedCustomer(Number(userId));
   throw new TRPCError({ code: "FORBIDDEN", message: ended ? ENDED_MESSAGE : NOT_SUBSCRIBED_MESSAGE });
 }
 
-/** 定期処理・LINE用：使える契約があるか（判定に失敗したら止めない） */
+/** 定期処理・LINE用：使える契約があるか（お支払い確認中の方も含む・判定に失敗したら止めない） */
 export async function isSubscribed(userId: number | null | undefined): Promise<boolean> {
   if (!userId) return false;
-  try { return await db.hasServiceAccess(Number(userId)); } catch { return true; }
+  try { return (await db.hasServiceAccess(Number(userId))) || (await db.isInDunning(Number(userId))); } catch { return true; }
 }
 
 /** 定期処理・LINE用：契約が終わった方か（例外を投げない） */

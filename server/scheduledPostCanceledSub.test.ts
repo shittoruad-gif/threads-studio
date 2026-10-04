@@ -27,6 +27,7 @@ vi.mock("./threadsAuth", () => ({ refreshAccessToken: vi.fn(async () => null) })
 vi.mock("./_core/notification", () => ({ notifyOwner: vi.fn(), sendEmail: vi.fn(async () => true) }));
 
 let usable = false;
+let dunning = false;
 let source = "auto";
 const updates: Array<{ id: number; patch: any }> = [];
 const account = {
@@ -50,11 +51,19 @@ vi.mock("./db", () => ({
   getUserById: vi.fn(async () => ({ id: 4851, email: "x@example.test" })),
   hasUsableSubscription: vi.fn(async () => usable),
   hasServiceAccess: vi.fn(async () => usable),
+  isInDunning: vi.fn(async () => dunning),
   isEndedCustomer: vi.fn(async () => true),
 }));
 
 describe("契約が終わった方の自動の投稿（2026-10-03）", () => {
-  beforeEach(() => { updates.length = 0; publish.mockReset(); publish.mockResolvedValue({ id: "x", permalink: "" }); });
+  beforeEach(() => { updates.length = 0; dunning = false; publish.mockReset(); publish.mockResolvedValue({ id: "x", permalink: "" }); });
+
+  it("お支払い確認中（決済失敗）の方の予約は取り消さない（2026-10-04 点検）", async () => {
+    usable = false; dunning = true; source = "auto";
+    const { executePendingPosts } = await import("./scheduledPostExecutor");
+    await executePendingPosts();
+    expect(updates.find((x) => x.patch.status === "canceled")).toBeUndefined();
+  });
 
   it("自動の投稿は公開せず、理由つきで見送りにする", async () => {
     usable = false; source = "auto";

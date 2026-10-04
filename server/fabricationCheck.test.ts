@@ -66,3 +66,12 @@ describe('料金・保証の言葉は機械でも拾う', () => {
     expect(merged).toHaveLength(1);
   });
 });
+
+describe('注意書きは料金の言葉として拾わない（2026-10-04 点検）', () => {
+  it('「効果を保証するものではありません」は拾わず、「返金保証つき」は拾う', async () => {
+    const { ruleBasedFabrications } = await import('../shared/fabricationCheck');
+    expect(ruleBasedFabrications('感じ方には個人差があり、効果を保証するものではありません。', '整骨院')).toEqual([]);
+    expect(ruleBasedFabrications('初回は無料ではありません。', '整骨院')).toEqual([]);
+    expect(ruleBasedFabrications('返金保証つきです。', '整骨院').map((x) => x.quote)).toEqual(['保証', '返金']);
+  });
+});

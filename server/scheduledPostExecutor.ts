@@ -165,7 +165,8 @@ export async function executePendingPosts() {
         // ★使える契約が無い方の投稿は公開しない（2026-10-03）。
         //   氷見様：解約後に自動の投稿が2本公開されていた。フリープラン廃止（三上様「1で進めて」）で、
         //   お申し込み前の方にも投稿の機能は無いため、自動・手動・固定投稿・イベント告知を問わず止める。
-        if (!(await db.hasServiceAccess(post.userId))) {
+        //   ただしお支払い確認中（決済失敗）の方は、今までどおり公開する（2026-10-04 点検）。
+        if (!(await db.hasServiceAccess(post.userId)) && !(await db.isInDunning(post.userId))) {
           const ended = await db.isEndedCustomer(post.userId);
           await db.updateScheduledPost(post.id, {
             status: 'canceled',

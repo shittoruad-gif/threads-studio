@@ -134,7 +134,8 @@ export function parseFabricationResult(raw: string, draft: string): FabricationI
 const PRICE_WORDS = ['無料', '0円', '０円', 'タダ', '割引', '半額', '値引', '保証', '返金', '初回限定', '今だけ', 'キャンペーン'];
 
 export function ruleBasedFabrications(draft: string, facts: string): FabricationItem[] {
-  const d = String(draft || '');
+  // ★「効果を保証するものではありません」のような打ち消しの注意書きは約束ではないので、先に外してから見る（2026-10-04 点検）
+  const d = String(draft || '').replace(/(無料|保証|返金|割引)(する|される|を|は|が|も)?(ものでは|わけでは|では)?(ありません|ございません|しません|できません|いたしかねます)/g, '');
   const f = String(facts || '');
   return PRICE_WORDS.filter((w) => d.includes(w) && !f.includes(w))
     .map((w) => ({ quote: w, kind: 'price' as const, reason: `「${w}」は登録に無い` }));

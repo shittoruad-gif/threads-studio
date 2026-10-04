@@ -1,4 +1,4 @@
-import { eq, and, isNull, gt, lt } from "drizzle-orm";
+import { desc, eq, and, isNull, gt, lt } from "drizzle-orm";
 import { getDb } from "./db";
 import { coupons, userCoupons, subscriptions, type Coupon, type InsertCoupon, type InsertUserCoupon } from "../drizzle/schema";
 import { normalizeCouponCode } from "@shared/inputNormalize";
@@ -62,7 +62,7 @@ export async function hasUserUsedCoupon(userId: number, couponId: number): Promi
 
 // セミナー価格コードの一覧と種別判定は @shared/plans に移設
 // （管理画面のクーポン効果表示でも使うため。営業マン追加時は shared/plans.ts と DB の両方に足す）。
-import { campaignTierForCode } from "@shared/plans";
+import { campaignTierForCode, effectiveSubscriptionStatus } from "@shared/plans";
 export { campaignTierForCode };
 
 /**
@@ -158,9 +158,15 @@ export async function applyCoupon(
       .select()
       .from(subscriptions)
       .where(eq(subscriptions.userId, userId))
+      .orderBy(desc(subscriptions.createdAt))
       .limit(1);
 
-    if (existingSubscription.length > 0) {
+    // ★解約ずみ（または解約の予約の期限を過ぎた）契約には上書きせず、新しい契約の行を作る（2026-10-04 点検）。
+    //   上書きすると「解約の予約」の印と過去の期限が残り、effectiveSubscriptionStatus がすぐに canceled と判定して
+    //   クーポンが使えなかった。古い行（UnivaPayの契約ID）は、遅れて届く通知の照合のためそのまま残す。
+    const latest = existingSubscription[0];
+    const latestEnded = !!latest && effectiveSubscriptionStatus(latest as any) === "canceled";
+    if (latest && !latestEnded) {
       // Update existing subscription
       await db
         .update(subscriptions)
@@ -168,9 +174,12 @@ export async function applyCoupon(
           planId,
           trialEndsAt,
           status: "trialing",
+          // 解約の予約は取り消し、使える期間はクーポンの終わりにそろえる
+          cancelAtPeriodEnd: false,
+          currentPeriodEnd: trialEndsAt,
           updatedAt: new Date(),
         })
-        .where(eq(subscriptions.id, existingSubscription[0]!.id));
+        .where(eq(subscriptions.id, latest.id));
     } else {
       // Create new subscription
       await db.insert(subscriptions).values({
