@@ -1933,6 +1933,9 @@ export type AutoPostRunOptions = {
   forTomorrow?: boolean;
 };
 
+/** アカウントごとに、いま動いている枠づくりの数（同時に動いているかを見分ける） */
+const activeSlotLoops = new Map<number, number>();
+
 export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): Promise<{ processed: number; generated: number; failed: number }> {
   let processed = 0;
   let generated = 0;
@@ -2235,11 +2238,15 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           const loopIdBefore = await db.getMaxScheduledPostId().catch(() => 0);
           const countSavedInLoop = async (): Promise<number> =>
             loopIdBefore ? await db.countAccountAutoPostsSinceId(account.id, loopIdBefore).catch(() => -1) : -1;
+          // ★同じアカウントで当日補充・「今すぐ作る」が同時に動いていると、相手の投稿まで「保存済み」と数えて
+          //   枠を飛ばしてしまう。同時に動いている間は数えない（作れたかは generateAutoPost の戻り値だけで見る）。
+          activeSlotLoops.set(account.id, (activeSlotLoops.get(account.id) ?? 0) + 1);
+          try {
           for (let i = startIndex; i < regularCount; i++) {
             const project = pinnedProject || eligibleProjects[(dayOffset + i) % eligibleProjects.length];
             const savedBeforeSlot = await countSavedInLoop();
             const slotAlreadySaved = async (): Promise<boolean> => {
-              if (savedBeforeSlot < 0) return false;
+              if (savedBeforeSlot < 0 || (activeSlotLoops.get(account.id) ?? 0) > 1) return false;
               return (await countSavedInLoop()) > savedBeforeSlot;
             };
 
@@ -2354,6 +2361,10 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
 
             // Small delay between generations to avoid API rate limits
             await new Promise(r => setTimeout(r, 2000));
+          }
+          } finally {
+            const left = (activeSlotLoops.get(account.id) ?? 1) - 1;
+            if (left > 0) activeSlotLoops.set(account.id, left); else activeSlotLoops.delete(account.id);
           }
 
           // ★前の晩に作った分に「明日の分」の印を付ける（日をまたいでも見送りにしない・2026-09-24）
