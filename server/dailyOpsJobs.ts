@@ -443,6 +443,13 @@ export function initDailyOpsSchedulers(): void {
     const { runAgencyWeeklyReportJob } = await import("./agencyReportJob");
     await runTrackedJob("agency_weekly_report", runAgencyWeeklyReportJob);
   });
+  // 月曜 9:10 JST = 0:10 UTC — 同じ投稿に見せないルールの週次の見張り（2026-10-05 三上様「厳格にルール化」・server/repetitionMonitor.ts）。
+  //   基準（shared/repetitionRules.ts M1〜M3）を超えたアカウントを運営にだけ知らせる。お客様には何も送らない。
+  cron.schedule("10 0 * * 1", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runRepetitionMonitorJob } = await import("./repetitionMonitor");
+    await runTrackedJob("repetition_monitor", runRepetitionMonitorJob);
+  });
   // 18:00 JST = 9:00 UTC — まだ承認待ちの方へ「今日中に承認すれば今日公開できます」を1通
   cron.schedule("0 9 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");

@@ -22,6 +22,7 @@
  *  2. ご登録の材料のうち、まだ使っていないものを1つ＝今日の主題
  * 使うのは「同じような内容ばかり」と言われた方だけ（ふつうのお客様の生成は変わらない）。
  */
+import { REPETITION_RULES } from './repetitionRules';
 
 import { looksLikeFragment } from "./topicRotation";
 
@@ -135,7 +136,8 @@ export function planFreshTopic(params: {
   /** 主題にしない言葉（NGワード・見送られた主役の言葉）。含む材料は主題の候補から外す（2026-09-30） */
   avoid?: readonly string[];
 }): FreshTopicPlan {
-  const docs = params.recentPosts.map(norm).filter((d) => d.length >= 10).slice(0, 12);
+  // 数字は shared/repetitionRules.ts の R1（唯一の正）
+  const docs = params.recentPosts.map(norm).filter((d) => d.length >= 10).slice(0, REPETITION_RULES.topic.window);
   const empty: FreshTopicPlan = { overused: [], frames: [], topic: null, sampleSize: docs.length };
   if (docs.length < 4) return empty;
 
@@ -161,7 +163,7 @@ export function planFreshTopic(params: {
   // ★直近の3割以上（最低3本）に出ている言葉を「使いすぎ」とする。
   //   プレステージ様の直近10本（9/25 実測）は「技術」「不安」「スタッフ」5本、「先輩」「異業種」4本、
   //   「未経験」「役職」3本。4割（4本）で切ると「未経験」「役職」が漏れ、試しに作った案にまだ出ていた。
-  const minDocs = Math.max(3, Math.ceil(docs.length * 0.3));
+  const minDocs = Math.max(REPETITION_RULES.topic.minPosts, Math.ceil(docs.length * REPETITION_RULES.topic.share));
   const frequent = Array.from(df.entries()).filter(([, n]) => n >= minDocs).sort((a, b) => b[1] - a[1] || a[0].length - b[0].length);
   // 長い言葉は、それを含む短い言葉が選ばれていれば要らない（「役職者」は「役職」で足りる）
   const overused: string[] = [];

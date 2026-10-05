@@ -1797,6 +1797,23 @@ export async function generateAutoPost(
         noteReject('repetition', userId, threadsAccountId, postingTimeIndex, why, { detail: (op || rs[0] || '1行目の地名').slice(0, 40) });
         return false;
       }
+    } else if (recentPosts.length > 0) {
+      // ★R3（shared/repetitionRules.ts）：最後の作り直し・保証パスでも、繰り返している文はその文を外して出す。
+      //   外すと40字未満になる・店名地名が消えるときは外さずに出す（枠を空けない）。
+      try {
+        const rg = await import('../shared/repetitionGuard');
+        const rs = rg.repeatedSentences(naturalMain, recentPosts, { owner: await ownerRepetitionKeys() });
+        if (rs.length > 0) {
+          const cut = rg.removeRepeatedSentences(naturalMain, rs);
+          const { checkIdentity } = await import('../shared/identityGuard');
+          if (cut && checkIdentity(cut, project).ok) {
+            console.warn(`[AutoPost] repetition: 最後の作り直しのため、繰り返している文を外して出す（${rs.map((x) => x.slice(0, 16)).join('／')}） userId=${userId} account=${threadsAccountId}`);
+            naturalMain = cut;
+          } else {
+            console.warn(`[AutoPost] repetition: 繰り返している文が残るが、外すと短すぎる／店名地名が消えるため出す userId=${userId} account=${threadsAccountId}`);
+          }
+        }
+      } catch (e) { console.warn(`[AutoPost] repetition の後処理をとばしました: ${(e as Error)?.message}`); }
     }
 
     // 「。」の直後に絵文字が続く形（「〜しますね。✨」）は人間の投稿に無い機械の癖。
