@@ -753,6 +753,21 @@ export async function generateAutoPost(
     //   材料が無ければ空文字になるので、これまでと同じ生成になる（2026-09-08 三上様指示）。
     // ★名前を preferenceNote にすると、上で作った◯✕評価の好み（line 391）を隠してしまい、
     //   評価による学習がプロンプトから消える。別の名前にして両方を渡す。
+    // ★ご本人が自分で書いた書き出し・文（手直しした投稿・文体のお手本）。繰り返しの判定から外す（2026-10-05）
+    let ownerKeysCache: { openings: Set<string>; sentences: Set<string> } | null = null;
+    const ownerRepetitionKeys = async () => {
+      if (ownerKeysCache) return ownerKeysCache;
+      try {
+        const { ownerKeys } = await import('../shared/repetitionGuard');
+        const { splitStyleSamples } = await import('../shared/styleTraits');
+        const edits = await db.getUserEditedPosts(userId, 20).catch(() => []);
+        ownerKeysCache = ownerKeys([
+          ...edits.map((e) => String(e.postContent ?? '')),
+          ...splitStyleSamples((project as any).styleSamples || null),
+        ]);
+      } catch { ownerKeysCache = { openings: new Set(), sentences: new Set() }; }
+      return ownerKeysCache;
+    };
     let editPreferenceNote = '';
     try {
       const { buildPreferenceNote } = await import('../shared/postPreference');
@@ -896,6 +911,8 @@ export async function generateAutoPost(
     //   下書きで6語も止めると書ける範囲が狭くなりすぎる（プレステージ様：先輩・不安・技術・現場・チーム・未経験）。
     let stickyAvoid: string[] = [];
     let topicAnchors: string[] = [];
+    // ご本人から「同じ」と言われた・見送りが続く方か（作り直しの理由の書き方を変えるだけ・2026-10-05）
+    let sameComplained = false;
     const freshProtect = [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title];
     try {
       const ft = await import('../shared/freshTopic');
@@ -906,7 +923,11 @@ export async function generateAutoPost(
         stickyAvoid = ft.stickyDeclinedWords({ declined: declined7, recentPosts, protect: freshProtect, max: 6 });
         if (stickyWords.length > 0) console.log(`[AutoPost] 見送られた主役の言葉を今日は使わない account=${threadsAccountId} ${stickyWords.join('・')}`);
       }
-      if (ft.saidSameContent(skipReasons) || repeatDecliner) {
+      // ★2026-10-05 三上様「同じ投稿ばかりになっていたりするので、きちんと改善して」：
+      //   話題を回す仕組みは「同じと言われた方・見送りが続く方」だけに効いていた。自動で公開している方は
+      //   見送りをしないので一度も効かず、「我慢」68%・「産後」67% のように話題が偏っていた。予防として全員に効かせる。
+      sameComplained = ft.saidSameContent(skipReasons) || repeatDecliner;
+      {
         const cr: any = counselingResult || {};
         const plan = ft.planFreshTopic({
           recentPosts,
@@ -1177,6 +1198,14 @@ export async function generateAutoPost(
           + declinedNote
           // ★「同じような内容ばかり」と言われた方への、話題の指定（2026-09-25）。見送りの共通点より後ろ＝より優先
           + freshNote
+          // ★書き出し・同じ文・1行目の地名の繰り返しを避ける（shared/repetitionGuard.ts・2026-10-05）
+          + await (async () => {
+            try {
+              const { buildRepetitionNote } = await import('../shared/repetitionGuard');
+              const { identityTokens } = await import('../shared/identityGuard');
+              return buildRepetitionNote(recentPosts, identityTokens(project), await ownerRepetitionKeys());
+            } catch { return ''; }
+          })()
           // ★同じ枠の前の案（3案の2案目以降）。末尾に近いほど守られるので、話題の指定のあとに置く（2026-10-04）
           + (opts.siblingTexts?.length ? (await import('../shared/threeChoice')).choiceSiblingNote(opts.siblingTexts) : '')
           // ★ネタ帳の今日のネタ（2026-09-30）。話題を変える指示より後ろ＝より優先
@@ -1407,7 +1436,7 @@ export async function generateAutoPost(
       if (hits.length >= 2) {
         console.warn(`[AutoPost] sameTopic:「${hits.join('・')}」の話が続いている → 作り直し userId=${userId} account=${threadsAccountId}`);
         noteReject('sameTopic', userId, threadsAccountId, postingTimeIndex,
-          `- 「${hits.join('」「')}」は、直近の投稿の多くと同じ話題。オーナーから「同じような内容ばかり」と言われている。この言葉を使わず、${freshPlan.topic ? `「${freshPlan.topic}」を主題にして` : '直近で使っていない材料から'}書く。`,
+          `- 「${hits.join('」「')}」は、直近の投稿の多くと同じ話題。${sameComplained ? 'オーナーから「同じような内容ばかり」と言われている。' : '読む人に同じ投稿に見えてしまう。'}この言葉を使わず、${freshPlan.topic ? `「${freshPlan.topic}」を主題にして` : '直近で使っていない材料から'}書く。`,
           { detail: hits.join('・') });
         return false;
       }
@@ -1416,7 +1445,7 @@ export async function generateAutoPost(
       if (fr.length > 0) {
         console.warn(`[AutoPost] sameFrame:${fr.join('・')} の流れが続いている → 作り直し userId=${userId} account=${threadsAccountId}`);
         noteReject('sameFrame', userId, threadsAccountId, postingTimeIndex,
-          `- 直近の投稿の多くと同じ流れになっている。オーナーから「同じような内容ばかり」と言われている。${fr.includes('worry') ? '「不安・難しそう・できるかな・覚えられるか・未経験」から書き出さない。' : ''}${fr.includes('invite') ? '「一緒に◯◯を目指しませんか／成長しませんか」で締めない。' : ''}`,
+          `- 直近の投稿の多くと同じ流れになっている。${sameComplained ? 'オーナーから「同じような内容ばかり」と言われている。' : '読む人に同じ投稿に見えてしまう。'}${fr.includes('worry') ? '「不安・難しそう・できるかな・覚えられるか・未経験」から書き出さない。' : ''}${fr.includes('invite') ? '「一緒に◯◯を目指しませんか／成長しませんか」で締めない。' : ''}`,
           { detail: fr.join('・') });
         return false;
       }
@@ -1744,6 +1773,29 @@ export async function generateAutoPost(
         console.log(`[AutoPost] 作り話チェック：問題なし userId=${userId} account=${threadsAccountId}`);
       } else if (found === null) {
         console.warn(`[AutoPost] 作り話チェックができなかったため、機械ガードだけで進めます userId=${userId} projectId=${project.id}`);
+      }
+    }
+
+    // ★書き出し・同じ文・1行目の地名の繰り返し（shared/repetitionGuard.ts・2026-10-05 三上様「同じ投稿ばかり」）。
+    //   既存の重複検査は店名・地名・実績の数字を外して比べるため、それらを含む文が丸ごと繰り返されても通っていた。
+    //   ここでは外さずに比べる。枠を空けないよう、最後の作り直しと保証パスでは止めない。
+    if (!lastAttempt && !guarantee && recentPosts.length > 0) {
+      const rg = await import('../shared/repetitionGuard');
+      const { identityTokens } = await import('../shared/identityGuard');
+      const tokens = identityTokens(project);
+      const owner = await ownerRepetitionKeys();
+      const op = rg.repeatedOpening(naturalMain, recentPosts, { owner });
+      const rs = rg.repeatedSentences(naturalMain, recentPosts, { owner });
+      const idFirst = rg.identityOpeningStreak(recentPosts, tokens) && rg.identityInFirstLine(naturalMain, tokens);
+      if (op || rs.length > 0 || idFirst) {
+        const why = [
+          op ? `- 書き出し「${op}」が直近の投稿と同じ。別の入り方（場面・問いかけ・季節・よくある質問など）にする。` : '',
+          rs.length > 0 ? `- 「${rs.map((x) => x.slice(0, 24)).join('」「')}」は直近で何度も使った文。使わない。` : '',
+          idFirst ? '- 直近の投稿が続けて地名・店名から始まっている。1行目に地名・店名を入れない（2行目以降に1回だけ）。' : '',
+        ].filter(Boolean).join('\n');
+        console.warn(`[AutoPost] repetition: ${[op && '書き出し', rs.length && '同じ文', idFirst && '1行目の地名'].filter(Boolean).join('・')} → 作り直し userId=${userId} account=${threadsAccountId}`);
+        noteReject('repetition', userId, threadsAccountId, postingTimeIndex, why, { detail: (op || rs[0] || '1行目の地名').slice(0, 40) });
+        return false;
       }
     }
 
