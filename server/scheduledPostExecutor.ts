@@ -416,7 +416,8 @@ export async function executePendingPosts() {
                       `${dest.channelName}へのリンクを自動でコメントする機能が、現在Meta社の審査の承認待ちです。\n` +
                       'お手数ですが、Threadsアプリで先ほどの固定投稿を開き、下の文をそのままコメントしてください。' },
                     { type: 'text', text: `${dest.commentLead}\n${dest.link.url}` },
-                    { type: 'text', text: `上の文を長押しでコピー → 固定投稿の「返信を追加」に貼り付けて送信、で完了です。\nこのコメントが、固定投稿から${dest.channelName}へつながる入口になります。` },
+                    // ★「返信を追加」という言葉はアプリに無く、どこを押すのか聞かれた（2026-10-05 #53）。押す場所を書く
+                    { type: 'text', text: `やり方：上の文を長押しでコピー → Threadsアプリで固定投稿の下にある吹き出しのマーク（返信）を押す → 入力欄に貼り付けて「投稿する」、で完了です。\nこのコメントが、固定投稿から${dest.channelName}へつながる入口になります。` },
                   ]);
                 }
                 console.log(`[Scheduled Post] 固定投稿のコメント: 手動用の案内を送付 post=${post.id} 案内先=${dest.link.type} (返信権限の承認待ち)`);
