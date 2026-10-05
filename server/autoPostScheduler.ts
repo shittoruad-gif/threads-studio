@@ -2330,13 +2330,29 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                     : '- これまでと違う入り方（季節・お客様との会話・よくある質問）から書く。',
                   '- 直近の投稿に出てきた言葉・決め台詞・実績の数字は使わない。信条（主張）もそのまま書かない。',
                 ].filter(Boolean).join('\n');
-                console.log(`[AutoPost] 保証パス user=${user.id} account=${account.id} slot=${i}（未使用の材料 ${unused.length}件）`);
-                success = await generateAutoPost(
-                  user.id, project, typeIdx, purposeIdx, account.id, i,
-                  eff.autoPostRequireApproval, acctHours, eff.postLength,
-                  sameDaySlots ? sameDaySlots[i] : (opts.forTomorrow ? postingTimeOnDay(i, acctHours, 1) : null),
-                  guaranteeHint, true, true,
-                );
+                // ★2026-10-05 三上様「こちらで勝手に文章を作っていて、自動チェックで公開されませんでしたと言うのは論外」。
+                //   保証パスが1回で落ちると枠が消えていた。落ちた理由を渡して最大3回まで書き直し、
+                //   最後の1回は「登録内容だけで書く短い1本」（効果・体験談・数字・作り話の入りようがない形）にする。
+                //   ガードは緩めない。書き方を、ガードに掛からない形へ寄せていく。
+                const SAFE_LAST_HINT = [
+                  '- ★最後の1本。登録されているお店の情報（店名・地域・営業時間・どんな方が来ているか・お店の考え）だけで、60〜120字の短い投稿を書く。',
+                  '- 効果・改善・体の変化・お客様の体験談・数字・価格・無料の申し出・登録に無い出来事は、1つも書かない。',
+                  '- 例の形：「（地域）の（店名）です。（どんな方が来ているか）。（お店の考えを自分の言葉で一文）。」',
+                ].join('\n');
+                const GUARANTEE_TRIES = 3;
+                for (let g = 1; g <= GUARANTEE_TRIES && !success; g++) {
+                  if (g > 1 && await slotAlreadySaved()) { success = true; break; }
+                  const hintNow = g === 1
+                    ? guaranteeHint
+                    : [lastRejectReason.get(rk) ?? '', g === GUARANTEE_TRIES ? SAFE_LAST_HINT : guaranteeHint].filter(Boolean).join('\n');
+                  console.log(`[AutoPost] 保証パス ${g}/${GUARANTEE_TRIES} user=${user.id} account=${account.id} slot=${i}（未使用の材料 ${unused.length}件）`);
+                  success = await generateAutoPost(
+                    user.id, project, typeIdx, purposeIdx, account.id, i,
+                    eff.autoPostRequireApproval, acctHours, eff.postLength,
+                    sameDaySlots ? sameDaySlots[i] : (opts.forTomorrow ? postingTimeOnDay(i, acctHours, 1) : null),
+                    hintNow, true, true,
+                  );
+                }
                 if (success) {
                   guaranteedHere++;
                   anyApproval = true; // 承認カードを作ったので、まとめの案内を必ず送る
