@@ -2184,6 +2184,20 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           grantedExtraScopes: (await import("./threadsAuth")).wantsExtraScopes(ctx.user.id).join(",") || null,
         } as any);
 
+        // ★2つ目以降のアカウントを連携した直後に「どのお店の情報で投稿するか」を聞く（2026-10-06 三上様「早急に改善」）。
+        //   それまでは翌朝6時の投稿づくりで初めて案内していたため、選ぶまで投稿が止まったままになっていた
+        //   （プレステージ様：サロン用のアカウントで連携から約1週間、AI投稿が1本も公開されなかった）。
+        void (async () => {
+          try {
+            const accts: any[] = (await db.getThreadsAccountsByUserId(ctx.user.id)).filter((x: any) => x.isActive);
+            const mine = accts.find((x: any) => String(x.threadsUsername) === String(profile.username));
+            if (mine && !mine.defaultProjectId && accts.length >= 2) {
+              const { notifyProjectMissing } = await import('./accountProjectNotice');
+              await notifyProjectMissing({ id: ctx.user.id }, { ...mine, projectMissingNoticeAt: null });
+            }
+          } catch (e) { console.warn('[ThreadsConnect] お店の情報のご案内を送れませんでした:', (e as Error)?.message); }
+        })();
+
         // ★連携直後：自己紹介が空のままなら、貼るだけの提案を公式LINEへ（2026-09-06 三上様指示）
         void import('./profileAdvice').then((m) => m.nudgeAfterConnect(ctx.user.id, String(profile.username))).catch(() => undefined);
         // ★本人がもともと投稿していた文章を「文体のお手本」に自動で取り込む（2026-09-07 三上様指示）

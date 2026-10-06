@@ -1595,9 +1595,17 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const projects = await db.getUserProjects(user.id) || [];
     const pj: any = projects.find((x: any) => String(x.id) === String(q.p));
     if (!pj) return [textWithQuick("その情報が見つかりませんでした。", MENU_HINT)];
+    const wasMissing = !acc.defaultProjectId;
     await db.updateThreadsAccount(acc.id, { defaultProjectId: pj.id } as any);
+    // ★決まっていなかったアカウントは、その場で今日の分を作る（翌朝まで待たせない・2026-10-06 三上様「早急に改善」）
+    let startedToday = false;
+    if (wasMissing && await db.hasServiceAccess(user.id).catch(() => false)) {
+      startedToday = true;
+      void import("./autoPostScheduler").then((m) => m.runAutoPostCatchUpForUser(user.id, "お店の情報を結び付けた")).catch(() => undefined);
+    }
     return [textWithQuick(
       `@${acc.threadsUsername} には「${pj.storeName || pj.title}」の内容で投稿します。\n\n` +
+      (startedToday ? "今日の分の投稿づくりを始めました。できあがると、いつもどおりこのトークにお届けします。\n\n" : "") +
       "内容を直したいときは「お店の情報」から確認・修正できます。",
       MENU_HINT,
     )];

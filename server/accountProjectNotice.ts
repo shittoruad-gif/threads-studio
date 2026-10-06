@@ -19,20 +19,30 @@ function shouldSend(sentAt: unknown): boolean {
   return Date.now() - t >= 24 * 60 * 60 * 1000;
 }
 
-export async function notifyProjectMissing(user: { id: number }, account: { id: number; threadsUsername?: string | null; projectMissingNoticeAt?: unknown }): Promise<boolean> {
+export async function notifyProjectMissing(user: { id: number }, account: { id: number; threadsUsername?: string | null; projectMissingNoticeAt?: unknown; createdAt?: unknown }): Promise<boolean> {
   if (!shouldSend(account.projectMissingNoticeAt)) return false;
+  // ★連携から2日たっても決まっていなければ、運営にも知らせる（2026-10-06：プレステージ様は約1週間だれも気づかなかった）
+  try {
+    const created = account.createdAt ? new Date(String(account.createdAt)).getTime() : NaN;
+    if (Number.isFinite(created) && Date.now() - created >= 48 * 60 * 60 * 1000) {
+      const days = Math.floor((Date.now() - created) / 86400000);
+      const { notifyOwner } = await import("./_core/notification");
+      await notifyOwner({
+        title: "お店の情報が決まらず、投稿が止まっているアカウントがあります",
+        content: `user ${user.id} の @${account.threadsUsername ?? account.id}（account ${account.id}）は、連携から${days}日たってもお店の情報が結び付いていないため、自動投稿を止めています。お客様にはLINEで毎日1回ご案内しています。必要ならフォローをお願いします。`,
+      });
+    }
+  } catch (e) { console.warn("[AccountProjectNotice] 運営への通知に失敗:", String(e)); }
   const name = account.threadsUsername ? `@${account.threadsUsername}` : "新しく連携されたアカウント";
   const lineIds = await db.getLineUserIdsForUser(user.id).catch(() => [] as string[]);
   if (lineIds.length > 0) {
     const { textWithQuick } = await import("./lineChat");
     const { pushMessages } = await import("./lineNotify");
     const msg = textWithQuick(
-      `${name} のお店の情報がまだ登録されていません。\n` +
-      "この状態では、もう一方のアカウントの情報で文章が作られてしまうため、" +
-      `${name} の投稿づくりはいったん止めています。\n\n` +
-      "下のボタンから、このアカウント用の情報を登録してください。" +
-      "アカウントごとに別々の情報を持てますので、もう一方の登録内容は変わりません。",
-      [{ label: "このアカウントの設定をする", data: `c=acct&a=${account.id}` }],
+      `${name} で、どのお店の情報を使って投稿するかが、まだ決まっていません。\n` +
+      "もう一方のアカウントの内容が混ざらないよう、決まるまで " + `${name} の投稿づくりは止めています。\n\n` +
+      "下のボタンから選ぶと、その場で今日の分の投稿づくりを始めます。登録ずみの情報をそのまま使うことも、このアカウント用に新しく登録することもできます（もう一方の登録内容は変わりません）。",
+      [{ label: "使う情報を選ぶ", data: `c=acct&a=${account.id}` }],
     );
     for (const lineId of lineIds) await pushMessages(lineId, [msg]).catch(() => undefined);
   }
