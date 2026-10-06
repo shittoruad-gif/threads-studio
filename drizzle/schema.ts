@@ -411,6 +411,8 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   extraPostsReason: varchar("extraPostsReason", { length: 200 }),
   // Meta AI呼びかけ文を7日間使っていない → 送るのをやめた時刻（設定の「再開する」で消える）
   metaAiCallPausedAt: timestamp("metaAiCallPausedAt"),
+  // Meta AI呼びかけを再開した日（再開から7日間は止めない・0106）
+  metaAiCallResumedAt: timestamp("metaAiCallResumedAt"),
   /**
    * 「このアカウントのお店の情報が登録されていません」とLINEでご案内した日時。
    * ★アカウントが2つ以上あって紐づけが無いときは、もう一方の情報で文章を作らず止める。

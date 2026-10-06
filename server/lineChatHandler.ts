@@ -2952,7 +2952,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     // ★「使われていないため停止」も、ONにしたら解く（再開の入口をひとつにする）
     if (on) {
       for (const a of (await db.getThreadsAccountsByUserId(user.id)) as any[]) {
-        if (a.metaAiCallPausedAt) await db.updateThreadsAccount(a.id, { metaAiCallPausedAt: null } as any).catch(() => {});
+        if (a.metaAiCallPausedAt) await db.updateThreadsAccount(a.id, { metaAiCallPausedAt: null, metaAiCallResumedAt: new Date() } as any).catch(() => {});
       }
     }
     return [textWithQuick(

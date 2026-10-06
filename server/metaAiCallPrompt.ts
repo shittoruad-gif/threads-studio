@@ -150,7 +150,9 @@ export async function buildTodayCallsForUser(userId: number, dayIndex: number, o
     if (full && process.env.QA_SAFE_MODE !== "1") {
       try {
         const linkedDays = (Date.now() - new Date(full.createdAt).getTime()) / 86400000;
-        if (linkedDays >= UNUSED_PAUSE_DAYS) {
+        // ★再開してから7日間は止めない（再開した翌朝に「直近7日に投稿なし」ですぐまた止まっていた・2026-10-06）
+        const resumedDays = full.metaAiCallResumedAt ? (Date.now() - new Date(full.metaAiCallResumedAt).getTime()) / 86400000 : Infinity;
+        if (linkedDays >= UNUSED_PAUSE_DAYS && resumedDays >= UNUSED_PAUSE_DAYS) {
           const r: any = await (await fetch(`https://graph.threads.net/v1.0/me/threads?fields=id,text,timestamp&limit=30&access_token=${full.accessToken}`)).json();
           if (!r?.error) {
             const since = Date.now() - UNUSED_PAUSE_DAYS * 86400000;
