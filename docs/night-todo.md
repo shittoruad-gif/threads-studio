@@ -30,6 +30,13 @@
 - コンサル用 line_sasaki_consult_0930（@shittoru.1203）から：ctaAssets「LINE登録で〇〇をプレゼント」のみ
 - 変更前の控え：~/.claude/backups/threads_user7269_projects_20261007.json（お客様の情報なので repo には置かない）
 
+## 2026-10-08 00:00（夜間整備・20時の先行回）：同じ push に staleChunk の直し（5303890）と週次リサーチ（f515c9b・コメントのみ）を含めた
+
+- 本番ログ 10/7 06:48 の「Cannot read properties of undefined (reading 'default')」：デプロイ前から開いたままの画面で旧チャンクが読めず、再読み込みが始まった後に React.lazy が投げる副次エラー。再読み込みが終わるまでの間に「予期しないエラー」画面と /api/client-error への報告が出ていた → 再読み込み中は出さない（client/src/lib/staleChunk.ts・ErrorBoundary）。修正前は誤報告1件・修正後0件（テスト server/staleChunk.test.ts）
+- ローカル（QA_SAFE_MODE）：登録→ログイン→料金→「7日間無料で試す」→決済ページ（ポップアップ遮断）まで通過。34画面を375pxで横はみ出し・JSエラーなし。はじめの設定通過。LINEのボタン・自由入力83通りに無反応なし
+- 10/7 朝の生成：72本・failed 1（user 7269 acc27 slot3「保証パスでも書けず」）。主題「専門特化（〇〇専門）」が原因で、268588b（freshTopic）で直した件と同じ
+- プレステージ様 acc22 は案 #16 が 10/1 から判断待ち
+
 ## 2026-10-07 00:00（夜間整備）：10/6 の未反映コミット2本（b305255 2つ目のアカウント／5a51440 Meta AI呼びかけ 0106）を push
 
 - 2本とも中身を読んで含めた。0106 は起動時の自動適用（__drizzle_migrations）で入る
