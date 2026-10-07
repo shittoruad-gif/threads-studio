@@ -13,6 +13,19 @@
  */
 const KEY = "ts_stale_chunk_reloaded";
 
+/**
+ * ★vite:preloadError で preventDefault すると、Vite はエラーを投げずに import を
+ *   undefined で解決する。すると React.lazy が「Cannot read properties of undefined
+ *   (reading 'default')」を投げ、再読み込みが終わるまでの一瞬エラー画面が出て、
+ *   /api/client-error にも報告されていた（2026-10-07 06:48 の本番ログ）。
+ *   再読み込みを始めたことをここで覚えておき、ErrorBoundary はその間エラー画面を出さない。
+ */
+let reloading = false;
+
+export function isReloadingForStaleChunk(): boolean {
+  return reloading;
+}
+
 export function isStaleChunkError(err: unknown): boolean {
   const msg = String((err as any)?.message ?? err ?? "");
   return (
@@ -33,6 +46,7 @@ export function reloadOnceForStaleChunk(): boolean {
     // sessionStorage が使えない環境では、1回きりの保証ができないので再読み込みしない
     return false;
   }
+  reloading = true;
   window.location.reload();
   return true;
 }
