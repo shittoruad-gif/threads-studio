@@ -100,9 +100,12 @@ async function main() {
     const rd = (await get('admin.repeatDecliners')) || [];
     console.log(`\n■ ★見送りが続いているお客様（直近7日に3回以上）: ${rd.length}件`);
     const ST = { pending: '足す案を三上様のLINEへ送付ずみ（判断待ち）', applied: '足した', skipped: '見送り', undone: '元に戻した', no_url: '★ホームページ未登録→夜間整備で検索して案を作る', no_new: 'HPに新しい材料なし→先生に直接伺う段階' };
+    // HPを検索して見つからなかった方はそのままでよい（2026-10-07 三上様）。検索し直さない・朝の報告にも載せない
+    const HP_SEARCHED_NONE = new Set([25, 31]);
     for (const t of rd) {
       const p = t.latestProposal;
-      console.log(`  @${t.username}（${t.userName}） 見送り${t.declines}回／公開${t.published}件 → ${p ? (ST[p.status] || p.status) : '20:30のフォローで案を作る'}`);
+      const st = p?.status === 'no_url' && HP_SEARCHED_NONE.has(Number(t.accountId)) ? 'HPなし（検索済み）→そのままでよい' : p ? (ST[p.status] || p.status) : '20:30のフォローで案を作る';
+      console.log(`  @${t.username}（${t.userName}） 見送り${t.declines}回／公開${t.published}件 → ${st}`);
     }
     if (rd.length === 0) console.log('  なし');
   } catch (e) {

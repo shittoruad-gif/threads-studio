@@ -8,7 +8,7 @@
 import { describe, it, expect } from "vitest";
 import {
   planFreshTopic, overusedHits, dropOverusedLines, buildFreshTopicNote, saidSameContent, topicWordsOf,
-  framesOf, dropFramedSentences, surveyAvoidWords, hitsSurveyAvoid, buildSurveyAvoidNote,
+  framesOf, dropFramedSentences, surveyAvoidWords, hitsSurveyAvoid, buildSurveyAvoidNote, hasUnfilledPlaceholder,
 } from "@shared/freshTopic";
 
 const RECENT: string[] = [
@@ -54,6 +54,21 @@ describe("話題の偏りを数える", () => {
     expect(p.topic).not.toBeNull();
     expect(overusedHits(p.topic!, p)).toHaveLength(0);
     expect(p.topic).not.toMatch(/未経験|役職/);
+  });
+
+  it("選択肢の見本のまま埋まっていない材料（「専門特化（〇〇専門）」）は主題にしない（2026-10-07）", () => {
+    for (let i = 0; i < 6; i++) {
+      const p = planFreshTopic({
+        recentPosts: RECENT,
+        materials: ["専門特化（〇〇専門）", "◯◯が得意", PROJECT.strength],
+        protect: [PROJECT.storeName, PROJECT.area, PROJECT.target],
+        index: i,
+      });
+      expect(p.topic ?? "").not.toMatch(/〇〇|◯◯/);
+    }
+    expect(hasUnfilledPlaceholder("専門特化（〇〇専門）")).toBe(true);
+    expect(hasUnfilledPlaceholder("XXLサイズもあります")).toBe(false);
+    expect(hasUnfilledPlaceholder("季節ごとのデザイン研修がある")).toBe(false);
   });
 
   it("枠ごとに別の材料を選ぶ（同じ日の3案が同じ主題にならない）", () => {

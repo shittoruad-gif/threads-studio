@@ -17,6 +17,13 @@
 
 - 9/17 に @angyomori.jiko（account 32）が連携済み・旧 @angyomori は停止。supportQuestions は repliedAt が空のまま残るが、§3.3 の「要望 未返信」に出ても**返信しない・判断待ちに載せない**
 
+## 2026-10-08 00:00（夜間整備）：10/7 の未反映コミット4本（31a765f／4001260／f1ed218 0107／b0b7a31 0108）＋夜間の1本を push
+
+- 夜間の直し：選択肢の見本のまま埋まっていない材料（「専門特化（〇〇専門）」）を「今日の主題」にしない（shared/freshTopic.ts）。10/7朝 account 27 で主題に選ばれ、作り直し3回＋保証パス3回とも自然さの点検に落ちた（公開は3本で枠は欠けていない・4本目の候補が取消）
+- 朝の点検：acc25・acc31 は「HPなし（検索済み）→そのままでよい」と出す（scripts/ops/daily-check.mjs）
+- ★反映後の確認：0107（threadsAccounts.metaAiCallLightAt）・0108（scheduledPosts.experimentKey）の列があること。翌朝6時のログで account 10・12 に `学習の枠`、10:00 に `[MetaAiCall] 選んだ種類`
+- acc21：9/30〜10/6 の候補が全部取消で公開0件（見送りは3回・残りは選ばれないまま）。→ 朝の報告に載せた
+
 ## 2026-10-07 00:30：user 7269の登録から混ざっていた内容を外した（三上様の承諾どおり）
 
 - ゲーム用 line_mts96lic7x626h（@tama.yurazoku）の counselingResult から：menu「インスタ広告・スレッズ」／concept.how／concept.why・uspRaw「夜遅く/早朝など営業時間の柔軟さ」／ctaAssets「LINE登録で〇〇をプレゼント」

@@ -26,6 +26,11 @@ import { REPETITION_RULES } from './repetitionRules';
 
 import { looksLikeFragment } from "./topicRotation";
 
+/** 選択肢の見本の伏せ字（〇〇・○○・◯◯・●●・××・XX）が埋まらないまま残っているか */
+export function hasUnfilledPlaceholder(s: string): boolean {
+  return /[〇○◯●×✕]{2,}|[XxＸｘ]{2,}(?![a-zA-Zａ-ｚＡ-Ｚ])/.test(String(s ?? ""));
+}
+
 /** 漢字・カタカナの2字以上のつながり（＝話題を表す言葉の候補） */
 const WORD_RUN = /[一-龠々ァ-ヶー]{2,}/g;
 
@@ -185,6 +190,9 @@ export function planFreshTopic(params: {
       if (items.some((x) => norm(x) === norm(s))) continue;
       // ★NGワード・見送られた主役の言葉を含む材料は主題にしない（9/30 香取様：NGの「11年」の行が主題に選ばれていた）
       if ((params.avoid ?? []).some((w) => w && norm(s).includes(norm(w)))) continue;
+      // ★選択肢の見本のまま埋まっていない材料（「専門特化（〇〇専門）」）は主題にしない（2026-10-07 夜間整備）。
+      //   account 27 で主題に選ばれ、何を書いても自然さの点検に落ち、保証パス3回とも書けなかった。
+      if (hasUnfilledPlaceholder(s)) continue;
       items.push(s);
     }
   }
