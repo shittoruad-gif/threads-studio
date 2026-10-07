@@ -12,7 +12,7 @@
  * - ライトの方には送らない（設定画面・LINE設定で「プロ・ビジネスで使えます」と案内）
  */
 import * as db from "./db";
-import { buildMetaAiCallPost, buildMetaAiCallPostOfKind, splitDailyQuota } from "../shared/metaAiAsk";
+import { buildMetaAiCallPost, buildMetaAiCallPostOfKind, splitDailyQuota, chooseMetaAiCall, META_AI_CALL_CHOICE, type MetaAiCallHistoryItem, type MetaAiCallKind } from "../shared/metaAiAsk";
 import { effectiveAccountSettings } from "../shared/accountSettings";
 import { getPlan, resolveEffectivePlanId } from "../shared/plans";
 
@@ -27,6 +27,8 @@ export interface MetaAiCallMessageInput {
   username: string;
   storeName?: string | null;
   text: string;
+  /** 「別の質問で投稿する」ボタンの文（2026-10-07・選べると出していただきやすい） */
+  alt?: string | null;
   /** 今朝の自動投稿がメンションにならなかった方への「やり直し」案内 */
   redo?: boolean;
 }
@@ -51,13 +53,19 @@ function callBubble(p: MetaAiCallMessageInput, withHero: boolean) {
         { type: "separator" },
         { type: "text", text: `投稿するアカウント：${acct}`, size: "xs", color: "#0E8388", weight: "bold", wrap: true },
         { type: "text", text: p.text.slice(0, 300), size: "xs", color: "#6B7A78", wrap: true },
+        ...(p.alt ? [
+          { type: "separator" },
+          { type: "text", text: `別の質問：${p.alt.slice(0, 300)}`, size: "xs", color: "#6B7A78", wrap: true },
+        ] : []),
       ],
     },
     footer: {
-      type: "box", layout: "vertical",
+      type: "box", layout: "vertical", spacing: "sm",
       contents: [
         { type: "button", style: "primary", color: "#0E8388", height: "md",
           action: { type: "uri", label: "Threadsアプリで投稿する", uri: url } },
+        ...(p.alt ? [{ type: "button", style: "secondary", height: "sm",
+          action: { type: "uri", label: "別の質問で投稿する", uri: buildThreadsIntentUrl(p.alt) } }] : []),
       ],
     },
   };
@@ -84,6 +92,7 @@ export function buildMetaAiCallBundle(items: MetaAiCallMessageInput[]): unknown[
     (redo
       ? "今朝の自動投稿は、Threadsの決まりでMeta AIに届きませんでした（自動投稿からだと@meta.aiが効かないため）。すみません。上のボタンからアプリで出し直すと届きます。今朝の投稿は消さなくて大丈夫です。\n\n"
       : "") +
+    (items.some((i) => i.alt) ? "質問は2つから選べます。どちらか1つだけ投稿してください（2つとも出すと、同じ日に似た投稿が並びます）。\n\n" : "") +
     "これは、Meta AI（Threadsの中のAI）に質問する投稿です。地元の話題や、お客様が来店前に気になることを聞くと、Meta AIがコメント欄で答えてくれます。見た方の役に立つ投稿になり、地元の方にお店のアカウントを知ってもらうきっかけになります。質問の内容は毎日変わります。\n\n" +
     "Meta AIの答えは間違うことがあります。していないサービスや言い過ぎの表現が書かれていたら、その返信の「…」から非表示にできます。\n\n" +
     (items.length > 1
@@ -117,7 +126,7 @@ function callSourceOf(project: any) {
 }
 
 /** その方の、アカウントごとの「今日の呼びかけ文」を組み立てる（送らない） */
-export async function buildTodayCallsForUser(userId: number, dayIndex: number, opts: { onPause?: (username: string) => void } = {}): Promise<Array<{ accountId: number; username: string; storeName: string | null; text: string }>> {
+export async function buildTodayCallsForUser(userId: number, dayIndex: number, opts: { onPause?: (username: string) => void; onLight?: (username: string) => void } = {}): Promise<Array<{ accountId: number; username: string; storeName: string | null; text: string; alt?: string | null }>> {
   const user: any = await db.getUserById(userId);
   if (!user || user.isDemoMode) return [];
   if (user.metaAiAskEnabled === false) return [];
@@ -129,7 +138,8 @@ export async function buildTodayCallsForUser(userId: number, dayIndex: number, o
   if (projects.length === 0) return [];
   const accounts: any[] = await db.getActiveThreadsAccounts(userId);
   const common = await db.getAutoPostSettings(userId);
-  const out: Array<{ accountId: number; username: string; storeName: string | null; text: string }> = [];
+  const out: Array<{ accountId: number; username: string; storeName: string | null; text: string; alt?: string | null }> = [];
+  const chosenKinds = new Set<MetaAiCallKind>();
   for (const acct of accounts) {
     const eff = effectiveAccountSettings(common as any, acct);
     if (!eff.autoPostEnabled) continue;
@@ -143,42 +153,94 @@ export async function buildTodayCallsForUser(userId: number, dayIndex: number, o
       full = await db.getThreadsAccountById(Number(acct.id));
       if (full && (await rampForAccount(full, 99)).capped) continue;
     } catch { /* 判定できないときは従来どおり送る */ }
-    // ★使われていないアカウントには送らない（2026-09-10 三上様指示）。
-    //   連携7日以上で、直近7日にご本人の @meta.ai 投稿が1件も無ければ止め、一度だけお知らせする。
-    //   使っている方には今までどおり届く。再開は「設定」→「Meta AI呼びかけを再開する」。
+    // ★止めていたアカウント（従来の「7日間使われていないので停止」・ご本人のOFF）には送らない。
     if (full?.metaAiCallPausedAt) continue;
-    if (full && process.env.QA_SAFE_MODE !== "1") {
-      try {
-        const linkedDays = (Date.now() - new Date(full.createdAt).getTime()) / 86400000;
-        // ★再開してから7日間は止めない（再開した翌朝に「直近7日に投稿なし」ですぐまた止まっていた・2026-10-06）
-        const resumedDays = full.metaAiCallResumedAt ? (Date.now() - new Date(full.metaAiCallResumedAt).getTime()) / 86400000 : Infinity;
-        if (linkedDays >= UNUSED_PAUSE_DAYS && resumedDays >= UNUSED_PAUSE_DAYS) {
-          const r: any = await (await fetch(`https://graph.threads.net/v1.0/me/threads?fields=id,text,timestamp&limit=30&access_token=${full.accessToken}`)).json();
-          if (!r?.error) {
-            const since = Date.now() - UNUSED_PAUSE_DAYS * 86400000;
-            const used = (r.data ?? []).some((p: any) => /@meta\.ai/.test(String(p.text ?? "")) && new Date(p.timestamp).getTime() >= since);
-            if (!used) {
-              await db.updateThreadsAccount(Number(acct.id), { metaAiCallPausedAt: new Date() } as any);
-              console.log(`[MetaAiCall] @${acct.threadsUsername} は${UNUSED_PAUSE_DAYS}日間使われていないため送信停止`);
-              opts.onPause?.(String(acct.threadsUsername));
-              continue;
-            }
-          }
-        }
-      } catch { /* 確認できないときは従来どおり送る */ }
+    // このアカウントの @meta.ai 投稿（直近60日・表示回数つき）。種類の選び方と「使われているか」の両方に使う
+    const history = full && process.env.QA_SAFE_MODE !== "1" ? await fetchCallHistory(full) : null;
+    // ★使われていないアカウント（2026-10-07 三上様「リーチを広げる最大限のことを」で変更）。
+    //   以前は7日間使われなければ止めていた（25アカウント中12が停止）。止めずに3日に1回に減らし、
+    //   使われたら毎日に戻す。3日に1回にしてからも28日続けて使われなければ、従来どおり止める。
+    let lightNow = false;
+    if (full && history) {
+      const linkedDays = (Date.now() - new Date(full.createdAt).getTime()) / 86400000;
+      // ★再開してから7日間は減らさない（再開した翌朝にすぐまた止まっていた・2026-10-06）
+      const resumedDays = full.metaAiCallResumedAt ? (Date.now() - new Date(full.metaAiCallResumedAt).getTime()) / 86400000 : Infinity;
+      const lastUsed = history.reduce((m, h) => Math.max(m, h.at.getTime()), 0);
+      const usedRecently = lastUsed >= Date.now() - UNUSED_PAUSE_DAYS * 86400000;
+      const lightAt = full.metaAiCallLightAt ? new Date(full.metaAiCallLightAt).getTime() : null;
+      if (lightAt != null && lastUsed >= lightAt) {
+        await db.updateThreadsAccount(Number(acct.id), { metaAiCallLightAt: null } as any).catch(() => {});
+        console.log(`[MetaAiCall] @${acct.threadsUsername} は使われたので毎日に戻す`);
+      } else if (lightAt != null && Date.now() - lightAt >= LIGHT_THEN_PAUSE_DAYS * 86400000) {
+        await db.updateThreadsAccount(Number(acct.id), { metaAiCallPausedAt: new Date() } as any);
+        console.log(`[MetaAiCall] @${acct.threadsUsername} は3日に1回にしてから${LIGHT_THEN_PAUSE_DAYS}日使われていないため送信停止`);
+        opts.onPause?.(String(acct.threadsUsername));
+        continue;
+      } else if (lightAt != null) {
+        lightNow = true;
+      } else if (!usedRecently && linkedDays >= UNUSED_PAUSE_DAYS && resumedDays >= UNUSED_PAUSE_DAYS) {
+        await db.updateThreadsAccount(Number(acct.id), { metaAiCallLightAt: new Date() } as any);
+        console.log(`[MetaAiCall] @${acct.threadsUsername} は${UNUSED_PAUSE_DAYS}日間使われていないため3日に1回に減らす`);
+        opts.onLight?.(String(acct.threadsUsername));
+        lightNow = true;
+      }
     }
+    if (lightNow && !isLightDay(dayIndex, Number(acct.id))) continue;
     const pinned = acct.defaultProjectId ? projects.find((p) => p.id === acct.defaultProjectId) : null;
     const project = pinned || projects[dayIndex % projects.length];
+    const src = { ...callSourceOf(project), focus: acct.callFocus ?? null };
     // ★アカウントごとにずらす（同じお店の2アカウントが同じ日に同じ種類の質問にならないように）
-    const text = buildMetaAiCallPost({ ...callSourceOf(project), focus: acct.callFocus ?? null }, dayIndex + Number(acct.id));
-    if (!text) continue;
-    out.push({ accountId: Number(acct.id), username: String(acct.threadsUsername), storeName: project.storeName ?? null, text });
+    const choice = chooseMetaAiCall(src, history ?? [], dayIndex * 31 + Number(acct.id), new Date(), chosenKinds);
+    if (!choice) continue;
+    chosenKinds.add(choice.kind);
+    if (choice.alt) chosenKinds.add(choice.alt.kind);
+    console.log(`[MetaAiCall] 選んだ種類 @${acct.threadsUsername} ${choice.why}${lightNow ? '（3日に1回の日）' : ''}`);
+    out.push({ accountId: Number(acct.id), username: String(acct.threadsUsername), storeName: project.storeName ?? null, text: choice.text, alt: choice.alt?.text ?? null });
   }
   return out;
 }
 
-/** この日数、呼びかけ投稿が無ければ送るのをやめる */
+/** この日数、呼びかけ投稿が無ければ3日に1回に減らす */
 export const UNUSED_PAUSE_DAYS = 7;
+/** 3日に1回にしてから、この日数使われなければ止める */
+export const LIGHT_THEN_PAUSE_DAYS = 28;
+/** 3日に1回の間隔 */
+export const LIGHT_EVERY_DAYS = 3;
+
+export function isLightDay(dayIndex: number, accountId: number): boolean {
+  return (dayIndex + accountId) % LIGHT_EVERY_DAYS === 0;
+}
+
+/**
+ * このアカウントの @meta.ai 投稿（直近60日）と表示回数。取れなければ null（＝従来どおり送る・減らさない）。
+ * 表示回数は公開から24時間たったものだけ数える（伸びきっていない数字で種類を判断しない）。
+ */
+export async function fetchCallHistory(full: { accessToken?: string | null }): Promise<MetaAiCallHistoryItem[] | null> {
+  if (!full?.accessToken) return null;
+  try {
+    const since = Math.floor((Date.now() - META_AI_CALL_CHOICE.repeatTextDays * 86400000) / 1000);
+    const r: any = await (await fetch(`https://graph.threads.net/v1.0/me/threads?fields=id,text,timestamp&since=${since}&limit=100&access_token=${full.accessToken}`)).json();
+    if (r?.error || !Array.isArray(r?.data)) return null;
+    const posts = (r.data as any[]).filter((p) => /@meta\.ai/.test(String(p.text ?? "")));
+    const out: MetaAiCallHistoryItem[] = [];
+    for (let i = 0; i < posts.length; i++) {
+      const p = posts[i];
+      const at = new Date(p.timestamp);
+      let views: number | null = null;
+      if (i < 20 && Date.now() - at.getTime() >= 86400000) {
+        try {
+          const x: any = await (await fetch(`https://graph.threads.net/v1.0/${p.id}/insights?metric=views&access_token=${full.accessToken}`)).json();
+          const v = x?.data?.find((m: any) => m.name === "views")?.values?.[0]?.value;
+          views = typeof v === "number" ? v : null;
+        } catch { views = null; }
+      }
+      out.push({ text: String(p.text), views, at });
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
 
 export function todayIndexJst(): number {
   return Math.floor((Date.now() + JST) / 86400000);
@@ -196,15 +258,26 @@ export async function runMetaAiCallPromptJob(): Promise<void> {
   for (const userId of userIds) {
     try {
       const pausedNow: string[] = [];
-      const calls = await buildTodayCallsForUser(userId, dayIndex, { onPause: (u) => pausedNow.push(u) });
+      const lightNow: string[] = [];
+      const calls = await buildTodayCallsForUser(userId, dayIndex, { onPause: (u) => pausedNow.push(u), onLight: (u) => lightNow.push(u) });
       const targets = await db.getLineUserIdsForUser(userId);
       if (targets.length === 0) continue;
       const { pushMessages } = await import("./lineNotify");
+      if (lightNow.length > 0) {
+        const { textWithQuick } = await import("./lineChat");
+        const who = lightNow.map((u) => `@${u}`).join("・");
+        const notice = textWithQuick(
+          `${who} のMeta AI呼びかけ文は、${UNUSED_PAUSE_DAYS}日間ご投稿が無かったので、毎日ではなく${LIGHT_EVERY_DAYS}日に1回お送りするようにしました。\n` +
+          "呼びかけの投稿は、ご利用中のアカウントの多くで、ふだんの投稿の約2倍以上見られています。届いた日に、緑のボタンから1回投稿していただくだけで大丈夫です。投稿していただくと、また毎日お送りします。",
+          [{ label: "毎日に戻す", data: "s=metaai&v=on" }, { label: "設定", data: "m=settings" }],
+        );
+        for (const to of targets) await pushMessages(to, [notice]);
+      }
       if (pausedNow.length > 0) {
         const { textWithQuick } = await import("./lineChat");
         const who = pausedNow.map((u) => `@${u}`).join("・");
         const notice = textWithQuick(
-          `${who} のMeta AI呼びかけ文は、${UNUSED_PAUSE_DAYS}日間ご投稿が無かったので、しばらくお送りしないようにしました。\n` +
+          `${who} のMeta AI呼びかけ文は、ご投稿が無い日が続いたので、しばらくお送りしないようにしました。\n` +
           "使いたくなったら、いつでも下の「再開する」か「設定」から戻せます。",
           [{ label: "Meta AI呼びかけを再開する", data: "s=metaai&v=on" }, { label: "設定", data: "m=settings" }],
         );
@@ -212,10 +285,10 @@ export async function runMetaAiCallPromptJob(): Promise<void> {
       }
       if (calls.length === 0) continue;
       // ★アカウント数に関係なく1人2通（カード1通＝カルーセル＋説明文1通）
-      const msgs = buildMetaAiCallBundle(calls.map((c) => ({ username: c.username, storeName: c.storeName, text: c.text })));
+      const msgs = buildMetaAiCallBundle(calls.map((c) => ({ username: c.username, storeName: c.storeName, text: c.text, alt: c.alt ?? null })));
       for (const to of targets) await pushMessages(to, msgs);
       sent++;
-      for (const c of calls) console.log(`[MetaAiCall] 送信 user=${userId} @${c.username} 「${c.text}」`);
+      for (const c of calls) console.log(`[MetaAiCall] 送信 user=${userId} @${c.username} 「${c.text}」${c.alt ? ` 別の質問「${c.alt}」` : ""}`);
     } catch (e) {
       console.error(`[MetaAiCall] 失敗 user=${userId}:`, e);
     }

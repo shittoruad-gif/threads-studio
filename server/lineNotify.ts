@@ -219,6 +219,28 @@ export interface ApprovalPushPost {
   /** 切り口とアンケートの選択肢（カードに一言添える・shared/threadsFeatures.ts） */
   angle?: string | null;
   pollOptions?: string | null;
+  /** 「この形の投稿は、ふだんの約◯倍見られています」（shared/reachEvidence.ts）。送る直前に補う */
+  reachNote?: string | null;
+}
+
+/**
+ * 承認カードに、その切り口の実績（このお客様の公開済みの投稿の平均表示）を一言添える（2026-10-07）。
+ * 見送りが続く方にも「違う内容でも見られている」ことを数字で伝える。取れなければ何も添えない。
+ */
+async function withReachNotes(posts: ApprovalPushPost[]): Promise<ApprovalPushPost[]> {
+  try {
+    const anyId = posts.find((p) => p.threadsAccountId)?.threadsAccountId;
+    if (!anyId || !posts.some((p) => p.angle)) return posts;
+    const db = await import("./db");
+    const acc: any = await db.getThreadsAccountById(Number(anyId));
+    if (!acc?.userId) return posts;
+    const perf = await db.getAnglePerformanceStats(Number(acc.userId));
+    const { reachNoteFor } = await import("@shared/reachEvidence");
+    return posts.map((p) => (p.reachNote !== undefined ? p : { ...p, reachNote: reachNoteFor(p.angle, perf) }));
+  } catch (e) {
+    console.warn("[LineNotify] 実績の一言を補えませんでした:", (e as Error)?.message);
+    return posts;
+  }
 }
 
 function fmtTime(v: Date | string | null): string {
@@ -326,6 +348,7 @@ export async function sendApprovalPush(
   //   朝6時の経路が accountName を渡しておらず、複数アカウントの方が押す前に判別できなかった。
   //   呼び出し元の書き忘れで再発しないよう、送る直前にここで補う。
   posts = await withAccountNamesForPush(posts);
+  posts = await withReachNotes(posts);
   // ★「今日」か「明日」かは予定時刻で決める。
   //   朝6時の定例は当日15/21/22時に置くので「今日」、お申し込み直後の当日補充も「今日」。
   //   以前は常に「明日の投稿」と書いていて、実際には数時間後に公開されていた。

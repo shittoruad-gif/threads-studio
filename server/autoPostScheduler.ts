@@ -610,6 +610,25 @@ export async function generateAutoPost(
         console.log(`[AutoPost] 反応が取れていないため改善の回 account=${threadsAccountId} 連携${status?.linkedDays}日 30日で${status?.posts}本・反応${status?.reactions}`);
       }
     } catch (e) { console.warn(`[AutoPost] 反応の判定をとばしました account=${threadsAccountId}: ${(e as Error)?.message}`); }
+    // ★見送りが続く方は「見られる型」を優先する（2026-10-07 三上様「毎回見送るクライアントに関しては、
+    //   違う内容でも閲覧数が取れて結果が残せるのであれば問題ない」）。
+    //   直近7日に3回以上見送った方は、ご本人の好みに寄せる学習が狭くなりすぎて同じ所へ戻っていた
+    //   （10/7 対象4件。見送った切り口にも、そのアカウントで平均以上に見られていたものがあった）。
+    //   反応が取れていないアカウントと同じく、他店で反応が取れている切り口に寄せ、短め・宣伝の言葉なし・地域名入りにする。
+    //   見送った投稿の共通点を外す仕組み（shared/declinedPatterns.ts）と、作り話の検査はそのまま。
+    if (!lowReaction) {
+      try {
+        const { countRecentDeclines } = await import('./declineFollowup');
+        const { FOLLOWUP_MIN_DECLINES } = await import('../shared/declineFollowup');
+        const declines = await countRecentDeclines(threadsAccountId);
+        if (declines >= FOLLOWUP_MIN_DECLINES) {
+          lowReaction = true;
+          perf.lowReaction = true;
+          perf.pooled = await db.getPooledAngleReactions();
+          console.log(`[AutoPost] 見送りが続くため見られる型を優先 account=${threadsAccountId} 直近7日の見送り${declines}回`);
+        }
+      } catch (e) { console.warn(`[AutoPost] 見送りの数をとばしました account=${threadsAccountId}: ${(e as Error)?.message}`); }
+    }
     // ★健康系のお店には、ビフォーアフター・お客様の声を書かせない。
     //   2026-09-08 @haisaiseikotsuin（整骨院・連携2日目）の公開3件がThreads側で削除された。
     //   消された投稿も承認待ちの投稿も change_story / customer_voice で作られていた。

@@ -413,6 +413,8 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   metaAiCallPausedAt: timestamp("metaAiCallPausedAt"),
   // Meta AI呼びかけを再開した日（再開から7日間は止めない・0106）
   metaAiCallResumedAt: timestamp("metaAiCallResumedAt"),
+  // Meta AI呼びかけを3日に1回に減らした日（7日間使われなかった。使われたら消える・0107）
+  metaAiCallLightAt: timestamp("metaAiCallLightAt"),
   /**
    * 「このアカウントのお店の情報が登録されていません」とLINEでご案内した日時。
    * ★アカウントが2つ以上あって紐づけが無いときは、もう一方の情報で文章を作らず止める。

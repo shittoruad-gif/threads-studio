@@ -69,7 +69,7 @@ export function fmtJst(v: Date | string | null): string {
  * 本文は全文を載せる（見に行かせない）。1カード=1投稿・最大5件。
  */
 export function buildPostCards(
-  posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null; accountName?: string | null; accountEmphasis?: boolean; angle?: string | null; choiceGroupId?: string | null; pollOptions?: string | null }>,
+  posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null; accountName?: string | null; accountEmphasis?: boolean; angle?: string | null; choiceGroupId?: string | null; pollOptions?: string | null; reachNote?: string | null }>,
   opts: { one?: boolean; bulk?: boolean; choice?: boolean } = {},
 ): unknown {
   // ★3案からお選びいただく形（shared/threeChoice.ts）。
@@ -137,6 +137,10 @@ export function buildPostCards(
         // ★アンケート・答えを隠すクイズ（shared/threadsFeatures.ts）は、本文だけでは分からないので一言添える
         ...(featureNote(p as any) ? [{
           type: "text", wrap: true, size: "xs", color: "#0B6E72", text: featureNote(p as any)!,
+        }] : []),
+        // ★この切り口が、このお客様の公開済みの投稿で実際に見られているか（shared/reachEvidence.ts・2026-10-07）
+        ...(p.reachNote ? [{
+          type: "text", wrap: true, size: "xs", color: "#0B6E72", text: p.reachNote,
         }] : []),
         ...(isCall ? [{
           type: "text", wrap: true, size: "xs", color: "#8A6D3B",

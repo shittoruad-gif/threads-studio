@@ -254,6 +254,8 @@ function serviceWord(src: MetaAiCallSource): string {
 export type MetaAiCallKind =
   | 'local_specialty' | 'about_store' | 'body_season' | 'first_visit' | 'local_season'
   | 'merit' | 'choose' | 'local_family' | 'body_daily' | 'local_event'
+  | 'local_gourmet' | 'local_souvenir' | 'local_scenery' | 'local_rainy' | 'local_history'
+  | 'store_cando' | 'body_stretch' | 'body_sleep'
   | 'recommend' | 'strength';
 
 /** 並び順＝日替わりの順番。地元の話題・お店の紹介・来店前・体の質問が交互になるように並べる */
@@ -262,8 +264,33 @@ export const META_AI_CALL_ROTATION: readonly MetaAiCallKind[] = [
   'merit', 'choose', 'local_family', 'body_daily', 'local_event',
 ];
 
+/**
+ * ★日替わりで回す種類の全部（2026-10-07 三上様「Meta AIに関しても、もっと様々な内容をあげるようにし、
+ *   リーチを広げる最大限のできることを行ってください」）。META_AI_CALL_ROTATION の10種類に8種類を足した18種類。
+ *   足したものも、読む人の役に立ち・店の名前が中立に出て・他店や効果の言い切りを呼ばないものだけ。
+ *   どれを出すかは chooseMetaAiCall（そのアカウントで実際に見られた種類を多めに・同じ文は60日出さない）。
+ */
+export const META_AI_CALL_ALL_KINDS: readonly MetaAiCallKind[] = [
+  ...META_AI_CALL_ROTATION,
+  'local_gourmet', 'local_souvenir', 'local_scenery', 'local_rainy', 'local_history',
+  'store_cando', 'body_stretch', 'body_sleep',
+];
+
+/** 地元の話題の種類（実測でいちばん見られ、返信も付く：名産品 4,217回・返信25件／秋のおすすめ 5,766回・返信14件） */
+export const META_AI_LOCAL_KINDS: ReadonlySet<MetaAiCallKind> = new Set<MetaAiCallKind>([
+  'local_specialty', 'local_season', 'local_family', 'local_event',
+  'local_gourmet', 'local_souvenir', 'local_scenery', 'local_rainy', 'local_history',
+]);
+
+/** 1つの種類で使える言い回しの数（同じ種類でも文を変えて、まったく同じ文が続かないようにする） */
+export const META_AI_CALL_VARIANTS: Partial<Record<MetaAiCallKind, number>> = {
+  local_specialty: 2, local_season: 2, local_family: 2, local_event: 2, about_store: 2,
+  first_visit: 2, choose: 2, body_season: 2, body_daily: 2, merit: 2,
+};
+
 /** 地元の話題に添える一言（返信を呼ぶ。返信が表示の約半分を占めるため） */
 const LOCAL_INVITE = '\n地元の方のおすすめも、よかったら教えてください';
+const LOCAL_INVITE_MEMORY = '\n地元の方の思い出も、よかったら教えてください';
 
 /** 体の不調を扱う業種か（季節の体・日常の注意の質問はこの業種だけ） */
 function isBodyBusiness(service: string, businessType: string | null | undefined): boolean {
@@ -287,7 +314,7 @@ const SEASON_BODY: Record<number, string> = {
 };
 
 /** 種類を指定して1つ作る。材料が足りない種類は null */
-export function buildMetaAiCallPostOfKind(src: MetaAiCallSource, kind: MetaAiCallKind, now: Date = new Date()): string | null {
+export function buildMetaAiCallPostOfKind(src: MetaAiCallSource, kind: MetaAiCallKind, now: Date = new Date(), variant = 0): string | null {
   const area = callAreaLabel(src.area, src.localTerms);
   const store = String(src.storeName || '').trim();
   const storeOk = store.length > 0 && store.length <= 16;
@@ -309,30 +336,68 @@ export function buildMetaAiCallPostOfKind(src: MetaAiCallSource, kind: MetaAiCal
   const adultsOnly = /(スナック|バー|パブ|居酒屋|キャバ|ラウンジ|クラブ)/.test(String(src.businessType || ''));
   const month = jstMonth(now);
   const H = META_AI_HANDLE;
+  const v = Math.max(0, Math.floor(variant)) % (META_AI_CALL_VARIANTS[kind] ?? 1);
 
   let text: string | null = null;
   switch (kind) {
     case 'local_specialty':
-      text = local ? `${H} ${local}の名産品と言えば？${LOCAL_INVITE}` : null; break;
+      text = !local ? null : v === 0
+        ? `${H} ${local}の名産品と言えば？${LOCAL_INVITE}`
+        : `${H} ${local}で、地元の人が自慢したくなる名物は？${LOCAL_INVITE}`; break;
     case 'local_season':
-      text = local ? `${H} ${local}周辺で、${seasonWord(month)}に出かけるならおすすめの場所は？${LOCAL_INVITE}` : null; break;
+      text = !local ? null : v === 0
+        ? `${H} ${local}周辺で、${seasonWord(month)}に出かけるならおすすめの場所は？${LOCAL_INVITE}`
+        : `${H} ${local}周辺で、${seasonWord(month)}を感じられるおすすめのスポットは？${LOCAL_INVITE}`; break;
     case 'local_family':
-      text = local && !adultsOnly ? `${H} ${local}周辺で、子どもと一緒に楽しめる場所を教えて${LOCAL_INVITE}` : null; break;
+      text = !local || adultsOnly ? null : v === 0
+        ? `${H} ${local}周辺で、子どもと一緒に楽しめる場所を教えて${LOCAL_INVITE}`
+        : `${H} ${local}周辺で、休みの日に家族で出かけるならどこがおすすめ？${LOCAL_INVITE}`; break;
     case 'local_event':
-      text = local ? `${H} ${local}周辺で、${seasonWord(month)}にある行事やお祭りを教えて${LOCAL_INVITE}` : null; break;
+      text = !local ? null : v === 0
+        ? `${H} ${local}周辺で、${seasonWord(month)}にある行事やお祭りを教えて${LOCAL_INVITE}`
+        : `${H} ${local}周辺で、${seasonWord(month)}の楽しみといえば？${LOCAL_INVITE}`; break;
+    case 'local_gourmet':
+      text = local ? `${H} ${local}で、地元の人に愛されているご当地の味は？${LOCAL_INVITE}` : null; break;
+    case 'local_souvenir':
+      text = local ? `${H} ${local}で手土産を選ぶなら、何がおすすめ？${LOCAL_INVITE}` : null; break;
+    case 'local_scenery':
+      text = local ? `${H} ${local}周辺で、景色がきれいな場所はどこ？${LOCAL_INVITE}` : null; break;
+    case 'local_rainy':
+      text = local && !adultsOnly ? `${H} ${local}周辺で、雨の日でも楽しめる場所は？${LOCAL_INVITE}` : null; break;
+    case 'local_history':
+      text = local ? `${H} ${local}の地名の由来や、昔の様子を教えて${LOCAL_INVITE_MEMORY}` : null; break;
     case 'about_store':
       // 会社・教室・オンラインにも合うよう「お店」ではなく「ところ」（9/8 はいさい整骨院「どういう場所？」が中立の紹介になった）
-      text = storeOk ? `${H} ${store}はどんなところ？初めての人にも分かるように教えて` : null; break;
+      text = !storeOk ? null : v === 0
+        ? `${H} ${store}はどんなところ？初めての人にも分かるように教えて`
+        : `${H} ${store}のことを、初めての人向けに分かりやすく紹介して`; break;
+    case 'store_cando':
+      // 9/5 金光「うちでできること」が 2,053回（店名を出して中立に紹介した）
+      text = storeOk ? `${H} ${store}では、どんなことができる？初めての人にも分かるように教えて` : null; break;
     case 'merit':
-      text = area && who && svc ? `${H} ${area}で${who}に、${svc}${visitable ? 'に通う' : 'を利用する'}メリットを伝えて` : null; break;
+      text = !(area && who && svc) ? null : v === 0
+        ? `${H} ${area}で${who}に、${svc}${visitable ? 'に通う' : 'を利用する'}メリットを伝えて`
+        : `${H} ${area}で${who}に、${svc}${visitable ? 'に行く' : 'を利用する'}前に知っておいてほしいことを伝えて`; break;
     case 'first_visit':
-      text = service ? `${H} 初めて${service}${visitable ? 'に行く' : 'を利用する'}とき、知っておくと安心なことは？` : null; break;
+      text = !service ? null : v === 0
+        ? `${H} 初めて${service}${visitable ? 'に行く' : 'を利用する'}とき、知っておくと安心なことは？`
+        : `${H} 初めて${service}${visitable ? 'に行く' : 'を利用する'}前に、準備しておくといいことは？`; break;
     case 'choose':
-      text = service ? `${H} ${service}を選ぶときに、確認しておくといいポイントは？` : null; break;
+      text = !service ? null : v === 0
+        ? `${H} ${service}を選ぶときに、確認しておくといいポイントは？`
+        : `${H} 自分に合う${service}を見つけるコツは？`; break;
     case 'body_season':
-      text = body ? `${H} ${SEASON_BODY[month]}、体がだるいと感じるときに自分でできる工夫は？` : null; break;
+      text = !body ? null : v === 0
+        ? `${H} ${SEASON_BODY[month]}、体がだるいと感じるときに自分でできる工夫は？`
+        : `${H} ${SEASON_BODY[month]}、肩や腰が重く感じるときに気をつけたいことは？`; break;
     case 'body_daily':
-      text = body && problem ? `${H} ${problem}が気になる人が、毎日の生活で気をつけるといいことは？` : null; break;
+      text = !(body && problem) ? null : v === 0
+        ? `${H} ${problem}が気になる人が、毎日の生活で気をつけるといいことは？`
+        : `${H} ${problem}が気になる人が、仕事や家事の合間にできる工夫は？`; break;
+    case 'body_stretch':
+      text = body ? `${H} 座りっぱなしが続いた日に、自分でできる簡単な体のほぐし方は？` : null; break;
+    case 'body_sleep':
+      text = body ? `${H} ${SEASON_BODY[month]}、ぐっすり眠るために寝る前にできることは？` : null; break;
     // ↓ 日替わりには入れない（種類指定でだけ使う）
     case 'recommend':
       text = area && svc ? `${H} ${area}で${svc}のおすすめを教えて` : null; break;
@@ -354,6 +419,183 @@ export function buildMetaAiCallPost(src: MetaAiCallSource, seed: number, now: Da
   // 材料がほとんど無いときだけ「強み」を使う（何も送れないよりは良い）
   if (list.length === 0) { const fb = buildMetaAiCallPostOfKind(src, 'strength', now); return fb; }
   return list[Math.abs(seed) % list.length];
+}
+
+/**
+ * ★今日の呼びかけ文の選び方（2026-10-07 三上様「もっと様々な内容をあげるようにし、リーチを広げる最大限のできることを」）。
+ *
+ * 10/7 実測（連携中25アカウント・直近45日の @meta.ai 投稿）：
+ *   - ほとんどのアカウントで、呼びかけは通常の投稿の 1.6〜6倍 見られている（中央値どうし）
+ *   - 例外の1アカウントは21本出して中央値13回（通常85回）。同じ文（「整体院を選ぶときに…」）を4回、
+ *     ほかの文も2回ずつ出していた。材料で作れる文が8本ほどしか無く、8日ごとにまったく同じ文に戻っていたため
+ *   - いちばん見られたのは地元の話題（秋のおすすめ 5,766回・名産品 4,217回）。「地元の方のおすすめも」の一言で返信も付く
+ *   - 同じ種類でも、アカウントによって 13回〜5,766回 と差が大きい → そのアカウントで見られた種類を多めに出す
+ *
+ * 決まり：
+ *   1. まったく同じ文は60日出さない（言い回し違いに回す）
+ *   2. 直近4本で使った種類は出さない（作れる種類が足りないときは緩める）
+ *   3. 種類の重み＝ 下地（地元の話題 1.3・お店の紹介 1.0・体 0.9・来店前 0.8）
+ *        × そのアカウントでの実績（その種類の平均表示 ÷ 呼びかけ全体の中央値、0.4〜2.5倍。2本で効き始め4本で満額）
+ *   4. 重みに沿って、日付で決まる乱数で1つ選ぶ（毎回いちばん良い種類だけにならない）。もう1つ別の種類を「別の質問」として添える
+ */
+export const META_AI_CALL_CHOICE = {
+  repeatTextDays: 60,
+  recentKindWindow: 4,
+  prior: { local: 1.3, store: 1.0, body: 0.9, visit: 0.8 },
+  ownClamp: [0.4, 2.5] as const,
+  ownFullAt: 4,
+} as const;
+
+export interface MetaAiCallHistoryItem {
+  text: string;
+  /** 表示回数（取れなければ null） */
+  views: number | null;
+  at: Date;
+}
+
+const squashCall = (t: string) => String(t || '').replace(/[\s　]/g, '');
+
+function priorOf(kind: MetaAiCallKind): number {
+  const P = META_AI_CALL_CHOICE.prior;
+  // 地名の由来は答えに誤りが混ざりやすく、まだ実績も無いので、地元の話題の中では控えめにする
+  if (kind === 'local_history') return P.store;
+  if (META_AI_LOCAL_KINDS.has(kind)) return P.local;
+  if (kind === 'about_store' || kind === 'store_cando' || kind === 'merit') return P.store;
+  if (kind.startsWith('body_')) return P.body;
+  return P.visit;
+}
+
+/**
+ * 過去の呼びかけ文が、どの種類だったか。今の型（全種類×言い回し×12か月）と同じ文なら、その種類。
+ * 昔の型（「届けて」「強み」「おすすめを教えて」「何が違う」）は種類だけ分かればよいので形で見る。
+ */
+export function detectCallKind(text: string, src: MetaAiCallSource): MetaAiCallKind | null {
+  const t = squashCall(text);
+  if (!t.startsWith(META_AI_HANDLE)) return null;
+  for (let m = 1; m <= 12; m++) {
+    const at = new Date(Date.UTC(2026, m - 1, 15, 3));
+    for (const k of META_AI_CALL_ALL_KINDS) {
+      for (let v = 0; v < (META_AI_CALL_VARIANTS[k] ?? 1); v++) {
+        const c = buildMetaAiCallPostOfKind(src, k, at, v);
+        if (c && squashCall(c) === t) return k;
+      }
+    }
+  }
+  // 地元の一言が付く前の昔の型（「〇〇の名産品と言えば？」だけ）も同じ種類として数える
+  for (let m = 1; m <= 12; m++) {
+    const at = new Date(Date.UTC(2026, m - 1, 15, 3));
+    for (const k of META_AI_CALL_ALL_KINDS) {
+      if (!META_AI_LOCAL_KINDS.has(k)) continue;
+      for (let v = 0; v < (META_AI_CALL_VARIANTS[k] ?? 1); v++) {
+        const c = buildMetaAiCallPostOfKind(src, k, at, v);
+        const head = c ? squashCall(c.split('\n')[0]) : '';
+        if (head && head === t) return k;
+      }
+    }
+  }
+  if (/強みを/.test(t)) return 'strength';
+  if (/おすすめを教えて$/.test(t)) return 'recommend';
+  return null;
+}
+
+/** 日付から決まる乱数（同じ日・同じアカウントなら同じ結果） */
+function seededRandom(seed: number): () => number {
+  let a = (Math.abs(Math.floor(seed)) * 2654435761) >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let x = a;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export interface MetaAiCallChoice {
+  text: string;
+  kind: MetaAiCallKind;
+  /** 「別の質問で投稿する」に出す2つ目（別の種類）。作れなければ null */
+  alt: { text: string; kind: MetaAiCallKind } | null;
+  /** 選んだ理由（ログ用） */
+  why: string;
+}
+
+/**
+ * 今日の呼びかけ文を選ぶ。history は新しい順でなくてよい（このアカウントの @meta.ai 投稿）。
+ */
+export function chooseMetaAiCall(
+  src: MetaAiCallSource,
+  history: readonly MetaAiCallHistoryItem[],
+  seed: number,
+  now: Date = new Date(),
+  /** 同じお客様の別のアカウントで今日すでに選んだ種類（同じお店の2アカウントが同じ日に同じ質問にならないように） */
+  avoidKinds: ReadonlySet<MetaAiCallKind> = new Set(),
+): MetaAiCallChoice | null {
+  const C = META_AI_CALL_CHOICE;
+  const hist = history.slice().sort((a, b) => b.at.getTime() - a.at.getTime())
+    .map((h) => ({ ...h, kind: detectCallKind(h.text, src), sq: squashCall(h.text) }));
+  // 候補：作れる種類×言い回し
+  const cands: Array<{ text: string; kind: MetaAiCallKind }> = [];
+  for (const k of META_AI_CALL_ALL_KINDS) {
+    for (let v = 0; v < (META_AI_CALL_VARIANTS[k] ?? 1); v++) {
+      const t = buildMetaAiCallPostOfKind(src, k, now, v);
+      if (t && !cands.some((c) => c.text === t)) cands.push({ text: t, kind: k });
+    }
+  }
+  if (cands.length === 0) {
+    const fb = buildMetaAiCallPostOfKind(src, 'strength', now);
+    return fb ? { text: fb, kind: 'strength', alt: null, why: '材料が少ないため強みの型' } : null;
+  }
+  // 1. 同じ文は60日出さない（全部使い切っていたら、いちばん前に使った文から戻す）
+  const usedAt = new Map<string, number>();
+  for (const h of hist) if (!usedAt.has(h.sq)) usedAt.set(h.sq, h.at.getTime());
+  const since = now.getTime() - C.repeatTextDays * 86400_000;
+  let pool = cands.filter((c) => (usedAt.get(squashCall(c.text)) ?? 0) < since);
+  if (pool.length === 0) {
+    const oldest = Math.min(...cands.map((c) => usedAt.get(squashCall(c.text)) ?? 0));
+    pool = cands.filter((c) => (usedAt.get(squashCall(c.text)) ?? 0) === oldest);
+  }
+  // 2. 直近4本で使った種類は出さない
+  const recentKinds = new Set([
+    ...(hist.slice(0, C.recentKindWindow).map((h) => h.kind).filter(Boolean) as MetaAiCallKind[]),
+    ...Array.from(avoidKinds),
+  ]);
+  const fresh = pool.filter((c) => !recentKinds.has(c.kind));
+  if (fresh.length > 0) pool = fresh;
+  // 3. 種類の重み（下地 × このアカウントでの実績）
+  const viewed = hist.filter((h) => typeof h.views === 'number' && h.views >= 0) as Array<typeof hist[number] & { views: number }>;
+  const sorted = viewed.map((h) => h.views).sort((a, b) => a - b);
+  const median = sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] : 0;
+  const weightOf = (k: MetaAiCallKind): { w: number; own: number | null } => {
+    const xs = viewed.filter((h) => h.kind === k).map((h) => h.views);
+    let own: number | null = null;
+    let factor = 1;
+    if (xs.length >= 2 && median > 0) {
+      own = xs.reduce((s, x) => s + x, 0) / xs.length / median;
+      const conf = Math.min(1, (xs.length - 1) / (C.ownFullAt - 1));
+      const clamped = Math.min(C.ownClamp[1], Math.max(C.ownClamp[0], own));
+      factor = 1 + (clamped - 1) * conf;
+    }
+    return { w: priorOf(k) * factor, own };
+  };
+  const rnd = seededRandom(seed);
+  const pickFrom = (list: typeof pool) => {
+    // 種類ごとに重みを1回だけ数える（言い回しが2つある種類が2倍出ないように）
+    const kinds = Array.from(new Set(list.map((c) => c.kind)));
+    const ws = kinds.map((k) => weightOf(k).w);
+    const total = ws.reduce((s, w) => s + w, 0);
+    let r = rnd() * total;
+    let kind = kinds[kinds.length - 1];
+    for (let i = 0; i < kinds.length; i++) { r -= ws[i]; if (r <= 0) { kind = kinds[i]; break; } }
+    const opts = list.filter((c) => c.kind === kind);
+    return opts[Math.floor(rnd() * opts.length) % opts.length];
+  };
+  const main = pickFrom(pool);
+  const altPool = pool.filter((c) => c.kind !== main.kind);
+  const altFallback = cands.filter((c) => c.kind !== main.kind && !recentKinds.has(c.kind));
+  const alt = altPool.length > 0 ? pickFrom(altPool) : altFallback.length > 0 ? pickFrom(altFallback) : null;
+  const w = weightOf(main.kind);
+  const why = `${main.kind}${w.own != null ? `（このアカウントでの実績 ${w.own.toFixed(2)}倍）` : ''}／候補${pool.length}・除外した種類${Array.from(recentKinds).join(',') || 'なし'}`;
+  return { text: main.text, kind: main.kind, alt, why };
 }
 
 /**
