@@ -620,6 +620,8 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   forDate: date("forDate", { mode: "string" }),
   // ★他店の当たり型（hitPatterns）で作った投稿なら、その型のID（2026-09-28・型ごとの効果を測る）
   hitPatternId: int("hitPatternId"),
+  // 学習用アカウントの試しの条件（shared/learningAccounts.ts の LEARNING_TRIALS の key・0108）
+  experimentKey: varchar("experimentKey", { length: 40 }),
   // アンケートの選択肢（JSON配列・shared/threadsFeatures.ts）。null ならアンケートなし
   pollOptions: text("pollOptions"),
   // ★ネタ帳のどのネタから作った投稿か（2026-09-30・shared/materialLedger.ts）。使った記録はこの列だけで持つ

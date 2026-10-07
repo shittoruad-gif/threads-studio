@@ -555,6 +555,8 @@ export async function generateAutoPost(
   //   forcedAngleId は3案の切り口を散らすため（同じ材料から3本作ると同じ所へ戻るため）。
   opts: {
     choiceGroupId?: string | null; forcedAngleId?: string | null; hitPatternId?: number | null; feature?: import('../shared/threadsFeatures').FeatureKind | null;
+    /** 学習用アカウントの試し（1つの条件だけ変える・shared/learningAccounts.ts） */
+    learningTrial?: import('../shared/learningAccounts').LearningTrial | null;
     // ★◯✕アンケートの案づくり（2026-09-29・server/draftSurveyWeekly.ts）。検査はすべて通常どおり通し、
     //   投稿（scheduledPosts）にはせず本文だけを受け取る。
     collect?: (d: { content: string; angleId: string | null }) => void;
@@ -686,6 +688,11 @@ export async function generateAutoPost(
         console.log(`[AutoPost] 自然な書き方モード：数字で始める切り口を外した account=${threadsAccountId} → ${angle?.id ?? 'なし'}`);
       }
     }
+    // ★学習の試しでは切り口を選ばない（試す条件を1つに絞る。切り口の検査と食い違って3回とも落ちていた・10/7）
+    if (opts.learningTrial && !forced) {
+      angle = null;
+      console.log(`[AutoPost] 学習の試しのため切り口なし account=${threadsAccountId} → ${opts.learningTrial.key}`);
+    }
     if (studyExperiment && angle) console.log(`[AutoPost] 試験中（勉強会の型） userId=${userId} account=${threadsAccountId} → ${angle.id}`);
     if (forced) console.log(`[AutoPost] 3案：切り口を指定 account=${threadsAccountId} → ${forced.id}`);
     if (preferredAngles.length) console.log(`[AutoPost] 希望の型を優先 userId=${userId} ${preferredAngles.join('/')} → ${angle?.id}`);
@@ -712,11 +719,14 @@ export async function generateAutoPost(
 
   // 投稿の長さ指示（既定は短め。長めは本人が選んだときだけ）
   // 'alternate' のときは、日と枠の両方で短め/長めを交互にする（A/Bテスト）。
-  const effectiveLength = resolveWithAlternation(postLength, postingTimeIndex);
+  // ★学習の試しの「長め」は長めの予算（300字）で書く。「ひとこと」は短め（2026-10-07）
+  const trialKey = opts.learningTrial?.key ?? null;
+  const effectiveLength = trialKey === 'len_long' ? 'long' : trialKey === 'len_oneliner' ? 'short' : resolveWithAlternation(postLength, postingTimeIndex);
   // ★お客様ごとの長さ（2026-10-03 三上様「相手の平均的な文字数に合わせて」）。
   //   文体のお手本が3本以上あれば、その平均字数に合わせる。「長め」を選んだ方・反応改善の試験中の方は従来どおり。
   const { sampleLengthRange, applyLengthRange, budgetForRange } = await import('../shared/sampleLength');
-  const lengthRange = effectiveLength === 'short' && !lowReaction
+  // ★長さの試し（len_*）では、お手本の平均字数に合わせない（合わせると「長め」が50〜60字に縮められ、10/7 の試しで1本も書けなかった）
+  const lengthRange = effectiveLength === 'short' && !lowReaction && !(trialKey ?? '').startsWith('len_')
     ? sampleLengthRange((project as any).styleSamples || null)
     : null;
   if (lengthRange) console.log(`[AutoPost] 長さをお手本に合わせる account=${threadsAccountId} 平均${lengthRange.avg}字（${lengthRange.n}本）→ ${lengthRange.lo}〜${lengthRange.hi}字`);
@@ -1237,7 +1247,10 @@ export async function generateAutoPost(
           //   プレステージ様は2晩続けて naturalnessReview で3回落ち、枠を捨てていた。
           + (looksLikeRecruiting(project) ? RECRUITING_POST_ADDENDUM : '')
           // ★個人モードの上書きは最末尾（末尾の指示が最も遵守されやすい）
-          + (personal ? personalModePromptOverride() : ''),
+          + (personal ? personalModePromptOverride() : '')
+          // ★学習の試し（shared/learningAccounts.ts）は最末尾。途中に置くと、後ろの「切り口（最優先）」「長さ」に上書きされ、
+          //   10/7 の試しで「1行目に数字」に数字が無い・「箇条書き」に箇条書きが無い投稿になっていた。
+          + (opts.learningTrial ? `\n\n【今回の試し（ここまでのすべての指示より優先・厳守）】\n- ${opts.learningTrial.note}\n- 上の切り口・長さ・書き出しの指示と食い違うところは、この試しに合わせる。試すのはこの1点だけで、それ以外はいつもどおり。\n- 作り話・効果の断定・登録に無い事実・価格の禁止は変わらない。` : ''),
       }],
       response_format: JSON_SCHEMA,
     });
@@ -1312,7 +1325,8 @@ export async function generateAutoPost(
     } catch { keepIdentityWords = []; }
     // ★自然な書き方モードでは、短く崩すリライト（1文30字・1文1行）をかけない。
     //   試作（2026-10-03）ではリライト無しの文がお手本にいちばん近かった。
-    let naturalMain = naturalStyle ? beforeNaturalize : await naturalizeContent(
+    // ★学習の試しでもかけない。このリライトは「50〜100字・1文30字」に寄せるため、長め・箇条書きの試しの形が消えていた（10/7）
+    let naturalMain = naturalStyle || opts.learningTrial ? beforeNaturalize : await naturalizeContent(
       beforeNaturalize, personal, brandVoice, keepIdentityWords, (project as any).styleSamples || null, lengthRange,
     );
 
@@ -1805,7 +1819,7 @@ export async function generateAutoPost(
       const owner = await ownerRepetitionKeys();
       const op = rg.repeatedOpening(naturalMain, recentPosts, { owner });
       const rs = rg.repeatedSentences(naturalMain, recentPosts, { owner });
-      const idFirst = rg.identityOpeningStreak(recentPosts, tokens) && rg.identityInFirstLine(naturalMain, tokens);
+      const idFirst = opts.learningTrial?.key !== 'hook_local' && rg.identityOpeningStreak(recentPosts, tokens) && rg.identityInFirstLine(naturalMain, tokens); // ★学習の試し「1行目に地域名」はR4の対象外
       if (op || rs.length > 0 || idFirst) {
         const why = [
           op ? `- 書き出し「${op}」が直近の投稿と同じ。別の入り方（場面・問いかけ・季節・よくある質問など）にする。` : '',
@@ -1941,6 +1955,8 @@ export async function generateAutoPost(
       // 使った切り口を記録（◯✕評価と組み合わせて好み学習に使う）
       angle: angle?.id ?? null,
       hitPatternId: angle?.id === 'hit_pattern' && opts.hitPatternId ? opts.hitPatternId : null,
+      // 学習の試しの条件（集計 scripts/ops/learning-report.mts）
+      experimentKey: opts.learningTrial?.key ?? null,
       // 使った長さ条件を記録（A/Bテストの集計に使う。設定は後から変わるため投稿側に残す）
       postLength: effectiveLength,
       metaAiAskText,
@@ -2174,11 +2190,14 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           // 1日の回数（アカウント別の設定をプラン上限で頭打ち）
           let postCount = Math.min(getPostCount(eff.autoPostFrequency), maxPerDay);
           let pendingDecrement: 'deleted' | 'apology' | null = null;
+          // ★学習用アカウント（自社の Moveact 2店）の学習の枠の数（shared/learningAccounts.ts）
+          let learningN = 0;
           // ★新しいアカウントの慣らし運転（shared/accountRamp.ts）。連携7日未満は1件、14日未満は2件。
           //   2026-09-06 連携4日目・フォロワー0のアカウントが本人確認→停止になった再発防止。
           {
             const { rampForAccount } = await import('./accountRampCheck');
             const r = await rampForAccount(account as any, postCount);
+            learningN = Number(r.learning ?? 0);
             if (r.capped) { console.log(`[AutoPost] account ${account.id} ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count; }
             else if (r.extra) {
               console.log(`[AutoPost] account ${account.id} 補填: ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count;
@@ -2328,9 +2347,40 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             loopIdBefore ? await db.countAccountAutoPostsSinceId(account.id, loopIdBefore).catch(() => -1) : -1;
           // ★同じアカウントで当日補充・「今すぐ作る」が同時に動いていると、相手の投稿まで「保存済み」と数えて
           //   枠を飛ばしてしまう。同時に動いている間は数えない（作れたかは generateAutoPost の戻り値だけで見る）。
+          // ★学習の枠（2026-10-07 三上様「Moveactの店舗をもっと投稿数を増やして、リーチが取れる投稿の傾向を取れるように」）。
+          //   最後の learningN 枠を「1つの条件だけ変えた投稿」にし、時刻はその日の枠のあいだでいちばん空いている所の真ん中に置く。
+          //   当日補充では作らない（時刻を詰めると連投になる）。置けない枠は作らない（本数を減らす）。
+          let learningStart = Number.POSITIVE_INFINITY;
+          let learningTimes: Date[] = [];
+          if (!opts.fillToday && learningN > 0 && regularCount - startIndex > 0) {
+            try {
+              const { learningSlotTimes } = await import('../shared/learningAccounts');
+              const { jstDateString } = await import('../shared/accountRamp');
+              const want = Math.min(learningN, regularCount - startIndex);
+              const normal = regularCount - want;
+              const hrs = acctHours && acctHours.length > 0 ? acctHours : POSTING_HOURS;
+              const usedHours = Array.from({ length: normal }, (_, k) => {
+                const list = k >= hrs.length && hrs.length < 4 ? [...hrs, 12] : hrs;
+                return list[k % list.length];
+              });
+              const earliest = Date.now() + 10 * 60_000;
+              learningTimes = learningSlotTimes(usedHours, want, jstDateString(opts.forTomorrow ? 1 : 0))
+                .map((t) => new Date(t.getTime() + Math.floor(Math.random() * 10) * 60_000))
+                .filter((t) => t.getTime() >= earliest);
+              regularCount = normal + learningTimes.length;
+              learningStart = normal;
+              console.log(`[AutoPost] 学習の枠 account=${account.id} ${learningTimes.length}/${want}本 → ${learningTimes.map((t) => new Date(t.getTime() + JST_OFFSET_MS).toISOString().slice(11, 16)).join(' / ') || 'なし'}`);
+            } catch (e) { console.warn(`[AutoPost] 学習の枠を置けませんでした account=${account.id}: ${(e as Error)?.message}`); learningTimes = []; learningStart = Number.POSITIVE_INFINITY; regularCount = Math.max(startIndex, regularCount - learningN); }
+          }
+
           activeSlotLoops.set(account.id, (activeSlotLoops.get(account.id) ?? 0) + 1);
           try {
           for (let i = startIndex; i < regularCount; i++) {
+            const learningTrial = i >= learningStart
+              ? (await import('../shared/learningAccounts')).trialFor(account.id, i - learningStart)
+              : null;
+            const learningAt = learningTrial ? learningTimes[i - learningStart] : null;
+            if (learningTrial) console.log(`[AutoPost] 学習の試し account=${account.id} slot=${i} → ${learningTrial.key}（${learningTrial.label}）`);
             const project = pinnedProject || eligibleProjects[(dayOffset + i) % eligibleProjects.length];
             const savedBeforeSlot = await countSavedInLoop();
             const slotAlreadySaved = async (): Promise<boolean> => {
@@ -2343,7 +2393,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             let hitPatternId: number | null = null;
             try {
               const { isHitPatternSlot, businessGroupOf } = await import('../shared/hitPatterns');
-              if (!opts.fillToday && isHitPatternSlot(account.id, i, contractCount)) {
+              if (!opts.fillToday && !learningTrial && isHitPatternSlot(account.id, i, contractCount)) {
                 const { looksLikeRecruiting } = await import('../shared/recruitingPost');
                 const { pickHitPatternId } = await import('./hitPatterns');
                 hitPatternId = await pickHitPatternId(account.id, businessGroupOf((project as any).businessType, { recruiting: looksLikeRecruiting(project as any) }));
@@ -2357,7 +2407,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             try {
               const { featureForSlot } = await import('../shared/threadsFeatures');
               const day = opts.forTomorrow ? new Date(Date.now() + 86400_000) : new Date();
-              feature = !opts.fillToday && !hitPatternId ? featureForSlot(account.id, i, day) : null;
+              feature = !opts.fillToday && !hitPatternId && !learningTrial ? featureForSlot(account.id, i, day) : null;
               if (feature) console.log(`[AutoPost] Threadsの機能の枠 account=${account.id} slot=${i} → ${feature}`);
             } catch (e) { console.warn(`[AutoPost] 機能の枠を判定できませんでした account=${account.id}: ${(e as Error)?.message}`); }
 
@@ -2383,11 +2433,11 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                 eff.autoPostRequireApproval,
                 acctHours,
                 eff.postLength,
-                sameDaySlots ? sameDaySlots[i] : (opts.forTomorrow ? postingTimeOnDay(i, acctHours, 1) : null),
+                learningAt ?? (sameDaySlots ? sameDaySlots[i] : (opts.forTomorrow ? postingTimeOnDay(i, acctHours, 1) : null)),
                 hint,
                 attempt === 3,
                 false,
-                hitPatternId ? { hitPatternId } : feature ? { feature } : {},
+                learningTrial ? { learningTrial } : hitPatternId ? { hitPatternId } : feature ? { feature } : {},
               );
               if (!success && attempt < 3) console.log(`[AutoPost] user=${user.id} account=${account.id} slot=${i} 作り直し ${attempt + 1}回目${hint ? '（前回の理由を渡す）' : ''}`);
             }
@@ -2399,6 +2449,13 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             if (!success && await slotAlreadySaved()) {
               console.warn(`[AutoPost] slot=${i} は保存済みのため保証パスに進まない account=${account.id}`);
               success = true;
+            }
+            // ★学習の枠は契約の外なので、書けなければそのまま見送る（保証パス・翌日の補填に回さない）
+            if (!success && learningTrial) {
+              console.log(`[AutoPost] 学習の枠を書けず見送り account=${account.id} slot=${i}（${learningTrial.key}）`);
+              lastRejectReason.delete(rk);
+              await new Promise(r => setTimeout(r, 2000));
+              continue;
             }
             if (!success) {
               try {

@@ -47,12 +47,29 @@ export interface RampDecision {
   note: string;
   established: boolean;
   shortfall: number;
+  /** 学習用アカウントの上乗せ分（shared/learningAccounts.ts） */
+  learning?: number;
   /** 本数を変えた理由（R8：冷却を「慣らし運転」と言わないために区別する） */
   reason?: "cooldown" | "ramp" | "compensation" | "deleted" | "manual" | "apology";
 }
 
-/** そのアカウントの今日の本数（contract=契約本数） */
+/**
+ * そのアカウントの今日の本数（contract=契約本数）。
+ * ★学習用アカウント（自社の Moveact 2店・shared/learningAccounts.ts・2026-10-07 三上様指示）は、
+ *   慣らし・冷却で抑えていない日だけ、学習の枠を上乗せする。冷却中は上乗せしない（1日1件が先）。
+ */
 export async function rampForAccount(
+  account: { id: number; threadsUserId: string; accessToken: string; createdAt?: Date | string | null; extraPostsPerDay?: number | null; extraPostsUntil?: Date | string | null; extraPostsReason?: string | null },
+  contract: number,
+): Promise<RampDecision> {
+  const r = await rampForAccountBase(account, contract);
+  const { learningExtra } = await import("../shared/learningAccounts");
+  const add = learningExtra(Number(account.id), { capped: r.capped || inCooldown(account as any) });
+  if (add <= 0) return r;
+  return { ...r, count: r.count + add, extra: true, learning: add, note: [r.note, `傾向を早くつかむための学習の枠（1日＋${add}件）`].filter(Boolean).join("／") };
+}
+
+async function rampForAccountBase(
   account: { id: number; threadsUserId: string; accessToken: string; createdAt?: Date | string | null; extraPostsPerDay?: number | null; extraPostsUntil?: Date | string | null; extraPostsReason?: string | null },
   contract: number,
 ): Promise<RampDecision> {
