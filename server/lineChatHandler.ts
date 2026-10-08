@@ -1427,7 +1427,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     // ★お申し込み前の方は、はじめの設定と連携だけ（2026-10-03 三上様「フリープランは不要」）。
     //   投稿の操作（a=）・固定投稿の案（m=makepin）・コメント返信の文案（cr=）はAIで作るので動かさない。
     //   ★a= はアカウントIDとしても使われる（c=start&a=ID など）ので、投稿の操作の値だけを止める（2026-10-04 点検）
-    const POST_ACTIONS = ["ok", "okall", "alt", "rw", "rw2", "selfedit", "skip", "skipwhy", "undo", "undoall", "rate"];
+    const POST_ACTIONS = ["ok", "okall", "alt", "rw", "rw2", "selfedit", "revertedit", "skip", "skipwhy", "undo", "undoall", "rate"];
     if (POST_ACTIONS.includes(String(q.a ?? "")) || (q.cr && q.cr !== "ignore") || q.m === "makepin") return [notSubscribedReply()];
   }
 
@@ -2859,6 +2859,15 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       [{ label: "やめる", data: "m=cancel" }],
     )];
   }
+  // ── 送り返された文で差し替えた投稿を、直す前の文に戻す（applyPastedEdit）──
+  if (q.a === "revertedit" && q.i) {
+    const post: any = await ownedPost(user.id, Number(q.i));
+    if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
+    if (post.status === "posted") return [textWithQuick("この投稿はすでに公開されているため、戻せません。", MENU_HINT)];
+    if (!post.originalContent) return [textWithQuick("直す前の文が残っていないため、戻せませんでした。", MENU_HINT)];
+    await db.updateScheduledPost(post.id, { postContent: post.originalContent, editedByUserAt: null } as any);
+    return [{ type: "text", text: "直す前の文に戻しました。" }, { type: "text", text: String(post.originalContent) }, textWithQuick("このままでよろしければ、何もしなくて大丈夫です。", MENU_HINT)];
+  }
   if (q.a === "selfedit" && q.i) {
     const post = await ownedPost(user.id, Number(q.i));
     if (!post) return [{ type: "text", text: "その投稿が見つかりませんでした。" }];
@@ -3481,8 +3490,14 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   //   （投稿カードの本文をコピーして、ボタンを押さずに送り返される）。
   //   「投稿の材料をお預かりします」ではなく、その投稿に対してできることをお出しする。
   {
-    const own = await db.findOwnRecentPostByContent(user.id, t);
-    if (own) return replyToOwnPost(own);
+    // ★直して送り返された文は、ボタンを押していなくても、その投稿の修正として反映する（2026-10-08 プレステージ様：
+    //   1行目を直して送られた文が「投稿の材料」として預かられ、投稿は直す前の文のまま公開された）
+    const near = await db.findOwnPostBySimilarity(user.id, t).catch(() => null);
+    if (near && !near.identical && (near.post.status === "awaiting_approval" || near.post.status === "pending")) {
+      return await applyPastedEdit(user.id, near.post, t);
+    }
+    const own = (near?.post as any) ?? await db.findOwnRecentPostByContent(user.id, t);
+    if (own) return replyToOwnPost(own, near ? !near.identical : false);
   }
 
   // ★「〇〇という言い方はやめてほしい」は、NGワードのご登録で解決する。
@@ -3800,8 +3815,55 @@ async function stashMaterial(lineUserId: string, userId: number, text: string): 
  *   ・確認待ち：そのまま公開／一部修正／書き直す／見送る
  *   ・公開ずみ：こちらからは直せないことをお伝えし、◯✕のご評価だけお願いする
  */
-function replyToOwnPost(post: any): unknown[] {
+/**
+ * 送り返された文で、その投稿を差し替える（self_edit と同じ記録の仕方。「直す前」を残して学習に使う）。
+ * 「元に戻す」で直す前の文に戻せる。
+ */
+async function applyPastedEdit(userId: number, post: any, text: string): Promise<unknown[]> {
+  const next = text.trim();
+  if (Array.from(next).length > 500) {
+    return [{ type: "text", text: `直した文が${Array.from(next).length}字あります。Threadsは1投稿500字までのため、${Array.from(next).length - 500}字ほど削って、もう一度お送りください。` }];
+  }
   const id = Number(post.id);
+  await db.updateScheduledPost(id, {
+    postContent: next,
+    ...(post.originalContent ? {} : { originalContent: post.postContent || null }),
+    editedByUserAt: new Date(),
+  } as any);
+  console.log(`[LineChat] 送り返された文で投稿を差し替え user=${userId} post=${id}`);
+  const { EDIT_LEARN_NOTE } = await import("@shared/postPreference");
+  const when = post.scheduledAt ? (() => {
+    const d = new Date(new Date(post.scheduledAt).getTime() + 9 * 3600_000);
+    return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+  })() : "";
+  return [
+    { type: "text", text: `お送りいただいた文で、${when ? `${when}公開予定の` : ""}投稿を直しました。
+${EDIT_LEARN_NOTE}` },
+    { type: "text", text: next },
+    textWithQuick(
+      post.status === "awaiting_approval"
+        ? "この内容でよろしければ「これで投稿する」を押してください（押さなくても、見送らなければ予定の時間にこの内容で公開されます）。"
+        : "予定の時間に、この内容で公開されます。",
+      [
+        ...(post.status === "awaiting_approval" ? [{ label: "これで投稿する", data: `a=ok&i=${id}` }] : []),
+        { label: "直す前に戻す", data: `a=revertedit&i=${id}` },
+        { label: "見送る", data: `a=skip&i=${id}` },
+        ...MENU_HINT,
+      ],
+    ),
+  ];
+}
+
+function replyToOwnPost(post: any, edited = false): unknown[] {
+  const id = Number(post.id);
+  if (post.status === "posted" && edited) {
+    return [textWithQuick(
+      "お送りいただいた文は、すでにThreadsに公開された投稿を直したもののようです。\n" +
+      "公開後の投稿は、こちらからは差し替えられません。直した文で出し直す場合は、Threadsアプリでその投稿の右上の「…」から削除し、直した文をアプリから投稿してください。\n" +
+      "これから公開される投稿は、文を直して送っていただければ、そのまま差し替えます。",
+      [{ label: "担当者に聞く", data: "m=staff" }, ...MENU_HINT],
+    )];
+  }
   const rate = [
     { label: "◯ 自分らしい", data: `a=rate&i=${id}&v=good` },
     { label: "✕ 違う", data: `a=rate&i=${id}&v=bad` },

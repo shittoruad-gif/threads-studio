@@ -681,6 +681,25 @@ export async function findOwnRecentPostByContent(userId: number, text: string): 
 }
 
 /**
+ * 送られた文章に「いちばん似ている」最近の投稿（直して送り返された場合を拾う・shared/postMatch.ts・2026-10-08）。
+ * 頭の30字の一致（findOwnRecentPostByContent）では、1行目を直された文を拾えなかった。
+ */
+export async function findOwnPostBySimilarity(userId: number, text: string): Promise<{ post: ScheduledPost; score: number; identical: boolean } | null> {
+  const database = await getDb();
+  if (!database) return null;
+  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const rows = await database.select()
+    .from(scheduledPosts)
+    .where(and(eq(scheduledPosts.userId, userId), gte(scheduledPosts.createdAt, since)))
+    .orderBy(desc(scheduledPosts.createdAt))
+    .limit(120);
+  const { bestPastedMatch } = await import("../shared/postMatch");
+  // 公開前の投稿を先に見る（同じくらい似ていれば、直したい相手はこれから出る投稿）
+  const open = rows.filter((r: any) => r.status === "awaiting_approval" || r.status === "pending");
+  return (bestPastedMatch(text, open as any[]) ?? bestPastedMatch(text, rows as any[])) as any;
+}
+
+/**
  * LINE問い合わせ計測用：公開済みの自動メイン投稿（追い投稿=返信は除く）を古い順で返す。
  * 各投稿の合言葉は shared/inquiryKeywords.ts の inquiryKeywordForPost(id) で決まる。
  */
