@@ -808,12 +808,14 @@ export async function generateAutoPost(
     let ownerRemovedFirm: string[] = [];
     let ownerLikesQuestion = false;
     let ownerAfterTexts: string[] = [];
+    let ownerEditPairs: Array<{ before: string; after: string }> = [];
     try {
       const { buildPreferenceNote } = await import('../shared/postPreference');
       const { getEditLessons } = await import('./editLessons');
       const { buildEditLessonsNote, EDIT_LESSONS } = await import('../shared/editLessons');
       const lessons = await getEditLessons(userId, threadsAccountId);
       ownerEditCount = lessons.pairs.length;
+      ownerEditPairs = lessons.pairs;
       ownerAdded = (await import('../shared/editLessons')).ownerAddedRuns(lessons.pairs);
       ownerAfterTexts = lessons.pairs.slice(0, 3).map((p) => p.after);
       // お手本（直した後の文）も、このアカウントの手直しだけから作る（以前はお客様単位で別のアカウントの直しが混ざっていた）
@@ -938,7 +940,9 @@ export async function generateAutoPost(
       if (bad.length > 0) {
         const ft = await import('../shared/freshTopic');
         const av = ft.surveyAvoidWords(bad, items.filter((i) => i.rating === 'good').map((i) => i.content),
-          [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title]);
+          [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title],
+          // ★ご本人が直した後の文に自分で残している言葉は✕の題材にしない（10/8 acc22「未経験」「成長」で枠が欠けた）
+          ownerEditPairs);
         if (av.labelWords.length > 0 || av.contentWords.length > 0) {
           surveyAvoid = av;
           surveyAvoidNote = ft.buildSurveyAvoidNote(av);
@@ -992,7 +996,9 @@ export async function generateAutoPost(
           // 毎回出てよい言葉（店名・地名・業種・対象のお客様）は数えない
           protect: [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title],
           index: postTypeIndex * PURPOSES.length + purposeIndex,
-          avoid: [...ngWords, ...stickyAvoid],
+          // ★ご本人が3回以上消している言葉を含む材料は、今日の主題にしない（10/8 #25：4回消している「文化勲章の授賞式」の材料が
+          //   主題に選ばれ、「主題を書け」と「この言葉は書かない」がぶつかっていた）。末尾の助詞は外して材料と照らす
+          avoid: [...ngWords, ...stickyAvoid, ...ownerRemovedFirm.map((w) => w.replace(/[のへでをにはがと]+$/, '')).filter((w) => w.length >= 2)],
         });
         if (plan.overused.length > 0 || (plan.frames?.length ?? 0) > 0) {
           freshPlan = plan;

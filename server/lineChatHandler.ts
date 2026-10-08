@@ -3871,8 +3871,8 @@ function replyToOwnPost(post: any, edited = false): unknown[] {
   if (post.status === "awaiting_approval") {
     return [textWithQuick(
       "この文章は、いま確認待ちの投稿と同じ内容です。\n" +
-      "文章を直してお送りいただく場合は、先に「一部修正」を押してから送り返してください" +
-      "（ボタンを押さずに送っても、投稿は差し替わりません）。",
+      // ★10/8 から、直した文はボタンなしで送っても差し替える（applyPastedEdit）。「差し替わりません」と案内しない
+      "直したい所があれば、その部分を直した文をそのままお送りください。この投稿を差し替えます。",
       [
         { label: "これで投稿する", data: `a=ok&i=${id}` },
         { label: "一部修正", data: `a=selfedit&i=${id}` },

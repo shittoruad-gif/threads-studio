@@ -8,7 +8,7 @@
 import { describe, it, expect } from "vitest";
 import {
   planFreshTopic, overusedHits, dropOverusedLines, buildFreshTopicNote, saidSameContent, topicWordsOf,
-  framesOf, dropFramedSentences, surveyAvoidWords, hitsSurveyAvoid, buildSurveyAvoidNote, hasUnfilledPlaceholder,
+  framesOf, dropFramedSentences, surveyAvoidWords, hitsSurveyAvoid, buildSurveyAvoidNote, hasUnfilledPlaceholder, ownerKeepsWord,
 } from "@shared/freshTopic";
 
 const RECENT: string[] = [
@@ -222,5 +222,34 @@ describe("◯✕アンケートで✕が付いた題材", () => {
   it("プロンプトに題名が入る", () => {
     expect(buildSurveyAvoidNote(av)).toContain("「子育てと両立する働き方」");
     expect(buildSurveyAvoidNote(null)).toBe("");
+  });
+});
+
+describe("ご本人が直した後の文に残している言葉は✕の題材にしない（10/8 acc22）", () => {
+  const bad = [{ label: "季節ネタ", content: "未経験から成長できる職場です。\nスタッフが応援します。秋風が心地いい季節。" }];
+  // 10/8 #2871 の手直し（1行目だけ直した）と同じ形
+  const edits = [
+    { before: "未経験で入社。3ヶ月の研修で、本当に指名もらえる？\nプレステージは未経験者が8割以上。", after: "未経験で入社。不安もたくさんありますよね。\nプレステージは未経験者が8割以上。" },
+    { before: "スタッフ同士で成長できる職場です。", after: "一人ひとりが成長できる職場です。未経験でも大丈夫。" },
+    { before: "スタッフが優しく教えます。", after: "先輩が優しく教えます。" },
+    { before: "スタッフの研修があります。", after: "研修があります。" },
+    { before: "技術は後からついてきます。", after: "毎日の練習で成長を実感できます。" },
+  ];
+  const av = surveyAvoidWords(bad, [], ["サンプルサロン"], edits);
+
+  it("ご本人が書き残す「未経験」「成長」は外さない", () => {
+    expect([...av.labelWords, ...av.contentWords]).not.toContain("未経験");
+    expect([...av.labelWords, ...av.contentWords]).not.toContain("成長");
+    expect(hitsSurveyAvoid("スタッフと一緒に、未経験から成長。", av)).toEqual([]);
+  });
+
+  it("ご本人が消している「スタッフ」と、ご本人が書かない「秋風」は✕のまま", () => {
+    expect(av.contentWords).toEqual(expect.arrayContaining(["スタッフ", "秋風"]));
+    expect(ownerKeepsWord(edits, "スタッフ")).toBe(false);
+    expect(hitsSurveyAvoid("秋風が心地いい季節、スタッフで紅葉狩り。", av).length).toBeGreaterThan(0);
+  });
+
+  it("手直しが無ければ今までどおり", () => {
+    expect(surveyAvoidWords(bad, [], ["サンプルサロン"]).contentWords).toContain("未経験");
   });
 });

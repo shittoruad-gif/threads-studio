@@ -283,10 +283,11 @@ export function surveyAvoidWords(
   bad: ReadonlyArray<{ label?: string | null; content?: string | null }>,
   goodContents: readonly string[],
   protect: readonly (string | null | undefined)[],
+  ownerEdits: ReadonlyArray<{ before: string; after: string }> = [],
 ): SurveyAvoid {
   const good = new Set(goodContents.flatMap((c) => topicWordsOf(c)));
   const pw = protectWordsOf(protect);
-  const keep = (w: string) => !good.has(w) && !pw.some((p) => p.includes(w) || w.includes(p));
+  const keep = (w: string) => !good.has(w) && !ownerKeepsWord(ownerEdits, w) && !pw.some((p) => p.includes(w) || w.includes(p));
   const labelWords = new Set<string>();
   const contentWords = new Set<string>();
   for (const b of bad) {
@@ -298,6 +299,19 @@ export function surveyAvoidWords(
     contentWords: Array.from(contentWords).filter((w) => !labelWords.has(w)),
     labels: bad.map((b) => String(b.label ?? "").trim()).filter(Boolean),
   };
+}
+
+/**
+ * ご本人が手直しした後の文に自分で残している言葉（2本以上に出て、直す前の半分以上が残っているもの）。
+ * ★10/8 プレステージ様 acc22：✕の題材の言葉に「未経験」「成長」が入り、ご本人が直した後の文25本中9本・5本に
+ *   ある言葉なのに、3枠目が作り直し3回＋保証パス3回とも「✕の題材」で落ちて投稿が欠けた。
+ *   ご本人が書き残す言葉は、お店の主題であって✕の題材ではない。ご本人が消している言葉（「スタッフ」直す前7→後3）は残す。
+ */
+export function ownerKeepsWord(edits: ReadonlyArray<{ before: string; after: string }>, word: string): boolean {
+  if (edits.length === 0) return false;
+  const after = edits.filter((e) => norm(e.after).includes(word)).length;
+  const before = edits.filter((e) => norm(e.before).includes(word)).length;
+  return after >= 2 && after * 2 >= before;
 }
 
 /** その文が✕の題材に当たっているか（題名の言葉1つ、または本文の言葉2つ） */

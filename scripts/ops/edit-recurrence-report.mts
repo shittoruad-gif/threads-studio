@@ -42,7 +42,9 @@ for (const x of accts) {
   if (VERIFY && (ONLY.length === 0 || ONLY.includes(Number(x.a)))) {
     const { generateAutoPost } = await import('../../server/autoPostScheduler');
     const acc: any = await db.getThreadsAccountById(Number(x.a));
-    const project = acc?.defaultProjectId ? await db.getProjectById(acc.defaultProjectId) : null;
+    // 紐付けの無い1アカウントの方は、本番と同じくご本人のお店の情報で作る（10/8 #17 がとばされていた）
+    const project = acc?.defaultProjectId ? await db.getProjectById(acc.defaultProjectId)
+      : acc ? ((await db.getUserProjects(acc.userId)) as any[])[0] ?? null : null;
     if (!acc || !project) { console.log('  試し生成：お店の情報が無いためとばす'); continue; }
     const made: string[] = [];
     for (let k = 0; k < 2; k++) {
