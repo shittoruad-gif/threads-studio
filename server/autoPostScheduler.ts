@@ -789,20 +789,35 @@ export async function generateAutoPost(
       try {
         const { ownerKeys } = await import('../shared/repetitionGuard');
         const { splitStyleSamples } = await import('../shared/styleTraits');
-        const edits = await db.getUserEditedPosts(userId, 20).catch(() => []);
+        // ★このアカウントの手直しだけ（別のアカウントの手直しを混ぜない・2026-10-08）
+        const { getAccountEditPairs } = await import('./editLessons');
+        const { pairs: editPairs } = await getAccountEditPairs(userId, threadsAccountId, 20).catch(() => ({ pairs: [] as Array<{ before: string; after: string }>, latest: '' }));
         ownerKeysCache = ownerKeys([
-          ...edits.map((e) => String(e.postContent ?? '')),
+          ...editPairs.map((e) => e.after),
           ...splitStyleSamples((project as any).styleSamples || null),
         ]);
       } catch { ownerKeysCache = { openings: new Set(), sentences: new Set() }; }
       return ownerKeysCache;
     };
     let editPreferenceNote = '';
+    // ★毎回直しているところ（shared/editLessons.ts・2026-10-08 クレーム「訂正しても毎回同じ所を訂正しとる」）。
+    //   プロンプトの最後に置き、手直しが3本以上あるアカウントは、短く崩す書き直し（naturalizeContent）をかけない。
+    let editLessonsNote = '';
+    let ownerEditCount = 0;
+    let ownerAdded: string[] = [];
+    let ownerAfterTexts: string[] = [];
     try {
       const { buildPreferenceNote } = await import('../shared/postPreference');
-      const edits = await db.getUserEditedPosts(userId, 5);
-      editPreferenceNote = buildPreferenceNote(edits);
-      if (editPreferenceNote) console.log(`[AutoPost] 手直しの好みを反映 userId=${userId} edits=${edits.length}`);
+      const { getEditLessons } = await import('./editLessons');
+      const { buildEditLessonsNote, EDIT_LESSONS } = await import('../shared/editLessons');
+      const lessons = await getEditLessons(userId, threadsAccountId);
+      ownerEditCount = lessons.pairs.length;
+      ownerAdded = (await import('../shared/editLessons')).ownerAddedRuns(lessons.pairs);
+      ownerAfterTexts = lessons.pairs.slice(0, 3).map((p) => p.after);
+      // お手本（直した後の文）も、このアカウントの手直しだけから作る（以前はお客様単位で別のアカウントの直しが混ざっていた）
+      editPreferenceNote = buildPreferenceNote(lessons.pairs.slice(0, 5).map((p) => ({ originalContent: p.before, postContent: p.after })));
+      if (lessons.pairs.length >= EDIT_LESSONS.minPairs) editLessonsNote = buildEditLessonsNote(lessons.rules, lessons.pairs);
+      if (editPreferenceNote) console.log(`[AutoPost] 手直しの好みを反映 userId=${userId} account=${threadsAccountId} edits=${lessons.pairs.length} 決まり${lessons.rules.length}件${lessons.rules.length ? `：${lessons.rules.slice(0, 3).join('／').slice(0, 160)}` : ''}`);
     } catch (e) { console.warn(`[AutoPost] 手直しの好みの反映をとばしました: ${(e as Error)?.message}`); }
 
     // ★生成のときにも「この店を指す言葉」を渡す（2026-09-10）。
@@ -1248,6 +1263,8 @@ export async function generateAutoPost(
           + (looksLikeRecruiting(project) ? RECRUITING_POST_ADDENDUM : '')
           // ★個人モードの上書きは最末尾（末尾の指示が最も遵守されやすい）
           + (personal ? personalModePromptOverride() : '')
+          // ★毎回直しているところ（2026-10-08）。長さ・改行の最終指示より後ろ＝より優先
+          + editLessonsNote
           // ★学習の試し（shared/learningAccounts.ts）は最末尾。途中に置くと、後ろの「切り口（最優先）」「長さ」に上書きされ、
           //   10/7 の試しで「1行目に数字」に数字が無い・「箇条書き」に箇条書きが無い投稿になっていた。
           + (opts.learningTrial ? `\n\n【今回の試し（ここまでのすべての指示より優先・厳守）】\n- ${opts.learningTrial.note}\n- 上の切り口・長さ・書き出しの指示と食い違うところは、この試しに合わせる。試すのはこの1点だけで、それ以外はいつもどおり。\n- 作り話・効果の断定・登録に無い事実・価格の禁止は変わらない。` : ''),
@@ -1326,7 +1343,10 @@ export async function generateAutoPost(
     // ★自然な書き方モードでは、短く崩すリライト（1文30字・1文1行）をかけない。
     //   試作（2026-10-03）ではリライト無しの文がお手本にいちばん近かった。
     // ★学習の試しでもかけない。このリライトは「50〜100字・1文30字」に寄せるため、長め・箇条書きの試しの形が消えていた（10/7）
-    let naturalMain = naturalStyle || opts.learningTrial ? beforeNaturalize : await naturalizeContent(
+    // ★手直しが3本以上あるアカウントでもかけない。この書き直しが、ご本人の改行・【】・💡を毎回消していた（2026-10-08）
+    const { EDIT_LESSONS: EL } = await import('../shared/editLessons');
+    const ownerStyleKnown = ownerEditCount >= EL.minPairs;
+    let naturalMain = naturalStyle || opts.learningTrial || ownerStyleKnown ? beforeNaturalize : await naturalizeContent(
       beforeNaturalize, personal, brandVoice, keepIdentityWords, (project as any).styleSamples || null, lengthRange,
     );
 
@@ -1575,7 +1595,8 @@ export async function generateAutoPost(
       const { reviewNaturalness, NATURALNESS_MIN_SCORE } = await import('./naturalnessReview');
       const rv = await reviewNaturalness(naturalMain, {
         brandVoice, businessType: project.businessType, storeName: (project as any).storeName,
-        styleSamples: styleSamplesForToday || null, identityHint: identityHint || null,
+        // ★手直しした文も「この方の理想の投稿」として渡す（途中の改行・【】・絵文字を減点しない・2026-10-08）
+        styleSamples: [styleSamplesForToday || '', ...ownerAfterTexts].filter(Boolean).join('\n---\n') || null, identityHint: identityHint || null,
       });
       // ★最後の作り直しでは3点を通す（2026-09-11）。9/11朝は35枠中19枠が失敗し、その3回目の理由の
       //   半分以上が「3/5」だった（例：「土浦で11年。／早期回復をサポートしています。」）。
@@ -1700,7 +1721,9 @@ export async function generateAutoPost(
       //   みらい整体院様で「金沢市のみらい整体院接骨院」が使い回し扱いになり、5枠すべて落ちた。
       let idWords: string[] = [];
       try { const { identityTokens } = await import('../shared/identityGuard'); idWords = identityTokens(project).filter((w) => Array.from(w).length >= 2); } catch { idWords = []; }
-      const strip = (t: string) => idWords.reduce((acc, w) => acc.split(w).join(' '), String(t));
+      // ★ご本人が手直しで書き足した言葉も外す（2026-10-08：教えた言い回しが使い回し扱いで作り直しになっていた）
+      const stripWords = [...idWords, ...ownerAdded].sort((x, y) => y.length - x.length);
+      const strip = (t: string) => stripWords.reduce((acc, w) => acc.split(w).join(' '), String(t));
       const dup = findRepeatedPhrase(strip(naturalMain), recentPosts.map(strip));
       // ★書き直した回数を残す（2026-09-18）。お客様に追記をお願いするとき、
       //   「なぜ必要か」を数えた事実で示すために使う（shared/materialDepth.ts）。
