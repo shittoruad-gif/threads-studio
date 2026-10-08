@@ -17,6 +17,11 @@ const norm = (s: string) =>
 const REGION_WORDS = ["沖縄", "北海道", "九州", "関西", "関東", "東北", "四国", "地元", "県外", "出身"];
 
 export interface IdentitySource {
+  /**
+   * ご本人が手直しで何度も消している言葉（shared/editLessons.ts の recurringEdits「消す」）。
+   * これに当たる「この店を指す言葉」は、入れなくてよい・入れさせない（2026-10-08：ご本人が毎回消す「八千代市」を検査が毎回求めていた）。
+   */
+  __ownerRemoved?: readonly string[] | null;
   storeName?: string | null;
   area?: string | null;
   localTerms?: string | null;
@@ -37,7 +42,9 @@ export function identityTokens(p: IdentitySource): string[] {
   add(p.storeName);
 
   // 地域：都道府県は弱すぎるので除き、市区町村・町名を入れる（「八千代市」「八千代」「勝田台」）
-  const area = norm(String(p.area || ""));
+  // 「なし」「未定」などは地域ではない（2026-10-08：地域欄「なし」が店を指す言葉として扱われ、署名「なしより。」が付いた）
+  const areaRaw = norm(String(p.area || ""));
+  const area = /^(なし|無し|未定|特になし|-|ー|―|オンライン.*|全国.*)$/.test(areaRaw) ? "" : areaRaw;
   const parts = area.split(/(?<=[都道府県市区町村])/).filter(Boolean);
   for (const part of parts) {
     if (/[都道府県]$/.test(part) && parts.length > 1) continue;
@@ -70,7 +77,8 @@ export function identityTokens(p: IdentitySource): string[] {
   const idText = norm([p.usp, cr?.originStory, cr?.brandVoice].filter(Boolean).join("\n"));
   for (const w of REGION_WORDS) if (idText.includes(w) && w !== "出身") add(w);
 
-  return Array.from(out);
+  const removed = (p.__ownerRemoved ?? []).map((r) => norm(String(r || ""))).filter((r) => Array.from(r).length >= 2);
+  return Array.from(out).filter((t) => !removed.some((r) => r.includes(t) || t.includes(r)));
 }
 
 export interface IdentityVerdict {

@@ -95,6 +95,25 @@ export function buildEditLessonsNote(rules: readonly string[], pairs: readonly E
   return lines.join("\n");
 }
 
+/** 文字単位の差分（最長共通部分列）で、after にだけある連続した文字のまとまりを返す */
+function insertedSegments(beforeRaw: string, afterRaw: string): string[] {
+  const a = Array.from(String(beforeRaw || "").replace(/[\s　]/g, "")).slice(0, 700);
+  const b = Array.from(String(afterRaw || "").replace(/[\s　]/g, "")).slice(0, 700);
+  const n = a.length, m = b.length;
+  const dp: Uint16Array[] = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const segs: string[] = [];
+  let cur = "";
+  let i = 0, j = 0;
+  while (j < m) {
+    if (i < n && a[i] === b[j]) { if (cur) { segs.push(cur); cur = ""; } i++; j++; }
+    else if (i < n && dp[i + 1][j] >= dp[i][j + 1]) { i++; }
+    else { cur += b[j]; j++; }
+  }
+  if (cur) segs.push(cur);
+  return segs;
+}
+
 /**
  * ご本人が手直しで書き足した言葉（直した後にあって、直す前に無いまとまり）。
  * 「直近の投稿と同じ言い回し」の検査では、これを比べる前に外す（ご本人が毎回入れたい言葉なので）。
@@ -102,21 +121,56 @@ export function buildEditLessonsNote(rules: readonly string[], pairs: readonly E
  */
 export function ownerAddedRuns(pairs: readonly EditPair[], minLen = 4): string[] {
   const out = new Set<string>();
-  const n = 3;
   for (const p of pairs) {
-    const before = String(p.before || "").replace(/[\s　]/g, "");
-    const after = Array.from(String(p.after || "").replace(/[\s　]/g, ""));
-    const inBefore = (i: number) => before.includes(after.slice(i, i + n).join(""));
-    let start = -1;
-    for (let i = 0; i <= after.length; i++) {
-      const added = i + n <= after.length && !inBefore(i);
-      if (added && start < 0) start = i;
-      if (!added && start >= 0) {
-        const run = after.slice(start, Math.min(after.length, i + n - 1)).join("").replace(/^[、。！？!?…・]+|[、。！？!?…・]+$/g, "");
-        if (Array.from(run).length >= minLen) out.add(run);
-        start = -1;
+    for (const seg of insertedSegments(p.before, p.after)) {
+      const run = seg.replace(/^[、。！？!?…・]+|[、。！？!?…・]+$/g, "");
+      if (Array.from(run).length >= minLen) out.add(run);
+    }
+  }
+  return Array.from(out).sort((x, y) => y.length - x.length).slice(0, 40);
+}
+
+/** 2つの文字列に共通する、いちばん長い連続部分の長さ */
+function commonRunLength(x: string, y: string): number {
+  const a = Array.from(x), b = Array.from(y);
+  let best = 0;
+  const prev = new Uint16Array(b.length + 1);
+  for (let i = 1; i <= a.length; i++) {
+    let diag = 0;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = prev[j];
+      prev[j] = a[i - 1] === b[j - 1] ? diag + 1 : 0;
+      if (prev[j] > best) best = prev[j];
+      diag = tmp;
+    }
+  }
+  return best;
+}
+
+/** ご本人が手直しで消した言葉（直す前にあって、直した後に無いまとまり）。ownerAddedRuns の逆 */
+export function ownerRemovedRuns(pairs: readonly EditPair[], minLen = 4): string[] {
+  return ownerAddedRuns(pairs.map((p) => ({ before: p.after, after: p.before })), minLen);
+}
+
+export interface RecurringEdit { kind: "足す" | "消す"; text: string; count: number }
+
+/**
+ * 同じ直しのくり返し（夜間整備の見張り・2026-10-08 三上様「こういうのを毎晩のメンテナンスで改善しないと意味なくない？」）。
+ * 手直しの組ごとに「書き足した言葉」「消した言葉」を出し、minCount 組以上で同じ（片方がもう片方を含む）ものを数える。
+ */
+export function recurringEdits(pairs: readonly EditPair[], minCount = 3): RecurringEdit[] {
+  const out: RecurringEdit[] = [];
+  for (const kind of ["足す", "消す"] as const) {
+    const lists = pairs.map((p) => (kind === "足す" ? ownerAddedRuns([p], 3) : ownerRemovedRuns([p], 3)));
+    const same = (x: string, y: string) => commonRunLength(x, y) >= Math.min(4, Array.from(x).length, Array.from(y).length);
+    const counted: string[] = [];
+    for (const runs of lists) {
+      for (const r of runs) {
+        if (counted.some((c) => same(c, r))) continue;
+        const count = lists.filter((l) => l.some((x) => same(x, r))).length;
+        if (count >= minCount) { out.push({ kind, text: r, count }); counted.push(r); }
       }
     }
   }
-  return Array.from(out).sort((a, b) => b.length - a.length).slice(0, 40);
+  return out.sort((a, b) => b.count - a.count).slice(0, 8);
 }

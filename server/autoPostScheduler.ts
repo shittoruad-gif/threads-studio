@@ -805,6 +805,8 @@ export async function generateAutoPost(
     let editLessonsNote = '';
     let ownerEditCount = 0;
     let ownerAdded: string[] = [];
+    let ownerRemovedFirm: string[] = [];
+    let ownerLikesQuestion = false;
     let ownerAfterTexts: string[] = [];
     try {
       const { buildPreferenceNote } = await import('../shared/postPreference');
@@ -817,6 +819,15 @@ export async function generateAutoPost(
       // お手本（直した後の文）も、このアカウントの手直しだけから作る（以前はお客様単位で別のアカウントの直しが混ざっていた）
       editPreferenceNote = buildPreferenceNote(lessons.pairs.slice(0, 5).map((p) => ({ originalContent: p.before, postContent: p.after })));
       if (lessons.pairs.length >= EDIT_LESSONS.minPairs) editLessonsNote = buildEditLessonsNote(lessons.rules, lessons.pairs);
+      // ★3回以上消している言葉は「書かない」と言い切る。店を指す言葉の検査（identityGuard）にも求めさせない（2026-10-08）
+      const { recurringEdits } = await import('../shared/editLessons');
+      ownerRemovedFirm = recurringEdits(lessons.pairs).filter((e) => e.kind === '消す').map((e) => e.text);
+      if (ownerRemovedFirm.length > 0) {
+        project = { ...project, __ownerRemoved: ownerRemovedFirm };
+        editLessonsNote += `\n\n【★この方が3回以上消している言葉（使わない・厳守）】\n${ownerRemovedFirm.map((w) => `- 「${w}」`).join('\n')}\n- この言葉（と、この言葉を少し変えただけの言い方）は書かない。お店を指す言葉は、ほかの言葉（店名・地名のうち消されていないもの）で足りる。`;
+      }
+      // ★直した文の半分以上を問いかけで締めている方は、問いかけの締めを止めない（10/8 ゲームのアカウント：毎回「一緒にどう？」で締めていた）
+      ownerLikesQuestion = lessons.pairs.length >= 3 && lessons.pairs.filter((p) => /[？?]$/.test(p.after.trim().replace(/[\s\uFE0F\u200D]+$/g, '').replace(/(?:[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF])+$/g, '').trim())).length * 2 >= lessons.pairs.length;
       if (editPreferenceNote) console.log(`[AutoPost] 手直しの好みを反映 userId=${userId} account=${threadsAccountId} edits=${lessons.pairs.length} 決まり${lessons.rules.length}件${lessons.rules.length ? `：${lessons.rules.slice(0, 3).join('／').slice(0, 160)}` : ''}`);
     } catch (e) { console.warn(`[AutoPost] 手直しの好みの反映をとばしました: ${(e as Error)?.message}`); }
 
@@ -1003,6 +1014,10 @@ export async function generateAutoPost(
       // ★自然な書き方モードの方は、毎回問いかけで締めない（shared/naturalStyle.ts・2026-10-03 試し生成で4本中3本が「？」締め）
       if (!opts.feature && (await import('../shared/naturalStyle')).isNaturalStyleUser(userId)) noQuestionEnding = true;
     } catch { noQuestionEnding = false; }
+    if (ownerLikesQuestion && noQuestionEnding) {
+      noQuestionEnding = false;
+      console.log(`[AutoPost] ご本人が直した文の多くが問いかけで終わっているため、問いかけの締めを止めない account=${threadsAccountId}`);
+    }
 
     // ★ネタ帳（2026-09-30 三上様「解決できる仕組みを考えて作って」・shared/materialLedger.ts）。
     //   お客様が教えてくださった話・よくある質問を1件ずつ持ち、1本の投稿には使える状態のネタを1件だけ渡す。
@@ -1456,8 +1471,13 @@ export async function generateAutoPost(
           //   9/10 香取様（ライト・1日1件）は3回とも「この店を指す言葉が無い」で落ち、その日の投稿がゼロになった。
           //   足すのは登録どおりの地名と店名だけ（事実以外は足さない）。
           const areaShort = String(project.area || '').replace(/^(東京都|北海道|(?:京都|大阪)府|[一-龠]{2,3}県)/, '').trim();
-          const sig = [areaShort, project.storeName].filter(Boolean).join('の');
-          naturalMain = `${naturalMain.trim()}\n\n${sig}より。`;
+          // ご本人が何度も消している地名・店名は署名にも入れない（2026-10-08）
+          const removedNorm = ownerRemovedFirm.map((w) => w.replace(/\s/g, ''));
+          const okWord = (w: string) => !removedNorm.some((r) => r.includes(w) || w.includes(r));
+          // 「なし」「未定」のような地域欄は地名ではない（10/8 試しで「なしより。」が付いた）
+          const placeholder = (w: string) => /^(なし|無し|未定|特になし|-|ー|―|オンライン.*|全国.*)$/.test(w.trim());
+          const sig = [areaShort, project.storeName].filter((w): w is string => !!w && !placeholder(String(w)) && okWord(String(w))).join('の');
+          if (sig) naturalMain = `${naturalMain.trim()}\n\n${sig}より。`;
           console.warn(`[AutoPost] identityGuard: 最後の作り直しのため署名「${sig}」を足して公開へ userId=${userId} projectId=${project.id}`);
         } else {
           console.warn(`[AutoPost] identityGuard: この店を指す言葉が無い → 作り直し userId=${userId} projectId=${project.id}`);

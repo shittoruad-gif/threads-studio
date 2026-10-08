@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildEditLessonsPrompt, parseEditLessons, buildEditLessonsNote, EDIT_LESSONS, ownerAddedRuns } from "../shared/editLessons";
+import { buildEditLessonsPrompt, parseEditLessons, buildEditLessonsNote, EDIT_LESSONS, ownerAddedRuns, recurringEdits } from "../shared/editLessons";
 
 // 2026-10-08 クレーム「ほんまにAI学習しとる？訂正しても毎回同じ所を訂正しとる感じがする」
 const pairs = [
@@ -44,13 +44,44 @@ describe("毎回直しているところの決まり", () => {
 describe("ご本人が書き足した言葉", () => {
   it("直した後にだけある言葉を取り出す（使い回しの検査から外すため）", () => {
     const runs = ownerAddedRuns(pairs);
-    expect(runs.some((r) => r.includes("接骨院の僕"))).toBe(true);
-    expect(runs.some((r) => r.includes("で接骨院をしている僕"))).toBe(true);
+    expect(runs.some((r) => r.includes("接骨院の"))).toBe(true);
+    expect(runs.some((r) => r.includes("で接骨院をしている"))).toBe(true);
     expect(runs.some((r) => r.includes("【身体の使い方】"))).toBe(true);
     // 元からあった言葉は入らない
     expect(runs.some((r) => r === "伏見区の")).toBe(false);
   });
   it("直していなければ何も無い", () => {
     expect(ownerAddedRuns([{ before: "同じ文です。", after: "同じ文です。" }])).toEqual([]);
+  });
+});
+
+describe("同じ直しのくり返し（夜間整備の見張り）", () => {
+  it("3組以上で同じ言葉を書き足していれば拾う。1〜2回の直しは拾わない", () => {
+    const ps = [
+      { before: "伏見区の僕です。腰の話。", after: "伏見区で接骨院をしている僕です。腰の話。" },
+      { before: "京都市の僕が気づいたこと。", after: "京都市で接骨院をしている僕が気づいたこと。" },
+      { before: "醍醐の僕も感じます。", after: "醍醐で接骨院をしている僕も感じます。" },
+      { before: "セルフケアを伝えます。", after: "身体の使い方を伝えます。" },
+    ];
+    const r = recurringEdits(ps);
+    expect(r.some((e) => e.kind === "足す" && e.text.includes("接骨院をしている") && e.count === 3)).toBe(true);
+    expect(r.some((e) => e.text.includes("身体の使い方"))).toBe(false);
+  });
+  it("消した言葉のくり返しも拾う", () => {
+    const ps = [1, 2, 3].map((i) => ({ before: `今日の話${i}。セルフケアが大切です。`, after: `今日の話${i}。` }));
+    expect(recurringEdits(ps).some((e) => e.kind === "消す" && e.text.includes("セルフケア"))).toBe(true);
+  });
+});
+
+describe("店を指す言葉：ご本人が消す言葉・地域欄の「なし」", () => {
+  it("ご本人が何度も消している地名は求めない。地域欄の「なし」は地名にしない", async () => {
+    const { identityTokens, checkIdentity } = await import("../shared/identityGuard");
+    const p = { storeName: "はいさい整骨院", area: "千葉県八千代市勝田台" };
+    expect(identityTokens(p)).toContain("八千代市");
+    const q = { ...p, __ownerRemoved: ["八千代市"] };
+    expect(identityTokens(q)).not.toContain("八千代市");
+    expect(identityTokens(q)).toContain("勝田台");
+    expect(checkIdentity("勝田台で姿勢を見ます", q).ok).toBe(true);
+    expect(identityTokens({ storeName: "珠由良族", area: "なし" })).not.toContain("なし");
   });
 });
