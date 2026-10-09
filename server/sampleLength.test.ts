@@ -68,3 +68,14 @@ describe('プロンプトの一律ルールを置き換える', () => {
     expect(POST_LENGTHS.short.guide).toMatch(/50〜100字/);
   });
 });
+
+// 2026-10-08 三上様「生成にも「」は会話だけを入れて」（スレッズ勉強会の添削で出ていたコツ）
+describe("かぎかっこは会話だけ", () => {
+  it("生成の最終指示と、仕上げの書き直しの両方に入っている", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("./autoPostScheduler.ts", import.meta.url), "utf8");
+    const add = src.match(/const AUTO_POST_STYLE_ADDENDUM = `([\s\S]*?)`;/)![1];
+    expect(add).toContain("かぎかっこ「」は会話だけに使う");
+    expect(src).toContain("かぎかっこ「」は会話（実際に言われた言葉・心の声）だけに使う。強調のための「」は外す。");
+  });
+});
