@@ -238,3 +238,9 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - 当日補充：プレステージ様 @esthetic.salon_prestige（acc33）1枠。**08:16〜08:17 に2台のMacで同時に補充が走り、2件（#2981・#2982）できた**ため、こちらの #2982 を取り消し（今日4件＝契約3＋補填1）。
 - 約束の照合：@esthe_prestige_r（acc22・〜10/13 1日4件）今日4件 ✅、昨日は #2871 が「Threads上で見つからない」で3件。@black_eyes_1896（acc25・〜10/17 1日4件）今日4件 ✅・昨日4件 ✅。
 - 昨日の公開数：契約＋補填を超えたアカウントは無し（最大5件＝acc10/11/12 は型の試しの範囲内）。
+
+## 2026-10-10 朝の点検メモ（土曜）
+- 本番の最新 finished は 082f56e1＝origin/main の先頭と一致（反映済み）。/api/health 200。AccountHealth 完了（accounts=26・restricted=0）。
+- 当日補充：今朝の生成で消えた枠なし。
+- 約束の照合（当日の予定数）：@esthe_prestige_r（acc22）4 ✅／@black_eyes_1896（acc25）4 ✅／@esthetic.salon_prestige（acc33）4 ✅／@daigo.sekkotsuin（acc18）4 ✅／@yusuke_seitai（acc29）4 ✅／@tama.yurazoku（acc31）4 ✅。
+- 昨日の公開数：契約＋補填を超えたアカウントは無し（最大6件＝acc12 は型の試し＋学習の枠の範囲内）。
