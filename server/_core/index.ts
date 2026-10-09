@@ -152,6 +152,15 @@ async function startServer() {
     next();
   });
   app.set('trust proxy', 1);
+  // ★最低限のセキュリティヘッダ（2026-10-09 点検）。
+  //   ほかのサイトの枠（iframe）の中に画面を重ねて「承認」などを押させる手口を防ぎ、
+  //   ファイルの種類の取り違えによるスクリプト実行を防ぐ。画面の見た目・動きは変わらない。
+  app.use((_req, res, next) => {
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+  });
   const server = createServer(app);
 
 
@@ -260,10 +269,21 @@ async function startServer() {
             const code = extractDigits(text);
             const looksLikeEmail = toHalfWidth(text).includes('@');
             if (!alreadyLinked && !awaitingInput && !looksLikeEmail && code.length === 6) {
+              // ★6桁の総当たり対策：同じLINEから打ち間違いが続いたら、しばらく照合しない（2026-10-09 点検）
+              const guard = await import('../lineLinkGuard');
+              if (!guard.canTryLinkCode(lineUserId)) {
+                await replyMessage(
+                  ev.replyToken,
+                  '番号の入力が続けて違っていたため、しばらく受け付けを止めています。10分ほどおいてから、メールに届いた最新の6桁の番号を送ってください。',
+                );
+                continue;
+              }
               // 表示名は設定画面の連携一覧用（取れなくても連携は成立させる）
               const { fetchLineDisplayName } = await import('../lineNotify');
               const displayName = await fetchLineDisplayName(lineUserId);
               const result = await db.linkLineByCode(code, lineUserId, displayName);
+              if (result === 'invalid') guard.recordLinkCodeFailure(lineUserId);
+              else if (result === 'linked') guard.clearLinkCodeFailures(lineUserId);
               const user0 = await db.getUserByLineUserId(lineUserId);
               if (result === 'linked') {
                 const { switchToMainRichMenu } = await import('../lineNotify');

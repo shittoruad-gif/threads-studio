@@ -1899,12 +1899,13 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
 
     // Public "try before register" generation (rate limited by IP)
     tryGenerate: publicProcedure
+      // ★ログインなしで呼べるAI生成のため、1項目の長さに上限を付ける（巨大な文字列でAIの費用を膨らませられないように・2026-10-09 点検）
       .input(z.object({
-        businessType: z.string().min(1),
-        area: z.string().min(1),
-        target: z.string().min(1),
-        mainProblem: z.string().min(1),
-        strength: z.string().min(1),
+        businessType: z.string().min(1).max(500),
+        area: z.string().min(1).max(500),
+        target: z.string().min(1).max(500),
+        mainProblem: z.string().min(1).max(500),
+        strength: z.string().min(1).max(500),
         // 投稿の狙い（任意）。指定するとAIがその目的に最適化して生成する。
         purpose: z.enum(['cv', 'awareness', 'authority', 'fan']).optional(),
       }))

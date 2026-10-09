@@ -174,8 +174,12 @@ async function sendLinkCodeByEmail(lineUserId: string, email: string): Promise<u
     await db.setLineChatState(lineUserId, "link_email");
     return [{ type: "text", text: "メールアドレスの形式が正しくないようです。もう一度送ってください。" }];
   }
+  // ★連携メールの連打対策：同じLINEから・同じアドレスへ、それぞれ1時間に3通まで（2026-10-09 点検）。
+  //   上限のときも同じ文面を返す（登録の有無や制限の有無を外から確かめられないようにする）。
+  const { takeLinkEmailSend } = await import("./lineLinkGuard");
+  const allowed = takeLinkEmailSend(lineUserId, addr);
   try {
-    const user = await db.getUserByEmail(addr);
+    const user = allowed ? await db.getUserByEmail(addr) : null;
     if (user) {
       const { generateLinkCode, LINK_CODE_TTL_MS } = await import("./lineNotify");
       const code = generateLinkCode();
