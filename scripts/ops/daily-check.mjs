@@ -101,7 +101,7 @@ async function main() {
     console.log(`\n■ ★見送りが続いているお客様（直近7日に3回以上）: ${rd.length}件`);
     const ST = { pending: '足す案を三上様のLINEへ送付ずみ（判断待ち）', applied: '足した', skipped: '見送り', undone: '元に戻した', no_url: '★ホームページ未登録→夜間整備で検索して案を作る', no_new: 'HPに新しい材料なし→先生に直接伺う段階' };
     // HPを検索して見つからなかった方はそのままでよい（2026-10-07 三上様）。検索し直さない・朝の報告にも載せない
-    const HP_SEARCHED_NONE = new Set([25, 31]);
+    const HP_SEARCHED_NONE = new Set([25, 29, 31]); // 29：10/9 夜間整備で検索（オンラインのダイエット講師・専用HPなし）
     for (const t of rd) {
       const p = t.latestProposal;
       const st = p?.status === 'no_url' && HP_SEARCHED_NONE.has(Number(t.accountId)) ? 'HPなし（検索済み）→そのままでよい' : p ? (ST[p.status] || p.status) : '20:30のフォローで案を作る';

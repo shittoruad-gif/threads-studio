@@ -183,6 +183,10 @@ function findForeignRegionWords(
  */
 const lastRejectReason = new Map<string, string>();
 const rejectKey = (userId: number, accountId: number, slot: number) => `${userId}:${accountId}:${slot}`;
+/** 試し生成のスクリプトが、本番の作り直しループと同じく前回の理由を次へ渡すための読み出し口（読むだけ） */
+export function lastRejectHintFor(userId: number, accountId: number, slot: number): string | null {
+  return lastRejectReason.get(rejectKey(userId, accountId, slot)) ?? null;
+}
 
 /**
  * 試し生成（AUTOPOST_DRY_RUN=1）。本番データを読むだけで、記録・投稿は一切書かない。
@@ -1765,8 +1769,9 @@ export async function generateAutoPost(
       //   落とした枠は翌朝の自動補填で足される。
       if (dup && !guarantee && (!lastAttempt || Array.from(dup).length >= 14)) {
         console.warn(`[AutoPost] 直近の投稿と同じ言い回し「${dup}」→ ${lastAttempt ? '最後の作り直しでも見送り（明日の生成で補填）' : '作り直し'} userId=${userId} projectId=${project.id}`);
+        // ★前の回で落ちた言い回しも残して渡す（10/9 acc10：3回目に1回目の言い回しへ戻って枠が欠けた・shared/dupRetryHint.ts）
         noteReject('duplicatePhrase', userId, threadsAccountId, postingTimeIndex,
-          `- 直近の投稿と同じ言い回し「${dup}」を使っている。同じことを言うなら、別の入り方・別の言葉にする。`,
+          (await import('../shared/dupRetryHint')).dupRetryHint(lastRejectReason.get(rejectKey(userId, threadsAccountId, postingTimeIndex)), dup),
           { detail: dup, gaveUp: lastAttempt });
         return false;
       }
