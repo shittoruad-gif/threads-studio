@@ -23,3 +23,25 @@ export function naturalnessRetryHint(problems: string[], identityHint?: string |
   }
   return lines.join("\n");
 }
+
+/** 採点の指摘から本文の引用だけを取り出す（「文。- 抽象的で…」の説明部分は外す） */
+function quotedPart(p: string): string {
+  return String(p ?? "").split(/\s*-\s+/)[0].replace(/^["「『]|["」』]$/g, "").trim();
+}
+
+/**
+ * 同じ枠でこれまでに落ちた文を、次の作り直しへまとめて渡す（2026-10-09 夜間整備）。
+ *
+ * 直前の1回分しか渡していなかったため、10/9朝 acc33 slot0 は作り直し・保証パスの6回とも
+ * 「セルフマッサージでセルライトは減らない」を言い回しだけ変えて書き、すべて落ちて枠が欠けた。
+ * 今回の指摘（current）と重なるものは除く。無ければ空文字。
+ */
+export function earlierRejectedNote(earlier: readonly string[], current: readonly string[] = []): string {
+  const now = new Set(current.map(quotedPart));
+  const quotes = Array.from(new Set(earlier.map(quotedPart))).filter((q) => q.length >= 4 && !now.has(q));
+  if (quotes.length === 0) return "";
+  return [
+    "- この枠でこれまでにも不自然と判定された文（言い回しを変えても、同じ話・同じ入り方なら同じ判定になる。この話題から入らず、別の材料で書く）：",
+    ...quotes.slice(-6).map((q) => `  ・「${q}」`),
+  ].join("\n");
+}

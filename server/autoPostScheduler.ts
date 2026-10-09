@@ -20,6 +20,7 @@ import { touchesDeclined, filterStyleSamples, normalizeForPatterns, filterCounse
 import { overusedHits, dropOverusedLines, dropFramedSentences, framesOf, hitsSurveyAvoid, lineHitsFrames, stickyHits, coversTopic } from "../shared/freshTopic";
 import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
 import { stripRawUrls } from "../shared/sanitize";
+import { earlierRejectedNote } from "../shared/naturalnessRetryHint";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
 import { invokeLLM } from "./_core/llm";
 import { nanoid } from "nanoid";
@@ -187,6 +188,16 @@ const rejectKey = (userId: number, accountId: number, slot: number) => `${userId
 export function lastRejectHintFor(userId: number, accountId: number, slot: number): string | null {
   return lastRejectReason.get(rejectKey(userId, accountId, slot)) ?? null;
 }
+/**
+ * ★同じ枠で自然さの点検に落ちた文を、作り直し・保証パスを通して覚えておく（2026-10-09 夜間整備）。
+ *   lastRejectReason は直前の1回分しか持たないため、10/9朝 acc33 slot0 は6回とも
+ *   「セルフマッサージでセルライトは減らない」を言い回しだけ変えて書き、保証パス3回とも落ちて枠が欠けた。
+ */
+const rejectedLinesBySlot = new Map<string, string[]>();
+function clearReject(rk: string): void {
+  lastRejectReason.delete(rk);
+  rejectedLinesBySlot.delete(rk);
+}
 
 /**
  * 試し生成（AUTOPOST_DRY_RUN=1）。本番データを読むだけで、記録・投稿は一切書かない。
@@ -222,9 +233,12 @@ function noteReject(
   accountId: number,
   slot: number,
   hint: string,
-  opts: { detail?: string; gaveUp?: boolean } = {},
+  opts: { detail?: string; gaveUp?: boolean; rejectedLines?: string[] } = {},
 ): void {
-  lastRejectReason.set(rejectKey(userId, accountId, slot), hint);
+  const rk = rejectKey(userId, accountId, slot);
+  const earlier = rejectedLinesBySlot.get(rk) ?? [];
+  lastRejectReason.set(rk, [hint, earlierRejectedNote(earlier, opts.rejectedLines ?? [])].filter(Boolean).join('\n'));
+  if (opts.rejectedLines?.length) rejectedLinesBySlot.set(rk, [...earlier, ...opts.rejectedLines].slice(-8));
   if (isDryRun()) return;
   void db
     .recordPostReject({ userId, threadsAccountId: accountId, guard, detail: opts.detail ?? hint, gaveUp: opts.gaveUp })
@@ -1641,7 +1655,7 @@ export async function generateAutoPost(
         console.warn(`[AutoPost] naturalnessReview: ${rv.score}/5 ${rv.problems.join(' / ')} → 作り直し userId=${userId} projectId=${project.id}`);
         noteReject('naturalnessReview', userId, threadsAccountId, postingTimeIndex,
           (await import('../shared/naturalnessRetryHint')).naturalnessRetryHint(rv.problems, identityHint),
-          { detail: `${rv.score}/5 ${rv.problems.join(' / ')}`, gaveUp: lastAttempt });
+          { detail: `${rv.score}/5 ${rv.problems.join(' / ')}`, gaveUp: lastAttempt, rejectedLines: rv.problems });
         return false;
       }
       if (rv) console.log(`[AutoPost] naturalnessReview: ${rv.score}/5 userId=${userId}`);
@@ -2365,7 +2379,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                   // 枠は1つなので作り直しは2回まで（時間を掛けすぎない）
                   let ok = false;
                   const rk = rejectKey(user.id, account.id, 100 + k);
-                  lastRejectReason.delete(rk);
+                  clearReject(rk);
                   for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
                     ok = await generateAutoPost(
                       user.id, project, typeIdx, purposeIdx, account.id, 0,
@@ -2374,7 +2388,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                       { choiceGroupId: groupId, forcedAngleId: CHOICE_ANGLE_IDS[k], choiceIndex: k, siblingTexts },
                     );
                   }
-                  lastRejectReason.delete(rk);
+                  clearReject(rk);
                   if (ok) { made++; generated++; }
                   await new Promise((r) => setTimeout(r, 2000));
                 }
@@ -2471,7 +2485,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             //   1回目が健康表現ガードに落ち、generated=0 のまま終わっていた）。最大3回まで作り直す。
             let success = false;
             const rk = rejectKey(user.id, account.id, i);
-            lastRejectReason.delete(rk);
+            clearReject(rk);
             for (let attempt = 1; attempt <= 3 && !success; attempt++) {
               if (attempt > 1 && await slotAlreadySaved()) {
                 console.warn(`[AutoPost] slot=${i} は保存済みのため作り直さない account=${account.id}`);
@@ -2509,7 +2523,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             // ★学習の枠は契約の外なので、書けなければそのまま見送る（保証パス・翌日の補填に回さない）
             if (!success && learningTrial) {
               console.log(`[AutoPost] 学習の枠を書けず見送り account=${account.id} slot=${i}（${learningTrial.key}）`);
-              lastRejectReason.delete(rk);
+              clearReject(rk);
               await new Promise(r => setTimeout(r, 2000));
               continue;
             }
@@ -2565,7 +2579,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                 console.warn(`[AutoPost] 保証パスに失敗 user=${user.id} account=${account.id} slot=${i}: ${(e as Error)?.message}`);
               }
             }
-            lastRejectReason.delete(rk);
+            clearReject(rk);
 
             if (success) {
               generated++;
@@ -2874,13 +2888,13 @@ export async function generateReplacementPost(userId: number, canceledPostId: nu
   const typeIdx = Math.floor(Math.random() * POST_TYPES.length);
   const purposeIdx = Math.floor(Math.random() * PURPOSES.length);
   const rk = rejectKey(userId, accountId, 99);
-  lastRejectReason.delete(rk);
+  clearReject(rk);
   let ok = false;
   for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
     const h = attempt === 1 ? hint : `${hint}。${lastRejectReason.get(rk) ?? ''}`;
     ok = await generateAutoPost(userId, project, typeIdx, purposeIdx, accountId, 99, true, null, eff.postLength, at, h, attempt === 3);
   }
-  lastRejectReason.delete(rk);
+  clearReject(rk);
   if (ok) console.log(`[AutoPost] 代わりの投稿を作成 user=${userId} account=${accountId} 元=${canceledPostId}`);
   return ok;
 }
@@ -2907,7 +2921,7 @@ export async function generateSurveyDrafts(
     let got: { content: string; angleId: string | null } | null = null;
     // 毎朝の生成と同じく3回まで。落ちた理由を次の作り直しに渡す（渡さないと同じ所で落ち続ける）
     const rk = rejectKey(userId, threadsAccountId, 0);
-    lastRejectReason.delete(rk);
+    clearReject(rk);
     for (let attempt = 1; attempt <= 3 && !got; attempt++) {
       // 枠の番号（投稿の種類・目的・今日の主題の選び方に効く）を案ごとにずらし、同じ題材に寄らないようにする
       const k = out.length;
@@ -2917,7 +2931,7 @@ export async function generateSurveyDrafts(
         { forcedAngleId: angleId, collect: (d) => { got = d; }, extraRecent: out.map((o) => o.content) },
       ).catch(() => false);
     }
-    lastRejectReason.delete(rk);
+    clearReject(rk);
     const g = got as { content: string; angleId: string | null } | null;
     if (g && g.content && !out.some((o) => o.content === g.content)) out.push({ content: g.content, angleId: g.angleId ?? angleId });
     await new Promise((r) => setTimeout(r, 1500));
