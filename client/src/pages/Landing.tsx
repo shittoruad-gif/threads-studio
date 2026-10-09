@@ -58,7 +58,7 @@ const demoSteps = [
     step: 3,
     title: "「はじめの設定」に答える",
     time: "2分",
-    description: "公式LINEのトークで、最初は5つだけ。ホームページのURLを貼ると、業種・地域・店名・強みをこちらで読み取って先に入れておくので、合っていれば「これでOK」を押すだけです。残りの質問は、投稿が動き始めてから1日1問ずつ。答えた内容だけをAIが事実として使います（書いていない実績や料金が投稿に出ることはありません）。",
+    description: "公式LINEのトークで、最初は5つだけ。ホームページのURLを貼ると、業種・地域・店名・強みをこちらで読み取って先に入れておくので、合っていれば「これでOK」を押すだけです。残りの質問は、投稿が動き始めてから1日1問ずつ。答えた内容だけを事実として使います（書いていない実績や料金が投稿に出ることはありません）。",
     image: "/demo/counseling-sp.jpg",
     alt: "はじめの設定の画面",
     portrait: true,
@@ -78,7 +78,7 @@ const demoSteps = [
     step: 5,
     title: "毎日、LINEに投稿が届く。押すだけ",
     time: "毎日1タップ",
-    description: "実測で反応が高い15時・21時・22時に合わせて、AIが投稿を用意します。公式LINEに届いたカードを見て「これで投稿する」を押すだけ。気に入らなければ「書き直す」「見送る」もその場で。慣れたら確認なしの完全自動にもできます。",
+    description: "実測で反応が高い15時・21時・22時に合わせて、投稿を用意します。公式LINEに届いたカードを見て「これで投稿する」を押すだけ。気に入らなければ「書き直す」「見送る」もその場で。慣れたら確認なしの完全自動にもできます。",
     image: "/demo/line-card.jpg",
     alt: "公式LINEに届く投稿カード（これで投稿する・書き直す・見送る）",
     portrait: false,
@@ -263,7 +263,7 @@ export default function Landing() {
   };
 
   const features = [
-    { icon: <Sparkles className="w-7 h-7" />, title: "AIが毎日つくる", description: "はじめに登録したお店の情報だけを事実として使い、AIが毎日の投稿を用意します。届いた投稿を確認して押すだけです。" },
+    { icon: <Sparkles className="w-7 h-7" />, title: "毎日自動でつくる", description: "はじめに登録したお店の情報だけを事実として使い、毎日の投稿を用意します。届いた投稿を確認して押すだけです。" },
     { icon: <Clock className="w-7 h-7" />, title: "伸びる時間に自動公開", description: "実測で反応が高い15時・21時・22時に合わせて自動で公開。投稿を忘れる心配はありません。" },
     { icon: <Shield className="w-7 h-7" />, title: "安全フィルタ", description: "広告規制・誇大表現を自動で回避。コンプライアンスを守りながら効果的な訴求が可能です。" },
     { icon: <BarChart3 className="w-7 h-7" />, title: "複数アカウント管理", description: "複数のThreadsアカウントを一元管理。店舗ごと、ブランドごとに使い分けられます。" }
@@ -278,8 +278,8 @@ export default function Landing() {
 
   const reasons = [
     {
-      icon: <Sparkles className="w-10 h-10" />, title: "AIが投稿文を自動生成",
-      description: "お店の情報を登録するだけで、AIが毎日の投稿を自動生成。文章作成が苦手な方でも安心です。",
+      icon: <Sparkles className="w-10 h-10" />, title: "投稿文を自動でつくる",
+      description: "お店の情報を登録するだけで、毎日の投稿を自動でつくります。文章作成が苦手な方でも安心です。",
       benefits: ["投稿作成時間が90%削減", "切り口を日替わりで変える", "業種別に最適化された文章"]
     },
     {
@@ -387,7 +387,7 @@ export default function Landing() {
           </Badge>
           
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 text-white leading-tight scale-in">
-            お店の情報を登録するだけ。<br className="hidden sm:block" />あとはAIが毎日投稿。
+            お店の情報を登録するだけ。<br className="hidden sm:block" />あとは毎日自動で投稿。
           </h1>
           <p className="text-lg md:text-xl text-white/80 mb-4 max-w-3xl mx-auto leading-relaxed">
             整体院・美容サロン・飲食店など、店舗集客に特化したThreads投稿を自動生成
@@ -396,7 +396,7 @@ export default function Landing() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-10 mt-8">
             <Button size="lg" className="bg-white text-primary hover:bg-white/90 text-lg px-8 py-6 shadow-lg" onClick={handleSignupClick} disabled={loading}>
               <Sparkles className="w-5 h-5 mr-2" />
-              {loading ? "読み込み中..." : isAuthenticated ? "ダッシュボードへ" : "無料でAI生成を試す"}
+              {loading ? "読み込み中..." : isAuthenticated ? "ダッシュボードへ" : "無料で投稿づくりを試す"}
             </Button>
             <Link href="/pricing">
               <Button size="lg" variant="outline" className="text-lg px-8 py-6 border-white/40 text-white hover:bg-white/10 bg-transparent">
@@ -442,13 +442,13 @@ export default function Landing() {
             <span className="section-label mb-3 block">SOLUTION</span>
             <h2 className="text-3xl md:text-4xl font-bold mb-4 text-foreground">Threads Studioが解決します</h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              AIを活用した投稿自動生成と予約投稿で、<br className="hidden sm:block" />
+              投稿の自動作成と予約投稿で、<br className="hidden sm:block" />
               店舗のSNS運用を効率化します。
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { icon: <Sparkles className="w-8 h-8" />, title: "AIで投稿作成", desc: "お店の情報を登録するだけで、毎日の投稿文が自動生成されます", color: "bg-primary/10 text-primary" },
+              { icon: <Sparkles className="w-8 h-8" />, title: "投稿を自動作成", desc: "お店の情報を登録するだけで、毎日の投稿文が自動生成されます", color: "bg-primary/10 text-primary" },
               { icon: <Calendar className="w-8 h-8" />, title: "予約投稿", desc: "最適なタイミングで自動投稿。忙しい時間帯でも投稿を忘れません", color: "bg-blue-50 text-blue-600" },
               { icon: <Shield className="w-8 h-8" />, title: "安全フィルタ", desc: "広告規制や誇大表現を自動でチェック。コンプライアンスを守りながら投稿できます", color: "bg-green-50 text-green-600" },
             ].map((item, i) => (
@@ -554,8 +554,8 @@ export default function Landing() {
           
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 max-w-6xl mx-auto mb-12">
             {[
-              { name: "ライト", price: "￥4,980", period: "/月", features: ["自動投稿 1日1回", "Threads連携 1アカウント", "AI投稿生成 月10回"], highlight: false },
-              { name: "プロ", price: "￥9,800", period: "/月", features: ["自動投稿 1日3回", "Threads連携 3アカウント", "AI投稿生成 無制限"], highlight: true },
+              { name: "ライト", price: "￥4,980", period: "/月", features: ["自動投稿 1日1回", "Threads連携 1アカウント", "投稿の自動作成 月10回"], highlight: false },
+              { name: "プロ", price: "￥9,800", period: "/月", features: ["自動投稿 1日3回", "Threads連携 3アカウント", "投稿の自動作成 無制限"], highlight: true },
               { name: "ビジネス", price: "￥29,800", period: "/月", features: ["自動投稿 1日3回", "Threads連携 10アカウント", "お店の登録 50件"], highlight: false },
               { name: "代理店", price: "￥55,000", period: "/月", features: ["クライアントID 100件まで発行", "発行IDはプロ相当", "クライアント側の課金なし"], highlight: false },
             ].map((plan, i) => (
@@ -607,11 +607,11 @@ export default function Landing() {
           <h2 className="text-3xl md:text-4xl font-bold mb-4 text-white">まずはお気軽にお試しください</h2>
           <p className="text-lg text-white/80 mb-8 max-w-xl mx-auto">
             登録不要・クレジットカード不要<br />
-            AI投稿生成を3回まで無料でお試しいただけます
+            投稿の自動作成を3回まで無料でお試しいただけます
           </p>
           <Button size="lg" className="bg-white text-primary hover:bg-white/90 text-lg px-10 py-6 shadow-lg" onClick={handleSignupClick} disabled={loading}>
             <Sparkles className="w-5 h-5 mr-2" />
-            {loading ? "読み込み中..." : isAuthenticated ? "ダッシュボードへ" : "無料でAI生成を試す"}
+            {loading ? "読み込み中..." : isAuthenticated ? "ダッシュボードへ" : "無料で投稿づくりを試す"}
           </Button>
         </div>
       </section>
