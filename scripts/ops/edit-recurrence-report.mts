@@ -27,18 +27,37 @@ const accts: any[] = ((await d.execute(sql`
 const norm = (s: string) => String(s || '').replace(/[\s　]/g, '');
 let flagged = 0;
 for (const x of accts) {
-  const pairs = (((await d.execute(sql`SELECT originalContent b, postContent a FROM scheduledPosts
+  const pairs = (((await d.execute(sql`SELECT originalContent b, postContent a, editedByUserAt e FROM scheduledPosts
     WHERE threadsAccountId = ${x.a} AND editedByUserAt >= UTC_TIMESTAMP() - INTERVAL ${days} DAY AND originalContent IS NOT NULL
-    ORDER BY editedByUserAt DESC LIMIT 20`)) as any)[0] as any[]).map((r) => ({ before: String(r.b), after: String(r.a) }));
+    ORDER BY editedByUserAt DESC LIMIT 20`)) as any)[0] as any[]).map((r) => ({ before: String(r.b), after: String(r.a), at: new Date(r.e).getTime() }));
   const rec = recurringEdits(pairs);
-  // 最新の生成（AIが作った文そのもの）
-  const latest: string[] = (((await d.execute(sql`SELECT COALESCE(originalContent, postContent) t FROM scheduledPosts
-    WHERE threadsAccountId = ${x.a} AND source = 'auto' AND postContent IS NOT NULL ORDER BY id DESC LIMIT 5`)) as any)[0] as any[]).map((r) => norm(r.t));
-  const still = rec.filter((e) => e.kind === '消す' ? latest.some((t) => t.includes(norm(e.text))) : e.count * 2 >= pairs.length && latest.filter((t) => t.includes(norm(e.text))).length === 0);
-  if (rec.length > 0) flagged++;
-  console.log(`\n#${x.a} @${x.name}  手直し${x.n}本（${days}日）`);
+  // 契約が終わった方は生成が止まっているので、直す対象にしない（10/10 #17 氷見様＝10/2 解約で「まだ直っていない」と出続けた）
+  const ended = await db.isEndedCustomer(Number(x.u));
+  // 最新の生成（AIが作った文そのもの）。★その直しを最後にされた時より後に作られたものだけを見る
+  //   （10/10 #26：直された投稿そのものが「直近5本」に入り、直した後の生成には出ていないのに「まだ直っていない」と出ていた）
+  const recent = (((await d.execute(sql`SELECT COALESCE(originalContent, postContent) t, createdAt c FROM scheduledPosts
+    WHERE threadsAccountId = ${x.a} AND source = 'auto' AND postContent IS NOT NULL ORDER BY id DESC LIMIT 40`)) as any)[0] as any[])
+    .map((r) => ({ t: norm(r.t), at: new Date(r.c).getTime() }));
+  const latestFor = (e: { kind: string; text: string }) => {
+    const k = norm(e.text);
+    const lastEdit = Math.max(0, ...pairs.filter((p) => e.kind === '消す'
+      ? norm(p.before).includes(k) && !norm(p.after).includes(k)
+      : norm(p.after).includes(k) && !norm(p.before).includes(k)).map((p) => p.at));
+    return recent.filter((r) => r.at > lastEdit).slice(0, 5).map((r) => r.t);
+  };
+  const still = rec.filter((e) => {
+    const latest = latestFor(e);
+    if (latest.length === 0) return false; // 直した後の生成がまだ無い
+    return e.kind === '消す' ? latest.some((t) => t.includes(norm(e.text))) : e.count * 2 >= pairs.length && latest.every((t) => !t.includes(norm(e.text)));
+  });
+  if (rec.length > 0 && !ended) flagged++;
+  console.log(`\n#${x.a} @${x.name}  手直し${x.n}本（${days}日）${ended ? '  ※ご契約終了（生成は止まっている・対象外）' : ''}`);
   if (rec.length === 0) { console.log('  くり返している直し：なし'); continue; }
-  for (const e of rec) console.log(`  ${e.kind}「${e.text}」 ${e.count}回${still.includes(e) ? '  ← 直近5本の生成でまだ直っていない' : ''}`);
+  for (const e of rec) {
+    const n = latestFor(e).length;
+    console.log(`  ${e.kind}「${e.text}」 ${e.count}回${ended ? '' : still.includes(e) ? `  ← 直した後の生成${n}本でまだ直っていない` : n === 0 ? '  （直した後の生成がまだ無い）' : ''}`);
+  }
+  if (ended) continue;
   if (VERIFY && (ONLY.length === 0 || ONLY.includes(Number(x.a)))) {
     const { generateAutoPost } = await import('../../server/autoPostScheduler');
     const acc: any = await db.getThreadsAccountById(Number(x.a));
