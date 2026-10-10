@@ -21,16 +21,16 @@ describe("学習用アカウント", () => {
     expect(learningExtra(36, { capped: false, baseCount: 3 }, at("2026-10-10"))).toBe(0);
     expect(learningExtra(10, { capped: true, baseCount: 5 }, at("2026-10-14"))).toBe(0);
   });
-  it("1日の合計は4日で30本まで段を踏む（10/11 12本→10/12 18本→10/13 24本→10/14から30本）", () => {
+  it("1日の合計は10/11から30本（10/11 三上様「今日から30本にして」で段をやめた）", () => {
     expect(burstTotalFor("2026-10-10")).toBeNull();
-    expect(burstTotalFor("2026-10-11")).toBe(12);
-    expect(burstTotalFor("2026-10-12")).toBe(18);
-    expect(burstTotalFor("2026-10-13")).toBe(24);
-    expect(burstTotalFor("2026-10-14")).toBe(30);
+    expect(burstTotalFor("2026-10-11")).toBe(30);
+    expect(burstTotalFor("2026-10-12")).toBe(30);
     expect(burstTotalFor("2026-11-20")).toBe(30);
     // 上乗せ＝合計の目安−契約と補填
-    expect(learningExtra(10, { capped: false, baseCount: 5 }, at("2026-10-14"))).toBe(25);
-    expect(learningExtra(36, { capped: false, baseCount: 3 }, at("2026-10-11"))).toBe(9);
+    expect(learningExtra(10, { capped: false, baseCount: 5 }, at("2026-10-11"))).toBe(25);
+    expect(learningExtra(36, { capped: false, baseCount: 3 }, at("2026-10-11"))).toBe(27);
+    // 冷却・慣らしで抑えている日は30本の日でも0
+    expect(learningExtra(12, { capped: true, baseCount: 5 }, at("2026-10-11"))).toBe(0);
   });
   it("候補時刻は7:00〜23:20を等分し、30本でも25分以上あく", () => {
     const g = burstGrid("2026-10-14", 30);
