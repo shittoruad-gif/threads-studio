@@ -1041,6 +1041,8 @@ export async function generateAutoPost(
       // ★自然な書き方モードの方は、毎回問いかけで締めない（shared/naturalStyle.ts・2026-10-03 試し生成で4本中3本が「？」締め）
       if (!opts.feature && (await import('../shared/naturalStyle')).isNaturalStyleUser(userId)) noQuestionEnding = true;
     } catch { noQuestionEnding = false; }
+    // ★学習の試し「最後に読者へ質問」は、問いかけの締めを止めない（2026-10-10）
+    if (opts.learningTrial?.key === 'ask_reader') noQuestionEnding = false;
     if (ownerLikesQuestion && noQuestionEnding) {
       noQuestionEnding = false;
       console.log(`[AutoPost] ご本人が直した文の多くが問いかけで終わっているため、問いかけの締めを止めない account=${threadsAccountId}`);
@@ -2268,7 +2270,9 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           {
             const { rampForAccount } = await import('./accountRampCheck');
             const r = await rampForAccount(account as any, postCount);
-            learningN = Number(r.learning ?? 0);
+            // ★学習の枠は朝の回では作らない。毎時の生成（server/learningBurstJob.ts）が次の1時間分ずつ作る（1日30本・2026-10-10）
+            const learningInRamp = Number(r.learning ?? 0);
+            learningN = 0;
             if (r.capped) { console.log(`[AutoPost] account ${account.id} ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count; }
             else if (r.extra) {
               console.log(`[AutoPost] account ${account.id} 補填: ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count;
@@ -2278,6 +2282,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
               if (!opts.fillToday && (r.reason === 'deleted' || r.reason === 'apology')) pendingDecrement = r.reason;
             }
             else if (r.established) console.log(`[AutoPost] account ${account.id} はThreads歴が長いため慣らし運転なし`);
+            if (learningInRamp > 0) postCount = Math.max(0, postCount - learningInRamp);
           }
 
           // ★昨日届かなかった分を今日に足す（自動補填・2026-09-10 三上様指示）。

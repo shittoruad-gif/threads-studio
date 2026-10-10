@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { inLearning, learningExtra, trialFor, learningSlotTimes, LEARNING_TRIALS, LEARNING_ACCOUNTS, TRIAL_COMMON_RULES } from "../shared/learningAccounts";
+import { inLearning, learningExtra, trialFor, learningSlotTimes, LEARNING_TRIALS, LEARNING_ACCOUNTS, TRIAL_COMMON_RULES, burstTotalFor, burstGrid, burstSlotsToMake, LEARNING_BURST } from "../shared/learningAccounts";
 import { groupByRatio, lengthBucket, firstLineTraits, learningReportText, type LearningRow } from "../shared/learningReport";
 import { postingTimeTestHours } from "../shared/postingTimeTest";
 
@@ -8,28 +8,56 @@ const at = (ymd: string, hm = "06:00") => Date.parse(`${ymd}T${hm}:00+09:00`);
 const fmt = (d: Date) => new Date(d.getTime() + 9 * 3600e3).toISOString().slice(11, 16);
 
 describe("学習用アカウント", () => {
-  it("自社の Moveact 2店だけ・期間内だけ", () => {
+  it("Moveact 2店と株式会社しっとる公式だけ・期間内だけ（10/10 から公式も）", () => {
     expect(inLearning(10, at("2026-10-08"))).toBe(true);
     expect(inLearning(12, at("2026-11-30"))).toBe(true);
+    expect(inLearning(36, at("2026-10-11"))).toBe(true);
     expect(inLearning(10, at("2026-10-07"))).toBe(false);
     expect(inLearning(10, at("2026-12-01"))).toBe(false);
-    for (const customer of [11, 21, 22, 24, 36]) expect(inLearning(customer, at("2026-10-10"))).toBe(false);
+    for (const customer of [11, 21, 22, 24, 25, 31]) expect(inLearning(customer, at("2026-10-11"))).toBe(false);
   });
-  it("冷却・慣らしで抑えている日は上乗せしない", () => {
-    expect(learningExtra(10, { capped: false }, at("2026-10-10"))).toBe(2);
-    expect(learningExtra(10, { capped: true }, at("2026-10-10"))).toBe(0);
+  it("冷却・慣らしで抑えている日は上乗せしない。10/10までは2店だけ＋2本", () => {
+    expect(learningExtra(10, { capped: false, baseCount: 5 }, at("2026-10-10"))).toBe(2);
+    expect(learningExtra(36, { capped: false, baseCount: 3 }, at("2026-10-10"))).toBe(0);
+    expect(learningExtra(10, { capped: true, baseCount: 5 }, at("2026-10-14"))).toBe(0);
   });
-  it("試しは9種類を順に回し、同じ日の2店・2枠で同じ条件にならない", () => {
-    const seen: Record<string, number> = {};
-    for (let d = 0; d < 36; d++) {
-      const now = at("2026-10-08") + d * 86400e3;
-      const today = [trialFor(10, 0, now), trialFor(10, 1, now), trialFor(12, 0, now), trialFor(12, 1, now)].map((t) => t.key);
-      expect(new Set(today).size).toBe(4);
-      for (const k of today) seen[k] = (seen[k] ?? 0) + 1;
+  it("1日の合計は4日で30本まで段を踏む（10/11 12本→10/12 18本→10/13 24本→10/14から30本）", () => {
+    expect(burstTotalFor("2026-10-10")).toBeNull();
+    expect(burstTotalFor("2026-10-11")).toBe(12);
+    expect(burstTotalFor("2026-10-12")).toBe(18);
+    expect(burstTotalFor("2026-10-13")).toBe(24);
+    expect(burstTotalFor("2026-10-14")).toBe(30);
+    expect(burstTotalFor("2026-11-20")).toBe(30);
+    // 上乗せ＝合計の目安−契約と補填
+    expect(learningExtra(10, { capped: false, baseCount: 5 }, at("2026-10-14"))).toBe(25);
+    expect(learningExtra(36, { capped: false, baseCount: 3 }, at("2026-10-11"))).toBe(9);
+  });
+  it("候補時刻は7:00〜23:20を等分し、30本でも25分以上あく", () => {
+    const g = burstGrid("2026-10-14", 30);
+    expect(g.length).toBe(30);
+    expect(fmt(g[0])).toBe("07:00");
+    for (let i = 1; i < g.length; i++) expect(g[i].getTime() - g[i - 1].getTime()).toBeGreaterThanOrEqual(LEARNING_BURST.minGapMinutes * 60_000);
+    expect(fmt(g[g.length - 1]) <= "23:20").toBe(true);
+  });
+  it("今ある投稿と25分以内の時刻・時間外は作らない。何度動いても二重に作らない", () => {
+    const g = burstGrid("2026-10-14", 30);
+    const from = at("2026-10-14", "09:00"), to = at("2026-10-14", "10:20");
+    const first = burstSlotsToMake(g, [new Date(at("2026-10-14", "09:30"))], from, to);
+    for (const t of first) expect(Math.abs(t.getTime() - at("2026-10-14", "09:30"))).toBeGreaterThanOrEqual(25 * 60_000);
+    expect(first.every((t) => t.getTime() >= from && t.getTime() <= to)).toBe(true);
+    // 作った分が「今ある投稿」に入れば、次の回は同じ時刻を作らない
+    const again = burstSlotsToMake(g, [new Date(at("2026-10-14", "09:30")), ...first], from, to);
+    expect(again.length).toBe(0);
+  });
+  it("試しは13種類を回し、1日のうち同じアカウントで条件が偏らない", () => {
+    expect(LEARNING_TRIALS.length).toBe(13);
+    for (const acc of LEARNING_ACCOUNTS.accountIds) {
+      const keys = Array.from({ length: 26 }, (_, i) => trialFor(acc, i, at("2026-10-14")).key);
+      const count: Record<string, number> = {};
+      for (const k of keys) count[k] = (count[k] ?? 0) + 1;
+      expect(Object.keys(count).length).toBe(13);
+      for (const k of Object.keys(count)) expect(count[k]).toBe(2);
     }
-    expect(Object.keys(seen).length).toBe(LEARNING_TRIALS.length);
-    // 36日×4枠＝144本 → 9種類に16本ずつ
-    for (const k of Object.keys(seen)) expect(seen[k]).toBe(16);
   });
   it("学習の枠の時刻：投稿時間の試験の5枠のあいだに、ほかの枠と1時間以上あけて2本置ける（試験の全日程）", () => {
     for (let d = 0; d < 34; d++) for (const a of LEARNING_ACCOUNTS.accountIds) {

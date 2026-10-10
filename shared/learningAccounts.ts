@@ -15,17 +15,49 @@
  */
 
 export const LEARNING_ACCOUNTS = {
-  accountIds: [10, 12] as readonly number[],
-  /** 契約本数＋既存の補填に上乗せする本数 */
+  accountIds: [10, 12, 36] as readonly number[],
+  /** 10/10 まで（1日7本の時期）の上乗せ本数。Moveact 2店だけ */
   extraSlots: 2,
+  legacyAccountIds: [10, 12] as readonly number[],
   start: "2026-10-08",
   until: "2026-11-30",
   /** 学習の枠とほかの枠との最小の間隔（分）。これより狭くしか置けない日は置ける分だけ */
   minGapMinutes: 60,
 } as const;
 
+/**
+ * ★1日30本へ（2026-10-10 三上様「ムーブアクトと株式会社しっとるのアカウントは1日30投稿を目安に、最速でリーチを取れる投稿を
+ *   早急に調べ上げてください。それをもとに投稿の傾向を掴むようにしたい」）。
+ *   対象：Moveact 玉島(10)・金光(12)・株式会社しっとる公式(36)。1日の合計本数（契約・試しを含む）を4日で30本まで上げる。
+ *   - いきなり30本にしない理由：Threadsの多すぎる投稿の判定は本数ではなく「動き方」（短い間隔の連投）で決まり、
+ *     9/12 には同じ日に8〜10本出たアカウントで投稿が消された。段を踏み、投稿どうしは25分以上あける。
+ *   - APIの上限は1プロフィール24時間で250本（Meta）。30本はその内側。
+ *   - 投稿が1件でも消されたら冷却（1日1件・7日）が先に効き、上乗せは0になる（再開は三上様の判断）。
+ *   学習の枠は朝の生成ではなく、毎時の生成（server/learningBurstJob.ts）が次の1時間分ずつ作る。
+ */
+export const LEARNING_BURST = {
+  ramp: [
+    { from: "2026-10-11", total: 12 },
+    { from: "2026-10-12", total: 18 },
+    { from: "2026-10-13", total: 24 },
+    { from: "2026-10-14", total: 30 },
+  ] as const,
+  /** 1日のうち学習の投稿を置く範囲（JST・分） */
+  firstMinute: 7 * 60,
+  lastMinute: 23 * 60 + 20,
+  /** ほかの投稿との最小の間隔（分） */
+  minGapMinutes: 25,
+};
+
 const JST = 9 * 3600_000;
 const jstYmd = (now: number) => new Date(now + JST).toISOString().slice(0, 10);
+
+/** その日の1日の合計本数の目安（段の前は null） */
+export function burstTotalFor(ymd: string): number | null {
+  let total: number | null = null;
+  for (const r of LEARNING_BURST.ramp) if (ymd >= r.from) total = r.total;
+  return total;
+}
 
 export function inLearning(accountId: number, now: number = Date.now()): boolean {
   if (!LEARNING_ACCOUNTS.accountIds.includes(accountId)) return false;
@@ -33,10 +65,42 @@ export function inLearning(accountId: number, now: number = Date.now()): boolean
   return d >= LEARNING_ACCOUNTS.start && d <= LEARNING_ACCOUNTS.until;
 }
 
-/** 今日この口座に上乗せする学習の枠の数（冷却中・慣らし中は0。呼び出し側で capped を見る） */
-export function learningExtra(accountId: number, opts: { capped: boolean }, now: number = Date.now()): number {
+/**
+ * 今日この口座に上乗せする学習の枠の数（冷却中・慣らし中は0）。
+ * baseCount はその日の契約＋補填の本数（rampForAccount の結果）。段の日は「合計の目安 − baseCount」。
+ */
+export function learningExtra(accountId: number, opts: { capped: boolean; baseCount?: number }, now: number = Date.now()): number {
   if (opts.capped || !inLearning(accountId, now)) return 0;
-  return LEARNING_ACCOUNTS.extraSlots;
+  const total = burstTotalFor(jstYmd(now));
+  if (total == null) return LEARNING_ACCOUNTS.legacyAccountIds.includes(accountId) ? LEARNING_ACCOUNTS.extraSlots : 0;
+  return Math.max(0, total - Math.max(0, Math.floor(opts.baseCount ?? 0)));
+}
+
+/** 毎時の生成が使う、その日の学習の投稿の候補時刻（JST・目安の本数で7:00〜23:20を等間隔に割る） */
+export function burstGrid(ymd: string, total: number): Date[] {
+  const base = Date.parse(`${ymd}T00:00:00+09:00`);
+  const n = Math.max(1, Math.floor(total));
+  const span = LEARNING_BURST.lastMinute - LEARNING_BURST.firstMinute;
+  const step = span / n;
+  return Array.from({ length: n }, (_, i) => new Date(base + Math.round(LEARNING_BURST.firstMinute + i * step) * 60_000));
+}
+
+/**
+ * 候補時刻のうち、今から作るもの（from〜to の間・ほかの投稿と minGapMinutes 以上あく）。
+ * occupied は今日すでに予定・公開されている投稿の時刻（学習の投稿を含む＝何度動かしても二重に作らない）。
+ */
+export function burstSlotsToMake(grid: readonly Date[], occupied: readonly Date[], from: number, to: number): Date[] {
+  const gap = LEARNING_BURST.minGapMinutes * 60_000;
+  const taken = occupied.map((d) => d.getTime());
+  const out: Date[] = [];
+  for (const g of grid) {
+    const t = g.getTime();
+    if (t < from || t > to) continue;
+    if (taken.some((o) => Math.abs(o - t) < gap)) continue;
+    out.push(g);
+    taken.push(t);
+  }
+  return out;
 }
 
 /**
@@ -72,6 +136,12 @@ export const LEARNING_TRIALS: readonly LearningTrial[] = [
   { key: "aruaru", label: "地元のあるある・共感", note: "読む人がよく経験する場面（登録情報から言える範囲）を「〜ってありますよね」のように共感で書く。架空の個人の出来事は作らない。" },
   { key: "behind", label: "お店の裏側", note: "スタッフ目線で、お店の準備・こだわり・考えていることを話す（登録情報にあることだけ）。教科書の説明口調にしない。" },
   { key: "season", label: "今の季節の体", note: "今の季節（日本時間の月）に多い体の悩みや過ごし方の話にする。気候の一般的な話だけで、効果は言い切らない。" },
+  // ★10/10 追加（1日30本の試し）。Threadsは閲覧の約半分が返信から生まれるとされ（Meta日本法人の登壇のまとめ）、
+  //   冒頭3行で結論を置く・主張を言い切る（スレッズ勉強会の宿題「主張を決めて叫ぶ」）も、まだ測れていない。
+  { key: "ask_reader", label: "最後に読者へ質問", note: "最後の1文を、読む人が答えやすい具体的な質問にする。主語と述語のそろった丁寧な1文で書く（例「朝と夜、腰が重く感じるのはどちらが多いですか？」）。「〜派？」のように一語で切る質問、「〜いませんか？」「〜ですよね？」の形は使わない（口調の点検で止まる）。質問は最後の1つだけ。" },
+  { key: "opinion", label: "主張を言い切る", note: "お店の考え（登録された信条・こだわりにあること）を1つだけ選び、1行目で言い切る。理由を短く添えて終える。誰か・他店を否定しない。効果は約束しない。" },
+  { key: "conclusion_first", label: "1行目で結論", note: "1行目に、この投稿でいちばん伝えたい結論を書く。2行目以降で理由を短く。結論を最後まで引っ張らない。" },
+  { key: "compare", label: "2つを比べる", note: "読む人がよく迷う2つ（例：温めるか冷やすか、朝と夜、立ち仕事と座り仕事）を並べて、違いを短く書く。登録情報や一般的な知識から言えることだけ。効果は言い切らない。" },
 ];
 
 /**
@@ -82,7 +152,8 @@ export function trialFor(accountId: number, learningIndex: number, now: number =
   const day = Math.floor((now + JST) / 86400_000);
   const pos = Math.max(0, LEARNING_ACCOUNTS.accountIds.indexOf(accountId));
   const n = LEARNING_TRIALS.length;
-  const i = (day * LEARNING_ACCOUNTS.extraSlots * LEARNING_ACCOUNTS.accountIds.length + pos * LEARNING_ACCOUNTS.extraSlots + learningIndex) % n;
+  // 日ごと・アカウントごとに出発点をずらし、枠の順に1つずつ進める（1日にどの条件も同じくらい出る）
+  const i = (day * 5 + pos * 4 + learningIndex) % n;
   return LEARNING_TRIALS[i];
 }
 

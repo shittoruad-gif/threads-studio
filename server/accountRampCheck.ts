@@ -64,7 +64,7 @@ export async function rampForAccount(
 ): Promise<RampDecision> {
   const r = await rampForAccountBase(account, contract);
   const { learningExtra } = await import("../shared/learningAccounts");
-  const add = learningExtra(Number(account.id), { capped: r.capped || inCooldown(account as any) });
+  const add = learningExtra(Number(account.id), { capped: r.capped || inCooldown(account as any), baseCount: r.count });
   if (add <= 0) return r;
   return { ...r, count: r.count + add, extra: true, learning: add, note: [r.note, `傾向を早くつかむための学習の枠（1日＋${add}件）`].filter(Boolean).join("／") };
 }

@@ -450,8 +450,14 @@ export function initDailyOpsSchedulers(): void {
     const { runRepetitionMonitorJob } = await import("./repetitionMonitor");
     await runTrackedJob("repetition_monitor", runRepetitionMonitorJob);
   });
-  // 月曜・木曜 9:20 JST = 0:20 UTC — リーチの傾向のまとめ（2026-10-07 三上様「傾向を早く」・server/learningReportJob.ts）。運営にだけ送る
-  cron.schedule("20 0 * * 1,4", async () => {
+  // 毎時5分（JST 6:05〜22:05 = UTC 21:05〜13:05）— 学習用アカウントの次の1時間分の投稿（1日30本・2026-10-10 三上様・server/learningBurstJob.ts）
+  cron.schedule("5 21-23,0-13 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runLearningBurstJob } = await import("./learningBurstJob");
+    await runTrackedJob("learning_burst", runLearningBurstJob);
+  });
+  // 毎日 9:20 JST = 0:20 UTC — リーチの傾向のまとめ（2026-10-07 三上様「傾向を早く」・10/10から毎日・server/learningReportJob.ts）。運営にだけ送る
+  cron.schedule("20 0 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");
     const { runLearningReportJob } = await import("./learningReportJob");
     await runTrackedJob("learning_report", runLearningReportJob);
