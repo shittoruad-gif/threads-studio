@@ -431,6 +431,13 @@ export function initDailyOpsSchedulers(): void {
     const { runTrackedJob } = await import("./jobRunner");
     await runTrackedJob("comment_watch", runCommentWatchJob);
   });
+  // ★期間限定の告知に付いたコメントへ予約ページを返す（5分おき・7:00〜21:55 JST・2026-10-11 三上様・server/promoCommentReply.ts）。
+  //   期間（PROMOS）の外では何もしない。
+  cron.schedule("*/5 22-23,0-12 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runPromoCommentReplyJob } = await import("./promoCommentReply");
+    await runTrackedJob("promo_comment_reply", () => runPromoCommentReplyJob());
+  });
   // ★承認待ちのまま時刻を過ぎた投稿を、その日の後ろへずらす（30分おき・7:00〜21:30 JST）。2026-09-11 三上様指示
   cron.schedule("*/30 22-23,0-12 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");
