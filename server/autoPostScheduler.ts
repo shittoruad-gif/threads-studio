@@ -22,6 +22,7 @@ import { isPersonalMode, personalModePromptOverride } from "../shared/personalBr
 import { stripRawUrls } from "../shared/sanitize";
 import { earlierRejectedNote } from "../shared/naturalnessRetryHint";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
+import { TRIAL_COMMON_RULES } from "../shared/learningAccounts";
 import { invokeLLM } from "./_core/llm";
 import { nanoid } from "nanoid";
 import { approvedLocalTerms } from './localGeo';
@@ -1308,7 +1309,7 @@ export async function generateAutoPost(
           + editLessonsNote
           // ★学習の試し（shared/learningAccounts.ts）は最末尾。途中に置くと、後ろの「切り口（最優先）」「長さ」に上書きされ、
           //   10/7 の試しで「1行目に数字」に数字が無い・「箇条書き」に箇条書きが無い投稿になっていた。
-          + (opts.learningTrial ? `\n\n【今回の試し（ここまでのすべての指示より優先・厳守）】\n- ${opts.learningTrial.note}\n- 上の切り口・長さ・書き出しの指示と食い違うところは、この試しに合わせる。試すのはこの1点だけで、それ以外はいつもどおり。\n- 作り話・効果の断定・登録に無い事実・価格の禁止は変わらない。` : ''),
+          + (opts.learningTrial ? `\n\n【今回の試し（ここまでのすべての指示より優先・厳守）】\n- ${opts.learningTrial.note}\n- 上の切り口・長さ・書き出しの指示と食い違うところは、この試しに合わせる。試すのはこの1点だけで、それ以外はいつもどおり。\n${TRIAL_COMMON_RULES.map((r) => `- ${r}`).join('\n')}` : ''),
       }],
       response_format: JSON_SCHEMA,
     });

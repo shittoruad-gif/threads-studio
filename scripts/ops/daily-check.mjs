@@ -104,7 +104,8 @@ async function main() {
     const HP_SEARCHED_NONE = new Set([25, 29, 31]); // 29：10/9 夜間整備で検索（オンラインのダイエット講師・専用HPなし）
     for (const t of rd) {
       const p = t.latestProposal;
-      const st = p?.status === 'no_url' && HP_SEARCHED_NONE.has(Number(t.accountId)) ? 'HPなし（検索済み）→そのままでよい' : p ? (ST[p.status] || p.status) : '20:30のフォローで案を作る';
+      // acc29 は別事業のHPで作った案 #23 を 10/9 に「skipped」にしたため、最新の案が skipped のままでも同じ扱い
+      const st = (p?.status === 'no_url' || p?.status === 'skipped') && HP_SEARCHED_NONE.has(Number(t.accountId)) ? 'HPなし（検索済み）→そのままでよい' : p ? (ST[p.status] || p.status) : '20:30のフォローで案を作る';
       console.log(`  @${t.username}（${t.userName}） 見送り${t.declines}回／公開${t.published}件 → ${st}`);
     }
     if (rd.length === 0) console.log('  なし');

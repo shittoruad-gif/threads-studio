@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { inLearning, learningExtra, trialFor, learningSlotTimes, LEARNING_TRIALS, LEARNING_ACCOUNTS } from "../shared/learningAccounts";
+import { inLearning, learningExtra, trialFor, learningSlotTimes, LEARNING_TRIALS, LEARNING_ACCOUNTS, TRIAL_COMMON_RULES } from "../shared/learningAccounts";
 import { groupByRatio, lengthBucket, firstLineTraits, learningReportText, type LearningRow } from "../shared/learningReport";
 import { postingTimeTestHours } from "../shared/postingTimeTest";
 
@@ -91,5 +91,22 @@ describe("リーチの傾向の集計", () => {
     const t = learningReportText({ learning: [], all: [], days: 21, now });
     expect(t).toContain("6本以上");
     expect(t).toContain("三上様の承諾後");
+  });
+});
+
+// 10/10 朝 acc10：ひとことが「運動が続かない人、倉敷市玉島で3人に1人。」で自然さ2/5、
+// 3回目と「長め」が「私もそうでした」「私だけじゃないはず」で作り話の点検に落ち、2枠とも見送り
+describe("学習の試しの指示（10/10 acc10 の見送り）", () => {
+  it("どの試しにも、書き手の体験・心の声と作った割合を書かない決まりが付く", () => {
+    const all = TRIAL_COMMON_RULES.join("\n");
+    expect(all).toContain("私もそうでした");
+    expect(all).toContain("私だけじゃないはず");
+    expect(all).toContain("3人に1人");
+    expect(all).toContain("作り話・効果の断定・登録に無い事実・価格の禁止は変わらない");
+  });
+  it("ひとことは、です・ますで言い切り、名詞や割合で切らない", () => {
+    const one = LEARNING_TRIALS.find((t) => t.key === "len_oneliner")!;
+    expect(one.note).toContain("です・ます");
+    expect(one.note).toContain("割合・人数・統計は書かない");
   });
 });
