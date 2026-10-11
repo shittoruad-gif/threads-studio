@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { inLearning, learningExtra, trialFor, learningSlotTimes, LEARNING_TRIALS, LEARNING_ACCOUNTS, TRIAL_COMMON_RULES, burstTotalFor, burstGrid, burstSlotsToMake, LEARNING_BURST } from "../shared/learningAccounts";
+import { inLearning, learningExtra, trialFor, learningSlotTimes, LEARNING_TRIALS, LEARNING_ACCOUNTS, TRIAL_COMMON_RULES, trialRules, burstTotalFor, burstGrid, burstSlotsToMake, LEARNING_BURST } from "../shared/learningAccounts";
 import { groupByRatio, lengthBucket, firstLineTraits, learningReportText, type LearningRow } from "../shared/learningReport";
 import { postingTimeTestHours } from "../shared/postingTimeTest";
 
@@ -154,5 +154,23 @@ describe("改行の仕方の見分け（AIっぽい改行・2026-10-11）", () =
     expect(src).not.toContain("1〜2文ごとに空行");
     expect(src).toContain("1文ごとに毎回改行しない");
     expect(src).toContain("段落の長さをそろえない");
+  });
+});
+
+// 10/11 acc36（お手本なし・落ち着いた口調）：試しはリライトを通らず、共通の指示の絵文字が残って
+// 「株式会社しっとるが、その負担を減らします🙌」「岡山県の店舗オーナーさん、よく聞く悩みです😅」が自然さ2〜3/5で見送り
+describe("学習の試しの決まり（10/11 acc36 の見送り）", () => {
+  it("絵文字を使わない方には、絵文字を使わない決まりが付く", () => {
+    expect(trialRules(false).join("\n")).toContain("絵文字は使わない");
+    expect(trialRules(true).join("\n")).not.toContain("絵文字は使わない");
+  });
+  it("どの店でも言える宣伝の締めを書かない決まりが付く", () => {
+    const all = trialRules(true).join("\n");
+    expect(all).toContain("解決します");
+    expect(all).toContain("お任せください");
+  });
+  it("季節の試しは、業種と関係のない体調の話にしない", () => {
+    const s = LEARNING_TRIALS.find((t) => t.key === "season")!;
+    expect(s.note).toContain("業種と関係のない体調の話にしない");
   });
 });
