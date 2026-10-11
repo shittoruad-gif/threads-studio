@@ -31,7 +31,7 @@ describe("毎回直しているところの決まり", () => {
   it("プロンプトの最後に置く一節：長さ・改行の決まりより優先、直す前→直した後を3組まで", () => {
     const n = buildEditLessonsNote(["「伏見区の僕」と書かず「伏見区で接骨院をしている僕」と書く"], [...pairs, ...pairs]);
     expect(n).toContain("ここまでのすべての指示より優先");
-    expect(n).toContain("1文1行");
+    expect(n).toContain("改行の仕方");
     expect(n).toContain("伏見区で接骨院をしている僕");
     expect((n.match(/直す前：/g) ?? []).length).toBe(3);
     expect(n).toContain("直した後の文から事実を持ち込まない");

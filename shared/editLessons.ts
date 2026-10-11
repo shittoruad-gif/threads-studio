@@ -85,7 +85,7 @@ export function buildEditLessonsNote(rules: readonly string[], pairs: readonly E
   if (rules.length === 0 && shown.length === 0) return "";
   const lines = ["", "", "【★このアカウントの方が、毎回直しているところ（ここまでのすべての指示より優先・厳守）】",
     "この方は、AIの文を毎回同じように手直ししています。同じ直しをさせないよう、最初から下の形で書いてください。",
-    "上の「長さ」「1文1行」「改行は文末だけ」「絵文字を足さない」の決まりと食い違うところは、この方の直し方に合わせてください。"];
+    "上の「長さ」「改行の仕方」「改行は文末だけ」「絵文字を足さない」の決まりと食い違うところは、この方の直し方に合わせてください。"];
   if (rules.length > 0) lines.push("", "決まり：", ...rules.map((r) => `- ${r}`));
   if (shown.length > 0) {
     lines.push("", "実際の直し（直す前 → 直した後）：");

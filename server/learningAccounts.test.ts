@@ -138,3 +138,21 @@ describe("学習の試しの指示（10/10 acc10 の見送り）", () => {
     expect(one.note).toContain("割合・人数・統計は書かない");
   });
 });
+
+describe("改行の仕方の見分け（AIっぽい改行・2026-10-11）", () => {
+  it("1文ずつの段落・長さがそろう・混ざる を分ける", async () => {
+    const { lineStyle } = await import("../shared/learningReport");
+    expect(lineStyle("一文目。\n\n二文目。\n\n三文目。")).toBe("1文ずつ段落にしている");
+    expect(lineStyle("一。二。\n\n三。四。")).toBe("段落の長さがそろっている");
+    expect(lineStyle("一。\n\n二。三。四。")).toBe("短い段落と長い段落が混ざる");
+    expect(lineStyle("一。二。")).toBe("段落1つ");
+  });
+  it("最終指示から「1文＝1行」「1〜2文ごとに空行」が消え、1文ごとに改行しない指示になっている", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("./autoPostScheduler.ts", import.meta.url), "utf8");
+    expect(src).not.toContain("1文＝1行");
+    expect(src).not.toContain("1〜2文ごとに空行");
+    expect(src).toContain("1文ごとに毎回改行しない");
+    expect(src).toContain("段落の長さをそろえない");
+  });
+});

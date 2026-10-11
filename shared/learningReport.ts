@@ -41,6 +41,22 @@ export function lengthBucket(text: string): string {
   return n <= 50 ? "〜50字" : n <= 100 ? "51〜100字" : n <= 150 ? "101〜150字" : n <= 250 ? "151〜250字" : "251字〜";
 }
 
+/**
+ * 改行の仕方（2026-10-11 三上様共有の「AIっぽい改行」：1文ごとに毎回改行・段落の長さがそろう）。
+ * 空行で区切った段落のうち、1文だけの段落の割合で分ける。
+ */
+export function lineStyle(text: string): string {
+  const paras = String(text || "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  if (paras.length <= 1) return "段落1つ";
+  const sentenceCount = (p: string) => (p.match(/[。！？!?]/g) ?? []).length || 1;
+  const counts = paras.map(sentenceCount);
+  const single = counts.filter((c) => c === 1).length / counts.length;
+  const allSame = counts.every((c) => c === counts[0]);
+  if (single === 1) return "1文ずつ段落にしている";
+  if (allSame) return "段落の長さがそろっている";
+  return "短い段落と長い段落が混ざる";
+}
+
 export function firstLineTraits(text: string, area?: string | null): string[] {
   const first = String(text || "").split(/\r?\n/).map((l) => l.trim()).find(Boolean) ?? "";
   const out: string[] = [];
@@ -100,7 +116,8 @@ export function learningReportText(opts: { learning: readonly LearningRow[]; all
   const firstAll = groupByRatio(opts.all, (r) => firstLineTraits(r.text, r.area), undefined, now);
   const hourL = groupByRatio(opts.learning, (r) => `${jstHour(r.postedAt)}時台`, undefined, now);
   const angleAll = groupByRatio(opts.all, (r) => r.angle, undefined, now);
-  const sure = [...trials, ...lenAll, ...firstAll].filter((s) => s.verdict !== "まだ分からない");
+  const lineAll = groupByRatio(opts.all, (r) => lineStyle(r.text), undefined, now);
+  const sure = [...trials, ...lenAll, ...firstAll, ...lineAll].filter((s) => s.verdict !== "まだ分からない");
   const head = `リーチの傾向（直近${opts.days}日・公開から${LEARNING_REPORT.minAgeHours}時間たった投稿）\n` +
     `数字は各アカウントの中央値を1とした比。${LEARNING_REPORT.minCount}本以上で${LEARNING_REPORT.up}倍以上を「伸びる」、${LEARNING_REPORT.down}倍以下を「伸びない」とする。\n` +
     (sure.length > 0 ? `\nはっきりしてきたこと：\n${sure.slice(0, 6).map((s) => `・${s.label} ${s.medianRatio}倍（${s.n}本）→ ${s.verdict}`).join("\n")}` : "\nはっきりしてきたことは、まだありません。");
@@ -110,6 +127,7 @@ export function learningReportText(opts: { learning: readonly LearningRow[]; all
     lines("Moveact 2店の時間帯", hourL),
     lines("全アカウントの長さ", lenAll),
     lines("全アカウントの1行目", firstAll),
+    lines("全アカウントの改行の仕方", lineAll),
     lines("全アカウントの切り口", angleAll, 10),
     "お客様全体の作り方に広げるのは、三上様の承諾後（shared/learningAccounts.ts）。",
   ].join("\n\n");
