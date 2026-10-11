@@ -79,3 +79,21 @@ describe("かぎかっこは会話だけ", () => {
     expect(src).toContain("かぎかっこ「」は会話（実際に言われた言葉・心の声）だけに使う。強調のための「」は外す。");
   });
 });
+
+// 2026-10-11 三上様「これらを反映させて」（毎朝のリーチの傾向のまとめ＋スレッズ勉強会の添削）
+describe("勉強会の添削と、毎朝のまとめの実測を最終指示に", () => {
+  it("悩みは1つ・読む人を具体的に・1行目は心の声・変化の数字は使わない・リンクを貼らない", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("./autoPostScheduler.ts", import.meta.url), "utf8");
+    const add = src.match(/const AUTO_POST_STYLE_ADDENDUM = `([\s\S]*?)`;/)![1];
+    for (const w of ["扱う悩み・話題は1つだけ", "読む人を具体的な言葉で思い浮かべられるように", "読む人の心の声をそのまま一言で", "体重が何kg減ったなどの変化の数字は", "本文にリンク（URL）を貼らない", "50字以内は約2倍"]) expect(add).toContain(w);
+  });
+  it("お手本のある方は、実測の一般論の行ごと差し替わる（新しい実測の文も残らない）", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("./autoPostScheduler.ts", import.meta.url), "utf8");
+    const add = src.match(/const AUTO_POST_STYLE_ADDENDUM = `([\s\S]*?)`;/)![1];
+    const out = applyLengthRange(add, { avg: 141, lo: 124, hi: 159, n: 7 });
+    expect(out).not.toMatch(/50字以内は約2倍/);
+    expect(out).toMatch(/平均141字/);
+  });
+});
