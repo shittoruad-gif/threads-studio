@@ -272,3 +272,9 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - 約束の照合（当日の予定数）：@daigo.sekkotsuin（acc18）4 ✅／@esthe_prestige_r（acc22・〜10/13）4 ✅／@black_eyes_1896（acc25・〜10/17）4 ✅（昨日10/11も4件公開）／@tama.yurazoku（acc31）4 ✅／@esthetic.salon_prestige（acc33）4 ✅。@yusuke_seitai（acc29）は補填が10/10で終わり、今日から契約どおり3件（不足の点検にも出ていない）。
 - 昨日（10/11）の公開数：契約＋補填を超えたアカウントは無し（最大27件＝acc10 の学習の枠・30本の設定内）。
 - 当日補充：今朝の生成で消えた枠なし。
+
+## 2026-10-13 朝の点検メモ
+- 約束の照合（当日の予定数）：@daigo.sekkotsuin（acc18）4 ✅／@black_eyes_1896（acc25・〜10/17）4 ✅／@tama.yurazoku（acc31）4 ✅／@esthetic.salon_prestige（acc33）4 ✅。@esthe_prestige_r（acc22・〜10/13 1日4件の約束）は今朝 AccountHealth で冷却（1日1件・〜10/20）に入り今日1件 ✗ → 残りの補填をどうするか三上様の判断待ち。
+- 昨日（10/12）の公開数：契約＋補填を超えたアカウントは無し（最大23件＝acc12 の学習の枠・30本の設定内／acc11 は型の試し＋2で5件）。
+- 当日補充：@angyomori.jiko（user 4851）1件不足 → +1件で今日1件（契約1）。落ちた理由は healthClaimGuard（痛みの消失・症状の予告断定）。
+- 試験投稿を公開前に読んだ（#3318・#3346・#3358・#3365）。取り消しなし。玉島の「マシンが支える」0件。
