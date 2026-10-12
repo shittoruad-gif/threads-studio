@@ -167,6 +167,25 @@ export function looksLikeMaterialOnly(t: string): boolean {
 }
 
 /**
+ * 投稿の締めに使いたい「呼びかけの一言」だけを送ってこられたか。
+ *
+ * ★2026-10-12 ご質問 #55（juria様）：「初めての方も、安心してどうぞ」の一言が
+ *   12字以上のため自動応答に回り、AIが「このトークに表示される『実績として登録』ボタンを」と
+ *   **画面に無いボタン**を案内していた（自動応答には「担当者に聞く」しか付かない）。
+ *   ご質問ではなく投稿に入れたい言葉なので、材料として受け、登録ボタンをその場で出す。
+ */
+export function looksLikeInvitationPhrase(t: string): boolean {
+  const s = String(t || "").trim();
+  const n = Array.from(s).length;
+  if (n < 6 || n > 40 || /\n/.test(s)) return false;
+  if (/[?？]/.test(s)) return false;
+  if (SUPPORT_QUESTION_RE.test(s)) return false;
+  // 予約は締めの言葉によく入るので、APP_TOPIC_RE ではなくアプリの操作の言葉だけで外す
+  if (/(投稿|アプリ|設定|アカウント|ログイン|通知|承認|固定|ピン|Threads|スレッズ|LINE|ライン|画面|ボタン|メニュー|操作)/i.test(s)) return false;
+  return /(どうぞ|お待ちしてお?ります|お待ちしています|お待ちしてます|大?歓迎(です|します)?|お越しください|ご来店ください|ご相談ください)[。．.！!〜～]*$/.test(s);
+}
+
+/**
  * 箇条書き・番号つき・かぎかっこの引用が並ぶ「材料の並び」か。
  *
  * ★プレステージ様へお願いした形（「入社された方のお話を2〜3」）は、

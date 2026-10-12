@@ -15,7 +15,7 @@ import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 import { contractSummary, type ContractInfo } from "../shared/contractSummary";
-import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, looksLikeMaterialOnly, wantsHuman, isShortWish } from "../shared/requestKind";
+import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, wantsHuman, isShortWish } from "../shared/requestKind";
 import { missingAutoPostFields } from "../shared/autoPostRequirements";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
@@ -3599,7 +3599,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   //   「はじめの設定からご自身でご登録ください」と案内して終わり、
   //   aiConfident=1 のため担当者にも届かず、材料はどこにも残らなかった
   //   （2026-09-18 夜間整備でローカルQAにて実測）。
-  if (looksLikeMaterialOnly(t)) {
+  if (looksLikeMaterialOnly(t) || looksLikeInvitationPhrase(t)) {
     await recordMaterial(user.id, lineUserId, t);
     return replyToRequest("material", null, await stashMaterial(lineUserId, user.id, t));
   }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, looksLikeMaterialOnly, ownPlaceMarkers, wantsHuman, isShortWish } from "../shared/requestKind";
+import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, ownPlaceMarkers, wantsHuman, isShortWish } from "../shared/requestKind";
 import { isFeatureRequest } from "../shared/requestDetect";
 
 /**
@@ -421,5 +421,20 @@ describe("投稿の材料でしかない文章（2026-09-19）", () => {
 
   it("短い一言は材料として扱わない", () => {
     expect(looksLikeMaterialOnly("お客様が喜んでいました")).toBe(false);
+  });
+});
+
+describe("looksLikeInvitationPhrase（投稿の締めに使いたい一言）", () => {
+  // 2026-10-12 ご質問 #55：自動応答に回り、画面に無い「実績として登録」ボタンを案内していた
+  it("呼びかけの一言は材料として受ける", () => {
+    expect(looksLikeInvitationPhrase("初めての方も、安心してどうぞ")).toBe(true);
+    expect(looksLikeInvitationPhrase("ご予約お待ちしております。")).toBe(true);
+    expect(looksLikeInvitationPhrase("お子さま連れも大歓迎です！")).toBe(true);
+  });
+  it("ご質問・アプリのお尋ねは横取りしない", () => {
+    expect(looksLikeInvitationPhrase("初めての方も安心してどうぞ、と書けますか？")).toBe(false);
+    expect(looksLikeInvitationPhrase("投稿の最後にお気軽にどうぞ")).toBe(false);
+    expect(looksLikeInvitationPhrase("連携のやり方を教えてください")).toBe(false);
+    expect(looksLikeInvitationPhrase("どうぞ")).toBe(false);
   });
 });
