@@ -4055,9 +4055,16 @@ async function autoAnswer(userId: number, lineUserId: string, question: string):
         MENU_HINT,
       )];
     }
+    // ★知識（productKnowledge の「送っていただいた材料」）に沿って、AIが「『実績として登録』を押してください」と
+    //   案内することがある。ここでボタンを付けないと、押す物が無いまま終わる
+    //   （2026-10-11 ご質問 #55 juria様「初めての方も、安心してどうぞ」）。案内したときは預かってボタンを出す。
+    const save = /実績として登録/.test(res.answer) && await stashMaterial(lineUserId, userId, question)
+      ? [{ label: "実績として登録", data: "c=addproof" }]
+      : [];
     return [textWithQuick(
       res.answer + "\n\n解決しない場合は「担当者に聞く」を押してください。",
       [
+        ...save,
         { label: "担当者に聞く", data: `m=staff${res.questionId ? `&q=${res.questionId}` : ""}` },
         ...MENU_HINT,
       ],
