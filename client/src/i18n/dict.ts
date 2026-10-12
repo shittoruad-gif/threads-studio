@@ -42,6 +42,12 @@ export const dict: Record<string, string> = {
   // ── Threads連携画面（審査で最重要） ──
   "Threadsアカウントを連携して、直接投稿できるようになります": "Connect your Threads account to publish directly from this app",
   "連携は「パソコン」から行うのがおすすめです": "We recommend connecting from a computer",
+  "連携はパソコンで": "Please connect from a computer",
+  "スマホで進めると、Threadsアプリが開くだけで「許可」の画面が出ないことがほとんどです。": "On a phone, the Threads app usually opens instead, and the permission screen does not appear.",
+  "パソコンのブラウザでThreads Studioにログインして、この画面の同じボタンを押してください。Threadsのログイン画面のあとに「許可」の画面が出ます。": "Log in to Threads Studio in a computer browser and press the same button on this page. After the Threads login screen, the permission screen will appear.",
+  "この画面のURLをコピーしました。パソコンに送って開いてください": "Copied this page's URL. Send it to your computer and open it there.",
+  "この画面のURLをコピーする": "Copy this page's URL",
+  "このままスマホで進める": "Continue on this phone anyway",
   "スマホだと、Threadsアプリの影響でうまく連携できず「このページは存在しません」と表示されることがあります。パソコンのブラウザで": "On a phone, the Threads app can interfere and you may see a \"page not found\" error. Connecting from a computer browser at",
   "を開いて連携すると確実です。": "is more reliable.",
   "連携の前に：": "Before you connect:",

@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { getLoginUrl } from '@/const';
 import PageGuide from '@/components/PageGuide';
 import { useEffect, useState, useRef } from 'react';
+import { isPhoneLike, CONNECT_PAGE_URL } from '@shared/mobileOAuth';
 
 /** LINEから来られたことを、OAuthの往復をまたいで覚えておくための印 */
 const FROM_LINE_KEY = 'ts-oauth-from-line';
@@ -109,6 +110,8 @@ export default function ThreadsConnect() {
   // (set when they confirm the pre-OAuth guide modal)
   const userIntentRef = useRef<'add-different' | 'reconnect' | null>(null);
   const [showSameAccountGuide, setShowSameAccountGuide] = useState(false);
+  // スマホで押されたときに先に出す「パソコンでお願いします」（中身は待たせている連携の種類）
+  const [phoneGuideMode, setPhoneGuideMode] = useState<'reconnect' | 'switch' | null>(null);
 
   // ★LINEから来た場合は、連携後に「LINEに戻る」導線を出す（?from=line）
   //
@@ -237,7 +240,12 @@ export default function ThreadsConnect() {
   //  - mode 'reconnect': reuse current Threads session (token refresh / first connect)
   //  - mode 'switch':    force re-authentication so the user can pick a different
   //                      Threads account (auth_type=reauthenticate)
-  const startOAuth = (mode: 'reconnect' | 'switch') => {
+  const startOAuth = (mode: 'reconnect' | 'switch', fromPhoneGuide = false) => {
+    // ★スマホではThreadsアプリが許可画面を横取りして、ホームが開くだけになる。飛ぶ前に一度案内する
+    if (!fromPhoneGuide && typeof navigator !== 'undefined' && isPhoneLike(navigator.userAgent, navigator.maxTouchPoints || 0)) {
+      setPhoneGuideMode(mode);
+      return;
+    }
     const url = mode === 'switch' ? authUrlForceData?.authUrl : authUrlData?.authUrl;
     if (!url) {
       toast.error(t("認証URLを取得できませんでした"));
@@ -947,6 +955,44 @@ export default function ThreadsConnect() {
       {/* Post-OAuth fallback: same account got connected even after force-reauth.
           (Rare — only happens if the user clicks Continue with the same Threads
           account on the OAuth screen.) Show a one-screen recovery guide. */}
+      <Dialog open={phoneGuideMode !== null} onOpenChange={(o) => { if (!o) setPhoneGuideMode(null); }}>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg pr-6 text-left">
+              <Monitor className="w-5 h-5 shrink-0 text-emerald-600" />
+              {t("連携はパソコンで")}
+            </DialogTitle>
+            <DialogDescription className="pt-2 text-foreground/80 text-left">
+              {t("スマホで進めると、Threadsアプリが開くだけで「許可」の画面が出ないことがほとんどです。")}
+              <br /><br />
+              {t("パソコンのブラウザでThreads Studioにログインして、この画面の同じボタンを押してください。Threadsのログイン画面のあとに「許可」の画面が出ます。")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
+            <Button
+              className="w-full"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(CONNECT_PAGE_URL);
+                  toast.success(t("この画面のURLをコピーしました。パソコンに送って開いてください"));
+                } catch {
+                  toast.message(CONNECT_PAGE_URL);
+                }
+              }}
+            >
+              {t("この画面のURLをコピーする")}
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => { const m = phoneGuideMode; setPhoneGuideMode(null); if (m) startOAuth(m, true); }}
+            >
+              {t("このままスマホで進める")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showSameAccountGuide} onOpenChange={setShowSameAccountGuide}>
         <DialogContent className="max-w-md">
           <DialogHeader>
