@@ -15,7 +15,7 @@ import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 import { contractSummary, type ContractInfo } from "../shared/contractSummary";
-import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, isPlainStatement, wantsHuman, isShortWish } from "../shared/requestKind";
+import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, isPlainStatement, wantsTopicPost, wantsHuman, isShortWish } from "../shared/requestKind";
 import { missingAutoPostFields } from "../shared/autoPostRequirements";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
@@ -2610,6 +2610,49 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     )];
   }
 
+  // ── 「〇〇をお勧めしたい」を、ネタ帳の「書いてほしい話題」に足す（2026-10-13 ご質問 #56） ──
+  if (q.c === "addtopic") {
+    const st0 = await db.getLineChatState(lineUserId);
+    let topic = "";
+    if (st0?.state === "pending_topic" && st0.payload) {
+      try { topic = String(JSON.parse(String(st0.payload)).text || "").trim(); } catch { topic = ""; }
+    }
+    if (!topic) {
+      return [textWithQuick("お預かりしていた文章が見つかりませんでした。お手数ですが、もう一度お送りください。", MENU_HINT)];
+    }
+    const usable = ((await db.getUserProjects(user.id)) || []).filter((pj: any) =>
+      !String(pj.id).startsWith("demo_") && pj.businessType,
+    );
+    if (usable.length === 0) {
+      await db.clearLineChatState(lineUserId);
+      return [textWithQuick("先に「はじめの設定」でお店の情報のご登録をお願いします。", [{ label: "はじめの設定", data: "m=setup" }, ...MENU_HINT])];
+    }
+    if (usable.length >= 2 && !q.p) {
+      return [textWithQuick(
+        "どのお店の話題として登録しますか？",
+        usable.slice(0, 10).map((pj: any) => ({ label: String(pj.storeName || pj.title || "お店").slice(0, 16), data: `c=addtopic&p=${pj.id}` })),
+      )];
+    }
+    const pj: any = q.p ? usable.find((x: any) => String(x.id) === String(q.p)) : usable[0];
+    if (!pj) return [textWithQuick("そのお店の情報が見つかりませんでした。", MENU_HINT)];
+    const { listActiveItems, addItems } = await import("./materialLedger");
+    const { normalizeMaterial, MATERIAL_MAX_LEN } = await import("../shared/materialLedger");
+    const items = await listActiveItems(String(pj.id));
+    const key = normalizeMaterial(topic);
+    if (items.some((i) => normalizeMaterial(i.content) === key)) {
+      await db.clearLineChatState(lineUserId);
+      return [textWithQuick("その話題は、すでに登録されています。", MENU_HINT)];
+    }
+    await addItems(user.id, String(pj.id), [{ kind: "topic", content: topic.slice(0, MATERIAL_MAX_LEN) }], "line");
+    await db.clearLineChatState(lineUserId);
+    return [textWithQuick(
+      `話題として登録しました。\n（${String(pj.storeName || pj.title || "お店")}）\n「${topic}」\n\n` +
+        "これから作る投稿で、この話題を主役にした回を作ります。\n" +
+        "※ 健康に関わる言い切りは、安全運用ルールに沿って言い換わることがあります。",
+      [{ label: "今日の投稿", data: "m=posts" }, ...MENU_HINT],
+    )];
+  }
+
   // ── 送っていただいた文章を、お店の情報の「実績」に足す ──
   //   ★これが無いと、実績を1つ足すのに「はじめの設定」20問のやり直しが必要で、
   //     同じ内容を何度も送っていただくことになっていた（2026-09-06 香取様・氷見様）。
@@ -3599,6 +3642,14 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   //   「はじめの設定からご自身でご登録ください」と案内して終わり、
   //   aiConfident=1 のため担当者にも届かず、材料はどこにも残らなかった
   //   （2026-09-18 夜間整備でローカルQAにて実測）。
+  // ★「〇〇をお勧めしたい」は、投稿で取り上げてほしい話題。ご質問として自動応答に回すと、
+  //   AIが「担当者が登録します」と答えたまま誰にも届かず、どこにも残らなかった
+  //   （2026-10-13 ご質問 #56）。ネタ帳の「書いてほしい話題」へその場で足せるようにする。
+  if (wantsTopicPost(t)) {
+    await recordMaterial(user.id, lineUserId, t);
+    return replyToTopic(await stashTopic(lineUserId, user.id, t));
+  }
+
   if (looksLikeMaterialOnly(t) || looksLikeInvitationPhrase(t)) {
     await recordMaterial(user.id, lineUserId, t);
     return replyToRequest("material", null, await stashMaterial(lineUserId, user.id, t));
@@ -3797,6 +3848,36 @@ async function askedForMaterialRecently(userId: number): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** 「書いてほしい話題」をネタ帳ボタン用に預かる（お店の情報が無い方は false） */
+async function stashTopic(lineUserId: string, userId: number, text: string): Promise<boolean> {
+  try {
+    const usable = ((await db.getUserProjects(userId)) || []).filter((pj: any) =>
+      !String(pj.id).startsWith("demo_") && pj.businessType,
+    );
+    if (usable.length === 0) return false;
+    await db.setLineChatState(lineUserId, "pending_topic", JSON.stringify({ text: text.slice(0, 300) }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function replyToTopic(canSave: boolean): unknown[] {
+  return [textWithQuick(
+    "ありがとうございます。投稿で取り上げてほしい話題ですね。\n\n" +
+      (canSave
+        ? "下の「話題として登録」を押していただくと、ネタ帳の「書いてほしい話題」に足します。これからの投稿で、この話題を主役にした回を作ります（同じ話題は3週間ほどあけて使います）。\n" +
+          "メニューや商品の名前は、お送りいただいた言葉のまま使います。\n\n"
+        : "投稿で使えるようにするには、先に「はじめの設定」でお店の情報をご登録ください。\n\n") +
+      "担当者に伝えたい場合は「担当者に聞く」を押してください。",
+    [
+      ...(canSave ? [{ label: "話題として登録", data: "c=addtopic" }] : [{ label: "はじめの設定", data: "m=setup" }]),
+      { label: "担当者に聞く", data: "m=staff" },
+      ...MENU_HINT,
+    ],
+  )];
 }
 
 async function stashMaterial(lineUserId: string, userId: number, text: string): Promise<boolean> {

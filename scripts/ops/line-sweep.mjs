@@ -25,7 +25,7 @@ const BUTTONS = [
   //   アプリは正しく「うまく受け取れませんでした」と案内を返すので、こちらの書き方の誤りが
   //   不具合のように見えてしまう（2026-09-13 に一度そう見誤った）。
   'm=next', 'm=addstaff', 'm=sendq&q=1',
-  'c=addproof', 'c=focus', 'c=ideal', 'c=oneline', 'c=nourl', 'c=pintgt', 'c=proadv',
+  'c=addproof', 'c=addtopic', 'c=focus', 'c=ideal', 'c=oneline', 'c=nourl', 'c=pintgt', 'c=proadv',
   'c=more&p=1', 'c=acct&a=1', 'c=newpj&a=1', 'c=pin&a=1&p=1', 'c=urlk&k=line',
   's=common', 's=inherit&a=1', 's=acct&a=1',
   's=metaai&v=on', 's=metaai&v=off',
@@ -47,6 +47,7 @@ const TEXTS = [
   'Threadsとつなげたい',
   '小学生が足を捻って我慢していたが、当院に来てエコー観察したら骨折があった（整形外科で確定診断）、当院でリハビリを行い問題なくサッカーに復帰',
   'ありがとうございます',
+  '運動療法、リハサクをお勧めしたい', // 2026-10-13 ご質問 #56（話題として登録）
   'あ',
   '設定',
 ];

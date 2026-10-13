@@ -187,7 +187,7 @@ export function healthClaimRetryHint(hits: string[], reason: "many" | "short"): 
   const body = reason === "short"
     ? "その部分を消すと本文が残らないので、効果や結果を軸にせず、施術で何をするか・どんな場面の方に向くかで一本書く。"
     : "効果・結果・変化を言い切らない。施術で何をするか、どんな場面の方に向くかで書く。";
-  const specific = [...new Set(hits)].map((h) => LABEL_RETRY_HINTS[h]).filter(Boolean).map((t) => `\n  ・${t}`).join("");
+  const specific = Array.from(new Set(hits)).map((h) => LABEL_RETRY_HINTS[h]).filter(Boolean).map((t) => `\n  ・${t}`).join("");
   return `${head}${body}${specific}`;
 }
 

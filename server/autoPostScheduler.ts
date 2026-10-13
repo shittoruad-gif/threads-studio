@@ -1059,6 +1059,7 @@ export async function generateAutoPost(
     //   ネタ帳が無い方は今までどおり。◯✕アンケートの案づくり（opts.collect）では使わない（記録が残らないため）。
     let ledgerItem: import('../shared/materialLedger').LedgerItem | null = null;
     let ledgerActive = false;
+    let ledgerHasStories = false;
     let ledgerNote = '';
     let ledgerAnchors: string[] = [];
     if (!opts.collect) {
@@ -1067,6 +1068,7 @@ export async function generateAutoPost(
         const r = await pickLedgerItem(String(project.id), [...ngWords, ...stickyWords]);
         if (r) {
           ledgerActive = true;
+          ledgerHasStories = r.hasStories;
           ledgerItem = r.item;
           if (ledgerItem) {
             const { buildMaterialNote } = await import('../shared/materialLedger');
@@ -1175,7 +1177,9 @@ export async function generateAutoPost(
         for (const k of ['realEpisodes', 'faq', 'realProofs', 'benefitsDaily']) if (Array.isArray(v[k])) v[k] = dropAvoidedList(v[k]);
       }
       // ★ネタ帳のある方は、体験談・よくある質問を全部は渡さない。今日のネタ1件だけ（2026-09-30）
-      if (ledgerActive) {
+      //   ★ネタ帳が「書いてほしい話題」だけの方（LINEの「話題として登録」・2026-10-13）は、
+      //     体験談・よくある質問がネタ帳に移っていないので、ネタの日だけ外し、ほかの日は今までどおり渡す
+      if (ledgerActive && (ledgerHasStories || ledgerItem)) {
         v = { ...(v || {}) };
         v.realEpisodes = ledgerItem?.kind === 'episode' ? [ledgerItem.content] : [];
         v.faq = ledgerItem?.kind === 'faq' ? [ledgerItem.content] : [];

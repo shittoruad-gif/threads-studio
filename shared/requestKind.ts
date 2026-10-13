@@ -181,7 +181,7 @@ export function looksLikeInvitationPhrase(t: string): boolean {
   if (/[?？]/.test(s)) return false;
   if (SUPPORT_QUESTION_RE.test(s)) return false;
   // 予約は締めの言葉によく入るので、APP_TOPIC_RE ではなくアプリの操作の言葉だけで外す
-  if (/(投稿|アプリ|設定|アカウント|ログイン|通知|承認|固定|ピン|Threads|スレッズ|LINE|ライン|画面|ボタン|メニュー|操作)/i.test(s)) return false;
+  if (/(投稿|アプリ|設定|アカウント|ログイン|通知|承認|固定|ピン留め|ピン止め|Threads|スレッズ|LINE|ライン|画面|ボタン|メニュー|操作)/i.test(s)) return false;
   return /(どうぞ|お待ちしてお?ります|お待ちしています|お待ちしてます|大?歓迎(です|します)?|お越しください|ご来店ください|ご相談ください)[。．.！!〜～]*$/.test(s);
 }
 
@@ -199,6 +199,27 @@ export function isPlainStatement(t: string): boolean {
   if (SUPPORT_QUESTION_RE.test(s)) return false;
   if (APP_TOPIC_RE.test(s)) return false;
   return !/(お店の情報|はじめの設定|登録|変更|直し|修正|消し|削除)/.test(s);
+}
+
+/**
+ * 「〇〇をお勧めしたい」＝投稿で取り上げてほしい話題を、短く送ってこられたか。
+ *
+ * ★2026-10-13 ご質問 #56（どい接骨院様「運動療法、リハサクをお勧めしたい」）：
+ *   12字以上のため自動応答に回り、AIが「担当者が責任をもって登録させていただきます」と答えたが、
+ *   aiConfident=1 のため担当者には何も届かず、どこにも登録されなかった（守れない約束）。
+ *   ご質問ではなく「書いてほしい話題」なので、ネタ帳（shared/materialLedger.ts の topic）へ
+ *   その場で足せるようにする。
+ */
+export function wantsTopicPost(t: string): boolean {
+  const s = String(t || "").trim();
+  const n = Array.from(s).length;
+  if (n < 6 || n > 60 || /\n/.test(s)) return false;
+  if (/[?？]/.test(s)) return false;
+  if (hasLeadingAsk(s)) return false;
+  if (SUPPORT_QUESTION_RE.test(s)) return false;
+  // アプリの操作のお話（「固定投稿を紹介したい」「アプリをおすすめしたい」）は横取りしない
+  if (/(アプリ|設定|アカウント|ログイン|通知|承認|固定|ピン留め|ピン止め|Threads|スレッズ|LINE|ライン|画面|ボタン|メニューから|操作|友だち|友達|知り合い|紹介コード|紹介制度)/i.test(s)) return false;
+  return /((お勧め|おすすめ|オススメ|お薦め|紹介|宣伝|アピール|PR|ＰＲ)(し(たい|ていきたい)|して(ほしい|欲しい|ください|下さい))|(推し|広め|知らせ|伝え)(たい|ていきたい|てほしい|て欲しい|てください|て下さい)|知ってもらいたい)(です|と思います|と思っています)?[。．.！!〜～]*$/i.test(s);
 }
 
 /**

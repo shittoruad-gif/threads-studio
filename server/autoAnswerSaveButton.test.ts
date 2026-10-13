@@ -64,9 +64,11 @@ describe("自動応答が「実績として登録」を案内したときはボ�
   });
   it("「お店の情報に登録できます」とだけ答えたときも、言い切りの一文ならボタンを出す（#56）", async () => {
     aiAnswer = "この内容は「お店の情報」に登録して、今後の投稿づくりに役立てることができます。";
-    const res = await handler.handleFreeText(LINE_USER, "運動療法、リハサクをお勧めしたい");
+    // ★「〇〇をお勧めしたい」そのものは自動応答より先に「話題として登録」へ回る（server/topicPostButton.test.ts）。
+    //   ここでは自動応答に回る言い切りの一文で見る
+    const res = await handler.handleFreeText(LINE_USER, "運動療法とリハサクに力を入れています");
     expect(dataOf(res)).toContain("c=addproof");
-    expect(String(state?.payload)).toContain("運動療法、リハサクをお勧めしたい");
+    expect(String(state?.payload)).toContain("運動療法とリハサクに力を入れています");
   });
 
   it("お店の情報を直したいというお尋ねは預からない", async () => {

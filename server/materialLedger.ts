@@ -42,14 +42,17 @@ export async function getItemUsage(itemIds: readonly number[]): Promise<ItemUsag
  * 今日の1本に使うネタを選ぶ。ネタ帳が無い方は null（今までどおりの生成）。
  * @returns item＝使うネタ（無ければ null）／ledgerContents＝ネタ帳にある全ネタの本文（はじめの設定の答えから外すため）
  */
-export async function pickLedgerItem(projectId: string, avoidWords: readonly string[] = []): Promise<{ item: LedgerItem | null; ledgerContents: string[] } | null> {
+export async function pickLedgerItem(projectId: string, avoidWords: readonly string[] = []): Promise<{ item: LedgerItem | null; ledgerContents: string[]; hasStories: boolean } | null> {
   const items = await listActiveItems(projectId);
   if (items.length === 0) return null;
   const usage = await getItemUsage(items.map((i) => i.id));
   // NGワード・見送られた主役の言葉を含むネタは今日は選ばない（書けば作り直しになるだけ）
   const avoid = avoidWords.map(normalizeMaterial).filter((w) => w.length >= 2);
   const skipIds = items.filter((i) => avoid.some((w) => normalizeMaterial(i.content).includes(w))).map((i) => i.id);
-  return { item: pickNextItem(items, usage, new Date(), skipIds), ledgerContents: items.map((i) => i.content) };
+  // hasStories：話・よくある質問がネタ帳にあるか。話題（LINEの「話題として登録」）だけの方は、
+  //   はじめの設定の体験談・よくある質問を今までどおり渡す（ネタ帳に移していないため）
+  const hasStories = items.some((i) => i.kind === "episode" || i.kind === "faq");
+  return { item: pickNextItem(items, usage, new Date(), skipIds), ledgerContents: items.map((i) => i.content), hasStories };
 }
 
 export async function getLedgerStatus(projectId: string): Promise<LedgerStatus> {

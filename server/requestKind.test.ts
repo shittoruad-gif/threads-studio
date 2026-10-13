@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, ownPlaceMarkers, wantsHuman, isShortWish } from "../shared/requestKind";
+import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, wantsTopicPost, ownPlaceMarkers, wantsHuman, isShortWish } from "../shared/requestKind";
 import { isFeatureRequest } from "../shared/requestDetect";
 
 /**
@@ -430,11 +430,30 @@ describe("looksLikeInvitationPhrase（投稿の締めに使いたい一言）", 
     expect(looksLikeInvitationPhrase("初めての方も、安心してどうぞ")).toBe(true);
     expect(looksLikeInvitationPhrase("ご予約お待ちしております。")).toBe(true);
     expect(looksLikeInvitationPhrase("お子さま連れも大歓迎です！")).toBe(true);
+    // 「カッピング」の「ピン」をピン留めと取り違えない（2026-10-13）
+    expect(looksLikeInvitationPhrase("カッピングも、お気軽にどうぞ")).toBe(true);
   });
   it("ご質問・アプリのお尋ねは横取りしない", () => {
     expect(looksLikeInvitationPhrase("初めての方も安心してどうぞ、と書けますか？")).toBe(false);
     expect(looksLikeInvitationPhrase("投稿の最後にお気軽にどうぞ")).toBe(false);
     expect(looksLikeInvitationPhrase("連携のやり方を教えてください")).toBe(false);
     expect(looksLikeInvitationPhrase("どうぞ")).toBe(false);
+  });
+});
+
+describe("wantsTopicPost（投稿で取り上げてほしい話題）", () => {
+  // 2026-10-13 ご質問 #56：自動応答が「担当者が責任をもって登録させていただきます」と答え、どこにも残らなかった
+  it("〇〇をお勧めしたい・紹介してほしいは話題として受ける", () => {
+    expect(wantsTopicPost("運動療法、リハサクをお勧めしたい")).toBe(true);
+    expect(wantsTopicPost("骨盤調整をもっと紹介してほしいです")).toBe(true);
+    expect(wantsTopicPost("産後ケアをおすすめしていきたい")).toBe(true);
+    expect(wantsTopicPost("カッピングを推したい")).toBe(true);
+  });
+  it("ご質問・アプリのお話は横取りしない", () => {
+    expect(wantsTopicPost("運動療法をお勧めしたいのですが、どうすればいいですか？")).toBe(false);
+    expect(wantsTopicPost("このアプリを知り合いに紹介したい")).toBe(false);
+    expect(wantsTopicPost("固定投稿でメニューを紹介したい")).toBe(false);
+    expect(wantsTopicPost("紹介コードを使いたい")).toBe(false);
+    expect(wantsTopicPost("おすすめ")).toBe(false);
   });
 });
