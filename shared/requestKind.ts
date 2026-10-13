@@ -186,6 +186,22 @@ export function looksLikeInvitationPhrase(t: string): boolean {
 }
 
 /**
+ * お尋ねでもアプリの操作の話でもない、ふつうの言い切りの一文か。
+ *
+ * ★自動応答が「『お店の情報』に登録できます」と答えたときに、登録ボタンを付けてよいかを見る
+ *   （2026-10-12 ご質問 #56「運動療法、リハサクをお勧めしたい」：ボタンが無く、AIは「担当者が登録します」と答えていた）。
+ *   「お店の情報を直したい」のようなお尋ねの文を、材料として預からないための門。
+ */
+export function isPlainStatement(t: string): boolean {
+  const s = String(t || "").trim();
+  if (!s || Array.from(s).length > 200) return false;
+  if (/[?？]/.test(s)) return false;
+  if (SUPPORT_QUESTION_RE.test(s)) return false;
+  if (APP_TOPIC_RE.test(s)) return false;
+  return !/(お店の情報|はじめの設定|登録|変更|直し|修正|消し|削除)/.test(s);
+}
+
+/**
  * 箇条書き・番号つき・かぎかっこの引用が並ぶ「材料の並び」か。
  *
  * ★プレステージ様へお願いした形（「入社された方のお話を2〜3」）は、

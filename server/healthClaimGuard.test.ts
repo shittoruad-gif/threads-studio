@@ -150,6 +150,18 @@ describe("止めた理由を作り直しへ渡す（2026-09-15）", () => {
     expect(hint).toContain("痛みの消失");
     expect(hint).toContain("本文が残らない");
   });
+  // 2026-10-13 朝 acc32（交通事故の接骨院）：注意喚起の書き方で6回とも落ちて枠が欠けた（実際に落ちた文）
+  it("健康ガード：注意喚起の「痛みがなくても」「あとから出る」は、止まる言い方と代わりの書き方を渡す", () => {
+    const v = checkHealthClaims("交通事故の痛みは、あとから出ることもあります。\n事故直後、痛みがなくても病院受診は必須です。");
+    expect(v.hits).toEqual(expect.arrayContaining(["痛みの消失", "症状の予告断定"]));
+    const hint = healthClaimRetryHint(["痛みの消失", "症状の予告断定"], "many");
+    expect(hint).toContain("痛みがなくても");
+    expect(hint).toContain("気づきにくい");
+    expect(hint).toContain("人の話として書く");
+    // 言い換えの例そのものはガードに当たらない
+    const ok = checkHealthClaims("事故の直後は、体の変化に気づきにくいことがあります。\n数日たってから違和感に気づいて来られる方もいます。");
+    expect(ok.ok).toBe(true);
+  });
   it("健康ガード：型名が取れなくても空のヒントにはしない", () => {
     expect(healthClaimRetryHint([], "many")).toContain("健康の断定");
   });

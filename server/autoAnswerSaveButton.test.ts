@@ -62,4 +62,17 @@ describe("自動応答が「実績として登録」を案内したときはボ�
     expect(dataOf(res)).not.toContain("c=addproof");
     expect(state).toBe(null);
   });
+  it("「お店の情報に登録できます」とだけ答えたときも、言い切りの一文ならボタンを出す（#56）", async () => {
+    aiAnswer = "この内容は「お店の情報」に登録して、今後の投稿づくりに役立てることができます。";
+    const res = await handler.handleFreeText(LINE_USER, "運動療法、リハサクをお勧めしたい");
+    expect(dataOf(res)).toContain("c=addproof");
+    expect(String(state?.payload)).toContain("運動療法、リハサクをお勧めしたい");
+  });
+
+  it("お店の情報を直したいというお尋ねは預からない", async () => {
+    aiAnswer = "メニューの「はじめの設定」から、お店の情報に登録した内容を直せます。";
+    const res = await handler.handleFreeText(LINE_USER, "お店の情報の住所を変更したいです");
+    expect(dataOf(res)).not.toContain("c=addproof");
+    expect(state).toBe(null);
+  });
 });

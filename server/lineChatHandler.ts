@@ -15,7 +15,7 @@ import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 import { contractSummary, type ContractInfo } from "../shared/contractSummary";
-import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, wantsHuman, isShortWish } from "../shared/requestKind";
+import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, isPlainStatement, wantsHuman, isShortWish } from "../shared/requestKind";
 import { missingAutoPostFields } from "../shared/autoPostRequirements";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
@@ -4058,7 +4058,8 @@ async function autoAnswer(userId: number, lineUserId: string, question: string):
     // ★知識（productKnowledge の「送っていただいた材料」）に沿って、AIが「『実績として登録』を押してください」と
     //   案内することがある。ここでボタンを付けないと、押す物が無いまま終わる
     //   （2026-10-11 ご質問 #55 juria様「初めての方も、安心してどうぞ」）。案内したときは預かってボタンを出す。
-    const save = /実績として登録/.test(res.answer) && await stashMaterial(lineUserId, userId, question)
+    //   ★「『お店の情報』に登録できます」とだけ答えることもある（2026-10-12 ご質問 #56「運動療法、リハサクをお勧めしたい」）。
+    const save = (/実績として登録/.test(res.answer) || (/お店の情報」?に(登録|足|追加)/.test(res.answer) && isPlainStatement(question))) && await stashMaterial(lineUserId, userId, question)
       ? [{ label: "実績として登録", data: "c=addproof" }]
       : [];
     return [textWithQuick(

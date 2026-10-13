@@ -170,13 +170,25 @@ export function checkHealthClaims(text: string, opts: { allowPrice?: boolean } =
  *
  * @param reason many=引っかかりが2か所以上 / short=和らげたら本文が短くなりすぎた
  */
+/**
+ * ★止まった型ごとの、具体的な言い換え（2026-10-13 夜間整備）。
+ *   10/13朝 acc32（交通事故の接骨院）は主題が「あとから出てくることもあるので病院受診は必須」で、
+ *   6回とも「痛みがなくても」（痛みの消失）・「痛みは、あとから出ることも」（症状の予告断定）を書いて落ち、枠が欠けた。
+ *   「効果を言い切らない」だけでは、注意喚起の書き方が止まる理由が伝わらなかった。ガードは緩めない。
+ */
+const LABEL_RETRY_HINTS: Record<string, string> = {
+  "痛みの消失": "「痛みがない」「痛みがなくても」「痛みなく」「痛みが消える・取れる」のように「痛み」に「ない・消える」を続けない（注意喚起の「痛みがなくても」も止まる）。「事故の直後は、体の変化に気づきにくいことがあります」「違和感」と書く。",
+  "症状の予告断定": "「痛み・症状・しびれが（あとから）出る／出ます」と言い切らない。「数日たってから違和感に気づいて来られる方もいます」のように、人の話として書く。",
+};
+
 export function healthClaimRetryHint(hits: string[], reason: "many" | "short"): string {
   const labels = hits.filter(Boolean).join("／") || "健康の断定";
   const head = `- 健康の断定・体験談として止まる書き方（${labels}）が入っている。`;
   const body = reason === "short"
     ? "その部分を消すと本文が残らないので、効果や結果を軸にせず、施術で何をするか・どんな場面の方に向くかで一本書く。"
     : "効果・結果・変化を言い切らない。施術で何をするか、どんな場面の方に向くかで書く。";
-  return `${head}${body}`;
+  const specific = [...new Set(hits)].map((h) => LABEL_RETRY_HINTS[h]).filter(Boolean).map((t) => `\n  ・${t}`).join("");
+  return `${head}${body}${specific}`;
 }
 
 /**
