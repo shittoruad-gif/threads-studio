@@ -11,17 +11,19 @@
  * 認証は Coolify の env から取得するので、事前準備は不要。
  */
 import { SignJWT } from 'jose';
+import { execFileSync } from 'node:child_process';
 
-const COOLIFY = 'http://163.44.103.9:8000';
+// Coolify(8000番)は外から閉じているので、ssh で入って VPS 内の localhost を呼ぶ（トークンは標準入力で渡す）
+const coolifyGet = (path) => JSON.parse(execFileSync('ssh', [
+  '-i', `${process.env.HOME}/.ssh/id_ed25519`, '-o', 'BatchMode=yes', 'root@163.44.103.9',
+  `curl -s -H @- http://localhost:8000${path}`,
+], { input: `Authorization: Bearer ${process.env.COOLIFY_TOKEN}\n`, maxBuffer: 1 << 26 }).toString());
 const APP_UUID = 'g89zg5s4u6xr08gp2b0dptcn';
 const BASE = 'https://threads-studio.com';
 const ADMIN_OPENID = 'email_momen_t421@yahoo.co.jp';
 
 async function env() {
-  const r = await fetch(`${COOLIFY}/api/v1/applications/${APP_UUID}/envs`, {
-    headers: { Authorization: `Bearer ${process.env.COOLIFY_TOKEN}` },
-  });
-  const list = await r.json();
+  const list = coolifyGet(`/api/v1/applications/${APP_UUID}/envs`);
   const out = {};
   for (const e of list) if (!(e.key in out)) out[e.key] = e.value;
   return out;

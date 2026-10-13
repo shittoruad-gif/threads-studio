@@ -9,17 +9,19 @@
  * ※ threads_studio ディレクトリの中で実行すること（jose と shared/plans を使うため）
  */
 import { SignJWT } from 'jose';
+import { execFileSync } from 'node:child_process';
 import { getPlan } from '../../shared/plans';
 
-const COOLIFY = 'http://163.44.103.9:8000';
+// Coolify(8000番)は外から閉じているので、ssh で入って VPS 内の localhost を呼ぶ（トークンは標準入力で渡す）
+const coolifyGet = (path: string) => JSON.parse(execFileSync('ssh', [
+  '-i', `${process.env.HOME}/.ssh/id_ed25519`, '-o', 'BatchMode=yes', 'root@163.44.103.9',
+  `curl -s -H @- http://localhost:8000${path}`,
+], { input: `Authorization: Bearer ${process.env.COOLIFY_TOKEN}\n`, maxBuffer: 1 << 26 }).toString());
 const APP = 'g89zg5s4u6xr08gp2b0dptcn';
 const BASE = 'https://threads-studio.com';
 const APPLY = process.argv.includes('--apply');
 
-const r = await fetch(`${COOLIFY}/api/v1/applications/${APP}/envs`, {
-  headers: { Authorization: `Bearer ${process.env.COOLIFY_TOKEN}` },
-});
-const list = await r.json();
+const list = coolifyGet(`/api/v1/applications/${APP}/envs`);
 const e: any = {};
 for (const x of list) if (!(x.key in e)) e[x.key] = x.value;
 const secret = new TextEncoder().encode(e.JWT_SECRET);
