@@ -704,14 +704,17 @@ export async function generateAutoPost(
       console.log(`[AutoPost] Threadsの機能の投稿 account=${threadsAccountId} → ${opts.feature}`);
     }
     // ★自然な書き方モードの方は「1行目に数字」の切り口を使わない（shared/naturalStyle.ts・2026-10-03）
-    if (!forced && !opts.feature && !opts.hitPatternId && angle?.id === 'number_result') {
+    //   ★2026-10-15：地域の紹介・予約への誘導も、経歴や営業案内を並べた宣伝になるので外す（acc21 の試し生成で「local」が症例数の羅列に）
+    const { NATURAL_STYLE_SKIP_ANGLES } = await import('../shared/naturalStyle');
+    const skipNatural = (a: any) => !!a && NATURAL_STYLE_SKIP_ANGLES.includes(a.id);
+    if (!forced && !opts.feature && !opts.hitPatternId && skipNatural(angle)) {
       const { isNaturalStyleUser } = await import('../shared/naturalStyle');
       if (isNaturalStyleUser(userId)) {
-        for (let k = 0; k < 6 && angle?.id === 'number_result'; k++) {
+        for (let k = 0; k < 6 && skipNatural(angle); k++) {
           angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment });
         }
-        if (angle?.id === 'number_result') angle = null;
-        console.log(`[AutoPost] 自然な書き方モード：数字で始める切り口を外した account=${threadsAccountId} → ${angle?.id ?? 'なし'}`);
+        if (skipNatural(angle)) angle = null;
+        console.log(`[AutoPost] 自然な書き方モード：宣伝調の切り口を外した account=${threadsAccountId} → ${angle?.id ?? 'なし'}`);
       }
     }
     // ★学習の試しでは切り口を選ばない（試す条件を1つに絞る。切り口の検査と食い違って3回とも落ちていた・10/7）
@@ -1016,8 +1019,12 @@ export async function generateAutoPost(
         const cr: any = counselingResult || {};
         const plan = ft.planFreshTopic({
           recentPosts,
-          materials: [project.strength, project.usp, project.proof, project.n1Customer, (project as any).belief,
-            (project as any).customerWords, ...(cr.realProofs ?? []), ...(cr.realEpisodes ?? []), ...(cr.faq ?? []), ...(cr.menu ?? [])]
+          // ★自然な書き方モードの方は、強み・実績・メニューを今日の主題にしない（2026-10-15 acc21：強みの欄に「24時間」が3つあり、
+          //   12本中4本が「24時間急患」・残りも経歴や機器が主役の宣伝になっていた。ご本人の投稿は患者さんの迷いが主役）
+          materials: ((await import('../shared/naturalStyle')).isNaturalStyleUser(userId)
+            ? [project.n1Customer, (project as any).belief, (project as any).customerWords, ...(cr.realEpisodes ?? []), ...(cr.faq ?? [])]
+            : [project.strength, project.usp, project.proof, project.n1Customer, (project as any).belief,
+              (project as any).customerWords, ...(cr.realProofs ?? []), ...(cr.realEpisodes ?? []), ...(cr.faq ?? []), ...(cr.menu ?? [])])
             .map((m) => dropAvoided(m as string, '主題の候補')),
           // 毎回出てよい言葉（店名・地名・業種・対象のお客様）は数えない
           protect: [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title],

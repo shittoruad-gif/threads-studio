@@ -19,6 +19,12 @@ describe('自然な書き方モード', () => {
   it('絵文字を使わない方には絵文字なしと書く', () => {
     expect(naturalStyleAddendum({ allowEmoji: false })).toMatch(/絵文字は使わない/);
   });
+  it('主役は読む人の迷い・院名は書かない・設備や24時間対応を主役にしない（2026-10-15 acc21：12本中4本が「24時間急患」・ほぼ全部に院名）', () => {
+    const a = naturalStyleAddendum({ allowEmoji: true });
+    expect(a).toMatch(/院名は書かない/);
+    expect(a).toMatch(/24時間の対応は、主役にしない/);
+    expect(a).toMatch(/一度ご相談ください/);
+  });
   it('決まり文句を見つける', () => {
     expect(findCliches('根本から整えて、その場しのぎにしない')).toEqual(['根本から', 'その場しのぎ']);
     expect(findCliches('お話を伺います')).toEqual([]);

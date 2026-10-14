@@ -4132,7 +4132,11 @@ export async function getRecentPostContents(accountId: number, limit: number = 1
       SELECT postContent FROM scheduledPosts
       WHERE threadsAccountId = ${accountId} AND postContent IS NOT NULL AND postContent <> ''
         AND (status IN ('posted','pending','awaiting_approval','processing')
-             OR (status = 'canceled' AND (clientRating = 'bad' OR ratedAt IS NOT NULL)))
+             OR (status = 'canceled' AND (clientRating = 'bad' OR ratedAt IS NOT NULL))
+             -- ★承認されずに日をまたいだ案も、ご本人は承認カードで読んでいる（2026-10-15 acc21：外していたため
+             --   前日に読んだ「24時間急患」を翌日も書き、12本中4本が同じ話になっていた）。直近7日分だけ数える
+             OR (status = 'canceled' AND errorMessage LIKE '承認されないまま日をまたいだ%'
+                 AND scheduledAt >= DATE_SUB(NOW(), INTERVAL 7 DAY)))
       ORDER BY scheduledAt DESC LIMIT ${limit}`);
     return (((rows as any)[0] ?? []) as any[]).map((r) => String(r.postContent || "")).filter(Boolean);
   } catch {
