@@ -283,3 +283,4 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - 約束の照合（当日の予定数）：@daigo.sekkotsuin（acc18）4 ✅／@black_eyes_1896（acc25・〜10/17）4 ✅／@tama.yurazoku（acc31）4 ✅／@esthetic.salon_prestige（acc33）4 ✅。@esthe_prestige_r（acc22）は冷却中（〜10/20・1日1件）で予定3件だが公開時の上限で1件に抑えられる（昨日も1件）。残り7件の補填は三上様の判断待ちのまま。
 - 昨日（10/13）の公開数：契約＋補填を超えたアカウントは無し（最大27件＝acc12 の学習の枠・30本の設定内／acc11 は型の試し＋2で5件）。
 - 投稿時間の試験 21日目：4アカウント（10/11/12/36）とも今日の予定は 7〜23時台・持ち越し無し。
+- **@esthe_prestige_r（acc22）10/14 三上様ご判断「早急に進めて」→ 冷却を10/14で解除し、10/15〜10/18は1日5件（契約3＋2）で約束の残り7件＋消えた1件（#3220）を返す。** extraPostsPerDay=2・extraPostsUntil=10/18、deletedShortfall は1→0（この8件に含めたため。二重に返さない）。変更前：cooldownUntil=10/20・extraPostsPerDay=1・extraPostsUntil=10/13・deletedShortfall=1。10/19からは契約どおり3件。毎朝の照合で10/15〜10/18に5件ずつ予定・公開されているかを見る（公開前の確認あり＝承認が進まないと届かない点に注意）。
