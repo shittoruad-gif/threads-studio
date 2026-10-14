@@ -317,6 +317,22 @@ export function isThanksOrGreeting(text: string): boolean {
 }
 
 /**
+ * お礼・あいさつの一言への最初の一文。
+ * ★以前は何にでも「こちらこそ、ありがとうございます。」と返し、「こんにちは」「了解しました」にも
+ *   お礼で返していた（2026-10-14 夜間整備の通し確認で実測）。言われた言葉に合わせて返す。
+ */
+export function greetingOpener(text: string): string {
+  const t = String(text || "").trim().replace(/[。．！!、\s]+$/g, "");
+  if (/^おはよう/.test(t)) return "おはようございます。";
+  if (/^こんにちは/.test(t)) return "こんにちは。";
+  if (/^こんばんは/.test(t)) return "こんばんは。";
+  if (/^よろしく/.test(t)) return "こちらこそ、よろしくお願いいたします。";
+  if (/^お疲れ/.test(t)) return "お疲れさまです。";
+  if (/^(了解|承知|わかりました|分かりました)/.test(t)) return "ありがとうございます。";
+  return "こちらこそ、ありがとうございます。";
+}
+
+/**
  * 「担当者に聞きたい」＝人にお願いしたい、というご意思か。
  *
  * ★ボタンには「担当者に聞く」があるのに、同じことを文章で打つと何も起きず

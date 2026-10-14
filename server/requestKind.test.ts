@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, wantsTopicPost, ownPlaceMarkers, wantsHuman, isShortWish } from "../shared/requestKind";
+import { classifyRequestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, greetingOpener, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, wantsTopicPost, ownPlaceMarkers, wantsHuman, isShortWish } from "../shared/requestKind";
 import { isFeatureRequest } from "../shared/requestDetect";
 
 /**
@@ -455,5 +455,17 @@ describe("wantsTopicPost（投稿で取り上げてほしい話題）", () => {
     expect(wantsTopicPost("固定投稿でメニューを紹介したい")).toBe(false);
     expect(wantsTopicPost("紹介コードを使いたい")).toBe(false);
     expect(wantsTopicPost("おすすめ")).toBe(false);
+  });
+});
+
+describe("greetingOpener（あいさつには、あいさつで返す）", () => {
+  it("言われた言葉に合わせる（2026-10-14「こんにちは」にお礼で返していた）", () => {
+    expect(greetingOpener("こんにちは")).toBe("こんにちは。");
+    expect(greetingOpener("おはようございます！")).toBe("おはようございます。");
+    expect(greetingOpener("こんばんは")).toBe("こんばんは。");
+    expect(greetingOpener("よろしくお願いします")).toBe("こちらこそ、よろしくお願いいたします。");
+    expect(greetingOpener("お疲れ様です")).toBe("お疲れさまです。");
+    expect(greetingOpener("了解しました")).toBe("ありがとうございます。");
+    expect(greetingOpener("ありがとうございます")).toBe("こちらこそ、ありがとうございます。");
   });
 });

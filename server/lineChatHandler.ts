@@ -15,7 +15,7 @@ import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 import { contractSummary, type ContractInfo } from "../shared/contractSummary";
-import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, isPlainStatement, wantsTopicPost, wantsHuman, isShortWish } from "../shared/requestKind";
+import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, greetingOpener, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, isPlainStatement, wantsTopicPost, wantsHuman, isShortWish } from "../shared/requestKind";
 import { missingAutoPostFields } from "../shared/autoPostRequirements";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
@@ -3726,7 +3726,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   //   AIは呼ばない（お待たせしない）まま、短くお返しする（2026-09-14 夜間整備の通し確認で気づいた）。
   if (isThanksOrGreeting(t)) {
     return [textWithQuick(
-      "こちらこそ、ありがとうございます。\nご用のときは、下のメニューからいつでもどうぞ。",
+      `${greetingOpener(t)}\nご用のときは、下のメニューからいつでもどうぞ。`,
       MENU_HINT,
     )];
   }

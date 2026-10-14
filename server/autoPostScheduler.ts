@@ -11,7 +11,7 @@ import * as db from "./db";
 import { getPlan } from "../shared/plans";
 import { buildCtaText } from "../shared/autoPostCta";
 import { charBudgetFor, resolveWithAlternation, POST_LENGTHS, trimToBudget } from "../shared/postLength";
-import { checkNaturalized, endsWithQuestion, findAgreementQuestion, findBannedTic, findRepeatedHookNumber, findRepeatedPhrase, polishPunctuation } from "../shared/jpQualityGuard";
+import { checkNaturalized, endsWithQuestion, findAgreementQuestion, findBannedTic, findRepeatedHookNumber, findRepeatedPhraseExcept, polishPunctuation } from "../shared/jpQualityGuard";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
@@ -1780,9 +1780,11 @@ export async function generateAutoPost(
       let idWords: string[] = [];
       try { const { identityTokens } = await import('../shared/identityGuard'); idWords = identityTokens(project).filter((w) => Array.from(w).length >= 2); } catch { idWords = []; }
       // ★ご本人が手直しで書き足した言葉も外す（2026-10-08：教えた言い回しが使い回し扱いで作り直しになっていた）
-      const stripWords = [...idWords, ...ownerAdded].sort((x, y) => y.length - x.length);
-      const strip = (t: string) => stripWords.reduce((acc, w) => acc.split(w).join(' '), String(t));
-      const dup = findRepeatedPhrase(strip(naturalMain), recentPosts.map(strip));
+      // ★ご本人が直した後の文に2本以上入っている言い回し（決まった挨拶・署名）も外す（2026-10-14 acc26「ハイサイ♪はいさい整骨院の比嘉です」）
+      const dup = findRepeatedPhraseExcept(naturalMain, recentPosts, {
+        stripWords: [...idWords, ...ownerAdded],
+        ownerPairs: ownerEditPairs,
+      });
       // ★書き直した回数を残す（2026-09-18）。お客様に追記をお願いするとき、
       //   「なぜ必要か」を数えた事実で示すために使う（shared/materialDepth.ts）。
       if (dup && !isDryRun()) { try { await db.bumpDupReject(threadsAccountId); } catch { /* 記録できなくても続ける */ } }

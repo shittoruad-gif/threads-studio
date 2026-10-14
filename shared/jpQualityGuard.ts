@@ -463,6 +463,45 @@ export function findRepeatedPhrase(
   return best.length >= minChars ? best : null;
 }
 
+/**
+ * findRepeatedPhrase に、毎回入ってよい言葉の除外を足したもの。
+ * - stripWords（店名・地名・ご本人が書き足した言葉）は、句読点・空白・絵文字を除いた形で外す
+ * - 見つかった言い回しが、ご本人の直した後の文（ownerPairs の after）の ownerMin 本以上に入っていて、
+ *   しかも1回以上はご本人が書き足したもの（直す前の文に無かった）なら、決まった挨拶・署名なので外して探し直す。
+ *   AIが書いたまま残っただけの言い回しは外さない（直した後の文に入っているだけでは、ご本人の言葉とは言えない）
+ * 2026-10-14 比嘉様 acc26：ご本人が毎回冒頭に足す「ハイサイ♪はいさい整骨院の比嘉です(^^)」が、
+ * 手直しの差分では「…比嘉です(^^)連休明けのお疲れも溜まっ」と本文とつながって切り出され、外れずに
+ * 使い回し扱い→作り直し3回→保証パスで承認カード、を1晩に3枠くり返していた。
+ */
+export function findRepeatedPhraseExcept(
+  text: string,
+  recentTexts: readonly string[],
+  opts: { stripWords?: readonly string[]; ownerPairs?: ReadonlyArray<{ before: string; after: string }>; ownerMin?: number } = {},
+): string | null {
+  const words = (opts.stripWords ?? []).map(plain).filter((w) => w.length >= 2).sort((x, y) => y.length - x.length);
+  // 外した所をまたいで一致しないよう、本文と比べる相手で別の区切りを入れる
+  const cut = (t: string, sep: string, extra: readonly string[]) =>
+    [...words, ...extra].reduce((acc, w) => acc.split(w).join(sep), plain(t));
+  const pairs = (opts.ownerPairs ?? []).map((p) => ({ before: plain(p.before), after: plain(p.after) })).filter((p) => p.after);
+  const owners = pairs.map((p) => p.after);
+  const ownerMin = opts.ownerMin ?? 2;
+  const kept: string[] = [];
+  for (let k = 0; k < 5; k++) {
+    const dup = findRepeatedPhrase(cut(text, "\u0001", kept), recentTexts.map((r) => cut(r, "\u0002", kept)));
+    if (!dup || owners.length < ownerMin) return dup;
+    // 見つかった言い回しのうち、ご本人の文にある一番長い部分
+    const own = findRepeatedPhrase(dup, owners);
+    if (!own || owners.filter((o) => o.includes(own)).length < ownerMin) return dup;
+    // 直す前の文と半分以上同じなら、1〜2字の言い換えでありご本人の言葉ではない（acc37「孫を抱っこしたい[な]、またゴルフ」）
+    const ownLen = Array.from(own).length;
+    const ownerWrote = (p: { before: string; after: string }) =>
+      p.after.includes(own) && Array.from(findRepeatedPhrase(own, [p.before], 4) ?? "").length * 2 < ownLen;
+    if (!pairs.some(ownerWrote)) return dup;
+    kept.push(own);
+  }
+  return null;
+}
+
 // ── 書き出しで同じ実績の数字を繰り返していないか ──────────────────
 /**
  * 2026-09-13 実測。香取様の直近5本を findRepeatedPhrase にかけたところ、
