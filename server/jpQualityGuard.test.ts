@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   checkNaturalized, hiraganaRatio, endsWithQuestion, countNdesu,
   countEmoji, hasRepeatedEnding, polishPunctuation, findBannedTic, findRepeatedPhrase,
-  findRepeatedHookNumber, findAgreementQuestion,
+  findRepeatedHookNumber, findAgreementQuestion, findTicSentence, applyTicSentenceRepair, hasTicOrAgreement,
   HIRAGANA_RATIO_MAX, NDESU_MAX,
 } from "../shared/jpQualityGuard";
 
@@ -282,5 +282,35 @@ describe("findAgreementQuestion（同意確認疑問の語尾の族・2026-09-24
     ]) {
       expect(findAgreementQuestion(t), t).toBeNull();
     }
+  });
+});
+
+describe("決まり文句の1文だけを差し替える（2026-10-15 週次リサーチ）", () => {
+  const text = "腰のつらさ、その場しのぎで終わっていませんか？\n僕もこの仕事をして10年。\n根本から整えるのが当院の考え方です😊";
+
+  it("当たった1文だけを取り出す", () => {
+    expect(findTicSentence(text)).toBe("腰のつらさ、その場しのぎで終わっていませんか？");
+    expect(findTicSentence("朝、布団から出るのがつらい。\n体を整えましょう。")).toBeNull();
+  });
+
+  it("差し替えは他の文に触れない", () => {
+    const out = applyTicSentenceRepair(text, "腰のつらさ、その場しのぎで終わっていませんか？", "腰のつらさが、その場しのぎで終わってしまう。");
+    expect(out).toBe("腰のつらさが、その場しのぎで終わってしまう。\n僕もこの仕事をして10年。\n根本から整えるのが当院の考え方です😊");
+    expect(hasTicOrAgreement(out!)).toBe(false);
+  });
+
+  it("差し替え後も疑問・決まり文句・極端な長さなら採用しない", () => {
+    const bad = "腰のつらさ、その場しのぎで終わっていませんか？";
+    expect(applyTicSentenceRepair(text, bad, "腰のつらさ、そのままにしてませんか？")).toBeNull();
+    expect(applyTicSentenceRepair(text, bad, "腰は大丈夫？")).toBeNull();
+    expect(applyTicSentenceRepair(text, bad, "つらい。")).toBeNull();
+    expect(applyTicSentenceRepair(text, bad, "")).toBeNull();
+  });
+
+  it("かぎかっこで始まる文はかっこを残す", () => {
+    const q = "「赤ちゃんの頭の形、自然に整うって思っていませんか？」\n早めに見てあげることが大切です。";
+    const s = findTicSentence(q)!;
+    const out = applyTicSentenceRepair(q, s.trim(), "赤ちゃんの頭の形は、自然に整うと思われがちです。");
+    expect(out).toBe("「赤ちゃんの頭の形は、自然に整うと思われがちです。」\n早めに見てあげることが大切です。");
   });
 });

@@ -166,6 +166,9 @@
  *     店側の同意確認疑問は1本（ヘッドスパ店「頑張りすぎていませんか？」・反応3）。
  *     他の「いませんか」は募集型2本（「寝たい方いませんか？」「働いてみたい方いませんか？」）。
  *     1週分・反応の小さい1本なので禁止は維持。
+ *   追加の対処（同じ週・もう1台のMacの監視）：お手本に族が無くても残った場合に備え、
+ *     当たった1文だけを言い切りに差し替える（findTicSentence / applyTicSentenceRepair、
+ *     server/autoPostScheduler.ts の repairTicSentence）。直せたら guard='bannedTicRepaired' で記録する。
  *
  * ガードの原則:
  *   リライトはベストエフォートで、失敗しても「リライト前の文」という
@@ -270,6 +273,46 @@ export function agreementQuestionCaveat(samples: readonly string[]): string {
   const hit = samples.map((s) => findBannedTic(s) || findAgreementQuestion(s)).find(Boolean);
   if (!hit) return '';
   return `ただし、上の文にある「${hit}」のような、読み手に同意を求める問いかけ（〜ていませんか？／〜てませんか？／〜と思いませんか？）だけは真似しない（公開前の検査で必ず作り直しになる）。悩みや思い込みは疑問形にせず、地の文で言い切って描く。`;
+}
+
+/** 決まり文句か同意確認疑問の族が入っているか */
+export function hasTicOrAgreement(text: string): boolean {
+  return !!(findBannedTic(text) || findAgreementQuestion(text));
+}
+
+/**
+ * 決まり文句・同意確認疑問を含む「1文」を取り出す（無ければ null）。
+ *
+ * 2026-10-15 週次リサーチ：手直しが3本以上のアカウントと学習の枠では
+ * 書き直し（naturalizeContent）をかけなくなった（2026-10-08）。この書き直しが
+ * 副作用で「〜ていませんか？」を消していたため、作り直しの記録が 1日約2件 → 12〜18件、
+ * 最後の1回で公開された記録が 8日で27件に増えた。文全体を書き直すとご本人の書き方が
+ * 消えるので、当たった1文だけを差し替えるための切り出し。
+ */
+export function findTicSentence(text: string): string | null {
+  const sentences = String(text ?? '').match(/[^。！？!?\n]*[。！？!?]?/g) ?? [];
+  for (const s of sentences) {
+    if (s.trim() && hasTicOrAgreement(s)) return s;
+  }
+  return null;
+}
+
+/**
+ * 1文の差し替え結果を検査して、本文に当てはめる（不合格なら null）。
+ * 差し替え後の文に決まり文句・同意確認疑問が無く、疑問で終わらず、
+ * 長さが元の文の半分〜1.6倍のときだけ採用する。他の文には一切触れない。
+ */
+export function applyTicSentenceRepair(text: string, oldSentence: string, newSentence: string): string | null {
+  let repl = String(newSentence ?? '').trim().replace(/^[「『"]|[」』"]$/g, '').split('\n')[0].trim();
+  // 元の文がかぎかっこで始まっていたら残す（閉じかっこは次の断片として本文に残っている）
+  if (repl && /^[「『]/.test(oldSentence.trim())) repl = oldSentence.trim()[0] + repl;
+  if (!repl || !text.includes(oldSentence)) return null;
+  if (hasTicOrAgreement(repl) || /[？?]$/.test(repl)) return null;
+  const oldLen = Array.from(oldSentence.trim()).length;
+  const newLen = Array.from(repl).length;
+  if (newLen < oldLen * 0.5 || newLen > oldLen * 1.6) return null;
+  const out = text.replace(oldSentence, repl);
+  return hasTicOrAgreement(out) ? null : out;
 }
 
 /** ひらがな率を計算する（日本語文字のうちひらがなが占める割合） */

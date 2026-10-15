@@ -11,7 +11,7 @@ import * as db from "./db";
 import { getPlan } from "../shared/plans";
 import { buildCtaText } from "../shared/autoPostCta";
 import { charBudgetFor, resolveWithAlternation, POST_LENGTHS, trimToBudget } from "../shared/postLength";
-import { checkNaturalized, endsWithQuestion, findAgreementQuestion, findBannedTic, findRepeatedHookNumber, findRepeatedPhraseExcept, polishPunctuation } from "../shared/jpQualityGuard";
+import { applyTicSentenceRepair, checkNaturalized, endsWithQuestion, findAgreementQuestion, findBannedTic, findRepeatedHookNumber, findRepeatedPhraseExcept, findTicSentence, polishPunctuation } from "../shared/jpQualityGuard";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
@@ -249,6 +249,36 @@ function noteReject(
   void db
     .recordPostReject({ userId, threadsAccountId: accountId, guard, detail: opts.detail ?? hint, gaveUp: opts.gaveUp })
     .catch(() => undefined);
+}
+
+/**
+ * 決まり文句・同意確認疑問（「〜ていませんか？」等）を含む1文だけを、地の文の言い切りに差し替える。
+ * 他の文・改行・絵文字には触れない（ご本人の書き方を残すため）。直せなければ null。
+ * 2026-10-15 週次リサーチ：書き直しを省くアカウント（手直し3本以上・学習の枠）で
+ * この形が作り直し・最後の1回の公開まで残るようになったための対処。
+ */
+export async function repairTicSentence(text: string): Promise<string | null> {
+  const bad = findTicSentence(text);
+  if (!bad) return null;
+  try {
+    const prompt = `次の1文は、読む人に同意を求める確認の疑問（「〜ていませんか？」「〜と思いませんか？」など）になっています（この形は禁止）。
+同じ意味のまま、疑問形にしない地の文の言い切り1文に直してください。
+
+- 悩みや思い込みは、そのまま描く（例：「朝、腰が固まって起き上がれない。」「体重計の数字だけを見てしまう。」）。
+- 誘いの疑問（「〜しませんか」）にもしない。
+- 事実・数字・地名・店名を足さない、変えない。前後の文に合わせて、です・ます調か常体かを元の文に合わせる。
+- 絵文字は元の文にあるものだけ残す。
+
+【出力】直した1文だけ。前置き・説明・引用符は不要。
+
+元の文：${bad.trim()}`;
+    const res = await invokeLLM({ messages: [{ role: 'user', content: prompt }] });
+    const out = (res.choices[0]?.message?.content ?? '').toString().trim();
+    return applyTicSentenceRepair(text, bad.trim(), out);
+  } catch (e) {
+    console.warn(`[AutoPost] 1文の差し替えに失敗: ${(e as Error)?.message}`);
+    return null;
+  }
 }
 
 export async function naturalizeContent(
@@ -1459,9 +1489,18 @@ export async function generateAutoPost(
     const ticLeft = findBannedTic(naturalMain) || findAgreementQuestion(naturalMain);
     if (ticLeft) {
       const beforeClean = !findBannedTic(beforeNaturalize) && !findAgreementQuestion(beforeNaturalize);
+      // ★2026-10-15 週次リサーチ：書き直しを省くアカウントでは「リライト前に戻す」が使えず、
+      //   作り直し・最後の1回の公開が急増した（8日で公開27件）。当たった1文だけを言い切りに差し替える。
+      const repaired = beforeClean && naturalMain !== beforeNaturalize ? null : await repairTicSentence(naturalMain);
       if (beforeClean && naturalMain !== beforeNaturalize) {
         console.warn(`[AutoPost] bannedTic「${ticLeft}」→ リライト前の文に戻す userId=${userId}`);
         naturalMain = beforeNaturalize;
+      } else if (repaired) {
+        console.warn(`[AutoPost] bannedTic「${ticLeft}」→ その1文だけ言い切りに差し替え userId=${userId}`);
+        naturalMain = repaired;
+        if (!isDryRun()) void db
+          .recordPostReject({ userId, threadsAccountId, guard: 'bannedTicRepaired', detail: ticLeft, gaveUp: false })
+          .catch(() => undefined);
       } else if (lastAttempt) {
         console.warn(
           `[AutoPost] bannedTic「${ticLeft}」が残存（最後の作り直しのため公開） userId=${userId} projectId=${project.id}`,
