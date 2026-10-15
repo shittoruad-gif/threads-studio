@@ -15,6 +15,7 @@
  * プロンプトのいちばん最後に置き、長さ・改行の決まりより優先させる。
  */
 
+import { agreementQuestionCaveat } from "./jpQualityGuard";
 export interface EditPair { before: string; after: string }
 
 export const EDIT_LESSONS = {
@@ -91,6 +92,9 @@ export function buildEditLessonsNote(rules: readonly string[], pairs: readonly E
   if (shown.length > 0) {
     lines.push("", "実際の直し（直す前 → 直した後）：");
     shown.forEach((p, i) => lines.push(`${i + 1}. 直す前：${clip(p.before, 300).replace(/\n+/g, " / ")}`, `   直した後：${clip(p.after, 300).replace(/\n+/g, " / ")}`));
+    // ★直した後の文にある同意確認の問いかけは真似させない（2026-10-15 週次リサーチ・shared/jpQualityGuard.ts）
+    const caveat = agreementQuestionCaveat(shown.map((p) => clip(p.after, 300)));
+    if (caveat) lines.push(caveat);
   }
   lines.push("", "事実（数字・実績・料金・効果）は入力情報だけ。直した後の文から事実を持ち込まない。");
   return lines.join("\n");

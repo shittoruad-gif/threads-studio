@@ -96,3 +96,23 @@ describe("店を指す言葉：ご本人が消す言葉・地域欄の「なし�
     expect(identityTokens({ storeName: "珠由良族", area: "なし" })).not.toContain("なし");
   });
 });
+
+describe("直した後の文にある同意確認の問いかけ（2026-10-15 週次リサーチ）", () => {
+  it("お手本に「〜てませんか？」があれば、その形だけは真似しない一文を添える", () => {
+    const note = buildEditLessonsNote([], [
+      { before: "肩こりの原因は首だけではありません。", after: "肩や首ばかりマッサージしてませんか？\n原因は足元のこともあります。" },
+    ]);
+    expect(note).toContain("真似しない");
+    expect(note).toContain("てませんか");
+  });
+  it("お手本がきれいなら何も足さない", () => {
+    const note = buildEditLessonsNote([], [{ before: "腰の話です。長めの文です。", after: "腰のつらさは、股関節から来ることがあります。" }]);
+    expect(note).not.toContain("真似しない");
+  });
+  it("手直しの好み（postPreference）にも同じ一文が入る", async () => {
+    const { buildPreferenceNote } = await import("../shared/postPreference");
+    const note = buildPreferenceNote([{ originalContent: "運動が必要です。", postContent: "痩せる為には運動しなきゃいけないと思っていませんか？当店は運動なしです。" }]);
+    expect(note).toContain("真似しない");
+    expect(buildPreferenceNote([{ originalContent: "a", postContent: "当店のダイエットは運動なしで続けられる形です。" }])).not.toContain("真似しない");
+  });
+});

@@ -13,6 +13,7 @@
  * ★事実（お店の情報）には一切触れない。あくまで書き方の好みだけを扱う。
  */
 
+import { agreementQuestionCaveat } from "./jpQualityGuard";
 export interface PostEdit {
   /** AIが作った文 */
   originalContent: string | null | undefined;
@@ -74,6 +75,9 @@ export function buildPreferenceNote(edits: PostEdit[]): string {
     "内容（事実）は入力情報に従い、書き方だけを真似てください。\n---\n" +
     samples.join("\n---\n") +
     "\n---";
+  // ★お手本にある同意確認の問いかけは真似させない（2026-10-15 週次リサーチ・shared/jpQualityGuard.ts）
+  const caveat = agreementQuestionCaveat(samples);
+  if (caveat) note += "\n" + caveat;
 
   if (avoid.length > 0) {
     note +=
