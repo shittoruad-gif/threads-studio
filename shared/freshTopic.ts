@@ -196,16 +196,28 @@ export function planFreshTopic(params: {
       items.push(s);
     }
   }
+  // ★材料の言葉が漢字・カタカナの続きで長くなると（「〇〇担当歴」）、投稿の「〇〇」と一致せず
+  //   「まだ使っていない材料」に見えていた。10/10〜10/14 にある院で5本中4本がこの材料のまま主題に選ばれ続け、
+  //   ご本人から「〇〇の話題はいらない」（ご質問 #57）。投稿の言葉（3字以上）が材料の言葉の半分以上を占めていれば、使ったと数える
+  const docWordsOf = (ds: readonly string[]) => {
+    const out = new Set<string>();
+    for (const d of ds) for (const w of topicWordsOf(d)) if (w.length >= 3 && !isProtected(w)) out.add(w);
+    return Array.from(out);
+  };
+  const allDocWords = docWordsOf(docs);
+  const last3Words = docWordsOf(docs.slice(0, 3));
+  const wordUsedIn = (w: string, ds: readonly string[], dws: readonly string[]) =>
+    ds.some((d) => d.includes(w)) || (w.length >= 5 && dws.some((dw) => w.includes(dw) && dw.length * 2 >= w.length));
   const scored = items.map((s) => {
     const words = topicWordsOf(s).filter((w) => !isProtected(w));
     const hitOverused = overused.filter((o) => norm(s).includes(o)).length;
     // その材料の言葉が、直近の投稿にどれだけ出ているか（0〜1）
-    const used = words.length === 0 ? 1 : words.filter((w) => docs.some((d) => d.includes(w))).length / words.length;
+    const used = words.length === 0 ? 1 : words.filter((w) => wordUsedIn(w, docs, allDocWords)).length / words.length;
     // 使いすぎの型の言い回しを含む材料（「技術を覚えられるか不安」）は主題にしない
     const hitFrame = lineHitsFrames(s, frames) ? 2 : 0;
     // ★直近3本の主役だった材料（言葉の半分以上が直近3本に出ている）は、今日は主題にしない（2026-09-30 三上様「1〜3を今夜」）
     const last3 = docs.slice(0, 3);
-    const inLast3 = words.length > 0 && words.filter((w) => last3.some((d) => d.includes(w))).length / words.length >= 0.5 ? 2 : 0;
+    const inLast3 = words.length > 0 && words.filter((w) => wordUsedIn(w, last3, last3Words)).length / words.length >= 0.5 ? 2 : 0;
     return { s, score: hitOverused * 2 + hitFrame + used + inLast3, words: words.length };
   }).filter((x) => x.words > 0);
   if (scored.length === 0) return { ...empty, overused, frames };

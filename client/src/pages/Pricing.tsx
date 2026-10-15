@@ -523,9 +523,9 @@ export default function Pricing() {
         {/* 決済メール＝登録メールの注意（Webhook自動反映のため） */}
         {isAuthenticated && (
           <div className="max-w-3xl mx-auto -mt-8 mb-16 text-center">
-            <p className="text-sm text-muted-foreground bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 inline-block">
+            <p className="text-sm text-muted-foreground bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 inline-block max-w-full">
               💡 お支払い手続きの際は、アプリにご登録のメールアドレス
-              {user?.email ? <span className="font-semibold text-foreground">（{user.email}）</span> : ''}
+              {user?.email ? <span className="font-semibold text-foreground break-all">（{user.email}）</span> : ''}
               をご入力ください。別のメールアドレスですと、プランの自動反映ができない場合があります。
             </p>
           </div>

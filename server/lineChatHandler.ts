@@ -15,7 +15,7 @@ import { prefillProposalText } from "./counselingPrefill";
 import { applyPersonalOverrides } from "../shared/personalBrand";
 import { saveCounselingAnswers } from "./counselingSave";
 import { contractSummary, type ContractInfo } from "../shared/contractSummary";
-import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, greetingOpener, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, isPlainStatement, wantsTopicPost, wantsHuman, isShortWish } from "../shared/requestKind";
+import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, unwantedTopicWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, greetingOpener, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, isPlainStatement, wantsTopicPost, wantsHuman, isShortWish } from "../shared/requestKind";
 import { missingAutoPostFields } from "../shared/autoPostRequirements";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
@@ -3086,6 +3086,12 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       [{ label: `元に戻す（${jp(prev)}）`, data: `s=len&v=${prev === "alternate" ? "alt" : prev}${a}` }, ...MENU_HINT],
     )];
   }
+  // 「〇〇の話題はいらない」のボタンから、その言葉をそのまま登録する（2026-10-15 ご質問 #57）
+  if (q.s === "ngadd") {
+    const w = String(q.w || "").trim();
+    if (!w || Array.from(w).length > 30) return [textWithQuick("言葉を読み取れませんでした。", [{ label: "NGワードを追加", data: "s=ng" }, ...MENU_HINT])];
+    return addNgWords(user.id, q.p ? String(q.p) : null, [w]);
+  }
   if (q.s === "ng") {
     // ★NGワードはお店の情報ごとに保持している。複数店舗なら、どのお店に登録するかを先に選ぶ
     //   （以前は必ず1件目に登録され、別の店舗の投稿では避けられていなかった。2026-09-04）
@@ -3447,24 +3453,8 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
       // 1語が長すぎるものは言葉ではなく文章。登録しても避けようがないので落とす。
       .filter((w) => w && Array.from(w).length <= 30).slice(0, 20);
     if (words.length === 0) return [textWithQuick("言葉を読み取れませんでした。", MENU_HINT)];
-    try {
-      // NGワードはプロジェクト（お店の情報）側に保持している。
-      // どのお店かは、入力をお願いしたときに payload へ入れてある（複数店舗対応）。
-      const projects = ((await db.getProjectsByUserId(user.id)) || []).filter((pj: any) => !String(pj.id).startsWith("demo_"));
-      const project: any = st.payload
-        ? projects.find((pj: any) => String(pj.id) === String(st.payload))
-        : projects[0];
-      if (!project) return [textWithQuick("先にお店の情報の登録が必要です。", MENU_HINT)];
-      const cur = String(project.ngWords || "").split(/[、,\n]/).map((w: string) => w.trim()).filter(Boolean);
-      const merged = Array.from(new Set([...cur, ...words]));
-      await db.updateProject(project.id, { ngWords: merged.join("、") } as any);
-      // 「絶対に書きたくないこと」の答えにも足す（修正画面と食い違わせない）
-      await (await import("./counselingSync")).syncCounselingFromColumns(project.id, { ngWords: merged.join("、") });
-      const who = projects.length >= 2 ? `「${String(project.storeName || project.title || "お店")}」の投稿では、` : "";
-      return [textWithQuick(`「${words.join("」「")}」を、使わない言葉として登録しました。${who}以後の投稿では避けます。`, MENU_HINT)];
-    } catch {
-      return [textWithQuick("登録に失敗しました。時間をおいてお試しください。", MENU_HINT)];
-    }
+    // どのお店かは、入力をお願いしたときに payload へ入れてある（複数店舗対応）。
+    return addNgWords(user.id, st.payload ? String(st.payload) : null, words);
   }
 
   // 「メニュー」「使い方」などのキーワードにも反応する
@@ -3551,6 +3541,12 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   //   以前は自動応答が「設定メニューから登録できます」と説明するだけで、
   //   お客様がもう一度メニューをたどる必要があった（2026-09-06 ご質問 #10。
   //   ご登録は今も行われていない）。その場で言葉の入力までお通しする。
+  // ★「〇〇の話題はいらない」は、言葉を取り出して登録ボタンを出す（2026-10-15 ご質問 #57。
+  //   自動応答が「設定からNGワードを登録してください」と説明するだけで、ご登録されずに終わっていた）
+  {
+    const unwanted = unwantedTopicWord(t);
+    if (unwanted) return offerNgWordFromTopic(user.id, unwanted);
+  }
   if (wantsNgWord(t)) return handlePostback(lineUserId, "s=ng");
 
   // ★投稿文の貼り付けは、ご質問として自動応答に回さない（的外れな返事・担当者への誤通知を防ぐ）
@@ -3862,6 +3858,49 @@ async function stashTopic(lineUserId: string, userId: number, text: string): Pro
   } catch {
     return false;
   }
+}
+
+/** NGワード（使わない言葉）をお店の情報に足す。projectId が無ければ1件目のお店 */
+async function addNgWords(userId: number, projectId: string | null, words: string[]): Promise<unknown[]> {
+  try {
+    // NGワードはプロジェクト（お店の情報）側に保持している。
+    const projects = ((await db.getProjectsByUserId(userId)) || []).filter((pj: any) => !String(pj.id).startsWith("demo_"));
+    const project: any = projectId
+      ? projects.find((pj: any) => String(pj.id) === String(projectId))
+      : projects[0];
+    if (!project) return [textWithQuick("先にお店の情報の登録が必要です。", MENU_HINT)];
+    const cur = String(project.ngWords || "").split(/[、,\n]/).map((w: string) => w.trim()).filter(Boolean);
+    const merged = Array.from(new Set([...cur, ...words]));
+    await db.updateProject(project.id, { ngWords: merged.join("、") } as any);
+    // 「絶対に書きたくないこと」の答えにも足す（修正画面と食い違わせない）
+    await (await import("./counselingSync")).syncCounselingFromColumns(project.id, { ngWords: merged.join("、") });
+    const who = projects.length >= 2 ? `「${String(project.storeName || project.title || "お店")}」の投稿では、` : "";
+    return [textWithQuick(`「${words.join("」「")}」を、使わない言葉として登録しました。${who}以後の投稿では避けます。`, MENU_HINT)];
+  } catch {
+    return [textWithQuick("登録に失敗しました。時間をおいてお試しください。", MENU_HINT)];
+  }
+}
+
+/** 「〇〇の話題はいらない」へのお返事。言葉はもう書いてくださっているので、聞き直さずに登録ボタンを出す */
+async function offerNgWordFromTopic(userId: number, word: string): Promise<unknown[]> {
+  const usable = ((await db.getUserProjects(userId)) || []).filter((pj: any) =>
+    !String(pj.id).startsWith("demo_") && pj.businessType,
+  );
+  if (usable.length === 0) {
+    return [textWithQuick("先に「はじめの設定」でお店の情報をご登録ください。", [{ label: "はじめの設定", data: "m=setup" }, ...MENU_HINT])];
+  }
+  const w = encodeURIComponent(word);
+  const label = `「${word}」を登録`.slice(0, 20);
+  const buttons = usable.length >= 2
+    ? usable.slice(0, 10).map((pj: any) => ({ label: String(pj.storeName || pj.title || "お店").slice(0, 16), data: `s=ngadd&p=${pj.id}&w=${w}` }))
+    : [{ label, data: `s=ngadd&w=${w}` }];
+  return [textWithQuick(
+    `承知しました。「${word}」の話を投稿に出さないようにできます。\n\n` +
+      (usable.length >= 2 ? "どのお店の投稿で出さないか、下から選んでください。" : `下の「${label}」を押すと、使わない言葉として登録します。`) + "\n" +
+      "登録すると、その言葉が入ったお店の情報（実績など）は投稿の主題に使わず、文章にも入れません。翌日の投稿から変わります。\n" +
+      "言葉を変えたい場合は「別の言葉にする」を押してください。",
+    [...buttons, { label: "別の言葉にする", data: "s=ng" }, { label: "やめる", data: "m=cancel" }],
+  )];
 }
 
 function replyToTopic(canSave: boolean): unknown[] {

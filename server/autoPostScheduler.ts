@@ -776,7 +776,7 @@ export async function generateAutoPost(
     // Auto-posts also reuse the user's registered URL set so LINE/予約 links
     // appear in the right slots automatically.
     const { parseProjectLinks } = await import('../shared/projectLinks');
-    const { parseNgWords } = await import('../shared/ngwords');
+    const { parseNgWords, containsNgWord } = await import('../shared/ngwords');
     const { enforceNgWords } = await import('./ngwordGuard');
     const projectLinks = parseProjectLinks(project.links || null);
     const ngWords = parseNgWords((project as any).ngWords || null);
@@ -1123,6 +1123,17 @@ export async function generateAutoPost(
     const dropIfRecentlyUsed = (text: string | null | undefined, label: string): string | undefined => {
       let v = String(dropAvoided(text, label) ?? '').trim();
       if (!v) return undefined;
+      // ★NGワードを含む信条・実績の行は渡さない（2026-10-15 ご質問 #57「〇〇の話題はいらない」）。
+      //   NGワードを登録しても実績「〇〇担当歴あり」がそのまま渡り、書いた後の言い換え（enforceNgWords）で
+      //   「アスリート」などに置き換わって話題が残るため。悩み・強みは1行に何項目も並ぶ方がいるので対象にしない
+      //   （本番の実測：悩み1行に「高血圧」があるだけで悩みが空になる方がいた）
+      if (ngWords.length > 0) {
+        const lines = v.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+        const kept = lines.filter((l) => !containsNgWord(l, ngWords));
+        if (kept.length < lines.length) console.log(`[AutoPost] ${label}の${lines.length - kept.length}行はNGワードを含むため渡さない account=${threadsAccountId}`);
+        if (kept.length === 0) return undefined;
+        v = kept.join('\n');
+      }
       // ★「言っていることが違う」とお聞きしたら、信条・実績は主張として渡さない
       if (dropBeliefProof) {
         console.log(`[AutoPost] ${label}は「言っていることが違う」とお聞きしたため今日は渡さない account=${threadsAccountId}`);
