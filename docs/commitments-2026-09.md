@@ -308,3 +308,11 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - 昨日（10/16）の公開数：契約＋補填を超えたお客様のアカウントは無し（acc12 26件・acc10 24件・acc36 19件は学習の枠30本の設定内／acc11 は型の試し＋2で5件）。
 - 当日補充：今朝の生成で消えた枠なし。試験の切り口の投稿は昨日公開分・本日予定分とも0件（学習の枠は切り口なし）。玉島の「マシンが支える」0件。
 - デプロイは a42673f＝origin/main の先頭と一致。/api/health 200。AccountHealth 完了（accounts=27 restricted=0 missingAlerts=1）。返信待ち 0件。LINE 残り 4,136 通。
+
+## 2026-10-17 朝の点検メモ（もう1台の Mac・同じ日の別の記録）
+- 約束の照合（当日の予定数）：@daigo.sekkotsuin（acc18）4 ✅／@black_eyes_1896（acc25・〜10/17）4 ✅（今日で補填期間が終わるが、累計ではまだ11件不足）／@tama.yurazoku（acc31）4 ✅／@esthetic.salon_prestige（acc33）4 ✅／@takimoto_sora（acc11）5 ✅。
+- @esthe_prestige_r（acc22）：10/16 は公開0件（#3735 は公開後に Threads 側で削除・10/17 06:40 の健全性点検で検知、ほか運営見送り2・似た文で見送り2）。10/16 三上様ご判断（a12aa6c）どおり、冷却〜10/24 は1日1件・約束の残りは10/23から1日+1件。今日の予定1件。deletedShortfall=9。
+- 昨日（10/16）の公開数：契約＋補填を超えたアカウントは無し（最大26件＝acc12 の学習の枠・30本の設定内）。
+- 当日補充：今朝の生成で消えた枠なし。
+- 試験投稿：三上様の3アカウントで 10/16・10/17 は angle 付きの投稿が0本（10/15 は4本）。公開前に読む対象が無い。玉島の「マシンが支える」0件。
+- デプロイは a42673f＝origin/main の先頭と一致（コンテナ 10/17 00:10 起動・ssh で SOURCE_COMMIT を確認）。/api/health 200。AccountHealth 完了（accounts=27 restricted=0）。返信待ち 0件。LINE 残り 4,136 通。
