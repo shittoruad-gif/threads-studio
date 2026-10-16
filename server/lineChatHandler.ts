@@ -2096,7 +2096,11 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const { COOLDOWN_DAYS, jstDateString } = await import("../shared/accountRamp");
     const { singleDeleteByOwnerNotice, singleDeleteConfirmedNotice, dateJstLabel } = await import("../shared/dailyCap");
     if (q.sd === "mine") {
-      await db.updateThreadsAccount(Number(q.a), { singleDeleteAskedAt: null, singleDeletePostId: null } as any);
+      // ★お伺いのときに入れた仮の冷却だけ外す（2026-10-16）。ほかの理由の冷却（期限が違う）はそのまま残す
+      const { dateColToJst } = await import("../shared/accountRamp");
+      const askedAt = acct.singleDeleteAskedAt ? new Date(acct.singleDeleteAskedAt).getTime() : 0;
+      const setByAsk = askedAt > 0 && dateColToJst(acct.cooldownUntil) === jstDateString(COOLDOWN_DAYS, askedAt);
+      await db.updateThreadsAccount(Number(q.a), { singleDeleteAskedAt: null, singleDeletePostId: null, ...(setByAsk ? { cooldownUntil: null } : {}) } as any);
       return [textWithQuick(singleDeleteByOwnerNotice(String(acct.threadsUsername)), MENU_HINT)];
     }
     const until = jstDateString(COOLDOWN_DAYS);

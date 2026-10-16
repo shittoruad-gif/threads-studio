@@ -104,11 +104,31 @@ export function sameDayShortfall(fillTarget: number, have: number): number {
 export const MAX_EXTRA_PER_DAY = 2;
 
 /**
+ * 冷却が明けてから（運営が手で早めに解除した場合も含む）この日数のあいだは、足す本数を1日＋1件までにする。
+ * ★2026-10-16 acc22：10/14 に冷却を手で解除して 10/15 から1日＋2件で返したところ、当日に2件目が消えた。
+ *   docs/safe-operation-rules.md の「冷却明けから1日＋1件ずつ」を、手動の補填・自動の繰り越しにも効かせる。
+ */
+export const POST_COOLDOWN_GUARD_DAYS = 7;
+
+/** 冷却が明けて（cooldownUntil を過ぎて）POST_COOLDOWN_GUARD_DAYS 日以内か */
+export function recentlyOutOfCooldown(account: { cooldownUntil?: Date | string | null } | null | undefined, todayJst: string = jstDateString(0)): boolean {
+  const until = dateColToJst(account?.cooldownUntil);
+  if (!until || todayJst <= until) return false;
+  const days = Math.round((Date.parse(todayJst + "T00:00:00Z") - Date.parse(until + "T00:00:00Z")) / 86400000);
+  return days >= 1 && days <= POST_COOLDOWN_GUARD_DAYS;
+}
+
+/** そのアカウントが今日足せる本数の上限（冷却明け直後は＋1件・それ以外は MAX_EXTRA_PER_DAY） */
+export function maxExtraPerDayFor(account: { cooldownUntil?: Date | string | null } | null | undefined, todayJst: string = jstDateString(0)): number {
+  return recentlyOutOfCooldown(account, todayJst) ? 1 : MAX_EXTRA_PER_DAY;
+}
+
+/**
  * 昨日届かなかった分を今日に足す数（自動補填）。
  * 昨日の生成で落ちた枠（shortfall）があれば、手動の補填と合わせて1日＋2件まで。
  */
 export function carryOverCount(
-  account: { shortfallDate?: Date | string | null; shortfallCount?: number | null } | null | undefined,
+  account: { shortfallDate?: Date | string | null; shortfallCount?: number | null; cooldownUntil?: Date | string | null } | null | undefined,
   alreadyExtra: number,
   todayJst: string = jstDateString(0),
 ): number {
@@ -117,7 +137,7 @@ export function carryOverCount(
   if (!Number.isFinite(n) || n <= 0) return 0;
   const yday = jstDateString(-1, Date.parse(todayJst + "T00:00:00+09:00") + 12 * 3600 * 1000);
   if (dateColToJst(account.shortfallDate) !== yday) return 0;
-  return Math.max(0, Math.min(n, MAX_EXTRA_PER_DAY - Math.max(0, alreadyExtra)));
+  return Math.max(0, Math.min(n, maxExtraPerDayFor(account, todayJst) - Math.max(0, alreadyExtra)));
 }
 
 /** 投稿が消されたアカウントの冷却期間（日）。この間は1日1件・自己返信とリンクコメントなし */

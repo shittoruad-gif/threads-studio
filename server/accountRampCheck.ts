@@ -5,7 +5,7 @@
  * を足す。判定は1日キャッシュ。
  */
 import * as db from "./db";
-import { rampCap, rampNote, compensationCount, compensationNote, manualExtraPosts, inCooldown, dateColToJst, COMPENSATION_WINDOW_DAYS } from "../shared/accountRamp";
+import { rampCap, rampNote, compensationCount, compensationNote, manualExtraPosts, inCooldown, recentlyOutOfCooldown, dateColToJst, COMPENSATION_WINDOW_DAYS } from "../shared/accountRamp";
 
 const ESTABLISHED_DAYS = 30;
 const ESTABLISHED_FOLLOWERS = 100;
@@ -84,7 +84,8 @@ async function rampForAccountBase(
   if (m.extra > 0 && !base0.capped) {
     // ★1日に足せるのは、連携30日未満は＋1件、それ以降は＋2件まで（慣らしの補填と手動の補填が重なっても増やしすぎない。
     //   新しいアカウントに1日5件は停止の危険が戻る。2026-09-11 廿日市様）
-    const cap = contract + (base0.days < COMPENSATION_WINDOW_DAYS ? 1 : 2);
+    //   ★冷却が明けて7日以内（手で早めに解除したときも）も＋1件まで（2026-10-16 acc22：＋2で戻した当日に2件目が消えた）
+    const cap = contract + (base0.days < COMPENSATION_WINDOW_DAYS || recentlyOutOfCooldown(account as any) ? 1 : 2);
     const count = Math.min(base0.count + m.extra, cap);
     if (count <= base0.count) return base0;
     return { ...base0, count, extra: true, reason: "manual", note: [base0.note, m.note].filter(Boolean).join("／") };

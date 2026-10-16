@@ -11,6 +11,11 @@ const db = await import("../../server/db");
 const d = await db.getDb();
 const { sql } = await import("drizzle-orm");
 await d!.execute(sql`UPDATE threadsAccounts SET extraPostsPerDay = ${Number(perDay)}, extraPostsUntil = ${Number(perDay) > 0 ? until : null}, extraPostsReason = ${Number(perDay) > 0 ? String(reason || "").slice(0, 200) : null} WHERE id = ${Number(id)}`);
-const rows: any = (await d!.execute(sql`SELECT id, threadsUsername, extraPostsPerDay, extraPostsUntil, extraPostsReason FROM threadsAccounts WHERE id = ${Number(id)}`)) as any;
+const rows: any = (await d!.execute(sql`SELECT id, threadsUsername, extraPostsPerDay, extraPostsUntil, extraPostsReason, cooldownUntil FROM threadsAccounts WHERE id = ${Number(id)}`)) as any;
 console.log(rows[0]?.[0]);
+// ★冷却中・冷却明け7日以内は、アプリ側で1日＋1件に抑える（2026-10-16 acc22）。設定した数と実際がずれることを先に伝える
+const { inCooldown, recentlyOutOfCooldown } = await import("../../shared/accountRamp");
+if (Number(perDay) > 1 && (inCooldown(rows[0]?.[0]) || recentlyOutOfCooldown(rows[0]?.[0]))) {
+  console.warn(`⚠️ このアカウントは冷却中か冷却明け7日以内のため、実際に足されるのは1日＋1件までです（docs/safe-operation-rules.md 6.）`);
+}
 process.exit(0);

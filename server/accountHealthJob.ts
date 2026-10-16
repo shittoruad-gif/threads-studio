@@ -74,7 +74,16 @@ export async function runAccountHealthJob(): Promise<void> {
         if (goneIds.length === 1 && !askedRecently && !isOwnAccount) {
           const targets = await db.getLineUserIdsForUser(Number(a.userId));
           if (targets.length > 0) {
-            await db.updateThreadsAccount(Number(a.id), { singleDeleteAskedAt: new Date(), singleDeletePostId: goneIds[0] } as any);
+            // ★お答えを待つあいだも冷却に入れる（2026-10-16 三上様「それで進めて」）。
+            //   10/15 acc22 の #3595 で「ご本人に確認中」のまま冷却が入らず、1日5件のまま走って翌日もう1件消えた。
+            //   すでに冷却中なら期限は変えない（長い方を縮めない）。「自分で消しました」のお答えで、ここで入れた冷却だけ外す。
+            const { inCooldown } = await import("../shared/accountRamp");
+            const alreadyCooling = inCooldown(acct);
+            const { dateColToJst } = await import("../shared/accountRamp");
+            const holdUntil = alreadyCooling ? dateColToJst(acct.cooldownUntil) : until;
+            await db.updateThreadsAccount(Number(a.id), { singleDeleteAskedAt: new Date(), singleDeletePostId: goneIds[0], ...(alreadyCooling ? {} : { cooldownUntil: until }) } as any);
+            let deferredAsk = 0;
+            try { deferredAsk = await db.deferTodaysAutoPostsBeyond(Number(a.id), 1); } catch (e) { console.warn(`[AccountHealth] defer (asking) failed:`, (e as Error)?.message); }
             // 消えた1件は記録だけ残す（補填には積まない。お返事が「消していません」のときに積む）
             try { await d.execute(sql`UPDATE scheduledPosts SET status = 'failed', errorMessage = 'Threads上で見つからない（ご本人に確認中）' WHERE threadsAccountId = ${Number(a.id)} AND status = 'posted' AND publishedThreadsPostId = ${goneIds[0]}`); } catch (e) { console.warn(`[AccountHealth] mark asking failed:`, (e as Error)?.message); }
             for (const to of targets) {
@@ -86,8 +95,8 @@ export async function runAccountHealthJob(): Promise<void> {
                   ] } },
               ]);
             }
-            await notifyOwner({ title: "公開した投稿が1件消えています（ご本人に確認中・冷却はまだ）", content: `@${a.threadsUsername}（user ${a.userId}）直近3日の公開 ${ids.length}件のうち 1件が見つかりません。1件だけのため冷却には入れず、LINEで「ご自身で消されましたか？」と伺いました（2026-09-19 三上様ご判断）。お返事が「消していません」なら、その時点で7日間の冷却に入ります。` });
-            console.warn(`[AccountHealth] @${a.threadsUsername}: 1件消えたためご本人に確認（冷却なし）`);
+            await notifyOwner({ title: "公開した投稿が1件消えています（ご本人に確認中・お答えまで1日1件）", content: `@${a.threadsUsername}（user ${a.userId}）直近3日の公開 ${ids.length}件のうち 1件が見つかりません。LINEで「ご自身で消されましたか？」と伺いました。お答えを待つあいだも${dateJstLabel(holdUntil)}まで1日1件に抑え、今日の残り${deferredAsk}件を翌日へ送りました（2026-10-16）。「自分で消しました」なら抑えを外し、「消していません」なら冷却のまま消えた1件を補填に積みます。` });
+            console.warn(`[AccountHealth] @${a.threadsUsername}: 1件消えたためご本人に確認（お答えまで冷却〜${holdUntil}・翌日へ${deferredAsk}件）`);
             continue;
           }
           // LINE未連携の方には伺えないので、今までどおり冷却に入れる
