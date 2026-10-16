@@ -1861,6 +1861,27 @@ export async function generateAutoPost(
         return false;
       }
       if (dup) console.log(`[AutoPost] 使い回し「${dup}」が残るが短いため、最後の作り直しは公開へ userId=${userId}`);
+    }
+
+    // ★少し前の投稿と「ほぼ同じ文」（shared/oldPostCopy.ts・2026-10-16 acc22 #3727 が 10/11 #3109 と似ている度0.88で見送られた）。
+    //   上の言い回しの点検は直近10本しか見ないため、手直しのお手本をそのまま写した文が数日後に通っていた。
+    //   他店の当たり型・Threadsの機能の投稿は形を借りるものなので対象外。保証パスでは止めない（承認カードになる）。
+    if (!opts.hitPatternId && !opts.feature) {
+      const { findOldPostCopy, oldPostCopyHint, OLD_POST_COPY } = await import('../shared/oldPostCopy');
+      const older = await db.getOlderPostContents(threadsAccountId, OLD_POST_COPY.days).catch(() => []);
+      const copy = findOldPostCopy(naturalMain, older);
+      if (copy && guarantee) {
+        console.warn(`[AutoPost] 保証パス：過去の投稿とほぼ同じ（似ている度${copy.score.toFixed(2)}）が、契約本数を守るためお届けする（承認カードにする） userId=${userId}`);
+      } else if (copy && (!lastAttempt || copy.score >= OLD_POST_COPY.dropOnLastAttempt)) {
+        console.warn(`[AutoPost] 過去の投稿とほぼ同じ（似ている度${copy.score.toFixed(2)}）→ ${lastAttempt ? '最後の作り直しでも見送り（明日の生成で補填）' : '作り直し'} userId=${userId} account=${threadsAccountId}`);
+        noteReject('oldPostCopy', userId, threadsAccountId, postingTimeIndex, oldPostCopyHint(copy),
+          { detail: `${copy.score.toFixed(2)} ${copy.content.replace(/\s+/g, '').slice(0, 40)}`, gaveUp: lastAttempt });
+        return false;
+      } else if (copy) {
+        console.log(`[AutoPost] 過去の投稿と似ている（似ている度${copy.score.toFixed(2)}）が、最後の作り直しのため公開へ userId=${userId}`);
+      }
+    }
+    if (recentPosts.length > 0) {
 
       // ★書き出しが毎回同じ実績の数字（「11年」など）で始まると、言い回しが違っても同じ投稿に見える。
       //   2026-09-13 香取様の直近5本は findRepeatedPhrase では1件も拾えないのに、3本が「11年」で始まっていた。

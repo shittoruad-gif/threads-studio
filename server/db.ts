@@ -4124,6 +4124,26 @@ export async function getRecentAngles(accountId: number, limit: number = 12): Pr
   }
 }
 
+/**
+ * 少し前までの公開・公開待ちの投稿（本文と日時）。直近10本より前の投稿と「ほぼ同じ文」を書かないための比べる相手
+ * （shared/oldPostCopy.ts・2026-10-16 夜間整備）。
+ */
+export async function getOlderPostContents(accountId: number, days: number = 45, limit: number = 200): Promise<Array<{ content: string; at: Date | null }>> {
+  const database = await getDb();
+  if (!database) return [];
+  try {
+    const rows: any = await database.execute(sql`
+      SELECT postContent, scheduledAt FROM scheduledPosts
+      WHERE threadsAccountId = ${accountId} AND postContent IS NOT NULL AND postContent <> ''
+        AND status IN ('posted','pending','awaiting_approval','processing')
+        AND scheduledAt >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+      ORDER BY scheduledAt DESC LIMIT ${limit}`);
+    return (((rows as any)[0] ?? []) as any[]).map((r) => ({ content: String(r.postContent || ""), at: r.scheduledAt ?? null })).filter((r) => r.content);
+  } catch {
+    return [];
+  }
+}
+
 export async function getRecentPostContents(accountId: number, limit: number = 10): Promise<string[]> {
   const database = await getDb();
   if (!database) return [];
