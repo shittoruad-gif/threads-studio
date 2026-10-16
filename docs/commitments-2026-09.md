@@ -301,3 +301,10 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - 当日補充：今朝の生成で消えた枠なし。
 - 試験投稿：昨日公開分 #3581・#3576 を読んだ。取り消しなし。本日分の試験投稿は点検時点で未生成（学習の枠は毎時生成）。玉島の「マシンが支える」0件。
 - デプロイは 3bcf283＝origin/main の先頭と一致（コンテナ 10/16 00:10 起動・ssh で SOURCE_COMMIT を確認）。/api/health 200。AccountHealth 完了（accounts=27 restricted=0）。返信待ち 0件。LINE 残り 4,189 通。
+
+## 2026-10-17 朝の点検メモ（土曜）
+- 約束の照合（当日の予定数）：@daigo.sekkotsuin（acc18）4 ✅／@black_eyes_1896（acc25・〜10/17 最終日）4 ✅／@tama.yurazoku（acc31）4 ✅／@esthetic.salon_prestige（acc33）4 ✅（いずれも承認待ち＝承認されないと届かない）。
+- **@esthe_prestige_r（acc22・10/15〜10/18 1日5件の約束）**：昨日10/16は公開0件（#3735 failed・#3719/#3727/#3731/#3722 canceled）。今朝 AccountHealth で「1/5 posts missing」→ 冷却（〜10/24・1日1件）に入り、今日の予定は1件 ✗。約束との差をどう返すか三上様の判断待ち。
+- 昨日（10/16）の公開数：契約＋補填を超えたお客様のアカウントは無し（acc12 26件・acc10 24件・acc36 19件は学習の枠30本の設定内／acc11 は型の試し＋2で5件）。
+- 当日補充：今朝の生成で消えた枠なし。試験の切り口の投稿は昨日公開分・本日予定分とも0件（学習の枠は切り口なし）。玉島の「マシンが支える」0件。
+- デプロイは a42673f＝origin/main の先頭と一致。/api/health 200。AccountHealth 完了（accounts=27 restricted=0 missingAlerts=1）。返信待ち 0件。LINE 残り 4,136 通。
