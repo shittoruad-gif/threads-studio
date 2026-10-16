@@ -15,7 +15,7 @@
 - 本番で変えたこと（変更前の控え：~/.claude/backups/threads_acc22_20261016.tsv）：
   cooldownUntil 10/14→**10/22**（10/16〜10/22 1日1件）・extraPostsPerDay 2→0・extraPostsUntil 10/18→10/15・postLength NULL→**long**・
   今日の #3731（20:09）#3722（21:14）を運営が見送り（#3735 10:02 はご本人が承認して公開済み＝今日の1件）
-- ★約束の残り8件（10/14の約束：残り7＋#3220）は返していない。返し方（冷却明けに1日+1件／契約期間を延ばす）は**三上様の判断待ち**。deletedShortfall は0のまま
+- ★約束の残り8件（10/14の約束：残り7＋#3220）は三上様のご判断「10/23以降に1日+1件ずつ返す」→ deletedShortfall 0→8（冷却明け10/23から契約3＋1＝1日4件で8日＝10/30ごろまで。accountRampCheck の reason=deleted）
 - 今夜の夜間整備でやること：
   1. 「Threads上で見つからない（ご本人に確認中）」でも冷却に入れる（server/accountHealthJob.ts。いまはご本人がLINEで「消していない」を押したときだけ＝lineChatHandler singleDelete）。10/15 の #3595 で冷却が入らず1日5件のまま走った
   2. 冷却を手で解除した直後の補填は1日+1件まで（10/14 に+2で戻した当日に2回目が消えた）。safe-operation-rules.md の6.と合わせる
