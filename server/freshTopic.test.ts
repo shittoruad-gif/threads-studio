@@ -187,6 +187,21 @@ describe("流れの型（言い換えても同じに見えるもの）", () => {
     expect(framesOf("研修の話。\n駅前で一緒にプロを目指しませんか", ["invite"])).toEqual(["invite"]);
   });
 
+  it("「〜からよく聞く話です」の前置きは、本文のどこにあっても型として数える（2026-10-17 acc36）", () => {
+    // 実際の投稿（acc36 #3900・#3811・#3819）の前置き部分
+    const posts = [
+      "広告の止めどき、本当に迷いますよね。岡山県の店舗オーナーさんからよく聞く話です。\n\n・とりあえず続けている\n・効果が見えにくい",
+      "SNS投稿、続かないのはあなたのせいじゃない。\n\n岡山県の店舗オーナーさんから「投稿が続かない」とよく聞きます。\n日々の業務で忙しいのに、ネタ探しは無理があります。",
+      "Web集客でよくある課題、3つあります。\n\n意外と見落としがちなポイントかもしれません。\n\n岡山県の店舗オーナーさんから、こんな声を聞くことが多いです。",
+      "LINEの友だち、どこから来たか分からない。\n\n株式会社しっとるは、流入経路を1人ずつ計測できます。",
+    ];
+    for (const t of posts.slice(0, 3)) expect(framesOf(t, ["hearsay"])).toEqual(["hearsay"]);
+    expect(framesOf(posts[3], ["hearsay"])).toEqual([]);
+    const plan = planFreshTopic({ recentPosts: [...posts.slice(0, 3), posts[3], posts[3]], materials: ["流入経路を1人ずつ計測"], protect: ["岡山県", "株式会社しっとる"] });
+    expect(plan.frames).toContain("hearsay");
+    expect(buildFreshTopicNote(plan)).toContain("前置き");
+  });
+
   it("ふつうの並びでは型にならない", () => {
     const q = planFreshTopic({ recentPosts: FRAMED.slice(3), materials: ["季節ごとのデザイン研修がある"], protect: [] });
     expect(q.frames).toEqual([]);

@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink, TRPCClientError } from "@trpc/client";
+import { httpBatchLink, httpLink, splitLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
@@ -66,17 +66,19 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
+const SLOW_PATHS = new Set(["threads.getComments"]);
+const includeCredentials = (input: RequestInfo | URL, init?: RequestInit) =>
+  globalThis.fetch(input, { ...(init ?? {}), credentials: "include" });
+
 const trpcClient = trpc.createClient({
   links: [
-    httpBatchLink({
-      url: "/api/trpc",
-      transformer: superjson,
-      fetch(input, init) {
-        return globalThis.fetch(input, {
-          ...(init ?? {}),
-          credentials: "include",
-        });
-      },
+    // ★Threads API を順に何十回も呼ぶ遅い問い合わせは、ほかとまとめて送らない（2026-10-17 夜間整備）。
+    //   画面の枠（DashboardLayout）がコメント数のバッジに threads.getComments を呼んでおり、
+    //   auth.me と同じ束で送られていたため、連携済みの方はどの画面も約5秒、読み込み中の枠のままだった。
+    splitLink({
+      condition: (op) => SLOW_PATHS.has(op.path),
+      true: httpLink({ url: "/api/trpc", transformer: superjson, fetch: includeCredentials }),
+      false: httpBatchLink({ url: "/api/trpc", transformer: superjson, fetch: includeCredentials }),
     }),
   ],
 });

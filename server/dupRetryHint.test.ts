@@ -31,3 +31,19 @@ describe("学習の枠「箇条書き3つ」", () => {
     expect(n).toContain("宣伝にせず");
   });
 });
+
+// 2026-10-17 夜間整備：acc36 で「店舗オーナーさんからよく聞く」を少しずつ変えて23回作り直し・6枠見送り
+describe("同じ言い回しが流れの型に当たるとき", () => {
+  it("型ごと避ける指示を添え、次の回でも言い回しを読み違えない", () => {
+    const h1 = dupRetryHint(null, "の店舗オーナーさんからよく聞く");
+    expect(h1).toContain("誰から聞いたかの前置き");
+    const h2 = dupRetryHint(h1, "LINE登録の流入経路");
+    expect(h2.split("\n")[0]).toContain("「の店舗オーナーさんからよく聞く」");
+    expect(h2.split("\n")[0]).toContain("「LINE登録の流入経路」");
+    // 型の指示の中の「」を言い回しとして拾っていない
+    expect(h2.split("\n")[0]).not.toContain("よく聞きます");
+  });
+  it("型に当たらない言い回しには何も添えない", () => {
+    expect(dupRetryHint(null, "夜21時まで開けている").split("\n").length).toBe(1);
+  });
+});

@@ -90,6 +90,15 @@ export const FRAMES = [
     re: /目指しませんか|目指しましょう|一緒に成長|成長しませんか|成長を応援|踏み出しませんか|一緒に働きませんか/,
     note: "締めを「一緒に◯◯を目指しませんか／成長しませんか／成長を応援します」にしない。締めはこの投稿の内容に固有の1文にする。",
   },
+  {
+    // ★2026-10-17 夜間整備：「〇〇の店舗オーナーさんからよく聞く話です」の前置きが直近30日で acc36 37本・acc12 31本・acc10 26本。
+    //   言い回しの点検（duplicatePhrase）は「からよく聞く」「よく聞く話です」と少しずつ変えて書き直されるので止まらず、
+    //   10/17 は acc36 で23回作り直し・6枠を見送っていた。位置は2〜4行目に来ることが多いので本文全体で見る。
+    key: "hearsay",
+    where: "any" as const,
+    re: /よく聞[くきか]|聞くことが多|よく耳に|からよく言われ|本当に多い声/,
+    note: "「〇〇さんからよく聞く話です」「よく聞きます」「こんな声を聞くことが多いです」のような、誰から聞いたかの前置きを今日は書かない（直近で何度も使っている）。悩みや場面は前置きなしでそのまま書く。",
+  },
 ];
 export type FrameKey = (typeof FRAMES)[number]["key"];
 
@@ -104,7 +113,7 @@ function tailOf(text: string): string {
 export function framesOf(text: string, keys?: readonly string[]): FrameKey[] {
   return FRAMES
     .filter((f) => !keys || keys.includes(f.key))
-    .filter((f) => f.re.test(f.where === "head" ? headOf(text) : tailOf(text)))
+    .filter((f) => f.re.test(f.where === "head" ? headOf(text) : f.where === "tail" ? tailOf(text) : String(text ?? "")))
     .map((f) => f.key);
 }
 

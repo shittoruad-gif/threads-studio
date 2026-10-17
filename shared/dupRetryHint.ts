@@ -6,16 +6,22 @@
  *   1回目「初心者からアスリートまで」→2回目「体が硬いからピラティスは無理って」→3回目「運動初心者からアスリートまで」と、
  *   2回目で伝えなかった1回目の言い回しへ戻り、3回とも落ちて枠ごと見送りになった（金光 acc12 も同じ形）。
  */
+import { FRAMES } from "./freshTopic";
+
 const HEAD = "- 直近の投稿と同じ言い回しを使っている。同じことを言うなら、別の入り方・別の言葉にする。次の言い回しはどれも使わない：";
 
 export function dupRetryHint(prevHint: string | null | undefined, dup: string): string {
   const prev = String(prevHint ?? "");
   const phrases: string[] = [];
   if (prev.startsWith(HEAD)) {
-    for (const m of Array.from(prev.matchAll(/「([^」]+)」/g))) phrases.push(m[1]);
+    // 1行目だけ読む（2行目以降の型の指示・前の回の文に入っている「」を言い回しと取り違えない）
+    for (const m of Array.from(prev.split("\n")[0].matchAll(/「([^」]+)」/g))) phrases.push(m[1]);
   }
   // 言い回しの中のかぎかっこは外す（区切りと混ざって前の回の言い回しを読み違えないように）
   const d = String(dup).replace(/[「」]/g, "");
   if (d && !phrases.includes(d)) phrases.push(d);
-  return HEAD + phrases.map((p) => `「${p}」`).join("・");
+  // ★言い回しが「流れの型」に当たるときは、その型ごと避けるよう添える（2026-10-17 acc36：
+  //   「店舗オーナーさんからよく聞く話です」→「からよく聞く」→「よく聞く悩みです」と少しずつ変えて23回作り直し・6枠見送り）
+  const frameNotes = FRAMES.filter((f) => phrases.some((p) => f.re.test(p))).map((f) => `- ${f.note}`);
+  return [HEAD + phrases.map((p) => `「${p}」`).join("・"), ...frameNotes].join("\n");
 }
