@@ -316,3 +316,10 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - 当日補充：今朝の生成で消えた枠なし。
 - 試験投稿：三上様の3アカウントで 10/16・10/17 は angle 付きの投稿が0本（10/15 は4本）。公開前に読む対象が無い。玉島の「マシンが支える」0件。
 - デプロイは a42673f＝origin/main の先頭と一致（コンテナ 10/17 00:10 起動・ssh で SOURCE_COMMIT を確認）。/api/health 200。AccountHealth 完了（accounts=27 restricted=0）。返信待ち 0件。LINE 残り 4,136 通。
+
+## 2026-10-18 朝の点検メモ（日曜）
+- 約束の照合（当日の予定数）：@daigo.sekkotsuin（acc18）4 ✅／@takimoto_sora（acc11）5 ✅／@esthetic.salon_prestige（acc33・自動補填 1日4件）予定4のうち #3964 が canceled（理由欄なし）で残り3 ✗／@tama.yurazoku（acc31）は自動補填（連携11〜30日目）が明けて今日から3件（累計18件不足と出るが課金なしのお試し）。
+- **@black_eyes_1896（acc25）**：手動補填（+1件/日）は10/17で終了。今日は3件。累計ではまだ11件不足 → 延長するか三上様の判断待ち。
+- **@esthe_prestige_r（acc22）**：冷却中（〜10/24・1日1件）。今日の1件 #3960 は canceled（理由欄なし）で今日の公開0件の見込み。約束の残りは10/23から1日+1件（10/16 三上様ご判断）のまま。
+- 昨日（10/17）の公開数：契約＋補填を超えたお客様のアカウントは無し（acc36 22件・acc12 22件・acc10 19件は学習の枠30本の設定内／acc11 5件は型の試し＋2）。
+- デプロイは 4a8005c＝origin/main の先頭と一致（Coolify 記録 10/18 00:11 finished）。/api/health 200。AccountHealth 完了（accounts=27 restricted=0）。返信待ち 0件。LINE 残り 4,095 通。生成で消えた枠なし。
