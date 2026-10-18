@@ -330,3 +330,10 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - **@moveact_seitai（acc12）**：今朝 06:40 の健全性点検で「直近3日の公開8件のうち1件が Threads 上で見つからない」→ 冷却（〜10/26・1日1件）。今日の1件 #4073 は 06:43 に canceled（理由欄なし）で今日の公開0件の見込み。
 - 当日補充：今朝の生成で消えた枠なし。試験の切り口（angle 付き）の投稿は本日予定0本。三上様アカウントの本日予定4本（#4121〜#4124）を読み、取り消しなし。玉島の「マシンが支える」0件。
 - デプロイは c503002＝origin/main の先頭と一致（コンテナ 10/19 00:11 起動・イメージタグで確認。Coolify API は手元から応答なし）。/api/health 200。AccountHealth 完了（accounts=27 restricted=0 missingAlerts=1）。返信待ち 0件。LINE 残り 4,050 通。
+
+（同じ朝のもう1台の点検メモ）
+- 約束の照合（当日の予定数）：@daigo.sekkotsuin（acc18）4 ✅（承認待ち）／@takimoto_sora（acc11）5 ✅／@esthetic.salon_prestige（acc33）4 ✅（承認待ち）／@tama.yurazoku（acc31）3（補填明け・課金なしのお試し）。
+- **@black_eyes_1896（acc25）**：今日3件（承認待ち）。累計11件不足のまま、補填の延長は三上様の判断待ち。今日の #4095（10/19 19:19・承認待ち）は昨日公開の #3979（ご本人が手直しして承認）と本文が一字一句同じ（materialGuarantee=1 の枠）。取り消すかを三上様に伺う。
+- **@esthe_prestige_r（acc22）**：冷却中（〜10/24・1日1件）。今日の1件は承認待ち。約束の残りは10/23から1日+1件（10/16 三上様ご判断）のまま。
+- 昨日（10/18）の公開数：契約＋補填を超えたお客様のアカウントは無し（acc11 5件・acc18 4件は補填の設定内）。
+- デプロイは c503002＝origin/main の先頭と一致（Coolify 記録 10/19 00:11 finished）。/api/health 200。AccountHealth 完了（accounts=27 restricted=0 missingAlerts=1＝@moveact_seitai が冷却〜10/26）。返信待ち 0件。LINE 残り 4,050 通。生成で消えた枠なし。
