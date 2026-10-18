@@ -12,6 +12,7 @@ import { sanitizeTopicTag } from './threadsPost';
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 /**
+ * ⚠️ 2026-10-18 から使っていない（全投稿に同じ言葉が付き、差も確かめられなかったため。shared/topicTagTrial.ts）。
  * 店舗情報からトピックタグを1つ導出。
  * 優先順: 主な悩みの先頭ワード → 業種 → 地域の末尾トークン。
  * すべてユーザー入力済みの事実のみ（AIによる推測はしない）。

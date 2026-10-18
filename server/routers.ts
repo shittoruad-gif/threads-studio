@@ -2417,15 +2417,8 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
             });
           }
 
-          // トピックタグ（設定ONのとき、店舗情報から1つ自動付与。発見性UP）
-          let topicTag: string | undefined;
-          if (ctx.user && (ctx.user as any).autoTopicTag !== false) {
-            const { deriveTopicTag } = await import('./reachBoost');
-            const proj = (account as any).defaultProjectId
-              ? await db.getProjectById((account as any).defaultProjectId)
-              : (await db.getUserProjects(ctx.user.id))?.[0];
-            if (proj) topicTag = deriveTopicTag(proj) ?? undefined;
-          }
+          // トピックタグ：自動では付けない（2026-10-18 三上様「自動トピックは全アカウント止めて」・shared/topicTagTrial.ts）
+          const topicTag: string | undefined = undefined;
 
           // 場所のタグ・Instagramストーリーズ同時シェア（その権限で連携したアカウントだけ・2026-09-28）
           const { hasExtraScope, LOCATION_SCOPE, IG_SHARE_SCOPE } = await import('./threadsAuth');

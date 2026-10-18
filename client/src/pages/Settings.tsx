@@ -270,22 +270,7 @@ export default function Settings() {
                 />
               </div>
 
-              {/* トピックタグ自動付与 */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-sm font-medium text-foreground">{t("投稿に「トピック」を自動でつける（おすすめ）")}</Label>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {t("Threadsには投稿に「話題のラベル」をつける機能があります。ONにすると、")}
-                    {t("お店の悩みワードや地域名を自動でつけて、")}<br className="hidden sm:inline" />
-                    {t("フォロワー以外の「同じ話題を見ている人」にも届きやすくします")}
-                  </p>
-                </div>
-                <Switch
-                  checked={(autoPostSettings as any)?.autoTopicTag ?? true}
-                  onCheckedChange={(v) => updateAutoPost.mutate({ autoTopicTag: v } as any)}
-                  disabled={updateAutoPost.isPending}
-                />
-              </div>
+              {/* トピックタグ自動付与の切り替えは 2026-10-18 に外した（自動では付けない・shared/topicTagTrial.ts） */}
 
               {/* LINE通知連携（承認依頼・コメント通知をLINEで受け取る） */}
               {lineStatus.data?.available && (

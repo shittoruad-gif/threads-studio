@@ -317,10 +317,15 @@ export async function executePendingPosts() {
             console.log(`[Scheduled Post] post ${post.id}: ツリー${segments.length}本→権限承認待ちのため1本目のみ公開`);
             segments = segments.slice(0, 1);
           }
-          // トピックタグ（設定ONのとき、店舗情報から1つ。フォロワー外への発見性UP）
-          const topicTag = postUser?.autoTopicTag !== false && postProject
-            ? (await import('./reachBoost')).deriveTopicTag(postProject) ?? undefined
-            : undefined;
+          // トピックタグ：お客様には付けない。学習用アカウントだけ期間中に「本文に合う言葉を付ける／付けない」を交互に
+          //   （2026-10-18 三上様・shared/topicTagTrial.ts。7/5〜は店舗の悩みワードを全投稿に同じく付けていた）
+          const topicTag = (await import('../shared/topicTagTrial')).scheduledPostTopicTag({
+            threadsAccountId: Number(post.threadsAccountId),
+            postId: Number(post.id),
+            text: segments[0] ?? '',
+            area: (postProject as any)?.area ?? null,
+            userAutoTopicTag: postUser?.autoTopicTag,
+          });
           // ★Threads の機能（2026-09-28・shared/threadsFeatures.ts）：アンケートの選択肢／クイズの答えを隠す。
           //   決まりに合わなければ付けずに、ふつうの投稿として出す（投稿そのものは止めない）。
           const { parsePollOptions, pollAttachment, spoilerEntities, SPOILER_QUIZ_ANGLE_ID } = await import('../shared/threadsFeatures');
