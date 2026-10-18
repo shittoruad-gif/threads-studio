@@ -415,6 +415,8 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   metaAiCallResumedAt: timestamp("metaAiCallResumedAt"),
   // Meta AI呼びかけを3日に1回に減らした日（7日間使われなかった。使われたら消える・0107）
   metaAiCallLightAt: timestamp("metaAiCallLightAt"),
+  // お客様が自分で足す「書き方の決まり」（1行1つ・最大10件・0109）。生成の最後で、手直しの決まりと同じ位置で渡す
+  ownerRules: text("ownerRules"),
   /**
    * 「このアカウントのお店の情報が登録されていません」とLINEでご案内した日時。
    * ★アカウントが2つ以上あって紐づけが無いときは、もう一方の情報で文章を作らず止める。

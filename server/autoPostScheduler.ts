@@ -891,6 +891,17 @@ export async function generateAutoPost(
       ownerLikesQuestion = lessons.pairs.length >= 3 && lessons.pairs.filter((p) => /[？?]$/.test(p.after.trim().replace(/[\s\uFE0F\u200D]+$/g, '').replace(/(?:[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF])+$/g, '').trim())).length * 2 >= lessons.pairs.length;
       if (editPreferenceNote) console.log(`[AutoPost] 手直しの好みを反映 userId=${userId} account=${threadsAccountId} edits=${lessons.pairs.length} 決まり${lessons.rules.length}件${lessons.rules.length ? `：${lessons.rules.slice(0, 3).join('／').slice(0, 160)}` : ''}`);
     } catch (e) { console.warn(`[AutoPost] 手直しの好みの反映をとばしました: ${(e as Error)?.message}`); }
+    // ★お客様が自分で足した「書き方の決まり」（shared/ownerRules.ts・2026-10-18）。手直しの決まりの後ろ＝同じ強さで最優先
+    let ownerRulesNote = '';
+    let ownerRulesCount = 0;
+    try {
+      const acctForRules: any = threadsAccountId ? await db.getThreadsAccountById(threadsAccountId) : null;
+      const { parseOwnerRules, buildOwnerRulesNote } = await import('../shared/ownerRules');
+      const rules = parseOwnerRules(acctForRules?.ownerRules);
+      ownerRulesCount = rules.length;
+      ownerRulesNote = buildOwnerRulesNote(rules);
+      if (rules.length) console.log(`[AutoPost] 書き方の決まりを反映 account=${threadsAccountId} ${rules.length}件：${rules.slice(0, 3).join('／').slice(0, 160)}`);
+    } catch (e) { console.warn(`[AutoPost] 書き方の決まりの反映をとばしました: ${(e as Error)?.message}`); }
 
     // ★生成のときにも「この店を指す言葉」を渡す（2026-09-10）。
     //   渡していなかったため、生成側は「毎回・1行目に無理に入れない」と指示され、
@@ -1366,6 +1377,8 @@ export async function generateAutoPost(
           + (personal ? personalModePromptOverride() : '')
           // ★毎回直しているところ（2026-10-08）。長さ・改行の最終指示より後ろ＝より優先
           + editLessonsNote
+          // ★お客様が自分で決めた書き方（2026-10-18）。手直しの決まりの後ろ
+          + ownerRulesNote
           // ★学習の試し（shared/learningAccounts.ts）は最末尾。途中に置くと、後ろの「切り口（最優先）」「長さ」に上書きされ、
           //   10/7 の試しで「1行目に数字」に数字が無い・「箇条書き」に箇条書きが無い投稿になっていた。
           + (opts.learningTrial ? `\n\n【今回の試し（ここまでのすべての指示より優先・厳守）】\n- ${opts.learningTrial.note}\n- 上の切り口・長さ・書き出しの指示と食い違うところは、この試しに合わせる。試すのはこの1点だけで、それ以外はいつもどおり。\n${trialRules(allowEmoji).map((r) => `- ${r}`).join('\n')}` : ''),
@@ -1446,7 +1459,8 @@ export async function generateAutoPost(
     // ★学習の試しでもかけない。このリライトは「50〜100字・1文30字」に寄せるため、長め・箇条書きの試しの形が消えていた（10/7）
     // ★手直しが3本以上あるアカウントでもかけない。この書き直しが、ご本人の改行・【】・💡を毎回消していた（2026-10-08）
     const { EDIT_LESSONS: EL } = await import('../shared/editLessons');
-    const ownerStyleKnown = ownerEditCount >= EL.minPairs;
+    // ★自分で「書き方の決まり」を入れている方も、書き直しで決まりが消えないようにかけない（2026-10-18）
+    const ownerStyleKnown = ownerEditCount >= EL.minPairs || ownerRulesCount > 0;
     let naturalMain = naturalStyle || opts.learningTrial || ownerStyleKnown ? beforeNaturalize : await naturalizeContent(
       beforeNaturalize, personal, brandVoice, keepIdentityWords, (project as any).styleSamples || null, lengthRange,
     );

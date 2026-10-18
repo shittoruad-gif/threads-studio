@@ -221,6 +221,9 @@ export function parsePostback(data: string): Record<string, string> {
  */
 const PENDING_TEXT_INPUT: Record<string, (q: Record<string, string>) => boolean> = {
   ngword: (q) => q.s === "ng",
+  // 書き方の決まりの入力待ち／「決まり：〜」の預かり（どのアカウントかを選ぶボタン以外を押されたら捨てる）
+  ownerrule: (q) => q.s === "rule",
+  ownerrule_text: (q) => q.s === "ruleadd",
   set_line_url: (q) => q.c === "seturl",
   self_edit: (q) => q.a === "selfedit",
   rewrite_free: (q) => q.a === "rw",
@@ -561,6 +564,7 @@ export function settingsQuick(
     return [
       { label: "プランを見る", data: "s=plan" },
       { label: "NGワードを追加", data: "s=ng" },
+      { label: "書き方の決まり", data: "s=rule" },
       notifyToggle,
     ];
   }
@@ -586,6 +590,8 @@ export function settingsQuick(
         ]
       : [{ label: "プランを見る", data: "s=plan" }]),
     { label: "NGワードを追加", data: "s=ng" },
+    // ★お客様が自分で足す「書き方の決まり」（2026-10-18）
+    { label: "書き方の決まり", data: "s=rule" },
     notifyToggle,
   ];
 }

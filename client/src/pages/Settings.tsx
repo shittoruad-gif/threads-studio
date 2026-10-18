@@ -14,6 +14,7 @@ import { useLang } from "@/i18n";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { AccountSettingsCard } from "@/components/AccountSettingsCard";
+import { OwnerRulesCard } from "@/components/OwnerRulesCard";
 import BillingSummary from "@/components/BillingSummary";
 import { getPlan } from "@shared/plans";
 
@@ -512,6 +513,9 @@ export default function Settings() {
 
         {/* ── アカウントごとの設定（複数アカウント運用のときだけ表示） ── */}
         <AccountSettingsCard maxPerDay={(subscription as any)?.plan?.features?.maxAutoPostsPerDay ?? 0} />
+
+        {/* ── 書き方の決まり（お客様が自分で足す・2026-10-18） ── */}
+        <OwnerRulesCard />
 
         {/* ── アカウント設定 ── */}
         <Card className="p-6">

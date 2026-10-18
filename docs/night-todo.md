@@ -148,6 +148,18 @@
   → 止まった型ごとに具体的な言い換えを渡す（shared/healthClaimGuard.ts healthClaimRetryHint）。ガードは緩めていない。
   試し生成3本は書けたが、この主題は選ばれず再現できていない
 
+## 2026-10-18 夜（夜間整備でpush・マイグレーション 0109 あり）：「書き方の決まり」＋請求書・領収書の受け取り登録
+
+- **書き方の決まり**（三上様「進めて」・他社ツールの「お客様が自分でナレッジを足せる」を取り入れ）：
+  - threadsAccounts.ownerRules（0109・1行1つ・最大10件・1つ80字）。設定画面「書き方の決まり」（アカウントごと）と、公式LINEの「設定→書き方の決まり」「決まり：〜」で足す・消す
+  - 生成では手直しの決まりの直後（最優先）に渡す。決まりがあるアカウントは短く崩す書き直し（naturalizeContent）をかけない
+  - shared/ownerRules.ts・client/src/components/OwnerRulesCard.tsx・server/lineChatHandler.ts（s=rule／ruleadd／ruledel・状態 ownerrule／ownerrule_text）
+  - ローカルで確認済み：375pxはみ出しなし・画面から保存（長すぎる行は落ちる）・LINEの一連（複数アカウントの選択→足す→一覧→消す）・全テスト通過
+  - ★反映後の確認：0109 が __drizzle_migrations に入ったこと／設定画面に「書き方の決まり」が出ること／決まりを入れたアカウントの翌朝のログに「書き方の決まりを反映」が出ること
+- **請求書・領収書の受け取り登録**（server/docsBind.ts）：公式LINEに「書類 英字6文字」と送られたら、契約管理（keiyaku.s-toru.com）の /api/docs/line-bind へ中継して結果を返す。会員でなくても受ける
+  - 必要な env：DOCS_BIND_URL（契約管理の https://…/api/docs/line-bind）・DOCS_BIND_SECRET（契約管理側と同じ値）。未設定の間は「準備中」と返すだけ
+  - 契約管理側（shittoru-automation）には DOCS_LINE_CHANNEL_ACCESS_TOKEN（この公式LINEのトークン）と DOCS_BIND_SECRET を入れる
+
 ## 2026-10-12 夜（夜間整備でpush）：スマホで連携を押したときの案内（三上様「今夜、実装して」）
 
 - スマホでThreadsとの連携・接続をやり直すを押すと、Threadsアプリが許可画面を横取りしてホームが開くだけになる（新しく始める方から「ただスレッズに飛ぶだけ」）

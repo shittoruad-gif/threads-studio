@@ -2265,6 +2265,8 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         autoPostRequireApproval: z.boolean().nullable().optional(),
         autoPostFrequency: z.enum(['daily', 'twice_daily', 'three_daily']).nullable().optional(),
         postLength: z.enum(['short', 'long', 'alternate']).nullable().optional(),
+        // お客様が自分で足す「書き方の決まり」（1行1つ・shared/ownerRules.ts）
+        ownerRules: z.string().max(4000).nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const account = await db.getThreadsAccountById(input.accountId);
@@ -2272,6 +2274,10 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found' });
         }
         const { accountId, ...patch } = input;
+        if (patch.ownerRules !== undefined) {
+          const { serializeOwnerRules, parseOwnerRules } = await import('../shared/ownerRules');
+          (patch as any).ownerRules = patch.ownerRules ? serializeOwnerRules(parseOwnerRules(patch.ownerRules)) || null : null;
+        }
         // 自動投稿が使えないプランで、アカウント別にONにさせない（共通設定と同じ守り）
         if (patch.autoPostEnabled === true) {
           const sub = await db.getSubscriptionByUserId(ctx.user.id);

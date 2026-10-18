@@ -6,6 +6,8 @@
  * すべてトーク内の往復で完結させる。
  */
 import * as db from "./db";
+import { tryDocsBind } from "./docsBind";
+import { parseOwnerRuleMessage, parseOwnerRules, addOwnerRule, removeOwnerRule, OWNER_RULES } from "../shared/ownerRules";
 import { buildPostCards, textWithQuick, textWithChoices, parsePostback, fmtJst, REWRITE_KINDS, MENU_ITEMS, HELP_TOPICS, helpQuick, settingsQuick, settingsSummary, shouldClearPendingInput, planUpgradeExitText } from "./lineChat";
 import { COUNSELING_QUESTIONS, quickQuestions } from "../shared/counseling";
 import { buildCounselingBrief, renderBriefText } from "../shared/counselingBrief";
@@ -3096,6 +3098,42 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     if (!w || Array.from(w).length > 30) return [textWithQuick("言葉を読み取れませんでした。", [{ label: "NGワードを追加", data: "s=ng" }, ...MENU_HINT])];
     return addNgWords(user.id, q.p ? String(q.p) : null, [w]);
   }
+  // ── 書き方の決まり（2026-10-18・shared/ownerRules.ts） ──
+  if (q.s === "rule" || q.s === "ruleadd" || q.s === "ruledel") {
+    const accts = (await db.getThreadsAccountsByUserId(user.id)).filter((a: any) => a.isActive !== false);
+    if (accts.length === 0) return [textWithQuick("先にThreadsアカウントの連携が必要です。", MENU_HINT)];
+    const acct: any = q.a ? accts.find((a: any) => String(a.id) === String(q.a)) : accts.length === 1 ? accts[0] : null;
+    if (!acct) {
+      return [textWithQuick(
+        "どのアカウントの書き方の決まりですか？",
+        [...accts.slice(0, 10).map((a: any) => ({ label: `@${String(a.threadsUsername || "").slice(0, 18)}`, data: `s=${q.s}&a=${a.id}` })), { label: "やめる", data: "m=cancel" }],
+      )];
+    }
+    if (q.s === "ruleadd") {
+      const pending = await db.getLineChatState(lineUserId);
+      await db.clearLineChatState(lineUserId);
+      if (pending?.state !== "ownerrule_text" || !pending.payload) return [textWithQuick("決まりの文が見つかりませんでした。もう一度「決まり：〜」の形で送ってください。", MENU_HINT)];
+      return addOwnerRulesForAccount(user.id, Number(acct.id), String(pending.payload).split(/\r?\n/));
+    }
+    if (q.s === "ruledel") {
+      const i = Number(q.i);
+      const rules = parseOwnerRules(acct.ownerRules);
+      if (!Number.isInteger(i) || !rules[i]) return [textWithQuick("その決まりは見つかりませんでした（すでに消えている可能性があります）。", [{ label: "書き方の決まり", data: `s=rule&a=${acct.id}` }, ...MENU_HINT])];
+      const next = removeOwnerRule(acct.ownerRules, i);
+      await db.updateThreadsAccount(Number(acct.id), { ownerRules: next.length ? next.join("\n") : null } as any);
+      return [textWithQuick(`「${rules[i]}」を消しました。${next.length ? `残り${next.length}件です。` : "決まりはなくなりました。"}`, [{ label: "書き方の決まり", data: `s=rule&a=${acct.id}` }, ...MENU_HINT])];
+    }
+    const rules = parseOwnerRules(acct.ownerRules);
+    await db.setLineChatState(lineUserId, "ownerrule", String(acct.id));
+    const who = accts.length >= 2 ? `@${acct.threadsUsername} の` : "";
+    const list = rules.length ? `いまの決まり（${rules.length}件）：\n${rules.map((r, i) => `${i + 1}. ${r}`).join("\n")}\n\n` : "まだ決まりはありません。\n\n";
+    return [textWithQuick(
+      `${who}書き方の決まりです。\n${list}` +
+      `足したい決まりを短い文で送ってください（例：最後は必ず「ご相談はLINEから」で締める／「患者さん」ではなく「お客さま」と書く）。\n` +
+      `1つ${OWNER_RULES.maxLen}字まで・${OWNER_RULES.maxRules}件まで。次に作る投稿から毎回守ります。`,
+      [...rules.slice(0, 8).map((r, i) => ({ label: `${i + 1}を消す`, data: `s=ruledel&a=${acct.id}&i=${i}` })), { label: "やめる", data: "m=cancel" }],
+    )];
+  }
   if (q.s === "ng") {
     // ★NGワードはお店の情報ごとに保持している。複数店舗なら、どのお店に登録するかを先に選ぶ
     //   （以前は必ず1件目に登録され、別の店舗の投稿では避けられていなかった。2026-09-04）
@@ -3144,6 +3182,10 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
  * 連携コード・「解除」は webhook 側で先に処理される。
  */
 export async function handleFreeText(lineUserId: string, text: string): Promise<unknown[] | null> {
+  // ★請求書・領収書の受け取り登録（「書類 合言葉」）。会員でない方も送るので、会員の確認より先に受ける（2026-10-18）
+  const docs = await tryDocsBind(lineUserId, text);
+  if (docs) return docs;
+
   const user = await db.getUserByLineUserId(lineUserId);
 
   // ★未連携でも、メールアドレスの入力待ちなら受け付ける（LINE内で連携を完結させる）
@@ -3311,7 +3353,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   // ★入力待ちの途中で「やめる」と打たれたら、その言葉を内容として使わずに抜ける。
   //   （NGワード待ち・書き直し待ちでこれが無く、「やめる」がそのまま
   //     NGワードや書き直し指示として使われてしまっていた）
-  if ((st?.state === "ngword" || st?.state === "rewrite_free" || st?.state === "self_edit" || st?.state === "set_line_url" || st?.state === "set_call_focus" || st?.state === "ideal_posts" || st?.state === "skip_reason") &&
+  if ((st?.state === "ngword" || st?.state === "ownerrule" || st?.state === "rewrite_free" || st?.state === "self_edit" || st?.state === "set_line_url" || st?.state === "set_call_focus" || st?.state === "ideal_posts" || st?.state === "skip_reason") &&
       /^(やめる|中止|キャンセル|戻る|終わり|終了)$/.test(text.trim())) {
     await db.clearLineChatState(lineUserId);
     return [textWithQuick("わかりました。中止しました。", MENU_HINT)];
@@ -3461,8 +3503,36 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     return addNgWords(user.id, st.payload ? String(st.payload) : null, words);
   }
 
+  // ── 書き方の決まりの入力待ち（「書き方の決まり」ボタンのあと） ──
+  if (st?.state === "ownerrule" && st.payload) {
+    if (isPastedContent(text) || text.split(/\r?\n/).filter((l) => l.trim()).length >= 4) {
+      return [textWithQuick(
+        "いまは「書き方の決まり」をお待ちしています。\n" +
+        `投稿文ではなく、決まりを短い文でお送りください（1つ${OWNER_RULES.maxLen}字まで。いくつかある場合は改行で区切ってください）。\n` +
+        "別のご用件でしたら、下の「やめる」を押してください。",
+        [{ label: "やめる", data: "m=cancel" }],
+      )];
+    }
+    await db.clearLineChatState(lineUserId);
+    return addOwnerRulesForAccount(user.id, Number(st.payload), text.split(/\r?\n/));
+  }
+
   // 「メニュー」「使い方」などのキーワードにも反応する
   const t = text.trim();
+  // ── 「決まり：〜」で、書き方の決まりをその場で足す（2026-10-18） ──
+  {
+    const rule = parseOwnerRuleMessage(t);
+    if (rule) {
+      const accts = (await db.getThreadsAccountsByUserId(user.id)).filter((a: any) => a.isActive !== false);
+      if (accts.length === 0) return [textWithQuick("先にThreadsアカウントの連携が必要です。", MENU_HINT)];
+      if (accts.length === 1) return addOwnerRulesForAccount(user.id, Number(accts[0].id), rule.split(/\r?\n/));
+      await db.setLineChatState(lineUserId, "ownerrule_text", rule);
+      return [textWithQuick(
+        "どのアカウントの決まりにしますか？",
+        [...accts.slice(0, 10).map((a: any) => ({ label: `@${String(a.threadsUsername || "").slice(0, 18)}`, data: `s=ruleadd&a=${a.id}` })), { label: "やめる", data: "m=cancel" }],
+      )];
+    }
+  }
   if (/^(メニュー|めにゅー|menu)$/i.test(t)) return [textWithQuick("どれをご覧になりますか？", MENU_HINT)];
   if (wantsTodayPosts(t)) return handlePostback(lineUserId, "m=posts");
   if (/^(設定|せってい)$/.test(t)) return handlePostback(lineUserId, "m=settings");
@@ -3862,6 +3932,27 @@ async function stashTopic(lineUserId: string, userId: number, text: string): Pro
   } catch {
     return false;
   }
+}
+
+/** 書き方の決まりをアカウントに足す（1行1つ・上限あり）。足せなかった行は理由を返す */
+async function addOwnerRulesForAccount(userId: number, accountId: number, lines: string[]): Promise<unknown[]> {
+  const acct: any = await db.getThreadsAccountById(accountId);
+  if (!acct || Number(acct.userId) !== Number(userId)) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+  let cur: string | null = acct.ownerRules ?? null;
+  const added: string[] = [];
+  const failed: string[] = [];
+  for (const raw of lines.map((l) => l.trim()).filter(Boolean)) {
+    const r = addOwnerRule(cur, raw);
+    if (r.added) { added.push(raw); cur = r.rules.join("\n"); }
+    else failed.push(`「${raw.slice(0, 30)}」：${r.reason}`);
+  }
+  if (added.length) await db.updateThreadsAccount(accountId, { ownerRules: cur } as any);
+  const total = parseOwnerRules(cur).length;
+  const head = added.length
+    ? `「${added.join("」「")}」を書き方の決まりに足しました。次に作る投稿から毎回守ります（いま${total}件）。`
+    : "足せた決まりはありませんでした。";
+  const tail = failed.length ? `\n\n足せなかったもの：\n${failed.join("\n")}` : "";
+  return [textWithQuick(head + tail, [{ label: "書き方の決まり", data: `s=rule&a=${accountId}` }, ...MENU_HINT])];
 }
 
 /** NGワード（使わない言葉）をお店の情報に足す。projectId が無ければ1件目のお店 */
