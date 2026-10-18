@@ -51,6 +51,22 @@ describe("固定投稿：あと2問のご案内（2026-09-14）", () => {
     expect(r.error).toContain("まだ「お店の情報」が登録されていない");
   });
 
+  it("アカウントに紐づくお店の情報が途中なら、ほかのお店の情報へ切り替えず、そのお店の2問へ案内する（2026-10-18）", async () => {
+    const db: any = await import("./db");
+    db.getThreadsAccountsByUserId.mockResolvedValueOnce([
+      { id: 1, isActive: true, threadsUsername: "store_a", accessToken: "x", defaultProjectId: "line_a" },
+      { id: 2, isActive: true, threadsUsername: "store_b", accessToken: "x", defaultProjectId: "line_b" },
+    ]);
+    projects = [
+      { ...base, id: "line_a", target: "デスクワークの会社員", strength: "国家資格者が施術" },
+      { ...base, id: "line_b", businessType: "Web制作", area: "岡山市北区", mainProblem: "集客", target: null, strength: null },
+    ];
+    const r: any = await createPinnedDraft(1, 2);
+    expect(r.error).toContain("お客さん像");
+    expect(r.needMoreField).toBe("targetRaw");
+    expect(r.projectId).toBe("line_b");
+  });
+
   it("Threadsが未連携なら、そちらを先にご案内する", async () => {
     const db: any = await import("./db");
     db.getThreadsAccountsByUserId.mockResolvedValueOnce([]);

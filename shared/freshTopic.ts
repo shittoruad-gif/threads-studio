@@ -215,8 +215,27 @@ export function planFreshTopic(params: {
   };
   const allDocWords = docWordsOf(docs);
   const last3Words = docWordsOf(docs.slice(0, 3));
-  const wordUsedIn = (w: string, ds: readonly string[], dws: readonly string[]) =>
-    ds.some((d) => d.includes(w)) || (w.length >= 5 && dws.some((dw) => w.includes(dw) && dw.length * 2 >= w.length));
+  // ★漢字だけの4〜8字の材料（「制服貸与」）は、投稿では助詞を挟んで書かれる（「制服を貸与」）。
+  //   2字ずつに分けた全部が同じ1本に出ていれば使ったと数える（2026-10-18 acc22：「制服貸与」が使っていない材料に見え、
+  //   「同じ」と見送られた2日後にまた今日の主題に選ばれて見送られた）
+  const kanjiChunks = (w: string): string[] => {
+    if (!/^[一-龠々]{4,8}$/.test(w)) return [];
+    // 2字ずつ。奇数なら最後を3字にする（「実績賞与金」→「実績」「賞与金」）
+    const out: string[] = [];
+    let i = 0;
+    while (i < w.length) {
+      const n = w.length - i === 3 ? 3 : 2;
+      out.push(w.slice(i, i + n));
+      i += n;
+    }
+    return Array.from(new Set(out));
+  };
+  const wordUsedIn = (w: string, ds: readonly string[], dws: readonly string[]) => {
+    if (ds.some((d) => d.includes(w))) return true;
+    if (w.length >= 5 && dws.some((dw) => w.includes(dw) && dw.length * 2 >= w.length)) return true;
+    const chunks = kanjiChunks(w);
+    return chunks.length >= 2 && ds.some((d) => chunks.every((c) => d.includes(c)));
+  };
   const scored = items.map((s) => {
     const words = topicWordsOf(s).filter((w) => !isProtected(w));
     const hitOverused = overused.filter((o) => norm(s).includes(o)).length;

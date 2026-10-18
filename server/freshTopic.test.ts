@@ -290,6 +290,29 @@ describe("長い言葉の材料も、投稿で使っていれば主題に選ば�
       expect(plan.topic).not.toBe("アスリート担当歴あり");
     }
   });
+  it("漢字4字の材料「制服貸与」は、投稿の「制服を貸与」で使ったと数える（2026-10-18）", () => {
+    const salon = [
+      "未経験で入社した方が多いサロンです。\n制服を貸与しますので、安心してスタートできます。",
+      ...Array.from({ length: 9 }, (_, i) => `先輩が丁寧に教えます（${i + 1}）。\n先輩も最初は未経験でした。`),
+    ];
+    for (const index of [0, 1, 2, 3]) {
+      const plan = planFreshTopic({
+        recentPosts: salon,
+        materials: ["制服貸与", "ブライダルエステの施術", "年間休日の多さ"],
+        protect: ["サンプルサロン"],
+        index,
+      });
+      expect(plan.topic).not.toBe("制服貸与");
+    }
+  });
+  it("2字ずつの片方しか出ていない材料は、使っていない扱いのまま", () => {
+    const salon = [
+      "制服は毎日洗っています。",
+      ...Array.from({ length: 9 }, (_, i) => `先輩が丁寧に教えます（${i + 1}）。\n先輩も最初は未経験でした。`),
+    ];
+    const plan = planFreshTopic({ recentPosts: salon, materials: ["制服貸与"], protect: ["サンプルサロン"] });
+    expect(plan.topic).toBe("制服貸与");
+  });
   it("短い部分（2字）だけ重なる長い言葉は、今までどおり使っていない扱い", () => {
     const plan = planFreshTopic({
       recentPosts: recent,

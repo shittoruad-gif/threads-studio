@@ -2056,7 +2056,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       // ★足りないのが「お客さん像」「強み」だけなら、その2問へ直接ご案内する
       //   （「はじめの設定をやり直す」ではない。2026-09-14 夜間整備）
       const more = (res as any).needMoreField && (res as any).projectId
-        ? [{ label: "あと2問だけ答える", data: `c=more&p=${(res as any).projectId}&f=${(res as any).needMoreField}` }]
+        ? [{ label: `あと${(res as any).needMoreCount === 1 ? 1 : 2}問だけ答える`, data: `c=more&p=${(res as any).projectId}&f=${(res as any).needMoreField}` }]
         : [];
       return [textWithQuick(res.error, [...more, ...MENU_HINT])];
     }

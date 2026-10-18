@@ -115,8 +115,10 @@ const PINNED_CHAR_BUDGET = 495;
 /** 作れなかったときの返し。needMoreField があれば「あと2問」へご案内できる */
 export interface PinnedDraftError {
   error: string;
-  /** 足りない項目（'targetRaw' | 'strengthRaw'）。ある場合は「あと2問だけ答える」ボタンを出す */
+  /** 足りない項目（'targetRaw' | 'strengthRaw'）。ある場合は「あと◯問だけ答える」ボタンを出す */
   needMoreField?: string;
+  /** 足りない問いの数（1 か 2）。ボタンの文言に使う */
+  needMoreCount?: number;
   projectId?: string;
 }
 
@@ -132,19 +134,33 @@ export async function createPinnedDraft(userId: number, accountId?: number | nul
   const usable = real.filter((p: any) =>
     p.businessType && p.area && p.target && p.mainProblem && p.strength,
   );
-  if (usable.length === 0) {
+  // ★アカウントに自分のお店の情報が紐づいているのに、それが途中（お客さん像・強みが空）のとき、
+  //   ほかのお店の情報へ黙って切り替えない（2026-10-18 夜間整備の通し確認：2つ目のアカウントで
+  //   「はじめの設定」を5問だけ終えて固定投稿を作ると、1つ目のお店の固定投稿の案ができ、そのまま公開できた）。
+  //   そのお店の「あと2問」へご案内する。紐づけが無い方（お店が1つの方）は今までどおり。
+  const pickedAccount: any = accountId
+    ? active.find((a: any) => Number(a.id) === Number(accountId))
+    : active[0];
+  const ownProject: any = pickedAccount?.defaultProjectId
+    ? real.find((p: any) => p.id === pickedAccount.defaultProjectId)
+    : null;
+  const ownUnfinished = !!ownProject && !usable.some((p: any) => p.id === ownProject.id);
+  if (usable.length === 0 || ownUnfinished) {
     // ★「はじめの設定」を終えたばかりの方は、まず5つ（業種・場所・店名・お悩み）しか答えていない。
     //   それなのに「まだお店の情報が登録されていない」「先にはじめの設定を」と返していたため、
     //   たった今やり終えたことをもう一度やらされる形になっていた（2026-09-14 夜間整備の通し確認）。
     //   足りないのが「お客さん像」と「強み」だけなら、そう言って、その2問へ直接ご案内する。
-    const started = real.find((p: any) => p.businessType && p.area && p.mainProblem);
+    const started = ownUnfinished
+      ? (ownProject.businessType && ownProject.area && ownProject.mainProblem ? ownProject : null)
+      : real.find((p: any) => p.businessType && p.area && p.mainProblem);
     if (started) {
       const missing = [!started.target ? "お客さん像" : "", !started.strength ? "強み" : ""].filter(Boolean);
       return {
         error:
           `固定投稿は、お店の「${missing.join("」と「")}」が分かると作れます（あと${missing.length}問・30秒ほど）。\n` +
-          "下の「あと2問だけ答える」からお答えください。答えたら、そのまま固定投稿を作れます。",
+          `下の「あと${missing.length}問だけ答える」からお答えください。答えたら、そのまま固定投稿を作れます。`,
         needMoreField: !started.target ? "targetRaw" : "strengthRaw",
+        needMoreCount: missing.length,
         projectId: String(started.id),
       };
     }
