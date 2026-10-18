@@ -23,6 +23,8 @@
  *     server/angleGuard.test.ts の describe「本番の実データで」に固定してある。
  */
 
+import { LOCAL_TALK } from "./localTalk";
+
 export interface AngleCheck {
   ok: boolean;
   /** 落ちた理由（ログ用・短く） */
@@ -67,6 +69,8 @@ export interface AngleRequirement {
   leadingDigit?: boolean;
   /** 「？」のあとに答えの文が続くこと（qa 専用） */
   questionAndAnswer?: boolean;
+  /** 本文の字数（空白を除く）の上限。超えたら落とす（local_talk 専用・shared/localTalk.ts） */
+  maxChars?: number;
   hint: string;
 }
 
@@ -192,6 +196,14 @@ export const ANGLE_REQUIREMENTS: Record<string, AngleRequirement> = {
     mark: /(いま|今|途中|取り組|挑戦|続け|始め|準備中|進めて)/,
     hint: `「挑戦の途中経過」の回です。いま取り組んでいることを過程のまま見せてください（成果や数字を作らない）。${NO_TEMPLATE}`,
   },
+  // ★地元の会話（2026-10-18・shared/localTalk.ts）。地元の人への小さな問いかけで終える・宣伝の言葉なし・短い。
+  //   ban の「治る・改善・効果」は効果・結果の言い切りとして扱われ、最後の作り直しでも公開しない。
+  local_talk: {
+    mark: /([?？]|教えてください|教えて[！!]?$|派ですか|言います|ですかね)/,
+    ban: /(営業時間|時まで|ご予約|予約|お待ちして|来てください|お越し|ご来店|初回|[0-9０-９,]+円|キャンペーン|お気軽に|ご相談|国家資格|施術|な人へ|な方へ|https?:|#[^\s#]|治る|治り|改善|効果|必ず)/,
+    maxChars: LOCAL_TALK.hardMax,
+    hint: `「地元の会話」の回です。お店の宣伝ではなく、地元の人に町のこと（食べ物・場所・季節の地元のこと・方言・暮らしのあるある）を話しかけ、一言で答えられる小さな質問で終えてください。${LOCAL_TALK.targetMin}〜${LOCAL_TALK.targetMax}字。お店の名前・メニュー・施術・予約・料金・効果の話・「〜な人へ」・「国家資格」は書かない。`,
+  },
   // deep_worry / reservation_funnel は順番を守らせる独自の指示があり、別の検査で見ている。
   // meta_ai_call / quote_pinned は表示用のラベルで、ここでは見ない。
 };
@@ -211,6 +223,9 @@ export function checkAngle(angleId: string | null | undefined, text: string): An
     const m = t.match(req.ban)?.[0] ?? "";
     const kind = /逆効果|意味|無駄|繰り返|変わ|必ず|治|根本|完治|改善|ごまか|その場しのぎ/.test(m) ? "効果・結果の言い切り" : "売り込み";
     return { ok: false, reason: `${angleId}: ${kind}「${m}」が入っている`, hint: req.hint, defaultTemplate: template };
+  }
+  if (req.maxChars && Array.from(t.replace(/\s+/g, "")).length > req.maxChars) {
+    return { ok: false, reason: `${angleId}: 長すぎる（${Array.from(t.replace(/\s+/g, "")).length}字・上限${req.maxChars}字）`, hint: req.hint, defaultTemplate: template };
   }
   if (req.leadingDigit) {
     const first = t.split(/\r?\n/).map((s) => s.trim()).find(Boolean) ?? "";

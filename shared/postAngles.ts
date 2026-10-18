@@ -1,4 +1,5 @@
 import { reactionMultiplier, type PooledReactions } from "./reactionBoost";
+import { LOCAL_TALK, LOCAL_TALK_ANGLE_ID, LOCAL_TALK_HINT } from "./localTalk";
 /**
  * 自動投稿の「切り口」カタログ＋◯✕フィードバックによる重み付け選択。
  *
@@ -131,6 +132,15 @@ export const POST_ANGLES: PostAngle[] = [
       + '（「フェイシャル60分」ではなく「すっぴんで人に会えるようになる」）。'
       + '(4)最後は一言で答えられる小さな問いかけで終える。予約は直接促さない。'
       + 'きれいにまとめすぎず、普段お客様に話している言葉のままで書く。',
+  },
+
+  // ★2026-10-18追加：地元の会話（shared/localTalk.ts）。店主が手で書いた「地元の人への小さな問いかけ」が
+  //   AIの投稿より桁違いに見られ・返信が付いていた（Moveact 玉島の実データ）。
+  //   出る割合は pickAngle で LOCAL_TALK.share（約22%）に合わせる。会話型なので問いかけの締めを許す。
+  {
+    id: LOCAL_TALK_ANGLE_ID,
+    label: '地元の会話',
+    hint: LOCAL_TALK_HINT,
   },
 ];
 
@@ -330,8 +340,11 @@ export const ANGLE_FOCUS: { until: string; ids: readonly string[] } = {
 export const LINK_PUSH_ANGLES: readonly string[] = ['reservation_funnel'];
 
 export function activeAngles(now: number = Date.now(), mode: string = 'store'): PostAngle[] {
+  // 地元の会話は割合を 0 にすると候補から外れる（shared/localTalk.ts）
+  const localTalkOff = !(LOCAL_TALK.share > 0) ? [LOCAL_TALK_ANGLE_ID] : [];
   if (mode === 'personal') {
-    const EXCLUDED = ['local', ...LINK_PUSH_ANGLES];
+    // 個人ブランディングは来店・商圏が前提でないため、地元ネタ・地元の会話は使わない
+    const EXCLUDED = ['local', LOCAL_TALK_ANGLE_ID, ...LINK_PUSH_ANGLES];
     return [
       ...POST_ANGLES.filter((a) => !EXCLUDED.includes(a.id)),
       ...PERSONAL_EXTRA_ANGLES,
@@ -343,7 +356,7 @@ export function activeAngles(now: number = Date.now(), mode: string = 'store'): 
     const focused = POST_ANGLES.filter((a) => ANGLE_FOCUS.ids.includes(a.id) && !LINK_PUSH_ANGLES.includes(a.id));
     if (focused.length > 0) return focused;
   }
-  return POST_ANGLES.filter((a) => !LINK_PUSH_ANGLES.includes(a.id));
+  return POST_ANGLES.filter((a) => !LINK_PUSH_ANGLES.includes(a.id) && !localTalkOff.includes(a.id));
 }
 
 /**
@@ -364,9 +377,16 @@ export function pickAngle(
   perf?: AnglePerformance,
   now: number = Date.now(),
   mode: string = 'store',
-  opts: { excludeOutcomeAngles?: boolean; preferredAngles?: readonly string[]; recentAngles?: readonly string[]; studyExperiment?: boolean } = {},
+  opts: {
+    excludeOutcomeAngles?: boolean; preferredAngles?: readonly string[]; recentAngles?: readonly string[]; studyExperiment?: boolean;
+    /** 地元の会話を使わない（地域の登録が無い・言い切りで終えると決めた方・求人のアカウントなど。shared/localTalk.ts） */
+    excludeLocalTalk?: boolean;
+    /** 地元の会話の割合（既定は LOCAL_TALK.share。テスト・調整用） */
+    localTalkShare?: number;
+  } = {},
 ): PostAngle {
   let pool = activeAngles(now, mode);
+  if (opts.excludeLocalTalk) pool = pool.filter((a) => a.id !== LOCAL_TALK_ANGLE_ID);
   // ★試験用の切り口（三上様のアカウントだけ）。勉強会の型を足して比べる。
   const experimentIds = new Set<string>();
   if (opts.studyExperiment) {
@@ -425,6 +445,28 @@ export function pickAngle(
     if (expSum > 0 && restSum > 0) {
       const k = (STUDY_EXPERIMENT_SHARE / (1 - STUDY_EXPERIMENT_SHARE)) * (restSum / expSum);
       weights = pool.map((a, i) => (experimentIds.has(a.id) ? weights[i] * k : weights[i]));
+    }
+  }
+  // ★地元の会話（2026-10-18）は、ほかの重みに関係なく合計の約 LOCAL_TALK.share になるように合わせる。
+  //   ◯✕だけは効かせる（✕が多い方は下がり、◯が多い方は上がる・上限 LOCAL_TALK.maxShare）。
+  //   希望の切り口（約35%）・試験用の切り口（約半分）の割合は変えず、残りの切り口の分から取る。
+  const ltIndex = pool.findIndex((a) => a.id === LOCAL_TALK_ANGLE_ID);
+  if (ltIndex >= 0 && pool.length > 1) {
+    const s = stats[LOCAL_TALK_ANGLE_ID] ?? { good: 0, bad: 0 };
+    const preference = Math.max(0.1, 1 + 0.6 * s.good - 0.5 * s.bad);
+    let share = Math.min(LOCAL_TALK.maxShare, Math.max(0, (opts.localTalkShare ?? LOCAL_TALK.share) * preference));
+    const kept = (a: PostAngle) => preferred.has(a.id) || experimentIds.has(a.id);
+    const keptSum = pool.reduce((sum, a, i) => sum + (i !== ltIndex && kept(a) ? weights[i] : 0), 0);
+    const restSum = pool.reduce((sum, a, i) => sum + (i !== ltIndex && !kept(a) ? weights[i] : 0), 0);
+    const all = keptSum + restSum;
+    if (!(share > 0) || all <= 0) {
+      weights = weights.map((w, i) => (i === ltIndex ? 0 : w));
+    } else {
+      const keptShare = keptSum / all;
+      // 残りの切り口が少なくとも 5% は出るように、地元の会話の割合を抑える
+      share = Math.min(share, Math.max(0, 1 - keptShare - 0.05));
+      const restScale = restSum > 0 ? (all * (1 - keptShare - share)) / restSum : 1;
+      weights = pool.map((a, i) => (i === ltIndex ? all * share : kept(a) ? weights[i] : weights[i] * restScale));
     }
   }
   const total = weights.reduce((sum, w) => sum + w, 0);

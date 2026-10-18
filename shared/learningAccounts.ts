@@ -1,3 +1,5 @@
+import { LOCAL_TALK, LOCAL_TALK_ANGLE_ID } from "./localTalk";
+
 /**
  * 学習用アカウント（2026-10-07 三上様「Moveactの店舗をもっと投稿数を増やして、リーチが取れる投稿の傾向を取れるように。
  * 早くその傾向が取れないと、今契約しているユーザが離脱する原因となります」）。
@@ -156,7 +158,16 @@ export const LEARNING_TRIALS: readonly LearningTrial[] = [
   { key: "opinion", label: "主張を言い切る", note: "お店の考え（登録された信条・こだわりにあること）を1つだけ選び、1行目で言い切る。理由を短く添えて終える。誰か・他店を否定しない。効果は約束しない。" },
   { key: "conclusion_first", label: "1行目で結論", note: "1行目に、この投稿でいちばん伝えたい結論を書く。2行目以降で理由を短く。結論を最後まで引っ張らない。" },
   { key: "compare", label: "2つを比べる", note: "読む人がよく迷う2つ（例：温めるか冷やすか、朝と夜、立ち仕事と座り仕事）を並べて、違いを短く書く。登録情報や一般的な知識から言えることだけ。効果は言い切らない。" },
+  // ★10/18 追加（三上様「普段の投稿やスレッドスタジオにもこれを活かして」・shared/localTalk.ts）。
+  //   手で書いた地元の人への問いかけ（4,000〜5,700表示・返信10〜25）を、学習の枠の約半分で試して測る。
+  //   ほかの試しと違い、学習の枠の LOCAL_TALK.learningEvery 枠に1枠をこれにする（trialFor）。
+  { key: LOCAL_TALK_ANGLE_ID, label: "地元の会話", note: "地元に住む人へ、町のこと（地元の食べ物・身近な場所・この季節の地元のこと・方言・暮らしのあるある）を話しかける短いつぶやきにする。決まりは上の【今回は「地元の会話」の回】のとおり（20〜60字・地名を1回・一言で答えられる小さな質問で終える・お店の宣伝や効果の話は書かない）。" },
 ];
+
+/** 地元の会話の試し（学習の枠の約半分） */
+export const LOCAL_TALK_TRIAL: LearningTrial = LEARNING_TRIALS.find((t) => t.key === LOCAL_TALK_ANGLE_ID)!;
+/** 地元の会話以外の試し（残りの枠で順に回す） */
+export const OTHER_TRIALS: readonly LearningTrial[] = LEARNING_TRIALS.filter((t) => t.key !== LOCAL_TALK_ANGLE_ID);
 
 /**
  * 今日のこの枠の試し。条件ごとの本数がそろうよう、日付・枠・アカウントで決めた順に回す（同じ日の2店で同じ条件にならない）。
@@ -165,10 +176,18 @@ export const LEARNING_TRIALS: readonly LearningTrial[] = [
 export function trialFor(accountId: number, learningIndex: number, now: number = Date.now()): LearningTrial {
   const day = Math.floor((now + JST) / 86400_000);
   const pos = Math.max(0, LEARNING_ACCOUNTS.accountIds.indexOf(accountId));
-  const n = LEARNING_TRIALS.length;
+  const idx = Math.max(0, Math.floor(learningIndex));
+  // ★地元の会話（10/18）：学習の枠の LOCAL_TALK.learningEvery 枠に1枠（2 なら偶数番目＝約半分）
+  const every = Math.floor(LOCAL_TALK.learningEvery);
+  let k = idx;
+  if (every > 0) {
+    if (idx % every === 0) return LOCAL_TALK_TRIAL;
+    k = idx - Math.floor(idx / every) - 1; // 地元の会話以外の枠の中で何番目か
+  }
+  const n = OTHER_TRIALS.length;
   // 日ごと・アカウントごとに出発点をずらし、枠の順に1つずつ進める（1日にどの条件も同じくらい出る）
-  const i = (day * 5 + pos * 4 + learningIndex) % n;
-  return LEARNING_TRIALS[i];
+  const i = (day * 5 + pos * 4 + k) % n;
+  return OTHER_TRIALS[i];
 }
 
 /**

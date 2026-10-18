@@ -23,6 +23,8 @@ import { stripRawUrls } from "../shared/sanitize";
 import { earlierRejectedNote } from "../shared/naturalnessRetryHint";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
 import { trialRules } from "../shared/learningAccounts";
+import { bannedRuleFor, scrubProjectForAccount, findAccountBannedWord, accountBannedNote } from "../shared/accountBannedWords";
+import { LOCAL_TALK_ANGLE_ID, localTalkNote, localTalkPlaces, localTalkOptedOut } from "../shared/localTalk";
 import { invokeLLM } from "./_core/llm";
 import { nanoid } from "nanoid";
 import { approvedLocalTerms } from './localGeo';
@@ -54,6 +56,8 @@ const AUTO_POST_CHAR_BUDGET = 140;
 
 // 生成プロンプトの末尾に付ける自動投稿専用の最終指示。
 // LLMは末尾の指示に最も従いやすいため、文字数と1行目のルールをここで再強調する。
+// ★2026-10-18：末尾のお手本の形（冒頭に数字…）の最後の1行は、以前「マシンが支えてくれるピラティスは、この3つ全部いらないんです！」だった。
+//   Moveact の話が全員のプロンプトに入り、玉島（acc10・マシンは使わない方針）の「マシンがサポートするので大丈夫です」の元になっていたため、業種を問わない1行に差し替えた。
 const AUTO_POST_STYLE_ADDENDUM = `
 
 【自動投稿モードの最終指示（これまでの全指示より優先・厳守）】
@@ -110,7 +114,7 @@ const AUTO_POST_STYLE_ADDENDUM = `
 頑張りすぎ・完璧主義・ひとりでやる。
 これ全部当てはまる方、本当に多いです😅
 
-マシンが支えてくれるピラティスは、この3つ全部いらないんです！`;
+ひとつずつ減らしていけば大丈夫です！`;
 
 // 会話型（あるある・共感・Q&A）にだけ許可する締めの追加指示。
 // リーチ型は言い切りで終わるが、会話型は返信をもらうのが目的なので
@@ -627,6 +631,11 @@ export async function generateAutoPost(
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
   const purpose = PURPOSES[purposeIndex % PURPOSES.length];
+  // ★アカウントごとの「書かない言葉」（shared/accountBannedWords.ts・2026-10-18）。
+  //   Moveact 玉島（acc10）は「マシン」を書かない。登録の業種「マシンピラティススタジオ」などから、
+  //   生成に渡す前に外す（メモリの上だけ。DBの登録は変えない）。出来上がりにも残っていたら公開しない（下の最終検査）。
+  const bannedRule = bannedRuleFor(threadsAccountId);
+  if (bannedRule) project = scrubProjectForAccount(threadsAccountId, project);
 
   // ★切り口の多様化：◯✕フィードバックで重み付けした切り口をランダムに1つ選ぶ。
   //   ◯が付いた切り口は出やすく、✕が付いた切り口は出にくくなる（完全にゼロにはしない）。
@@ -714,8 +723,18 @@ export async function generateAutoPost(
     // ★三上様のアカウント（Moveact 2店・株式会社しっとる）だけ、勉強会の型を試す（2026-09-24）
     const { isStudyExperimentUser } = await import('../shared/postAngles');
     const studyExperiment = isStudyExperimentUser(userId);
+    // ★地元の会話（shared/localTalk.ts・2026-10-18）を使わないお店：地域の登録が無い・
+    //   「言い切りで終える」を選んだ方（問いかけで終える回なので）・求人のアカウント。
+    //   自然な書き方モードの方は NATURAL_STYLE_SKIP_ANGLES で外す。
+    const excludeLocalTalk = (() => {
+      if (localTalkOptedOut(userId)) return true;
+      if (localTalkPlaces(project.area, approvedLocalTerms(project)).length === 0) return true;
+      if (looksLikeRecruiting(project)) return true;
+      try { if (JSON.parse(project.counselingResult || 'null')?.closingStyle === 'statement') return true; } catch { /* 読めなければ外さない */ }
+      return false;
+    })();
     angle = forced
-      ?? pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment });
+      ?? pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment, excludeLocalTalk });
     // ★他店の当たり型の枠（2026-09-28 三上様指示・shared/hitPatterns.ts）。型が読めなければ通常の切り口のまま
     if (!forced && opts.hitPatternId) {
       try {
@@ -742,7 +761,7 @@ export async function generateAutoPost(
       const { isNaturalStyleUser } = await import('../shared/naturalStyle');
       if (isNaturalStyleUser(userId)) {
         for (let k = 0; k < 6 && skipNatural(angle); k++) {
-          angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment });
+          angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment, excludeLocalTalk });
         }
         if (skipNatural(angle)) angle = null;
         console.log(`[AutoPost] 自然な書き方モード：宣伝調の切り口を外した account=${threadsAccountId} → ${angle?.id ?? 'なし'}`);
@@ -781,20 +800,25 @@ export async function generateAutoPost(
   // 'alternate' のときは、日と枠の両方で短め/長めを交互にする（A/Bテスト）。
   // ★学習の試しの「長め」は長めの予算（300字）で書く。「ひとこと」は短め（2026-10-07）
   const trialKey = opts.learningTrial?.key ?? null;
-  const effectiveLength = trialKey === 'len_long' ? 'long' : trialKey === 'len_oneliner' ? 'short' : resolveWithAlternation(postLength, postingTimeIndex);
+  // ★地元の会話の回（切り口 local_talk か、学習の試し local_talk）。短い・問いかけで終える・宣伝なし（shared/localTalk.ts）
+  const localTalkTurn = angle?.id === LOCAL_TALK_ANGLE_ID || trialKey === LOCAL_TALK_ANGLE_ID;
+  if (localTalkTurn) console.log(`[AutoPost] 地元の会話の回 account=${threadsAccountId}${trialKey === LOCAL_TALK_ANGLE_ID ? '（学習の試し）' : ''}`);
+  const effectiveLength = trialKey === 'len_long' ? 'long' : (trialKey === 'len_oneliner' || localTalkTurn) ? 'short' : resolveWithAlternation(postLength, postingTimeIndex);
   // ★お客様ごとの長さ（2026-10-03 三上様「相手の平均的な文字数に合わせて」）。
   //   文体のお手本が3本以上あれば、その平均字数に合わせる。「長め」を選んだ方・反応改善の試験中の方は従来どおり。
   const { sampleLengthRange, applyLengthRange, budgetForRange } = await import('../shared/sampleLength');
   // ★長さの試し（len_*）では、お手本の平均字数に合わせない（合わせると「長め」が50〜60字に縮められ、10/7 の試しで1本も書けなかった）
-  const lengthRange = effectiveLength === 'short' && !lowReaction && !(trialKey ?? '').startsWith('len_')
+  const lengthRange = effectiveLength === 'short' && !lowReaction && !localTalkTurn && !(trialKey ?? '').startsWith('len_')
     ? sampleLengthRange((project as any).styleSamples || null)
     : null;
   if (lengthRange) console.log(`[AutoPost] 長さをお手本に合わせる account=${threadsAccountId} 平均${lengthRange.avg}字（${lengthRange.n}本）→ ${lengthRange.lo}〜${lengthRange.hi}字`);
-  const lengthNote = lengthRange
+  const lengthNote = localTalkTurn
+    ? `\n\n【今回の長さ（厳守）】\n- 本文は20〜60字（長くても80字）。1〜3行。地元の会話の回なので、説明を足して長くしない。`
+    : lengthRange
     ? `\n\n【今回の長さ（厳守）】\n- 本文は${lengthRange.lo}〜${lengthRange.hi}字（この方の文体のお手本の平均${lengthRange.avg}字に合わせる）。1文は短く、言い切って終わる。字数を埋めるための水増し（同じ内容の言い換え・一般論の付け足し）は禁止。`
     : `\n\n【今回の長さ（厳守）】\n- ${POST_LENGTHS[effectiveLength].guide}`;
   // ★反応が取れていないアカウントの回（短め・来てもらうための言葉なし・地域名・本人の目線。shared/reactionBoost.ts）
-  const lowReactionText = lowReaction
+  const lowReactionText = lowReaction && !localTalkTurn
     ? await (async () => {
         const { lowReactionNote, isOneLinerTurn } = await import('../shared/reactionBoost');
         const oneLiner = isOneLinerTurn(angle?.id ?? null, postingTimeIndex, fixedScheduledAt ?? new Date());
@@ -1107,6 +1131,8 @@ export async function generateAutoPost(
     } catch { noQuestionEnding = false; }
     // ★学習の試し「最後に読者へ質問」は、問いかけの締めを止めない（2026-10-10）
     if (opts.learningTrial?.key === 'ask_reader') noQuestionEnding = false;
+    // ★地元の会話は、地元の人への小さな質問で終えるのが型そのもの（2026-10-18）。問いかけの締めを止めない
+    if (localTalkTurn) noQuestionEnding = false;
     if (ownerLikesQuestion && noQuestionEnding) {
       noQuestionEnding = false;
       console.log(`[AutoPost] ご本人が直した文の多くが問いかけで終わっているため、問いかけの締めを止めない account=${threadsAccountId}`);
@@ -1391,17 +1417,22 @@ export async function generateAutoPost(
           + ledgerNote
           // ★◯✕アンケートで✕が付いた題材（2026-09-26）
           + surveyAvoidNote
-          + (CONVERSATION_POST_TYPES.has(postType) && !noQuestionEnding ? CONVERSATION_ENDING_ADDENDUM : '')
+          + ((CONVERSATION_POST_TYPES.has(postType) || localTalkTurn) && !noQuestionEnding ? CONVERSATION_ENDING_ADDENDUM : '')
           + (noQuestionEnding ? (await import('../shared/freshTopic')).QUESTION_ENDING_NOTE : '')
           // ★求人（採用）の投稿を、集客と同じ型で書かせない（shared/recruitingPost.ts・2026-09-23）。
           //   プレステージ様は2晩続けて naturalnessReview で3回落ち、枠を捨てていた。
           + (looksLikeRecruiting(project) ? RECRUITING_POST_ADDENDUM : '')
           // ★個人モードの上書きは最末尾（末尾の指示が最も遵守されやすい）
           + (personal ? personalModePromptOverride() : '')
+          // ★地元の会話の回（2026-10-18・shared/localTalk.ts）。長さ・絵文字・締めの共通指示より後ろ＝より優先。
+          //   ご本人の手直しの決まり（editLessonsNote）はこれより後ろ（ご本人の直しを優先する）
+          + (localTalkTurn ? localTalkNote({ places: localTalkPlaces(project.area, approvedLocalTerms(project)), allowEmoji }) : '')
           // ★毎回直しているところ（2026-10-08）。長さ・改行の最終指示より後ろ＝より優先
           + editLessonsNote
           // ★お客様が自分で決めた書き方（2026-10-18）。手直しの決まりの後ろ
           + ownerRulesNote
+          // ★アカウントごとの書かない言葉（shared/accountBannedWords.ts）。運営の方針なので末尾近くに置く
+          + accountBannedNote(threadsAccountId)
           // ★学習の試し（shared/learningAccounts.ts）は最末尾。途中に置くと、後ろの「切り口（最優先）」「長さ」に上書きされ、
           //   10/7 の試しで「1行目に数字」に数字が無い・「箇条書き」に箇条書きが無い投稿になっていた。
           + (opts.learningTrial ? `\n\n【今回の試し（ここまでのすべての指示より優先・厳守）】\n- ${opts.learningTrial.note}\n- 上の切り口・長さ・書き出しの指示と食い違うところは、この試しに合わせる。試すのはこの1点だけで、それ以外はいつもどおり。\n${trialRules(allowEmoji).map((r) => `- ${r}`).join('\n')}` : ''),
@@ -1484,7 +1515,8 @@ export async function generateAutoPost(
     const { EDIT_LESSONS: EL } = await import('../shared/editLessons');
     // ★自分で「書き方の決まり」を入れている方も、書き直しで決まりが消えないようにかけない（2026-10-18）
     const ownerStyleKnown = ownerEditCount >= EL.minPairs || ownerRulesCount > 0;
-    let naturalMain = naturalStyle || opts.learningTrial || ownerStyleKnown ? beforeNaturalize : await naturalizeContent(
+    // ★地元の会話の回もかけない（「50〜100字」に寄せて説明を足し、短い問いかけが崩れるため・2026-10-18）
+    let naturalMain = naturalStyle || opts.learningTrial || ownerStyleKnown || localTalkTurn ? beforeNaturalize : await naturalizeContent(
       beforeNaturalize, personal, brandVoice, keepIdentityWords, (project as any).styleSamples || null, lengthRange,
     );
 
@@ -1493,7 +1525,7 @@ export async function generateAutoPost(
     //   勝手な問いかけ締めを混入させた事故（2026-08-26 三上さん指摘）の再発防止。
     //   不合格なら、機械で直さずリライト前の文に戻す（安全な代替が常にあるため）。
     const verdict = checkNaturalized(naturalMain, beforeNaturalize, {
-      allowQuestionEnding: CONVERSATION_POST_TYPES.has(postType),
+      allowQuestionEnding: CONVERSATION_POST_TYPES.has(postType) || localTalkTurn,
     });
     if (!verdict.ok) {
       // ★差し戻し先（＝生成そのままの文）も決まり文句を検査する。
@@ -1749,6 +1781,7 @@ export async function generateAutoPost(
         brandVoice, businessType: project.businessType, storeName: (project as any).storeName,
         // ★手直しした文も「この方の理想の投稿」として渡す（途中の改行・【】・絵文字を減点しない・2026-10-08）
         styleSamples: [styleSamplesForToday || '', ...ownerAfterTexts].filter(Boolean).join('\n---\n') || null, identityHint: identityHint || null,
+        localTalk: localTalkTurn,
       });
       // ★最後の作り直しでは3点を通す（2026-09-11）。9/11朝は35枠中19枠が失敗し、その3回目の理由の
       //   半分以上が「3/5」だった（例：「土浦で11年。／早期回復をサポートしています。」）。
@@ -1838,7 +1871,11 @@ export async function generateAutoPost(
     //   （三上様のアカウントの直近6本が、切り口が違っても全部「悩み一言→店名→国家資格者が整えます」）。
     //   ラベルだけ付いて中身が伴っていなかったので、その切り口なら必ず入る印が無ければ作り直す。
     //   最後の作り直しでは枠を捨てず公開する（既存方針）。ガードは事実を増やさない・緩めない。
-    if (angle) {
+    // ★学習の試しの「地元の会話」は切り口なしで作るので、同じ検査を試しのキーで当てる（2026-10-18）
+    const angleForCheck: { id: string; label: string } | null = angle
+      ?? (trialKey === LOCAL_TALK_ANGLE_ID ? { id: LOCAL_TALK_ANGLE_ID, label: '地元の会話' } : null);
+    if (angleForCheck) {
+      const angle = angleForCheck;
       try {
         const { checkAngle, angleRetryHint } = await import('../shared/angleGuard');
         const ac = checkAngle(angle.id, naturalMain);
@@ -2089,6 +2126,19 @@ export async function generateAutoPost(
     const SAFETY_LIMIT = 480;
     if (Array.from(fullContent).length > SAFETY_LIMIT) {
       fullContent = Array.from(fullContent).slice(0, SAFETY_LIMIT - 1).join('') + '…';
+    }
+
+    // ★アカウントごとの書かない言葉（shared/accountBannedWords.ts・2026-10-18）。最後の作り直し・保証パスでも公開しない。
+    //   Moveact 玉島（acc10）の「マシン」。生成の前に登録から外し、プロンプトでも禁じているが、それでも残ったら作り直す。
+    {
+      const banned = findAccountBannedWord(threadsAccountId, fullContent);
+      if (banned) {
+        console.warn(`[AutoPost] accountBannedWord:「${banned}」が残っている → ${lastAttempt ? '公開しない（枠は空ける）' : '作り直し'} userId=${userId} account=${threadsAccountId}`);
+        noteReject('accountBannedWord', userId, threadsAccountId, postingTimeIndex,
+          `- 「${banned}」は、このアカウントでは書かない言葉（${bannedRule?.reason ?? '運営の方針'}）。言い換え（機械・器具で支える 等）も書かない。別の話にする。`,
+          { detail: banned, gaveUp: lastAttempt });
+        return false;
+      }
     }
 
     // ★地域ガード：店舗の地域と無関係な地名が混入していたら公開せずスキップ。
@@ -2879,6 +2929,8 @@ async function scheduleMetaAiCallPost(
 ): Promise<boolean> {
   const already = await db.countMetaAiAskToday(threadsAccountId).catch(() => 0);
   if (already > 0) return false;
+  // ★アカウントごとの書かない言葉（acc10「マシン」）は、業種などから外してから作る（2026-10-18）
+  project = scrubProjectForAccount(threadsAccountId, project);
   const { buildMetaAiCallPost, META_AI_CALL_ANGLE } = await import('../shared/metaAiAsk');
   let menu: string[] | null = null;
   try {
@@ -2891,6 +2943,7 @@ async function scheduleMetaAiCallPost(
     target: project.target, mainProblem: project.mainProblem, menu,
   }, dayIndex);
   if (!text) { console.log(`[AutoPost] Meta AI呼びかけ投稿: 材料不足のため見送り project=${project.id}`); return false; }
+  if (findAccountBannedWord(threadsAccountId, text)) { console.warn(`[AutoPost] Meta AI呼びかけ投稿: 書かない言葉が残るため見送り account=${threadsAccountId}`); return false; }
   // 10:00〜11:00 JST のどこか
   const nowJst = new Date(Date.now() + JST_OFFSET_MS);
   const slot = new Date(Date.UTC(nowJst.getUTCFullYear(), nowJst.getUTCMonth(), nowJst.getUTCDate(), 10, 0) - JST_OFFSET_MS + Math.floor(Math.random() * 60) * 60 * 1000);

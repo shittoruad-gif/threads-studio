@@ -49,14 +49,16 @@ describe("学習用アカウント", () => {
     const again = burstSlotsToMake(g, [new Date(at("2026-10-14", "09:30")), ...first], from, to);
     expect(again.length).toBe(0);
   });
-  it("試しは13種類を回し、1日のうち同じアカウントで条件が偏らない", () => {
-    expect(LEARNING_TRIALS.length).toBe(13);
+  it("試しは「地元の会話」が約半分、残りの13種類を順に回し、1日のうち同じアカウントで条件が偏らない（10/18〜）", () => {
+    expect(LEARNING_TRIALS.length).toBe(14);
     for (const acc of LEARNING_ACCOUNTS.accountIds) {
-      const keys = Array.from({ length: 26 }, (_, i) => trialFor(acc, i, at("2026-10-14")).key);
+      const keys = Array.from({ length: 52 }, (_, i) => trialFor(acc, i, at("2026-10-18")).key);
       const count: Record<string, number> = {};
       for (const k of keys) count[k] = (count[k] ?? 0) + 1;
-      expect(Object.keys(count).length).toBe(13);
-      for (const k of Object.keys(count)) expect(count[k]).toBe(2);
+      expect(count.local_talk).toBe(26);
+      const others = Object.keys(count).filter((k) => k !== "local_talk");
+      expect(others.length).toBe(13);
+      for (const k of others) expect(count[k]).toBe(2);
     }
   });
   it("学習の枠の時刻：投稿時間の試験の5枠のあいだに、ほかの枠と1時間以上あけて2本置ける（試験の全日程）", () => {

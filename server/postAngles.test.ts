@@ -28,7 +28,8 @@ describe("切り口の重み付け", () => {
   it("評価も実績も無いときは全切り口がほぼ均等に出る", () => {
     const counts = sample({}, undefined);
     // 予約導線（リンク先へ促す型）は通常のローテーションから外れている（2026-09-11）
-    const values = POST_ANGLES.filter((a) => !LINK_PUSH_ANGLES.includes(a.id)).map((a) => counts[a.id] ?? 0);
+    // ★地元の会話（local_talk・2026-10-18）は割合を LOCAL_TALK.share に合わせる別枠なので、均等の比べから外す（server/localTalk.test.ts で見る）
+    const values = POST_ANGLES.filter((a) => !LINK_PUSH_ANGLES.includes(a.id) && a.id !== "local_talk").map((a) => counts[a.id] ?? 0);
     const min = Math.min(...values);
     const max = Math.max(...values);
     expect(min).toBeGreaterThan(0);
@@ -131,7 +132,7 @@ describe("同じ切り口に偏らない（直近の切り口を渡す）", () =
 
   it("直近の切り口が無ければ、これまでどおり均等", () => {
     const counts = drawMany([]);
-    const values = Object.values(counts);
+    const values = Object.entries(counts).filter(([id]) => id !== "local_talk").map(([, v]) => v);
     expect(Math.max(...values) - Math.min(...values)).toBeLessThanOrEqual(2);
   });
 

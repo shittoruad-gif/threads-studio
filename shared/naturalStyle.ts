@@ -16,8 +16,11 @@ export const NATURAL_STYLE_USER_IDS: readonly number[] = [3500];
 /** このモードで本文の生成に使うモデル。失敗したら invokeLLM が既定のモデルでやり直す */
 export const NATURAL_STYLE_MODEL = 'gemini-3.8-flash';
 
-/** このモードで使わない切り口（数字で始める・地域の紹介・予約への誘導＝経歴や営業案内を並べた宣伝になる） */
-export const NATURAL_STYLE_SKIP_ANGLES: readonly string[] = ['number_result', 'local', 'reservation_funnel'];
+/**
+ * このモードで使わない切り口（数字で始める・地域の紹介・予約への誘導＝経歴や営業案内を並べた宣伝になる）。
+ * ★地元の会話（local_talk・2026-10-18）も外す：このモードは問いかけで締めない・地名を毎回入れない方のためのもの。
+ */
+export const NATURAL_STYLE_SKIP_ANGLES: readonly string[] = ['number_result', 'local', 'reservation_funnel', 'local_talk'];
 
 /** 使わない決まり文句（どの院でも言える言葉。香取様の投稿で目立っていたもの） */
 export const NATURAL_STYLE_CLICHES: readonly string[] = [

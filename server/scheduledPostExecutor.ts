@@ -162,6 +162,22 @@ export async function executePendingPosts() {
           continue;
         }
 
+        // ★アカウントごとの書かない言葉（shared/accountBannedWords.ts・2026-10-18）。自動の投稿に残っていたら公開しない。
+        //   Moveact 玉島（acc10）の「マシン」。生成の時点でも止めているが、承認待ちに残っていた分・他の経路の分の最後の関門。
+        //   ご本人が手で書いた投稿（manual など）は止めない。
+        if (post.source === 'auto') {
+          const { findAccountBannedWord } = await import('../shared/accountBannedWords');
+          const hit = findAccountBannedWord(account.id, post.postContent);
+          if (hit) {
+            await db.updateScheduledPost(post.id, {
+              status: 'canceled',
+              errorMessage: `このアカウントでは書かない言葉「${hit}」が入っていたため公開を見送り（運営の方針）`,
+            });
+            console.warn(`[Scheduled Post] 書かない言葉「${hit}」のため見送り: post=${post.id} account=${account.id}`);
+            continue;
+          }
+        }
+
         // ★使える契約が無い方の投稿は公開しない（2026-10-03）。
         //   氷見様：解約後に自動の投稿が2本公開されていた。フリープラン廃止（三上様「1で進めて」）で、
         //   お申し込み前の方にも投稿の機能は無いため、自動・手動・固定投稿・イベント告知を問わず止める。
