@@ -149,6 +149,8 @@ export function planFreshTopic(params: {
   maxOverused?: number;
   /** 主題にしない言葉（NGワード・見送られた主役の言葉）。含む材料は主題の候補から外す（2026-09-30） */
   avoid?: readonly string[];
+  /** 直近に「同じ言い回し」で落ちた言い回し（postRejectLog の duplicatePhrase）。本文のどこでも見る型の判定に使う */
+  rejectedPhrases?: readonly string[];
 }): FreshTopicPlan {
   // 数字は shared/repetitionRules.ts の R1（唯一の正）
   const docs = params.recentPosts.map(norm).filter((d) => d.length >= 10).slice(0, REPETITION_RULES.topic.window);
@@ -158,8 +160,13 @@ export function planFreshTopic(params: {
   // 流れの型：直近の3割以上（最低3本）が同じ入り方・締め方なら、今日は使わない（改行を残した原文で見る）
   const raws = params.recentPosts.filter((t) => norm(t).length >= 10).slice(0, 12);
   const minFrameDocs = Math.max(3, Math.ceil(raws.length * 0.3));
+  // ★2026-10-18 夜間整備：型の言い回しで毎回落ちる方は、その文が公開まで残らないので直近の投稿では数えられない
+  //   （acc36 10/18：「店舗オーナーさんからよく聞く悩みです」で32回作り直し・14枠見送り、直近12本に hearsay は2本だけ）。
+  //   落ちた言い回しが3つ以上その型に当たれば、型として避ける。位置の分からない切れ端なので、本文のどこでも見る型だけ
+  const rejected = (params.rejectedPhrases ?? []).map((p) => String(p ?? ""));
   const frames = FRAMES.map((f) => f.key)
-    .filter((k) => raws.filter((t) => framesOf(t, [k]).length > 0).length >= minFrameDocs);
+    .filter((k) => raws.filter((t) => framesOf(t, [k]).length > 0).length >= minFrameDocs
+      || (FRAMES.find((f) => f.key === k)!.where === "any" && rejected.filter((p) => lineHitsFrames(p, [k])).length >= 3));
 
   const protect = protectWordsOf(params.protect);
   const isProtected = (w: string) => protect.some((p) => p.includes(w) || w.includes(p));

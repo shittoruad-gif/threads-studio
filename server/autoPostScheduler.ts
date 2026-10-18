@@ -1073,6 +1073,8 @@ export async function generateAutoPost(
           // ★ご本人が3回以上消している言葉を含む材料は、今日の主題にしない（10/8 #25：4回消している「文化勲章の授賞式」の材料が
           //   主題に選ばれ、「主題を書け」と「この言葉は書かない」がぶつかっていた）。末尾の助詞は外して材料と照らす
           avoid: [...ngWords, ...stickyAvoid, ...ownerRemovedFirm.map((w) => w.replace(/[のへでをにはがと]+$/, '')).filter((w) => w.length >= 2)],
+          // 落ちた言い回しは公開まで残らないので、型の判定に足す（2026-10-18 acc36「よく聞く悩みです」）
+          rejectedPhrases: await db.getRecentDupRejectPhrases(threadsAccountId, 48).catch(() => [] as string[]),
         });
         if (plan.overused.length > 0 || (plan.frames?.length ?? 0) > 0) {
           freshPlan = plan;

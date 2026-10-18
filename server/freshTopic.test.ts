@@ -202,6 +202,22 @@ describe("流れの型（言い換えても同じに見えるもの）", () => {
     expect(buildFreshTopicNote(plan)).toContain("前置き");
   });
 
+  it("落ちた言い回しが型に3つ以上当たれば、公開した投稿に無くても型として避ける（2026-10-18 acc36）", () => {
+    const clean = [
+      "LINEの友だち、どこから来たか分からない。\n\n流入経路を1人ずつ計測できます。",
+      "広告の止めどき、迷いますよね。\n数字で決めると楽になります。",
+      "SNS投稿が続かない理由は、ネタ探しにあります。\n型を決めると続きます。",
+      "LPを直すなら、最初の1画面から。\n読まれる場所は上だけです。",
+    ];
+    // 10/18 の postRejectLog（duplicatePhrase）の実際の言い回し
+    const rejected = ["の店舗オーナーさんからよく聞く悩みです", "の店舗オーナーさんからよく聞く", "広告運用からLP制作まで一社で", "の店舗オーナーさんからよく聞く悩みです"];
+    expect(planFreshTopic({ recentPosts: clean, materials: [], protect: [] }).frames).toEqual([]);
+    expect(planFreshTopic({ recentPosts: clean, materials: [], protect: [], rejectedPhrases: rejected }).frames).toEqual(["hearsay"]);
+    // 2つまでは型にしない・位置で見る型（書き出しの不安）は切れ端からは決めない
+    expect(planFreshTopic({ recentPosts: clean, materials: [], protect: [], rejectedPhrases: rejected.slice(0, 2) }).frames).toEqual([]);
+    expect(planFreshTopic({ recentPosts: clean, materials: [], protect: [], rejectedPhrases: ["未経験でも大丈夫", "不安な方も", "難しそうに見えて"] }).frames).toEqual([]);
+  });
+
   it("ふつうの並びでは型にならない", () => {
     const q = planFreshTopic({ recentPosts: FRAMED.slice(3), materials: ["季節ごとのデザイン研修がある"], protect: [] });
     expect(q.frames).toEqual([]);

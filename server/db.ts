@@ -853,6 +853,21 @@ export async function recordPostReject(r: {
 }
 
 /**
+ * そのアカウントが直近 n 時間に「同じ言い回し」で落ちた言い回し（新しい順）。
+ * 落ちた文は公開まで残らないため、型の判定（shared/freshTopic.ts planFreshTopic）に足す（2026-10-18 夜間整備）。
+ */
+export async function getRecentDupRejectPhrases(accountId: number, hours: number = 48, limit: number = 40): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows: any = await db.execute(sql`
+    SELECT detail FROM postRejectLog
+     WHERE threadsAccountId = ${accountId} AND guard = 'duplicatePhrase'
+       AND createdAt >= DATE_SUB(NOW(), INTERVAL ${hours} HOUR) AND detail IS NOT NULL
+     ORDER BY id DESC LIMIT ${limit}`);
+  return ((rows as any)[0] ?? []).map((x: any) => String(x.detail ?? "")).filter(Boolean);
+}
+
+/**
  * 直近 n 時間に作り直しで落ちた理由の内訳（夜間整備 §3.45 で数える）。
  * gaveUp=1 ＝ その枠を捨てた＝お客様に届く本数が1本減ったもの。
  */
