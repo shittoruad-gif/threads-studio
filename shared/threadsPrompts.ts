@@ -126,6 +126,8 @@ export interface ThreadsPromptInput {
   businessType: string;
   area: string;
   localTerms?: string; // 地元の呼び方（最寄り駅・通称・ランドマーク）改行区切り。地域集客の精度向上に使う。
+  /** 店舗が複数あるお店で、この1本で書く店舗（shared/storeAreaPick.ts。1店のお店は無し） */
+  storeForPost?: string;
   target: string;
   mainProblem: string;
   strength: string;
@@ -1167,6 +1169,7 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
     businessType: sanitizeForPrompt(input.businessType, 100),
     area: sanitizeForPrompt(input.area, 100),
     localTerms: sanitizeForPrompt(input.localTerms, 400),
+    storeForPost: sanitizeForPrompt(input.storeForPost, 30),
     target: sanitizeForPrompt(input.target, 300),
     mainProblem: sanitizeForPrompt(input.mainProblem, 300),
     focusProblem: sanitizeForPrompt(input.focusProblem, 150),
@@ -1335,6 +1338,7 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
 ${safe.storeName ? `- 店名：${safe.storeName}（自己紹介・実績・固定投稿などで自然に出してよい。1行目に無理に入れない）` : ''}
 - 業種：${safe.businessType}
 - 地域：${safe.area}
+${safe.storeForPost ? `- ★この1本で書く店舗：${safe.storeForPost}店（店舗が複数あるため、1本ごとに順番に1つ。地域を書くときは「${safe.storeForPost}にある${safe.storeName || 'お店'}」のようにこの店だけにし、ほかの店舗名を並べない。毎回同じ店にしない）` : ''}
 ${safe.localTerms ? `- 地元での呼び方（事実確認済み。最寄り駅・通称・ランドマーク。地域集客で自然に使う。リストに無い地名は推測で作らない）：${safe.localTerms.replace(/\r?\n/g, ' / ')}` : ''}
 - ターゲット：${safe.target}
 - 主な悩み：${safe.mainProblem}

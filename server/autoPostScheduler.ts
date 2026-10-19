@@ -26,6 +26,7 @@ import { trialRules } from "../shared/learningAccounts";
 import { invokeLLM } from "./_core/llm";
 import { nanoid } from "nanoid";
 import { approvedLocalTerms } from './localGeo';
+import { multiStoreLabels, pickStoreForPost, counselingStoreTexts } from "../shared/storeAreaPick";
 
 // 自動投稿のローテーション。Threads講座の実測知見に合わせ、
 // 「共感・会話を生む短文型」を主力にし、売り込み色の強い型は頻度を絞る。
@@ -1247,6 +1248,17 @@ export async function generateAutoPost(
       }
       return v;
     })();
+    // ★店舗が複数あるお店は、1本ごとに書く店舗を順番に指定する（2026-10-19 プレステージ様 acc33：
+    //   毎回「横浜にある」と先頭の店だけになり、ご本人が川崎・横須賀中央へ直していた）
+    //   ★地元の呼び方（localTerms）が登録済みのお店は、そちらの回し方に任せて指定しない。
+    //     同じ方の求人アカウント acc22 は横浜店だけの募集で、ご本人が「川崎・横須賀」を消して直している（店を回すと逆になる）
+    const storeForPost = (() => {
+      if (String((project as any).localTerms ?? '').trim()) return null; // 承認前の登録でも外す（acc22 は承認の有無に関わらず対象外にする）
+      const labels = multiStoreLabels(project.area, counselingStoreTexts(counselingResult));
+      const pick = pickStoreForPost(labels, recentPosts);
+      if (pick) console.log(`[AutoPost] 店舗を順番に指定 account=${threadsAccountId} ${labels.join('/')} → ${pick}`);
+      return pick;
+    })();
     const beliefForToday = dropIfRecentlyUsed((project as any).belief, '信条');
     const proofForToday = dropIfRecentlyUsed(project.proof, '実績');
 
@@ -1256,6 +1268,7 @@ export async function generateAutoPost(
       businessType: project.businessType,
       area: project.area,
       localTerms: approvedLocalTerms(project),
+      storeForPost: storeForPost || undefined,
       // ★文体のお手本は「口調の見本」。見送られた主張に触れる文は今日は渡さない（写されるため）
       styleSamples: styleSamplesForToday || undefined,
       preferenceNote: editPreferenceNote || undefined,
