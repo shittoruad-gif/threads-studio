@@ -337,3 +337,10 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - **@esthe_prestige_r（acc22）**：冷却中（〜10/24・1日1件）。今日の1件は承認待ち。約束の残りは10/23から1日+1件（10/16 三上様ご判断）のまま。
 - 昨日（10/18）の公開数：契約＋補填を超えたお客様のアカウントは無し（acc11 5件・acc18 4件は補填の設定内）。
 - デプロイは c503002＝origin/main の先頭と一致（Coolify 記録 10/19 00:11 finished）。/api/health 200。AccountHealth 完了（accounts=27 restricted=0 missingAlerts=1＝@moveact_seitai が冷却〜10/26）。返信待ち 0件。LINE 残り 4,050 通。生成で消えた枠なし。
+
+## 2026-10-20 朝の点検メモ（火曜）
+- 約束の照合（当日の予定数）：@daigo.sekkotsuin（acc18）4 ✅（承認待ち）／@takimoto_sora（acc11）5 ✅／@black_eyes_1896（acc25）3（手動補填は10/17で終了・累計11件不足は判断待ちのまま）／@esthe_prestige_r（acc22）冷却中（〜10/24）1件（承認待ち）・約束の残りは10/23から1日+1件／@esthetic.salon_prestige（acc33）今日は3件（昨日まで4件。自動補填が明けたかは未確認）／@tama.yurazoku（acc31）3。
+- **@black_eyes_1896（acc25）**：昨日伺っていた #4095（#3979 と本文が同じ）は取り消されず 10/19 に公開済み。
+- **@moveact_seitai（acc12・学習用）**：冷却（〜10/26・1日1件）に加え、ログに「monthly cap (244/120) - skip」。10/19・10/20 とも公開0件。学習用30本の枠と月の上限がぶつかっている → 夜間整備で確認。
+- 昨日（10/19）の公開数：契約＋補填を超えたお客様のアカウントは無し（acc11 5件・acc18 4件は補填の設定内／acc36 23件・acc10 21件は学習の枠）。
+- デプロイは 5ab2e46＝origin/main の先頭と一致（Coolify 記録 10/20 00:11 finished）。/api/health 200。AccountHealth 完了（accounts=27 restricted=0 missingAlerts=0）。返信待ち 0件。LINE 残り 4,010 通。生成で消えた枠なし。試験の切り口の投稿は本日予定0本・昨日公開0本。
