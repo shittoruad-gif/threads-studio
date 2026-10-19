@@ -1374,7 +1374,9 @@ export async function generateAutoPost(
             try {
               const { buildRepetitionNote } = await import('../shared/repetitionGuard');
               const { identityTokens } = await import('../shared/identityGuard');
-              return buildRepetitionNote(recentPosts, identityTokens(project), await ownerRepetitionKeys());
+              const { REPETITION_RULES } = await import('../shared/repetitionRules');
+              const older14 = (await db.getOlderPostContents(threadsAccountId, REPETITION_RULES.monitor.days).catch(() => [])).map((o) => o.content);
+              return buildRepetitionNote(recentPosts, identityTokens(project), await ownerRepetitionKeys(), older14);
             } catch { return ''; }
           })()
           // ★同じ枠の前の案（3案の2案目以降）。末尾に近いほど守られるので、話題の指定のあとに置く（2026-10-04）

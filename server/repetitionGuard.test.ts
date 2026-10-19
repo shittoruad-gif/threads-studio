@@ -37,3 +37,19 @@ describe('ご本人が自分で書いた書き出し・文は止めない（2026
     expect(buildRepetitionNote([greet, greet], [], owner)).not.toMatch(/ハイサイ/);
   });
 });
+
+describe('14日で2回使った文は指示で避ける（2026-10-19 見張り M3：acc11「倉敷市で13年。」4本）', () => {
+  it('直近6本に1本しか無くても、14日で2本あれば指示に入る', () => {
+    const recent = ['腰の話です。\n倉敷市で13年。\nお気軽にどうぞ。', '肩の話です。', '膝の話です。'];
+    const older = [...recent, '首の話です。\n倉敷市で13年。\nまたどうぞ。', '足の話です。'];
+    const n = buildRepetitionNote(recent, ['倉敷市'], undefined, older);
+    expect(n).toMatch(/この2週間ですでに2回以上使っている.*「倉敷市で13年。」/);
+  });
+  it('14日で1本だけ・ご本人が書いた文は入れない', async () => {
+    const { ownerKeys } = await import('../shared/repetitionGuard');
+    const older = ['倉敷市で13年。\n腰の話です。', '肩の話です。'];
+    expect(buildRepetitionNote([], [], undefined, older)).not.toMatch(/倉敷市で13年/);
+    const owner = ownerKeys(['倉敷市で13年。\nご本人の文。']);
+    expect(buildRepetitionNote([], [], owner, [...older, '倉敷市で13年。\n膝の話です。'])).not.toMatch(/倉敷市で13年/);
+  });
+});

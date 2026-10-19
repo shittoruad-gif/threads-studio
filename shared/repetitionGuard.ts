@@ -70,7 +70,7 @@ export function identityOpeningStreak(recent: readonly string[], tokens: readonl
 }
 
 /** 書き出し・同じ文・1行目の地名をまとめて、生成の指示に足す文 */
-export function buildRepetitionNote(recent: readonly string[], tokens: readonly string[], owner?: { openings: Set<string>; sentences: Set<string> }): string {
+export function buildRepetitionNote(recent: readonly string[], tokens: readonly string[], owner?: { openings: Set<string>; sentences: Set<string> }, older: readonly string[] = []): string {
   const lines: string[] = [];
   const opens = Array.from(new Set(recent.slice(0, R.opening.window)
     .filter((r) => !owner?.openings.has(openingKey(r)))
@@ -84,6 +84,16 @@ export function buildRepetitionNote(recent: readonly string[], tokens: readonly 
   for (const r of recent.slice(0, R.sentence.window)) for (const s of sentencesOf(r, R.sentence.minLen)) counts.set(s, (counts.get(s) ?? 0) + 1);
   const rep = Array.from(counts.entries()).filter(([s, n]) => n >= R.sentence.min && !owner?.sentences.has(s)).map(([s]) => s).slice(0, 4);
   if (rep.length > 0) lines.push(`- 次の文は直近で何度も使っているので、今回は使わない（言い換えて同じことを言うのも避ける）：${rep.map((s) => `「${s.slice(0, 30)}」`).join('')}`);
+  // ★見張り M3（直近14日で同じ文3本以上）の手前で止める（2026-10-19 夜間整備）。
+  //   R3 は直近6本しか見ないため、数日おきの「倉敷市で13年。」「プレステージは創業40年。」が14日で3〜4本になっていた。
+  //   作り直しの基準（R3）は変えず、14日で2本使った文を指示で避けるだけ（枠は減らさない）。
+  const oc = new Map<string, number>();
+  for (const r of older) for (const s of sentencesOf(r, R.sentence.minLen)) oc.set(s, (oc.get(s) ?? 0) + 1);
+  const twice = Array.from(oc.entries())
+    // 続きの印（[[THREAD_BREAK]]）とかぎかっこの切れ端（「」とよく聞かれます。」）は文ではないので渡さない
+    .filter(([s, n]) => n >= R.monitor.sameSentence - 1 && !owner?.sentences.has(s) && !rep.includes(s) && !s.includes('[[') && !/^[」』）)]/.test(s))
+    .sort((a, b) => b[1] - a[1]).map(([s]) => s).slice(0, 5);
+  if (twice.length > 0) lines.push(`- 次の文はこの2週間ですでに2回以上使っている。今回は同じ形の文で書かない（伝えるなら別の言い方・別の場所で）：${twice.map((s) => `「${s.slice(0, 30)}」`).join('')}`);
   if (identityOpeningStreak(recent, tokens)) lines.push('- 直近の投稿が続けて地名・店名から始まっている。今回は1行目に地名・店名を入れない（入れるなら2行目以降に1回だけ）。');
   return lines.length > 0 ? `\n\n【同じ投稿に見せない（厳守）】\n${lines.join('\n')}` : '';
 }
