@@ -859,6 +859,14 @@ export async function generateAutoPost(
       } catch { ownerKeysCache = { openings: new Set(), sentences: new Set() }; }
       return ownerKeysCache;
     };
+    // ★直近14日（見張り M3 と同じ幅）の投稿。14日で2本使った文を避ける（2026-10-19 夜間整備）
+    let older14Cache: string[] | null = null;
+    const older14Posts = async () => {
+      if (older14Cache) return older14Cache;
+      const { REPETITION_RULES } = await import('../shared/repetitionRules');
+      older14Cache = (await db.getOlderPostContents(threadsAccountId, REPETITION_RULES.monitor.days).catch(() => [])).map((o) => o.content);
+      return older14Cache;
+    };
     let editPreferenceNote = '';
     // ★毎回直しているところ（shared/editLessons.ts・2026-10-08 クレーム「訂正しても毎回同じ所を訂正しとる」）。
     //   プロンプトの最後に置き、手直しが3本以上あるアカウントは、短く崩す書き直し（naturalizeContent）をかけない。
@@ -1374,9 +1382,7 @@ export async function generateAutoPost(
             try {
               const { buildRepetitionNote } = await import('../shared/repetitionGuard');
               const { identityTokens } = await import('../shared/identityGuard');
-              const { REPETITION_RULES } = await import('../shared/repetitionRules');
-              const older14 = (await db.getOlderPostContents(threadsAccountId, REPETITION_RULES.monitor.days).catch(() => [])).map((o) => o.content);
-              return buildRepetitionNote(recentPosts, identityTokens(project), await ownerRepetitionKeys(), older14);
+              return buildRepetitionNote(recentPosts, identityTokens(project), await ownerRepetitionKeys(), await older14Posts());
             } catch { return ''; }
           })()
           // ★同じ枠の前の案（3案の2案目以降）。末尾に近いほど守られるので、話題の指定のあとに置く（2026-10-04）
@@ -2011,7 +2017,7 @@ export async function generateAutoPost(
       const tokens = identityTokens(project);
       const owner = await ownerRepetitionKeys();
       const op = rg.repeatedOpening(naturalMain, recentPosts, { owner });
-      const rs = rg.repeatedSentences(naturalMain, recentPosts, { owner });
+      const rs = Array.from(new Set([...rg.repeatedSentences(naturalMain, recentPosts, { owner }), ...rg.sentencesUsedTwiceIn14Days(naturalMain, await older14Posts(), owner)]));
       const idFirst = opts.learningTrial?.key !== 'hook_local' && rg.identityOpeningStreak(recentPosts, tokens) && rg.identityInFirstLine(naturalMain, tokens); // ★学習の試し「1行目に地域名」はR4の対象外
       if (op || rs.length > 0 || idFirst) {
         const why = [
@@ -2028,7 +2034,8 @@ export async function generateAutoPost(
       //   外すと40字未満になる・店名地名が消えるときは外さずに出す（枠を空けない）。
       try {
         const rg = await import('../shared/repetitionGuard');
-        const rs = rg.repeatedSentences(naturalMain, recentPosts, { owner: await ownerRepetitionKeys() });
+        const owner = await ownerRepetitionKeys();
+        const rs = Array.from(new Set([...rg.repeatedSentences(naturalMain, recentPosts, { owner }), ...rg.sentencesUsedTwiceIn14Days(naturalMain, await older14Posts(), owner)]));
         if (rs.length > 0) {
           const cut = rg.removeRepeatedSentences(naturalMain, rs);
           const { checkIdentity } = await import('../shared/identityGuard');

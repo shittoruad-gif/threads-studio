@@ -69,6 +69,28 @@ export function identityOpeningStreak(recent: readonly string[], tokens: readonl
   return recent.slice(0, R.identityFirstLine.window).filter((r) => identityInFirstLine(r, tokens)).length >= R.identityFirstLine.min;
 }
 
+/**
+ * 見張り M3（直近14日で同じ文3本以上）の手前で止める（2026-10-19 夜間整備）。
+ * R3 は直近6本しか見ないため、数日おきの「倉敷市で13年。」「プレステージは創業40年。」が14日で3〜4本になっていた。
+ * 14日で（M3 − 1）本使った文を、指示で避け・作り直し・最後は R3 と同じく外して出す。R3・M3 の数字は変えない。
+ * ご本人の文と、続きの印（[[THREAD_BREAK]]）・かぎかっこの切れ端（「」とよく聞かれます。」）は数えない。
+ */
+function twiceIn14Days(older: readonly string[], owner?: { sentences: Set<string> }): Map<string, number> {
+  const oc = new Map<string, number>();
+  for (const r of older) for (const s of sentencesOf(r, R.sentence.minLen)) {
+    if (owner?.sentences.has(s) || s.includes('[[') || /^[」』）)]/.test(s)) continue;
+    oc.set(s, (oc.get(s) ?? 0) + 1);
+  }
+  for (const [s, n] of Array.from(oc.entries())) if (n < R.monitor.sameSentence - 1) oc.delete(s);
+  return oc;
+}
+
+/** この下書きの文のうち、直近14日ですでに2本使っている文 */
+export function sentencesUsedTwiceIn14Days(text: string, older: readonly string[], owner?: { sentences: Set<string> }): string[] {
+  const used = twiceIn14Days(older, owner);
+  return sentencesOf(text, R.sentence.minLen).filter((s) => used.has(s));
+}
+
 /** 書き出し・同じ文・1行目の地名をまとめて、生成の指示に足す文 */
 export function buildRepetitionNote(recent: readonly string[], tokens: readonly string[], owner?: { openings: Set<string>; sentences: Set<string> }, older: readonly string[] = []): string {
   const lines: string[] = [];
@@ -84,14 +106,8 @@ export function buildRepetitionNote(recent: readonly string[], tokens: readonly 
   for (const r of recent.slice(0, R.sentence.window)) for (const s of sentencesOf(r, R.sentence.minLen)) counts.set(s, (counts.get(s) ?? 0) + 1);
   const rep = Array.from(counts.entries()).filter(([s, n]) => n >= R.sentence.min && !owner?.sentences.has(s)).map(([s]) => s).slice(0, 4);
   if (rep.length > 0) lines.push(`- 次の文は直近で何度も使っているので、今回は使わない（言い換えて同じことを言うのも避ける）：${rep.map((s) => `「${s.slice(0, 30)}」`).join('')}`);
-  // ★見張り M3（直近14日で同じ文3本以上）の手前で止める（2026-10-19 夜間整備）。
-  //   R3 は直近6本しか見ないため、数日おきの「倉敷市で13年。」「プレステージは創業40年。」が14日で3〜4本になっていた。
-  //   作り直しの基準（R3）は変えず、14日で2本使った文を指示で避けるだけ（枠は減らさない）。
-  const oc = new Map<string, number>();
-  for (const r of older) for (const s of sentencesOf(r, R.sentence.minLen)) oc.set(s, (oc.get(s) ?? 0) + 1);
-  const twice = Array.from(oc.entries())
-    // 続きの印（[[THREAD_BREAK]]）とかぎかっこの切れ端（「」とよく聞かれます。」）は文ではないので渡さない
-    .filter(([s, n]) => n >= R.monitor.sameSentence - 1 && !owner?.sentences.has(s) && !rep.includes(s) && !s.includes('[[') && !/^[」』）)]/.test(s))
+  const twice = Array.from(twiceIn14Days(older, owner).entries())
+    .filter(([s]) => !rep.includes(s))
     .sort((a, b) => b[1] - a[1]).map(([s]) => s).slice(0, 5);
   if (twice.length > 0) lines.push(`- 次の文はこの2週間ですでに2回以上使っている。今回は同じ形の文で書かない（伝えるなら別の言い方・別の場所で）：${twice.map((s) => `「${s.slice(0, 30)}」`).join('')}`);
   if (identityOpeningStreak(recent, tokens)) lines.push('- 直近の投稿が続けて地名・店名から始まっている。今回は1行目に地名・店名を入れない（入れるなら2行目以降に1回だけ）。');

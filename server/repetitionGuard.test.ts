@@ -53,3 +53,15 @@ describe('14日で2回使った文は指示で避ける（2026-10-19 見張り M
     expect(buildRepetitionNote([], [], owner, [...older, '倉敷市で13年。\n膝の話です。'])).not.toMatch(/倉敷市で13年/);
   });
 });
+
+describe('14日で2本使った文は作り直し・最後は外して出す（2026-10-19 acc22 試し生成で「プレステージは創業40年。」が指示だけでは残った）', () => {
+  it('下書きの中の、14日で2本使った文を返す', async () => {
+    const { sentencesUsedTwiceIn14Days, removeRepeatedSentences } = await import('../shared/repetitionGuard');
+    const older = ['プレステージは創業40年。\n横浜の話です。', '研修の話です。\nプレステージは創業40年。', '別の話です。'];
+    const draft = 'プレステージは創業40年。\n長く愛されてきた理由は、内側から整えるアーユルヴェーダです。横浜駅の近くで、本物の技術を学びませんか。';
+    const rs = sentencesUsedTwiceIn14Days(draft, older);
+    expect(rs).toEqual(['プレステージは創業40年。']);
+    expect(removeRepeatedSentences(draft, rs)).not.toMatch(/創業40年/);
+    expect(sentencesUsedTwiceIn14Days(draft, older.slice(1))).toEqual([]);
+  });
+});
