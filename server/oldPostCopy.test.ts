@@ -26,4 +26,10 @@ describe("少し前の投稿とほぼ同じ文", () => {
   it("短い投稿は比べない", () => {
     expect(findOldPostCopy("今日も元気に営業中です。", [{ content: "今日も元気に営業中です。", at: null }])).toBeNull();
   });
+  it("一字一句同じは、保証パスでも止める基準（dropOnLastAttempt）を超える（2026-10-20 acc25 #4095）", async () => {
+    const { OLD_POST_COPY } = await import("../shared/oldPostCopy");
+    const body = "着物をお召しになる方へ。帯の結び方ひとつで、一日の疲れ方が変わります。当店では、お客様の体型に合わせて着付けの仕方をご提案しています。";
+    const c = findOldPostCopy(body, [{ content: body, at: null }]);
+    expect(c?.score).toBeGreaterThanOrEqual(OLD_POST_COPY.dropOnLastAttempt);
+  });
 });

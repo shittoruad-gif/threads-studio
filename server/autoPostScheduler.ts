@@ -1907,7 +1907,15 @@ export async function generateAutoPost(
       const { findOldPostCopy, oldPostCopyHint, OLD_POST_COPY } = await import('../shared/oldPostCopy');
       const older = await db.getOlderPostContents(threadsAccountId, OLD_POST_COPY.days).catch(() => []);
       const copy = findOldPostCopy(naturalMain, older);
-      if (copy && guarantee) {
+      // ★保証パスでも、ほぼ一字一句同じ（0.85以上）は出さない（2026-10-20 三上様「一字一句同じものは出さないようにする」）。
+      //   acc25 #4095（10/19）が前日の #3979 と本文が同じまま承認カードになり、ご本人が承認して公開された。
+      //   落ちた理由を渡して保証パスの次の回で書き直し、3回とも書けなければ翌朝の生成で補填する（枠は消さない）。
+      if (copy && guarantee && copy.score >= OLD_POST_COPY.dropOnLastAttempt) {
+        console.warn(`[AutoPost] 保証パス：過去の投稿とほぼ一字一句同じ（似ている度${copy.score.toFixed(2)}）→ 出さずに書き直し userId=${userId} account=${threadsAccountId}`);
+        noteReject('oldPostCopy', userId, threadsAccountId, postingTimeIndex, oldPostCopyHint(copy),
+          { detail: `${copy.score.toFixed(2)} 保証 ${copy.content.replace(/\s+/g, '').slice(0, 36)}` });
+        return false;
+      } else if (copy && guarantee) {
         console.warn(`[AutoPost] 保証パス：過去の投稿とほぼ同じ（似ている度${copy.score.toFixed(2)}）が、契約本数を守るためお届けする（承認カードにする） userId=${userId}`);
       } else if (copy && (!lastAttempt || copy.score >= OLD_POST_COPY.dropOnLastAttempt)) {
         console.warn(`[AutoPost] 過去の投稿とほぼ同じ（似ている度${copy.score.toFixed(2)}）→ ${lastAttempt ? '最後の作り直しでも見送り（明日の生成で補填）' : '作り直し'} userId=${userId} account=${threadsAccountId}`);
