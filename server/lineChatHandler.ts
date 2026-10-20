@@ -1418,7 +1418,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const allowed = q.s === "plan"
       || ["menu", "help", "support", "staff", "sendq", "cancel", "unlink", "stats", "profile", "refcode"].includes(String(q.m ?? ""))
       // よくある質問（カテゴリ hc=・質問 h=）と、案内を止めるボタン（n=off）は使える（2026-10-04 点検）
-      || q.hc != null || q.h != null || q.n === "off";
+      || q.hc != null || q.h != null || q.n === "off" || q.ec === "off";
     if (!allowed) {
       await db.clearLineChatState(lineUserId).catch(() => undefined);
       return [endedReply()];
@@ -1927,6 +1927,11 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     //   （2026-09-06「来月の私の請求額を教えてください」にお答えできず担当者へ回っていた）
     return [textWithQuick(`${contractSummary(await contractOf(user.id))}\n\nプランのご変更はこちらから行えます。\n${base}/pricing?openExternalBrowser=1`, MENU_HINT)];
   }
+  // ── 毎日5分の「交流」の案内（2026-10-20・server/engagementCoachJob.ts） ──
+  if (q.ec) {
+    const { handleCoachPostback } = await import("./engagementCoachJob");
+    return [textWithQuick(await handleCoachPostback(user.id, String(q.ec)), MENU_HINT)];
+  }
   // ── 「次にやること」の案内のON/OFF ──
   if (q.n === "off") {
     await db.setNextActionNotifyEnabled(user.id, false);
@@ -2174,7 +2179,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       "「Threadsアプリで返信する」を押すと文章が入った返信画面が開くので、「投稿」を押すだけです（返信の送信権限があるアカウントは「この文で送る」で即返信）。\n" +
       "返信が早いほど、投稿は多くの人に表示されます。フォローやいいねの連打は逆効果なので行いません。\n" +
       "勧誘・出会い系のコメントには文案をお作りしません。カードの「返信しない」を押していただければ、それで終わりです（返さないことで不利になることはありません）。\n\n" +
-      "コメントへの返信を「送る」ボタンで直接送れるのは、返信の送信権限があるアカウントだけです（Meta社の追加審査の承認後に全員に広がります）。",
+      "「この文で送る」で直接返信するには、返信の送信権限が要ります（Meta社の審査は承認済みです）。カードに「この文で送る」が出ていない場合は、アプリの「Threads連携」で「接続をやり直す」を押し、許可の画面で「許可」を押してください。接続をやり直しても、これまでの投稿や設定はそのまま残ります（パソコンからが確実です）。",
       MENU_HINT,
     )];
   }

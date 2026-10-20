@@ -45,3 +45,17 @@ describe("カードに出した文案の保存", () => {
     expect(saved).toEqual([]);
   });
 });
+
+describe("コメントの種類ごとの返し方（2026-10-20）", async () => {
+  const { commentKindOf } = await import("./commentReply");
+  it("一言・悩み・質問・その他を見分ける", () => {
+    expect(commentKindOf("気になります！")).toBe("short");
+    expect(commentKindOf("わかる〜😊")).toBe("short");
+    expect(commentKindOf("いいですね")).toBe("short");
+    expect(commentKindOf("最近ずっと腰が重くて…")).toBe("worry");
+    expect(commentKindOf("産後の骨盤ってどうしたらいいんでしょう")).toBe("worry");
+    expect(commentKindOf("土曜日も予約できますか？")).toBe("question");
+    expect(commentKindOf("駐車場はありますか")).toBe("question");
+    expect(commentKindOf("先週行ってきました。スタッフさんが丁寧で安心しました")).toBe("other");
+  });
+});

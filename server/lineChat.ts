@@ -565,6 +565,7 @@ export function settingsQuick(
       { label: "プランを見る", data: "s=plan" },
       { label: "NGワードを追加", data: "s=ng" },
       { label: "書き方の決まり", data: "s=rule" },
+      { label: "交流の案内を受け取る", data: "ec=on" },
       notifyToggle,
     ];
   }
@@ -592,6 +593,8 @@ export function settingsQuick(
     { label: "NGワードを追加", data: "s=ng" },
     // ★お客様が自分で足す「書き方の決まり」（2026-10-18）
     { label: "書き方の決まり", data: "s=rule" },
+    // ★毎日5分の交流の案内（2026-10-20）
+    { label: "交流の案内を受け取る", data: "ec=on" },
     notifyToggle,
   ];
 }

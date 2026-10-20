@@ -469,6 +469,12 @@ export function initDailyOpsSchedulers(): void {
     const { runLearningReportJob } = await import("./learningReportJob");
     await runTrackedJob("learning_report", runLearningReportJob);
   });
+  // 8:10 JST = 23:10 UTC — 毎日5分の「交流」の案内（2026-10-20・server/engagementCoachJob.ts）。最初は運営の学習用アカウントの持ち主だけ
+  cron.schedule("10 23 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runEngagementCoachJob } = await import("./engagementCoachJob");
+    await runTrackedJob("engagement_coach", async () => { await runEngagementCoachJob(); });
+  });
   // 18:00 JST = 9:00 UTC — まだ承認待ちの方へ「今日中に承認すれば今日公開できます」を1通
   cron.schedule("0 9 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");

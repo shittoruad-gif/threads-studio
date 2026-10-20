@@ -32,11 +32,38 @@ const RULES =
   "- 売り込みにしない。宣伝文・URL・ハッシュタグを入れない\n" +
   "- 店のオーナーが自分で打った短い返事に見える文にする。前置き・引用符なしで本文だけ";
 
+/**
+ * コメントの種類ごとの返し方（2026-10-20 三上様「早急に進めて」・Threads集客講座 第03〜04回／他社noteの第5章）。
+ *  - 一言（気になります・いいですね・わかる）→ お礼＋相手が答えやすい質問を1つ返して会話を広げる
+ *    （Threadsは会話の続く投稿を広く出す。1往復で終わらせない）
+ *  - 悩み・相談 → 共感を先に、答えられる範囲で一言、くわしくはDMで（断定・効果の約束はしない）
+ *  - 質問 → 分かる事実だけ短く答える。料金・空き・効果など入力に無いことは「DMで」
+ *  - 体験・感想 → お礼と、その人の言葉を1つ拾って返す
+ */
+export type CommentKind = "short" | "worry" | "question" | "other";
+
+export function commentKindOf(text: string): CommentKind {
+  const t = String(text ?? "").replace(/[\s　]+/g, "");
+  const plain = t.replace(/[!！?？。、…〜ー~wｗ笑]+/g, "").replace(/(?:[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF])/g, "");
+  if (/(痛|しびれ|痺れ|こり|コリ|張り|だるい|辛い|つらい|悩|困って|治らない|眠れない|疲れ|不調|重い|むくみ|浮腫|冷え|腰|肩|膝|首|頭痛|産後)/.test(t)) return "worry";
+  if (/[?？]$|(ですか|ますか|でしょうか|かな|教えて|どうやって|どこで|いくら|何分|予約でき)/.test(t)) return "question";
+  if (Array.from(plain).length <= 12) return "short";
+  return "other";
+}
+
+const KIND_RULES: Record<CommentKind, string> = {
+  short: "- このコメントは短い一言です。お礼を言ったうえで、相手が一言で答えられる質問を1つだけ返し、会話を続けてください（例：「どのあたりが気になりましたか？」）。質問は1つだけ",
+  worry: "- このコメントは悩みや体の不調の話です。まず共感を一言。そのうえで、答えられる範囲で短く一言。くわしくは「よければDMで聞かせてください」で締める。原因の断定・効果の約束・受診の判断はしない",
+  question: "- このコメントは質問です。投稿と入力から分かる事実だけで短く答える。料金・空き状況・効果など分からないことは作らず「DMでお伝えしますね」にする",
+  other: "- コメントの中の言葉を1つ拾って、それに触れて返す",
+};
+
 export async function draftCommentReply(p: { commentText: string; commenter?: string | null; parentText?: string | null; storeName?: string | null }): Promise<string> {
+  const kind = commentKindOf(p.commentText);
   const prompt =
     `あなたは${p.storeName ? `「${p.storeName}」の` : ""}店のオーナーです。自分のThreads投稿に付いたコメントへ返信を1つ書いてください。\n\n` +
     (p.parentText ? `【自分の投稿】\n${String(p.parentText).slice(0, 300)}\n\n` : "") +
-    `【コメント】${p.commenter ? `（@${p.commenter}）` : ""}\n${String(p.commentText).slice(0, 300)}\n\n【ルール】\n${RULES}`;
+    `【コメント】${p.commenter ? `（@${p.commenter}）` : ""}\n${String(p.commentText).slice(0, 300)}\n\n【ルール】\n${RULES}\n${KIND_RULES[kind]}`;
   const res: any = await invokeLLM({ temperature: 0.5, messages: [{ role: "user", content: prompt }] } as any);
   const out = String(res?.choices?.[0]?.message?.content ?? "").trim().replace(/^["「『]|["」』]$/g, "");
   return Array.from(out).length > 120 ? Array.from(out).slice(0, 120).join("") : out;

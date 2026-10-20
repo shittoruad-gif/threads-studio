@@ -24,7 +24,7 @@ describe("プロフィールの提案", () => {
     expect(a.allGood).toBe(false);
   });
   it("整っていれば○", () => {
-    const a = buildProfileAdvice({ username: "kouzaki_sekkotsu", name: "こうざき接骨院｜神崎町の整骨院", biography: "香取郡神崎町の整骨院。慢性的な腰痛・肩こりでお困りの40〜60代の女性へ。ご予約はリンクから", hasPicture: true }, project);
+    const a = buildProfileAdvice({ username: "kouzaki_sekkotsu", name: "こうざき接骨院｜神崎町の整骨院", biography: "香取郡神崎町の整骨院。慢性的な腰痛・肩こりでお困りの40〜60代の女性へ。初めての方はご相談から。ご予約はリンクから", hasPicture: true }, project);
     expect(a.allGood).toBe(true);
   });
 });

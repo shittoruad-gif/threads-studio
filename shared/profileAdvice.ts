@@ -29,7 +29,7 @@ export interface ProfileProjectFacts {
 }
 
 export type Mark = '○' | '△' | '✕';
-export interface ProfileCheck { key: 'name' | 'username' | 'bio' | 'picture' | 'link'; label: string; mark: Mark; note: string }
+export interface ProfileCheck { key: 'name' | 'username' | 'bio' | 'picture' | 'link' | 'first'; label: string; mark: Mark; note: string }
 export interface ProfileAdvice {
   checks: ProfileCheck[];
   /** そのまま貼れる表示名（30字以内） */
@@ -79,7 +79,8 @@ export function suggestBio(p: ProfileProjectFacts): string {
   const tgt = firstSentence(p.target, 22);
   const prob = firstSentence(p.mainProblem, 20).split(/[、,・／/]/)[0];
   const l3 = tgt && prob ? `${prob}でお困りの${tgt}へ` : tgt ? `${tgt}へ` : '';
-  const l4 = p.linkUrl ? `ご予約・ご相談は下のリンクから` : `ご予約・ご相談はDMから`;
+  // ★初めての方が迷わないよう、最初の1つ（相談）を示す（2026-10-20・firstVisitCheck と同じ考え）。メニュー名は作らない
+  const l4 = p.linkUrl ? `初めての方は、まず下のリンクからご相談ください` : `初めての方は、まずDMでご相談ください`;
   let lines = [l1, l2, l3, l4].filter(Boolean);
   const join = () => lines.join('\n');
   while (len(join()) > 150 && lines.length > 2) lines.splice(lines.length - 2, 1); // 真ん中（l3→l2）から落とす
@@ -100,6 +101,19 @@ export function suggestUsernameAdvice(username: string, p: ProfileProjectFacts):
 function romanHint(svc: string): string {
   const m: Record<string, string> = { 整体院: 'seitai', 整骨院: 'sekkotsu', 接骨院: 'sekkotsu', 鍼灸院: 'shinkyu', 鍼灸整骨院: 'shinkyu', エステ: 'esthe', エステサロン: 'esthe', 美容室: 'hair', 美容院: 'hair', ネイルサロン: 'nail', 整体: 'seitai', ピラティス: 'pilates', ピラティススタジオ: 'pilates', マシンピラティススタジオ: 'pilates', ジム: 'gym', パーソナルジム: 'gym', カフェ: 'cafe', 呉服店: 'kimono', 呉服小売店: 'kimono', 税理士事務所: 'tax', 歯科: 'dental', 歯科医院: 'dental' };
   return m[svc] || 'official';
+}
+
+/**
+ * 「初めての方はこれ」が1つに決まっているか（2026-10-20 三上様「早急に進めて」）。
+ *   メニューが並んでいるだけだと、初めての人は選べずに離れる。自己紹介か固定投稿で
+ *   「初めての方は〇〇から」と1つに絞って案内できているかを見る。メニュー名はこちらで作らない（お店の情報にある名前だけ）。
+ */
+export function firstVisitCheck(bio: string): ProfileCheck {
+  const b = String(bio || '');
+  if (/(初めて|はじめて|初回|初診|初めまして|ご新規|新規の方)/.test(b)) {
+    return { key: 'first', label: '初めての方への案内', mark: '○', note: '自己紹介に初めての方への案内があります' };
+  }
+  return { key: 'first', label: '初めての方への案内', mark: '△', note: '「初めての方は〇〇から」が無いので、初めての人が何を選べばいいか迷います。おすすめのメニューを1つに決めて、自己紹介か固定投稿に1行入れてください' };
 }
 
 export function buildProfileAdvice(f: ProfileFacts, p: ProfileProjectFacts): ProfileAdvice {
@@ -140,6 +154,8 @@ export function buildProfileAdvice(f: ProfileFacts, p: ProfileProjectFacts): Pro
   const linkAdvice = p.linkUrl
     ? `プロフィールの「リンク」欄に、ご案内先（${p.linkName || ''}）のURLを入れてください：${p.linkUrl}`
     : '公式LINE・予約ページ・ホームページのうち、いちばん来てほしい場所のURLを1つ、プロフィールの「リンク」欄に入れてください。';
+  // 初めての方が迷わないか（2026-10-20・選ぶものが多いと人は動けない）。自己紹介に「初めての方は」の案内があるか
+  checks.push(firstVisitCheck(bio));
   const allGood = checks.every((c) => c.mark === '○');
   return { checks, nameSuggestion, bioSuggestion, usernameAdvice, pictureAdvice, linkAdvice, allGood };
 }

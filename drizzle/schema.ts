@@ -60,6 +60,11 @@ export const users = mysqlTable("users", {
   emailOptOut: tinyint("emailOptOut").default(0).notNull(),
   // 「次にやること」の公式LINE通知。ご本人が「もう不要」と言えばOFFにできる。
   nextActionNotifyEnabled: tinyint("nextActionNotifyEnabled").default(1).notNull(),
+  // 毎日5分の「交流」の案内（shared/engagementCoach.ts・0110）。受け取るか／最後に送った日時／「やった」が続けて無い回数／次の案内の番号
+  engagementCoachEnabled: tinyint("engagementCoachEnabled").default(1).notNull(),
+  engagementCoachLastAt: timestamp("engagementCoachLastAt"),
+  engagementCoachMiss: int("engagementCoachMiss").default(0).notNull(),
+  engagementCoachStep: int("engagementCoachStep").default(0).notNull(),
   // 8:30の案内と一緒に送る「その日のお知らせ」を1人1回にするための記録（shared/announcements.ts の key）
   lastAnnouncementKey: varchar("lastAnnouncementKey", { length: 64 }),
   // 直近に送った案内の種類と日時（同じ案内を毎日送らないため）
