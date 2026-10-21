@@ -144,8 +144,9 @@ export default function AIGenerate() {
   }, [selectedAccountId]);
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const publishNow = trpc.threads.post.useMutation({
-    onSuccess: () => {
-      toast.success(t("Threadsに投稿しました！"));
+    onSuccess: (data: any) => {
+      // ★ツリーの権限が無い連携で1投稿にまとめたときは、そのことをお伝えする（2026-10-21）
+      toast.success(data?.message && data.message !== 'Threadsに投稿しました' ? t(data.message) : t("Threadsに投稿しました！"));
       setPublishConfirmOpen(false);
       triggerCelebration('first-post');
     },
@@ -2345,11 +2346,16 @@ export default function AIGenerate() {
                 if (!selectedAccountId || !editedPost) return;
                 // ★ツリー投稿は返信権限（Meta審査承認待ち）が必要。権限の無い連携で
                 //   送ると1件目だけ公開される事故になるため、送信前に案内して止める。
-                if (editedPost.treePosts.length > 0 && (selectedAccount as any)?.hasReplyScope === false) {
-                  toast.error(t('連続投稿（ツリー）は、Meta社の追加審査の承認待ちのため、この連携ではまだ使えません。ツリーなし（1投稿）で作り直してから投稿してください。'));
-                  return;
-                }
+                // ★2026-10-21：最後のひと押し（cta）も別の投稿として送るため、ツリーなしでも2投稿になっていた（ここをすり抜け、サーバで11回止められた）。
+                //   権限の無い連携では、サーバが500字以内なら1投稿にまとめて公開する。超えるときだけここで止める。
                 const text = buildThreadContent(editedPost);
+                if ((selectedAccount as any)?.hasReplyScope === false) {
+                  const joinedLen = Array.from(text.split(THREAD_SEGMENT_DELIMITER).map((s) => s.trim()).filter(Boolean).join('\n\n')).length;
+                  if (text.includes(THREAD_SEGMENT_DELIMITER) && joinedLen > 500) {
+                    toast.error(t('この連携では、連続投稿（ツリー）がまだ使えません。つなげると500字を超えるため、ツリーの数を減らすか「ツリーなし」で作り直してから投稿してください。'));
+                    return;
+                  }
+                }
                 publishNow.mutate({
                   accountId: selectedAccountId,
                   text,

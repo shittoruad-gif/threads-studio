@@ -2402,19 +2402,30 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           // テキストは区切りがあれば返信チェーン（ツリー）として連続投稿。
           // 画像/動画は単一投稿で扱う。
           const isMedia = input.mediaType && input.mediaType !== 'TEXT';
-          const segments = isMedia ? [] : splitThreadSegments(input.text);
+          let segments = isMedia ? [] : splitThreadSegments(input.text);
+          let mergedTree = false;
 
           // ★連続投稿（2件目以降）は「返信を作成する」操作＝threads_manage_replies が必要。
           //   権限の無い連携でツリーを投げると、1件目だけ公開→2件目で権限エラーになり、
           //   「エラー表示なのにThreadsには途中まで載っている」という最悪の状態になる
           //   （2026-09-02 梅原様で発生）。投稿を始める前に止める。
+          // ★2026-10-21：止めるだけだと、お客様が何度も押し直し（10:30台に11回）、500 の通報が出ていた。
+          //   500字に収まるなら1つの投稿にまとめて公開する。収まらないときだけ、入力の問題として返す。
           if (!isMedia && segments.length > 1 && (account as any).hasReplyScope === false) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message:
-                '連続投稿（ツリー）は、Meta社の追加審査の承認待ちのため、この連携ではまだ使えません。\n' +
-                'お手数ですが、ツリーなし（1投稿・500文字以内）で作り直してから投稿してください。承認され次第、そのまま使えるようになります。',
-            });
+            const joined = segments.join('\n\n');
+            if (Array.from(joined).length <= 500) {
+              segments = [joined];
+              mergedTree = true;
+              console.log(`[Threads Post] ツリーの権限が無い連携のため1投稿にまとめて公開 user=${ctx.user.id} account=${account.id} ${Array.from(joined).length}字`);
+            } else {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message:
+                  'この連携では、連続投稿（ツリー）がまだ使えません。\n' +
+                  `ツリーの文をつなげると${Array.from(joined).length}字になり、1投稿の上限（500字）を超えるため投稿できませんでした。` +
+                  'ツリーの数を減らすか「ツリーなし」で作り直してから、もう一度投稿してください。',
+              });
+            }
           }
 
           // トピックタグ：自動では付けない（2026-10-18 三上様「自動トピックは全アカウント止めて」・shared/topicTagTrial.ts）
@@ -2466,9 +2477,11 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
           return {
             success: true,
             postId: result.id,
-            message: 'Threadsに投稿しました'
+            message: mergedTree ? 'この連携ではツリーが使えないため、1つの投稿にまとめてThreadsに投稿しました' : 'Threadsに投稿しました'
           };
         } catch (error) {
+          // ★こちらで止めた理由（入力の問題など）は、そのままの種類と文でお返しする（500 に包むと通報が鳴り、文も「投稿に失敗しました:」付きになる）
+          if (error instanceof TRPCError) throw error;
           console.error('[Threads Post Error]', error);
           // ★ツリーの途中失敗：1件目はThreads上に公開済み。
           //   「投稿に失敗しました」とだけ出すと、公開済みなのに作り直して
@@ -2855,13 +2868,20 @@ ${input.commentText}
         //   「途中で切れた投稿」になる。予約の時点で明確に断る。
         {
           const { splitThreadSegments } = await import('./threadsPost');
-          if (splitThreadSegments(input.postContent).length > 1 && (account as any).hasReplyScope === false) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message:
-                '連続投稿（ツリー）は、Meta社の追加審査の承認待ちのため、この連携ではまだ使えません。\n' +
-                'ツリーなし（1投稿・500文字以内）に直してから予約してください。',
-            });
+          const segs = splitThreadSegments(input.postContent);
+          if (segs.length > 1 && (account as any).hasReplyScope === false) {
+            // ★2026-10-21：最後のひと押しも別の投稿になるため、ツリーなしでも断られていた。500字以内なら1投稿にまとめて予約する
+            const joined = segs.join('\n\n');
+            if (Array.from(joined).length <= 500) {
+              (input as any).postContent = joined;
+            } else {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message:
+                  'この連携では、連続投稿（ツリー）がまだ使えません。\n' +
+                  `つなげると${Array.from(joined).length}字になり、1投稿の上限（500字）を超えるため予約できませんでした。ツリーの数を減らすか「ツリーなし」に直してから予約してください。`,
+              });
+            }
           }
         }
 
