@@ -349,3 +349,9 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - 約束の照合（当日の予定数）：@daigo.sekkotsuin（acc18）4 ✅（承認待ち）／@takimoto_sora（acc11）5 ✅／@desire_6981（acc28・冷却明け）4 ✅（消えた分の補填 1日4件）／@matsusei5943（acc38）4 ✅（慣らし分の補填）／@black_eyes_1896（acc25）3（累計11件不足は判断待ちのまま）／@esthe_prestige_r（acc22）冷却中（〜10/24）1件（承認待ち）・約束の残りは10/23から1日+1件／@esthetic.salon_prestige（acc33）3／@tama.yurazoku（acc31）3。
 - 昨日（10/20）の公開数：契約＋補填を超えたお客様のアカウントは無し（acc11 5件・acc18 4件・acc38 4件は補填の設定内／acc36 24件・acc10 21件は学習の枠）。
 - デプロイは 29d8a45＝origin/main の先頭と一致（本番コンテナの SOURCE_COMMIT・10/21 00:05 起動。Coolify API は手元から応答なしのためコンテナで確認）。/api/health 200。AccountHealth 完了（accounts=27 restricted=0 missingAlerts=0）。返信待ち 0件。LINE 残り 3,951 通。生成で消えた枠なし。試験の切り口の投稿は本日予定0本。
+
+## 2026-10-22 朝の点検メモ（木曜）
+- 約束の照合（当日の予定数）：@daigo.sekkotsuin（acc18）4 ✅（承認待ち）／@takimoto_sora（acc11）5 ✅／@desire_6981（acc28）4 ✅／@matsusei5943（acc38）4 ✅（慣らし分の補填・あと12件）／@black_eyes_1896（acc25）3（累計14件不足は判断待ちのまま）／@esthe_prestige_r（acc22）冷却中（〜10/24）1件（承認待ち）・約束の残りは10/23から1日+1件／@esthetic.salon_prestige（acc33）3／@tama.yurazoku（acc31）3。
+- 昨日（10/21）の公開数：契約＋補填を超えたお客様のアカウントは無し（acc11 5件・acc18/28/38 4件は補填の設定内／acc10 28件・acc36 25件は学習の枠）。
+- デプロイは bce462f＝origin/main の先頭と一致（Coolify 記録 10/22 00:11 finished・SSH経由で確認。手元から8000番は応答なし）。10/21 は日中に2回反映（10:50 efd806c・13:50 df04055）。/api/health 200。AccountHealth 完了（accounts=28 restricted=0 missingAlerts=0）。返信待ち 0件。LINE 残り 3,855 通。生成で消えた枠なし。試験の切り口の投稿は本日予定0本。
+- healthClaimGuard 1日2件以上：川邊様（userId 12800・期間つきの結果×3で本文が短くなり公開せず×3）・小林様（3200・2件）。
