@@ -49,10 +49,21 @@ async function contractOf(userId: number): Promise<{ info: ContractInfo; sub: an
   const { getPlan, resolveEffectivePlanId } = await import("@shared/plans");
   const plan = getPlan(resolveEffectivePlanId(sub?.planId, sub?.status));
   if (!plan) return null;
+  // ★LINEの「ご契約内容」（lineChatHandler.ts contractOf）と同じ見分けを渡す。
+  //   渡していなかったため、クーポンで決済の契約が無い方にも「月額9,800円・次回の請求日は確認中」と
+  //   自動応答していた（2026-10-21 夜間整備の LINE 総当たりで発見。ボタンの「ご契約内容」は「期限なし・無料」と正しかった）
+  const state = (await db.isEndedCustomer(userId).catch(() => false)) ? "ended" as const
+    : (await db.isInDunning(userId).catch(() => false)) ? "dunning" as const
+    : (await db.isFreeGrace(userId).catch(() => false)) ? "grace" as const
+    : null;
   return {
     sub,
     plan,
     info: {
+      state,
+      contractPlanName: sub?.planId ? (getPlan(sub.planId)?.name ?? null) : null,
+      planId: plan.id,
+      hasPaymentContract: !!(sub?.univapaySubscriptionId || (sub as any)?.stripeSubscriptionId),
       planName: plan.name,
       priceMonthly: plan.priceMonthly,
       status: sub?.status ?? null,

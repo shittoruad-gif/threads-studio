@@ -21,6 +21,9 @@ vi.mock("./db", () => ({
   getSubscriptionByUserId: async () => state.sub,
   getThreadsAccountsByUserId: async () => state.accounts,
   countUserMonthlyPosts: async () => state.monthly,
+  isEndedCustomer: async () => !!state.ended,
+  isInDunning: async () => false,
+  isFreeGrace: async () => false,
 }));
 
 import { customerFacts, postsPerDayOf, jstMonthPosition } from "./supportCustomerFacts";
@@ -71,6 +74,25 @@ describe("このお客様の状況（自動応答に渡す事実）", () => {
     expect(facts).toBeTruthy();
     expect(facts).toContain("8,800円");
     expect(facts).toContain("次回のご請求日：2026年10月7日");
+  });
+
+  it("クーポンで決済の契約が無い方に「月額9,800円」を渡さない（2026-10-21 夜間整備：LINE総当たりで「料金はいくら？」に9,800円と答えていた）", async () => {
+    state.sub = { planId: "pro", status: "trialing", trialEndsAt: null, currentPeriodEnd: null, cancelAtPeriodEnd: false };
+    const facts = await customerFacts(5131);
+    expect(facts).toContain("期限なし・無料");
+    expect(facts).toContain("お支払いはございません");
+    expect(facts).not.toContain("9,800円");
+  });
+
+  it("ご契約が終わった方には「終了しています」を渡す（月額を渡さない）", async () => {
+    state.ended = true;
+    try {
+      const facts = await customerFacts(5131);
+      expect(facts).toContain("終了しています");
+      expect(facts).not.toContain("月額");
+    } finally {
+      state.ended = false;
+    }
   });
 
   it("今月の公開数が入る（#42「今月のこり何通？」に答えられる）", async () => {
