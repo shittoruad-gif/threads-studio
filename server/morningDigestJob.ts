@@ -59,6 +59,7 @@ export async function runMorningDigestJob(): Promise<void> {
       requireApproval: user.autoPostRequireApproval !== false,
       metaAiEnabled: user.metaAiAskEnabled !== false,
       newestAccountAgeDays: await newestAccountAgeDays(userId),
+      userId,
     };
     // ★送る相手が絞られているお知らせは、当てはまらない方には出さない
     //   （例：慣らし運転の説明は連携から30日以内の方だけ。2026-09-18）

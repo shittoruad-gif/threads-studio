@@ -118,3 +118,11 @@ export function localTalkLength(text: string): number {
 export function localTalkOptedOut(userId: number | null | undefined): boolean {
   return userId != null && LOCAL_TALK.optOutUserIds.includes(Number(userId));
 }
+
+/**
+ * お客様が書き方の決まりで「地元の投稿はいらない」と決めているか（2026-10-21 お知らせ：
+ * 「止めたいときは『決まり：地元の投稿はいらない』と送ってください」）。アカウントごと・コードの書き換えなしで止まる。
+ */
+export function localTalkOptedOutByRules(rules: readonly string[] | null | undefined): boolean {
+  return (rules ?? []).some((r) => /(地元|地域)/.test(r) && /(いらない|要らない|不要|作らない|つくらない|止め|やめ|出さない|書かない|なし|無し)/.test(r));
+}

@@ -24,7 +24,17 @@ import { earlierRejectedNote } from "../shared/naturalnessRetryHint";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
 import { trialRules } from "../shared/learningAccounts";
 import { bannedRuleFor, scrubProjectForAccount, findAccountBannedWord, accountBannedNote } from "../shared/accountBannedWords";
-import { LOCAL_TALK_ANGLE_ID, localTalkNote, localTalkPlaces, localTalkOptedOut } from "../shared/localTalk";
+import { LOCAL_TALK_ANGLE_ID, localTalkNote, localTalkPlaces, localTalkOptedOut, localTalkOptedOutByRules } from "../shared/localTalk";
+
+/**
+ * 試し生成（scripts/ops/autopost-dryrun.mts・AUTOPOST_DRY_RUN=1）のときだけ、書き方の決まりを差し替えて試す。
+ * 本番のお客様の記録を書き換えずに「決まりを入れたらどう書かれるか」を確かめるため（2026-10-21）。本番の生成では常に null。
+ */
+function dryRunOwnerRules(): string | null {
+  if (process.env.AUTOPOST_DRY_RUN !== '1') return null;
+  const v = process.env.DRY_OWNER_RULES;
+  return v != null && v !== '' ? v.replace(/\\n/g, '\n') : null;
+}
 import { invokeLLM } from "./_core/llm";
 import { nanoid } from "nanoid";
 import { approvedLocalTerms } from './localGeo';
@@ -726,8 +736,16 @@ export async function generateAutoPost(
     // ★地元の会話（shared/localTalk.ts・2026-10-18）を使わないお店：地域の登録が無い・
     //   「言い切りで終える」を選んだ方（問いかけで終える回なので）・求人のアカウント。
     //   自然な書き方モードの方は NATURAL_STYLE_SKIP_ANGLES で外す。
+    //   お客様が書き方の決まりで「地元の投稿はいらない」と決めたアカウントも外す（2026-10-21）。
+    let rulesForLocalTalk: string[] = [];
+    try {
+      const { parseOwnerRules } = await import('../shared/ownerRules');
+      const a: any = threadsAccountId ? await db.getThreadsAccountById(threadsAccountId) : null;
+      rulesForLocalTalk = parseOwnerRules(dryRunOwnerRules() ?? a?.ownerRules);
+    } catch { rulesForLocalTalk = []; }
     const excludeLocalTalk = (() => {
       if (localTalkOptedOut(userId)) return true;
+      if (localTalkOptedOutByRules(rulesForLocalTalk)) return true;
       if (localTalkPlaces(project.area, approvedLocalTerms(project)).length === 0) return true;
       if (looksLikeRecruiting(project)) return true;
       try { if (JSON.parse(project.counselingResult || 'null')?.closingStyle === 'statement') return true; } catch { /* 読めなければ外さない */ }
@@ -930,7 +948,7 @@ export async function generateAutoPost(
     try {
       const acctForRules: any = threadsAccountId ? await db.getThreadsAccountById(threadsAccountId) : null;
       const { parseOwnerRules, buildOwnerRulesNote } = await import('../shared/ownerRules');
-      const rules = parseOwnerRules(acctForRules?.ownerRules);
+      const rules = parseOwnerRules(dryRunOwnerRules() ?? acctForRules?.ownerRules);
       ownerRulesCount = rules.length;
       ownerRulesNote = buildOwnerRulesNote(rules);
       if (rules.length) console.log(`[AutoPost] 書き方の決まりを反映 account=${threadsAccountId} ${rules.length}件：${rules.slice(0, 3).join('／').slice(0, 160)}`);

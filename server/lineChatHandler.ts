@@ -421,6 +421,13 @@ async function rewritePost(userId: number, postId: number, instruction: string, 
   await holdForEditing(post);
   try {
     const { invokeLLM } = await import("./_core/llm");
+    // ★書き直しでも、お客様が自分で決めた書き方を守る（2026-10-21：自動の投稿にしか渡しておらず、「書き直す」で決まりが崩れることがあった）
+    let ownerRulesNote = "";
+    try {
+      const acct: any = (post as any).threadsAccountId ? await db.getThreadsAccountById(Number((post as any).threadsAccountId)) : null;
+      const { buildOwnerRulesNote } = await import("../shared/ownerRules");
+      ownerRulesNote = buildOwnerRulesNote(parseOwnerRules(acct?.ownerRules));
+    } catch { ownerRulesNote = ""; }
     const res = await invokeLLM({
       messages: [{
         role: "user",
@@ -429,7 +436,8 @@ async function rewritePost(userId: number, postId: number, instruction: string, 
           "事実は元の文にあるものだけを使い、新しい数字・実績・料金を足さないでください。\n" +
           "ハッシュタグや絵文字は元の文の使い方に合わせてください。\n" +
           "出力は書き直した本文だけにしてください（説明や前置きは不要）。\n\n" +
-          `【指示】${instruction}\n\n【元の文】\n${post.postContent || ""}`,
+          `【指示】${instruction}\n\n【元の文】\n${post.postContent || ""}` +
+          ownerRulesNote,
       }],
     });
     const next = String((res as any)?.choices?.[0]?.message?.content ?? "").trim().replace(/^["「]|["」]$/g, "");
@@ -3946,7 +3954,8 @@ async function addOwnerRulesForAccount(userId: number, accountId: number, lines:
   let cur: string | null = acct.ownerRules ?? null;
   const added: string[] = [];
   const failed: string[] = [];
-  for (const raw of lines.map((l) => l.trim()).filter(Boolean)) {
+  // ★1行ずつ「決まり：〜」と書いて何行か送られたとき、2行目からの「決まり：」を外す（2026-10-21 お知らせの例のとおりに送られる想定）
+  for (const raw of lines.map((l) => (parseOwnerRuleMessage(l.trim()) ?? l).replace(/^[\s　]*[-・•*]\s*/, "").trim()).filter(Boolean)) {
     const r = addOwnerRule(cur, raw);
     if (r.added) { added.push(raw); cur = r.rules.join("\n"); }
     else failed.push(`「${raw.slice(0, 30)}」：${r.reason}`);
