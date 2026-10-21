@@ -34,7 +34,7 @@ describe("料金ページの「現在のプラン」の印（R11）", () => {
   });
 
   it("キャンペーン価格には呼び名を添える（通常プランには付けない）", () => {
-    expect(campaignPriceLabel("pro_seminar")).toBe("セミナー価格");
+    expect(campaignPriceLabel("pro_seminar")).toBe("特別価格");
     expect(campaignPriceLabel("light_campaign")).toBe("モニター価格");
     expect(campaignPriceLabel("pro")).toBeNull();
     expect(campaignPriceLabel(null)).toBeNull();

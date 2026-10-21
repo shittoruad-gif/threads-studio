@@ -377,7 +377,7 @@ export default function Pricing() {
                 </div>
                 <div className="flex-1">
                   <p className="font-bold text-amber-800">
-                    紹介コード「{urlCouponCode}」の{campaignTier === 'seminar' ? 'セミナー' : 'キャンペーン'}特別価格をプレビュー中
+                    紹介コード「{urlCouponCode}」の特別価格をプレビュー中
                   </p>
                   <p className="text-sm text-amber-700 mt-1">
                     下の価格はプレビューです。申し込みには以下の手順でお進みください：

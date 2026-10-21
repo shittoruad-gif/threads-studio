@@ -142,8 +142,8 @@ export const PLANS: Record<string, PlanConfig> = {
   // ═══════ セミナー種別キャンペーン（セミナーコードで適用。3回課金後、4ヶ月目から通常価格へ自動移行）═══════
   light_seminar: {
     id: 'light_seminar',
-    name: 'ライト セミナー価格',
-    description: '3ヶ月セミナー特別価格（4ヶ月目から通常価格¥4,980に自動移行）。機能はライトプランと同じ',
+    name: 'ライト 特別価格',
+    description: '3ヶ月の特別価格（4ヶ月目から通常価格¥4,980に自動移行）。機能はライトプランと同じ',
     priceMonthly: 4480,
     univapayLinkUrl: 'https://univa.cc/u7ImKg',
     isCampaign: true,
@@ -154,8 +154,8 @@ export const PLANS: Record<string, PlanConfig> = {
   },
   pro_seminar: {
     id: 'pro_seminar',
-    name: 'プロ セミナー価格',
-    description: '3ヶ月セミナー特別価格（4ヶ月目から通常価格¥9,800に自動移行）。機能はプロプランと同じ',
+    name: 'プロ 特別価格',
+    description: '3ヶ月の特別価格（4ヶ月目から通常価格¥9,800に自動移行）。機能はプロプランと同じ',
     priceMonthly: 8800,
     univapayLinkUrl: 'https://univa.cc/C-ZzhL',
     isCampaign: true,
@@ -167,8 +167,8 @@ export const PLANS: Record<string, PlanConfig> = {
   },
   business_seminar: {
     id: 'business_seminar',
-    name: 'ビジネス セミナー価格',
-    description: '3ヶ月セミナー特別価格（4ヶ月目から通常価格¥29,800に自動移行）。機能はビジネスプランと同じ',
+    name: 'ビジネス 特別価格',
+    description: '3ヶ月の特別価格（4ヶ月目から通常価格¥29,800に自動移行）。機能はビジネスプランと同じ',
     priceMonthly: 27800,
     univapayLinkUrl: 'https://univa.cc/7gjlbv',
     isCampaign: true,
@@ -344,6 +344,7 @@ export const SEMINAR_PRICE_CODES: ReadonlySet<string> = new Set<string>([
   'SEMINAR2026',
   'OHKI2026',    // 大木慎也
   'SASAKI2026',  // 佐々木竜也
+  'THANKS2026',  // 既存のお客様（Instagram広告などをお任せいただいている方）への特別価格（2026-10-21 三上様）
 ]);
 
 /**
@@ -356,6 +357,7 @@ export const ALL_CAMPAIGN_CODES: ReadonlyMap<string, 'seminar' | 'monitor'> = ne
   ['SEMINAR2026', 'seminar'],
   ['OHKI2026',    'seminar'],
   ['SASAKI2026',  'seminar'],
+  ['THANKS2026',  'seminar'],
   // モニター価格コード
   ['SEIKOTSU2026',  'monitor'],
   ['PARTNER2026',   'monitor'],
@@ -386,7 +388,8 @@ export function currentPlanCardId(planId: string | null | undefined): string | n
 export function campaignPriceLabel(planId: string | null | undefined): string | null {
   const p = planId ? PLANS[planId] : undefined;
   if (!p?.isCampaign) return null;
-  return p.campaignTier === 'seminar' ? 'セミナー価格' : 'モニター価格';
+  // ★お客様の画面には「セミナー」と出さない（2026-10-21 三上様：既存のお客様への特別価格としても使うため）
+  return p.campaignTier === 'seminar' ? '特別価格' : 'モニター価格';
 }
 
 /**
