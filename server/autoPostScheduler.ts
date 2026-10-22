@@ -1999,6 +1999,19 @@ export async function generateAutoPost(
       }
     }
 
+    // ★お客様の口で書いた体験談（なりすましの口コミ）は出さない（2026-10-22 acc37 #4413・shared/customerVoiceGuard.ts）。
+    //   作り直しで直らなければ公開しない（文を外して出すと、残りもお客様の口のままになるため）。
+    {
+      const { checkCustomerVoice, customerVoiceRetryHint } = await import('../shared/customerVoiceGuard');
+      const cv = checkCustomerVoice(naturalMain);
+      if (!cv.ok) {
+        console.warn(`[AutoPost] customerVoiceGuard: お客様の口の体験談（${cv.hits.join('・')}）→ ${lastAttempt ? '公開しない' : '作り直し'} userId=${userId} account=${threadsAccountId}`);
+        noteReject('customerVoiceGuard', userId, threadsAccountId, postingTimeIndex,
+          customerVoiceRetryHint(cv.hits), { detail: cv.hits.join('・'), ...(lastAttempt ? { gaveUp: true } : {}) });
+        return false;
+      }
+    }
+
     // ★作り話チェック（2026-10-03 三上様「作り話チェックも入れて」・shared/fabricationCheck.ts）。
     //   登録情報に無い出来事・気持ち・日付・数字・料金・経歴を、登録情報と突き合わせて探す。
     //   見つかったら作り直し。最後の作り直しでは該当の文を外し、外せなければ公開しない（作り話は出さない）。
