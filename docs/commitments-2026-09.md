@@ -355,3 +355,10 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - 昨日（10/21）の公開数：契約＋補填を超えたお客様のアカウントは無し（acc11 5件・acc18/28/38 4件は補填の設定内／acc10 28件・acc36 25件は学習の枠）。
 - デプロイは bce462f＝origin/main の先頭と一致（Coolify 記録 10/22 00:11 finished・SSH経由で確認。手元から8000番は応答なし）。10/21 は日中に2回反映（10:50 efd806c・13:50 df04055）。/api/health 200。AccountHealth 完了（accounts=28 restricted=0 missingAlerts=0）。返信待ち 0件。LINE 残り 3,855 通。生成で消えた枠なし。試験の切り口の投稿は本日予定0本。
 - healthClaimGuard 1日2件以上：川邊様（userId 12800・期間つきの結果×3で本文が短くなり公開せず×3）・小林様（3200・2件）。
+
+## 2026-10-23 朝の点検メモ（金曜）
+- 約束の照合（当日の予定数）：@daigo.sekkotsuin（acc18）4 ✅／@takimoto_sora（acc11）5 ✅／@matsusei5943（acc38）4 ✅（慣らし分の補填）／@desire_6981（acc28）3（昨日まで4件・補填が明けたかは未確認）／@black_eyes_1896（acc25）3（累計14件不足は判断待ちのまま）／@esthe_prestige_r（acc22）1件（承認待ち）✗ 約束は「10/23から1日+1件」だが冷却（〜10/24・1日1件）のままで今日は+1になっていない→三上様へ／@esthetic.salon_prestige（acc33）3／@tama.yurazoku（acc31）3（10/22は1件見送りで2件公開）。
+- 10/22 の公開数：契約＋補填を超えたお客様のアカウントは無し（acc11 5件・acc18/38 4件は補填の設定内／acc10・acc36 25件は学習の枠）。@shin_honetugi（acc21）は10/22も3件とも未承認で取消・公開0件（累計45件不足・フォロー案 9/26 から押されず）。
+- デプロイは 9ea8345＝origin/main の先頭と一致（Coolify 記録 10/23 00:10 JST finished）。/api/health 200。AccountHealth 完了（accounts=28 restricted=0 missingAlerts=0）。返信待ち 1件（#61 解決のご報告）。LINE 残り 3,799 通。生成で消えた枠なし。試験の切り口の投稿は本日予定0本。
+- healthClaimGuard 1日2件以上：川邊様（userId 12800・期間つきの結果×2）。
+- 不自然な投稿 2件（#4456・#4472）は「パン屋さん」を敬称つき三人称と誤って判定したもの（誤検知）。
