@@ -23,6 +23,9 @@ export const META_AI_ASK_ANGLES: ReadonlySet<string> = new Set([
   'misconception', 'qa', 'surprise_fact', 'pro_tip', 'seasonal', 'lesson', 'reassurance',
 ]);
 
+// 呼びかけの地域を市区町村までにする決まりの見分け（shared/ownerRules.ts・2026-10-22）
+export { callAreaCityOnlyByRules } from './ownerRules';
+
 export const META_AI_HANDLE = '@meta.ai';
 export const META_AI_ASK_MAX_CHARS = 60;
 
@@ -134,6 +137,8 @@ export interface MetaAiCallSource {
   menu?: string[] | null;
   /** アカウント別の得意分野（threadsAccounts.callFocus）。例：ダイエット → 「ダイエットに強い整体院」 */
   focus?: string | null;
+  /** ★地域を市区町村までにする（お客様の書き方の決まり「呼びかけは町名なしで」・callAreaCityOnlyByRules） */
+  cityOnly?: boolean | null;
 }
 
 
@@ -144,7 +149,7 @@ export interface MetaAiCallSource {
  *   「埼玉県川口市戸塚安行駅、東川口駅」                 → 「戸塚安行・東川口」
  *   町名も駅も無ければ市区町村（「倉敷市」）、それも無ければ都道府県。
  */
-export function callAreaLabel(area: string | null | undefined, localTerms?: string | null): string {
+export function callAreaLabel(area: string | null | undefined, localTerms?: string | null, opts: { cityOnly?: boolean | null } = {}): string {
   const raw = String(area || '').trim();
   // 「なし」「未定」「オンライン」などは地域として使わない（2026-09-24「なしの名産品と言えば？」が作られていた）
   if (/^(なし|無し|未定|特になし|-|ー|―|オンライン.*|全国.*)$/.test(raw)) return '';
@@ -183,6 +188,8 @@ export function callAreaLabel(area: string | null | undefined, localTerms?: stri
     .filter((st) => !(town && (town.includes(st) || (townCore && st.includes(townCore)))))
     .slice(0, town ? 1 : 2);
   const bad = (x: string) => /[。、．]|です|ます|修正|回答/.test(x) || x.length > 10;
+  // ★お客様が「呼びかけは町名なしで」と決めたアカウントは、町名・駅を付けず市区町村まで（2026-10-22 川邊様 #60「岐阜市梅園町→岐阜市」）
+  if (opts.cityOnly && city) return bad(city) ? '' : city;
   if (useStations.length > 0) { const lbl = [...useStations, ...(town ? [town] : [])].join('・'); return bad(lbl) ? '' : lbl; }
   // 駅が無いときは、短い町名だけだと分かりにくいので市区名を前に付ける（倉敷市玉島／倉敷市中央）
   if (town) { const lbl = town.length <= 3 && city ? `${city}${town}` : town; return bad(lbl) ? '' : lbl; }
@@ -315,7 +322,7 @@ const SEASON_BODY: Record<number, string> = {
 
 /** 種類を指定して1つ作る。材料が足りない種類は null */
 export function buildMetaAiCallPostOfKind(src: MetaAiCallSource, kind: MetaAiCallKind, now: Date = new Date(), variant = 0): string | null {
-  const area = callAreaLabel(src.area, src.localTerms);
+  const area = callAreaLabel(src.area, src.localTerms, { cityOnly: src.cityOnly });
   const store = String(src.storeName || '').trim();
   const storeOk = store.length > 0 && store.length <= 16;
   const target = shortTarget(src.target);

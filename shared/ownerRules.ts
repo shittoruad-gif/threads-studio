@@ -51,9 +51,25 @@ export function removeOwnerRule(current: string | null | undefined, index: numbe
   return rules.filter((_, i) => i !== index);
 }
 
-/** 生成プロンプトの末尾に足す文。決まりが無ければ空 */
+/**
+ * お客様の書き方の決まり（threadsAccounts.ownerRules）に、呼びかけの地域を市までにする決まりがあるか。
+ *   「呼びかけは町名なしで」「Meta AIの質問は岐阜市まで」「呼びかけの地域は市だけ」→ true
+ *   ふつうの投稿の決まり（「町名は入れない」だけ）では変えない（呼びかけの話だと分かるものだけ）。
+ */
+export function isCallAreaRule(r: string): boolean {
+  return (
+    /(呼びかけ|呼び掛け|meta|メタ|質問)/i.test(r) &&
+    (/町名.{0,4}(入れない|いれない|いらない|要らない|不要|なし|無し|無く|なく|外|書かない|省)/.test(r) || /[市区町村](まで|だけ|のみ)/.test(r)));
+}
+
+export function callAreaCityOnlyByRules(rules: readonly string[] | null | undefined): boolean {
+  return (rules ?? []).some(isCallAreaRule);
+}
+
+/** 生成プロンプトの末尾に足す文。決まりが無ければ空。
+ *  ★呼びかけ（@meta.ai）の地域の決まりはふつうの投稿の指示に入れない（町名を書かなくなるため・2026-10-22） */
 export function buildOwnerRulesNote(rules: readonly string[]): string {
-  const list = parseOwnerRules(rules.join("\n"));
+  const list = parseOwnerRules(rules.join("\n")).filter((r) => !isCallAreaRule(r));
   if (list.length === 0) return "";
   return [
     "",

@@ -12,7 +12,8 @@
  * - ライトの方には送らない（設定画面・LINE設定で「プロ・ビジネスで使えます」と案内）
  */
 import * as db from "./db";
-import { buildMetaAiCallPost, buildMetaAiCallPostOfKind, splitDailyQuota, chooseMetaAiCall, META_AI_CALL_CHOICE, type MetaAiCallHistoryItem, type MetaAiCallKind } from "../shared/metaAiAsk";
+import { parseOwnerRules } from "../shared/ownerRules";
+import { buildMetaAiCallPost, buildMetaAiCallPostOfKind, callAreaCityOnlyByRules, splitDailyQuota, chooseMetaAiCall, META_AI_CALL_CHOICE, type MetaAiCallHistoryItem, type MetaAiCallKind } from "../shared/metaAiAsk";
 import { effectiveAccountSettings } from "../shared/accountSettings";
 import { getPlan, resolveEffectivePlanId } from "../shared/plans";
 
@@ -188,7 +189,10 @@ export async function buildTodayCallsForUser(userId: number, dayIndex: number, o
     if (lightNow && !isLightDay(dayIndex, Number(acct.id))) continue;
     const pinned = acct.defaultProjectId ? projects.find((p) => p.id === acct.defaultProjectId) : null;
     const project = pinned || projects[dayIndex % projects.length];
-    const src = { ...callSourceOf(project), focus: acct.callFocus ?? null };
+    // ★お客様が書き方の決まりで「呼びかけは町名なしで」と決めたアカウントは市区町村まで（2026-10-22 #60）
+    let cityOnly = false;
+    try { cityOnly = callAreaCityOnlyByRules(parseOwnerRules(full?.ownerRules ?? acct.ownerRules)); } catch { cityOnly = false; }
+    const src = { ...callSourceOf(project), focus: acct.callFocus ?? null, cityOnly };
     // ★アカウントごとにずらす（同じお店の2アカウントが同じ日に同じ種類の質問にならないように）
     const choice = chooseMetaAiCall(src, history ?? [], dayIndex * 31 + Number(acct.id), new Date(), chosenKinds);
     if (!choice) continue;
