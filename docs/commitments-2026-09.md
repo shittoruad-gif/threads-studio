@@ -362,3 +362,10 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - デプロイは 9ea8345＝origin/main の先頭と一致（Coolify 記録 10/23 00:10 JST finished）。/api/health 200。AccountHealth 完了（accounts=28 restricted=0 missingAlerts=0）。返信待ち 1件（#61 解決のご報告）。LINE 残り 3,799 通。生成で消えた枠なし。試験の切り口の投稿は本日予定0本。
 - healthClaimGuard 1日2件以上：川邊様（userId 12800・期間つきの結果×2）。
 - 不自然な投稿 2件（#4456・#4472）は「パン屋さん」を敬称つき三人称と誤って判定したもの（誤検知）。
+- （以下はもう1台の Mac の同じ朝の点検メモ。両方残す）
+- 約束の照合（当日の予定数）：@daigo.sekkotsuin（acc18）4 ✅／@takimoto_sora（acc11）5 ✅／@matsusei5943（acc38）4 ✅（慣らし分の補填）／@desire_6981（acc28）3（昨日まで4件・補填が明けたかは未確認）／@black_eyes_1896（acc25）3（累計14件不足は判断待ちのまま）／@esthe_prestige_r（acc22）1件（承認待ち）＝**約束の「10/23から1日+1件」が動いていない**（冷却 cooldownUntil=10/24 で1日1件に抑えられ、extraPostsPerDay=0）→ 三上様のご判断待ち／@esthetic.salon_prestige（acc33）3／@tama.yurazoku（acc31）3。
+- @doisekkotsuin（acc37）今日の1件 #4519 はご本人の✕（clientRating=bad）で今日の公開0件の見込み。
+- @moveact_seitai（acc12）：月の上限（244/120）で今日も生成0件（10/19から5日連続）。夜間整備の宿題のまま。
+- 昨日（10/22）の公開数：契約＋補填を超えたお客様のアカウントは無し（acc11 5件・acc18/38 4件は補填の設定内／acc10・acc36 各25件は学習の枠）。
+- デプロイは 9ea8345＝origin/main の先頭と一致（Coolify 記録 10/23 00:10 finished・SSH経由）。/api/health 200。AccountHealth 完了（accounts=28 restricted=0 missingAlerts=0）。返信待ち 1件（#61 お礼のみ）。LINE 残り 3,799 通。生成で消えた枠なし。試験の切り口の投稿は本日予定0本。
+- healthClaimGuard 1日2件以上：川邊様（userId 12800・期間つきの結果×2）。
