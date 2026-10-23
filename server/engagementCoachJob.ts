@@ -51,7 +51,8 @@ export async function runEngagementCoachJob(now: Date = new Date()): Promise<{ s
     if (!isCoachTarget(uid, r.firstAt ? new Date(r.firstAt) : null, now.getTime())) continue;
     if (!(await db.hasServiceAccess(uid).catch(() => false))) continue;
     const lastYmd = r.lastAt ? ymdJst(new Date(r.lastAt)) : null;
-    if (!shouldSendToday({ enabled: Number(r.en) === 1, lastSentYmd: lastYmd, missStreak: Number(r.miss) }, today)) { skipped++; continue; }
+    const alwaysDaily = (await import("../shared/engagementCoach")).ENGAGEMENT_COACH.trialUserIds.includes(uid);
+    if (!shouldSendToday({ enabled: Number(r.en) === 1, lastSentYmd: lastYmd, missStreak: Number(r.miss), alwaysDaily }, today)) { skipped++; continue; }
     const msgs = await buildCoachMessage(uid, Number(r.step));
     if (!msgs) { skipped++; continue; }
     const ok = await pushMessages(String(r.lid), msgs);

@@ -14,6 +14,8 @@ describe("毎日5分の交流の案内", () => {
     expect(shouldSendToday({ enabled: true, lastSentYmd: "2026-10-20", missStreak: 1 }, "2026-10-21")).toBe(true);
     expect(shouldSendToday({ enabled: true, lastSentYmd: "2026-10-20", missStreak: 3 }, "2026-10-21")).toBe(false);
     expect(shouldSendToday({ enabled: true, lastSentYmd: "2026-10-18", missStreak: 3 }, "2026-10-21")).toBe(true);
+    // 運営は「やった」が無くても毎日（10/23）
+    expect(shouldSendToday({ enabled: true, lastSentYmd: "2026-10-20", missStreak: 5, alwaysDaily: true }, "2026-10-21")).toBe(true);
   });
   it("最初は運営の会員だけ（mode=trial）", () => {
     expect(ENGAGEMENT_COACH.mode).toBe("trial");

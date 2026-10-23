@@ -119,10 +119,11 @@ export function searchUrl(area: string, worry: string): string {
  *  - 今日もう送ったなら送らない
  *  - 「やった」が missLimit 回続けて無ければ、quietEveryDays 日おきだけ
  */
-export function shouldSendToday(s: { enabled: boolean; lastSentYmd: string | null; missStreak: number }, todayYmd: string): boolean {
+export function shouldSendToday(s: { enabled: boolean; lastSentYmd: string | null; missStreak: number; alwaysDaily?: boolean }, todayYmd: string): boolean {
   if (!s.enabled) return false;
   if (s.lastSentYmd === todayYmd) return false;
-  if (s.missStreak >= ENGAGEMENT_COACH.missLimit && s.lastSentYmd) {
+  // ★運営（trialUserIds）は「やった」が無くても毎日送る（2026-10-23 三上様「交流の案内は送るようにして」）
+  if (!s.alwaysDaily && s.missStreak >= ENGAGEMENT_COACH.missLimit && s.lastSentYmd) {
     const days = Math.round((Date.parse(`${todayYmd}T00:00:00Z`) - Date.parse(`${s.lastSentYmd}T00:00:00Z`)) / 86_400_000);
     return days >= ENGAGEMENT_COACH.quietEveryDays;
   }
