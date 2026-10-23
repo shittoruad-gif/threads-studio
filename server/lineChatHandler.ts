@@ -1885,7 +1885,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
           ...accts.slice(0, 6).map((a: any) => ({ label: `@${String(a.threadsUsername).slice(0, 14)} の設定`, data: `s=acct&a=${a.id}` })),
           { label: "共通の設定", data: "s=common" },
           ...(((s as any).autoPostRequireApproval || accts.some((a: any) => a.autoPostRequireApproval)) ? [{ label: "案を見る時間を選ぶ", data: "m=reviewtime" }] : []),
-          { label: "NGワードを追加", data: "s=ng" },
+          { label: "NGワードを見る・足す", data: "s=ng" },
         ],
       )];
     }
@@ -3108,7 +3108,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
   // 「〇〇の話題はいらない」のボタンから、その言葉をそのまま登録する（2026-10-15 ご質問 #57）
   if (q.s === "ngadd") {
     const w = String(q.w || "").trim();
-    if (!w || Array.from(w).length > 30) return [textWithQuick("言葉を読み取れませんでした。", [{ label: "NGワードを追加", data: "s=ng" }, ...MENU_HINT])];
+    if (!w || Array.from(w).length > 30) return [textWithQuick("言葉を読み取れませんでした。", [{ label: "NGワードを見る・足す", data: "s=ng" }, ...MENU_HINT])];
     return addNgWords(user.id, q.p ? String(q.p) : null, [w]);
   }
   // ── 書き方の決まり（2026-10-18・shared/ownerRules.ts） ──
@@ -3147,6 +3147,27 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       [...rules.slice(0, 8).map((r, i) => ({ label: `${i + 1}を消す`, data: `s=ruledel&a=${acct.id}&i=${i}` })), { label: "やめる", data: "m=cancel" }],
     )];
   }
+  // ── NGワードを消す（2026-10-23）。どのお店の何番目かは押したボタンに入っている ──
+  if (q.s === "ngdel") {
+    const pj: any = ((await db.getProjectsByUserId(user.id)) || []).find((x: any) => String(x.id) === String(q.p));
+    if (!pj) return [textWithQuick("そのお店の情報が見つかりませんでした。", MENU_HINT)];
+    const cur = splitNgWords(pj.ngWords);
+    const i = Number(q.i);
+    if (!Number.isInteger(i) || !cur[i]) {
+      return [textWithQuick("その言葉は見つかりませんでした（すでに消えている可能性があります）。", [{ label: "NGワードを見る", data: `s=ng&p=${pj.id}` }, ...MENU_HINT])];
+    }
+    const removed = cur[i];
+    const next = cur.filter((_, k) => k !== i);
+    const joined = next.join("、");
+    await db.updateProject(pj.id, { ngWords: joined || null } as any);
+    // 「絶対に書きたくないこと」の答えにも同じ内容を入れる（修正画面と食い違わせない）
+    await (await import("./counselingSync")).syncCounselingFromColumns(pj.id, { ngWords: joined });
+    await db.clearLineChatState(lineUserId).catch(() => undefined);
+    return [textWithQuick(
+      `「${removed}」を、使わない言葉から外しました。次に作る投稿から、この言葉も使うことがあります。${next.length ? `\n残りは${next.length}件です。` : "\n使わない言葉は、いまは登録されていません。"}`,
+      [{ label: "NGワードを見る", data: `s=ng&p=${pj.id}` }, ...MENU_HINT],
+    )];
+  }
   if (q.s === "ng") {
     // ★NGワードはお店の情報ごとに保持している。複数店舗なら、どのお店に登録するかを先に選ぶ
     //   （以前は必ず1件目に登録され、別の店舗の投稿では避けられていなかった。2026-09-04）
@@ -3170,11 +3191,16 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       if (!pj) return [textWithQuick("そのお店の情報が見つかりませんでした。", MENU_HINT)];
       await db.setLineChatState(lineUserId, "ngword", String(pj.id));
       const who = usable.length >= 2 ? `「${String(pj.storeName || pj.title || "お店")}」で` : "";
+      // ★いま登録しているNGワードを見せて、消せるようにする（2026-10-23 三上様「消すボタンも作って」）
+      const cur = splitNgWords(pj.ngWords);
+      const list = cur.length
+        ? `いま登録している使わない言葉（${cur.length}件）：\n${cur.map((w, i) => `${i + 1}. ${w}`).join("\n")}\n消したい言葉は、下の「◯を消す」を押してください。\n\n`
+        : "";
       // ★「やめる」を必ず出す。これが無いと、気が変わって別のことを打った言葉が
       //   そのままNGワードとして登録されてしまう。
       return [textWithQuick(
-        `${who}投稿で使ってほしくない言葉を送ってください（いくつかある場合は、読点や改行で区切ってください）。`,
-        [{ label: "やめる", data: "m=cancel" }],
+        `${list}${who}投稿で使ってほしくない言葉を足すときは、その言葉を送ってください（いくつかある場合は、読点や改行で区切ってください）。`,
+        [...cur.slice(0, 11).map((w, i) => ({ label: `${i + 1}を消す`, data: `s=ngdel&p=${pj.id}&i=${i}` })), { label: "やめる", data: "m=cancel" }],
       )];
     }
   }
@@ -3967,6 +3993,11 @@ async function addOwnerRulesForAccount(userId: number, accountId: number, lines:
     : "足せた決まりはありませんでした。";
   const tail = failed.length ? `\n\n足せなかったもの：\n${failed.join("\n")}` : "";
   return [textWithQuick(head + tail, [{ label: "書き方の決まり", data: `s=rule&a=${accountId}` }, ...MENU_HINT])];
+}
+
+/** 保存しているNGワード（読点・カンマ・改行区切り）→ 言葉の配列 */
+function splitNgWords(v: unknown): string[] {
+  return String(v || "").split(/[、,，\n]/).map((w) => w.trim()).filter(Boolean);
 }
 
 /** NGワード（使わない言葉）をお店の情報に足す。projectId が無ければ1件目のお店 */

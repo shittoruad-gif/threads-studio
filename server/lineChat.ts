@@ -220,7 +220,7 @@ export function parsePostback(data: string): Record<string, string> {
  * ボタン操作も流れの一部なので、別のボタンが押されても消してはいけない。
  */
 const PENDING_TEXT_INPUT: Record<string, (q: Record<string, string>) => boolean> = {
-  ngword: (q) => q.s === "ng",
+  ngword: (q) => q.s === "ng" || q.s === "ngdel",
   // 書き方の決まりの入力待ち／「決まり：〜」の預かり（どのアカウントかを選ぶボタン以外を押されたら捨てる）
   ownerrule: (q) => q.s === "rule",
   ownerrule_text: (q) => q.s === "ruleadd",
@@ -349,7 +349,7 @@ export const HELP_TOPICS: Array<{ key: string; cat: string; q: string; a: string
     action: { label: "アカウント連携", data: "m=connect" } },
   { key: "ng", cat: "settings", q: "使ってほしくない言葉がある",
     a: "使ってほしくない言葉を登録すると、以後の投稿では自動的に避けます。\n下のボタンを押して、そのまま言葉をお送りください。",
-    action: { label: "NGワードを追加", data: "s=ng" } },
+    action: { label: "NGワードを見る・足す", data: "s=ng" } },
   // ★選んだ時点で意図がはっきりしているので、説明を挟まずその場でコードを出す
   //   （コードは10分で失効し、出し直しても害がないため）
   { key: "member", cat: "account", q: "スタッフも操作できるようにしたい", a: "", directPostback: "m=addstaff" },
@@ -563,7 +563,7 @@ export function settingsQuick(
     // 自動投稿が使えないプラン。切り替えても意味がないので出さない。
     return [
       { label: "プランを見る", data: "s=plan" },
-      { label: "NGワードを追加", data: "s=ng" },
+      { label: "NGワードを見る・足す", data: "s=ng" },
       { label: "書き方の決まり", data: "s=rule" },
       { label: "交流の案内を受け取る", data: "ec=on" },
       notifyToggle,
@@ -590,7 +590,7 @@ export function settingsQuick(
           { label: "呼びかけの得意分野", data: "c=focus" },
         ]
       : [{ label: "プランを見る", data: "s=plan" }]),
-    { label: "NGワードを追加", data: "s=ng" },
+    { label: "NGワードを見る・足す", data: "s=ng" },
     // ★お客様が自分で足す「書き方の決まり」（2026-10-18）
     { label: "書き方の決まり", data: "s=rule" },
     // ★毎日5分の交流の案内（2026-10-20）
