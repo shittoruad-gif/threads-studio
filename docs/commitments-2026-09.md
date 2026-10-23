@@ -369,3 +369,10 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - 昨日（10/22）の公開数：契約＋補填を超えたお客様のアカウントは無し（acc11 5件・acc18/38 4件は補填の設定内／acc10・acc36 各25件は学習の枠）。
 - デプロイは 9ea8345＝origin/main の先頭と一致（Coolify 記録 10/23 00:10 finished・SSH経由）。/api/health 200。AccountHealth 完了（accounts=28 restricted=0 missingAlerts=0）。返信待ち 1件（#61 お礼のみ）。LINE 残り 3,799 通。生成で消えた枠なし。試験の切り口の投稿は本日予定0本。
 - healthClaimGuard 1日2件以上：川邊様（userId 12800・期間つきの結果×2）。
+
+### 2026-10-24 朝の点検
+- デプロイは 7f98381＝origin/main の先頭と一致（コンテナのイメージ・SOURCE_COMMIT で確認、起動 10/24 00:30 JST。Coolify API 8000番はこのMacから応答なし）。/api/health 200。AccountHealth 完了（accounts=28 restricted=0 missingAlerts=0）。返信待ち 1件（#63 川邊様のお礼のみ）。LINE 残り 3,747 通。生成で消えた枠なし。
+- 前夜の直しの確認：acc12 に今日1件（21:27 pending・冷却の1日1件）あり、`reached monthly cap` のログ0件。昨日の acc10 29件・acc36 23件（学習の枠30以内）。
+- 約束の照合（当日の予定数）：acc18 4 ✅／acc11 5 ✅／acc38 4 ✅／acc26 2 ✅（11/1まで+1）／acc28 3／acc25 3（累計14件不足は判断待ち）／acc22 1件（冷却の最終日・extraPostsPerDay=0 のまま＝**「1日+1件」の約束は未設定のまま、三上様のご判断待ち**）。
+- healthClaimGuard 1日2件以上：滝本様（userId 556・4件、うち3件は公開見送り）・川邊様（userId 12800・3件、2日続き）。
+- 不自然な投稿 2件（#4456・#4472）は昨日と同じ「パン屋さん」の誤検知。試験の切り口の投稿は本日1本（#4613 持論・@shittoru_official 22:13）、全文を読み問題なし。
