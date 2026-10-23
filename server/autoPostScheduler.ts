@@ -22,7 +22,7 @@ import { isPersonalMode, personalModePromptOverride } from "../shared/personalBr
 import { stripRawUrls } from "../shared/sanitize";
 import { earlierRejectedNote } from "../shared/naturalnessRetryHint";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
-import { trialRules } from "../shared/learningAccounts";
+import { trialRules, inLearning } from "../shared/learningAccounts";
 import { bannedRuleFor, scrubProjectForAccount, findAccountBannedWord, accountBannedNote } from "../shared/accountBannedWords";
 import { LOCAL_TALK_ANGLE_ID, localTalkNote, localTalkPlaces, localTalkOptedOut, localTalkOptedOutByRules } from "../shared/localTalk";
 
@@ -2417,7 +2417,10 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
 
         // 各アカウントごとに postCount 本ずつ自動投稿（月間上限はアカウント単位で判定）
         for (const account of accounts) {
-          if (monthlyCap !== -1) {
+          // ★学習用アカウント（自社の 10・12・36）は月の上限で止めない（2026-10-23 夜間整備）。
+          //   学習の枠（1日30本）が月の本数に数えられ、プロの120本を超えた月中から契約の枠まで止まっていた
+          //   （acc12 は 10/19〜冷却の1日1件も出ず0本。「monthly cap (244/120) - skip」）。お客様のアカウントは従来どおり。
+          if (monthlyCap !== -1 && !inLearning(account.id)) {
             // B-5: 当月公開済み＋当月予約済みの合計で判定（自動投稿の予約で枠超過を防ぐ）。
             const used = await db.countAccountMonthlyUsage(account.id);
             if (used >= monthlyCap) {
