@@ -188,6 +188,8 @@ export const subscriptions = mysqlTable("subscriptions", {
    *   UnivaPayの次回課金額だけ変え、ここに予定を控える。次の課金が通ったときに
    *   planId へ移す。下げる変更で、払った期間のうちに機能だけ減るのを防ぐ。
    */
+  // プランを変えた日時（0111）。月の投稿の上限は、月の初めとこの日時の遅い方から数える（月の途中で下げても止まらないように）
+  planChangedAt: timestamp("planChangedAt"),
   pendingPlanId: varchar("pendingPlanId", { length: 50 }),
   /** 切り替わる予定日（UnivaPayの次回課金日）。ご案内に出す */
   pendingPlanEffectiveAt: timestamp("pendingPlanEffectiveAt"),

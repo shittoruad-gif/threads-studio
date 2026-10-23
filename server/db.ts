@@ -370,8 +370,14 @@ export async function updateSubscription(
   const db = await getDb();
   if (!db) return;
 
+  // ★プランが変わるときは planChangedAt を記録する（月の上限をそこから数え直す・2026-10-23 比嘉様の件）
+  let patch: any = data;
+  if (data.planId) {
+    const cur = await db.select({ planId: subscriptions.planId }).from(subscriptions).where(eq(subscriptions.id, subscriptionId)).limit(1);
+    if (cur[0] && cur[0].planId !== data.planId) patch = { ...data, planChangedAt: new Date() };
+  }
   await db.update(subscriptions)
-    .set(data)
+    .set(patch)
     .where(eq(subscriptions.id, subscriptionId));
   // ★お支払いが始まったら、お試し扱いを解除する（createSubscription と同じ理由・2026-09-19）
   if (data.status === "active" || data.status === "trialing") {
@@ -1262,6 +1268,16 @@ export async function getAccountScheduledTimesToday(accountId: number): Promise<
 export async function countAccountMonthlyUsage(threadsAccountId: number): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
+  // ★月の途中でプランを変えた方は、変えた日時から数える（2026-10-23 三上様「プラン通り月30本になるように」）。
+  //   プロの間に出した本数でライトの上限を超え、月末まで1本も出なくなっていた（比嘉様 10/15〜）。
+  const since: Date | null = await (async () => {
+    try {
+      const r: any = await db.execute(sql`SELECT s.planChangedAt AS t FROM threadsAccounts a JOIN subscriptions s ON s.userId = a.userId WHERE a.id = ${threadsAccountId} ORDER BY s.id DESC LIMIT 1`);
+      const t = (r?.[0]?.[0] ?? r?.[0])?.t;
+      return t ? new Date(t) : null;
+    } catch { return null; }
+  })();
+  const sinceCond = since ? sql`AND COALESCE(${scheduledPosts.postedAt}, ${scheduledPosts.scheduledAt}) >= ${since}` : sql``;
   const result = await db.select({ count: sql<number>`count(*)` })
     .from(scheduledPosts)
     .where(and(
@@ -1278,7 +1294,7 @@ export async function countAccountMonthlyUsage(threadsAccountId: number): Promis
         (${scheduledPosts.status} = 'pending'
           AND YEAR(DATE_ADD(${scheduledPosts.scheduledAt}, INTERVAL 9 HOUR)) = YEAR(DATE_ADD(NOW(), INTERVAL 9 HOUR))
           AND MONTH(DATE_ADD(${scheduledPosts.scheduledAt}, INTERVAL 9 HOUR)) = MONTH(DATE_ADD(NOW(), INTERVAL 9 HOUR)))
-      )`
+      ) ${sinceCond}`
     ));
   return result[0]?.count ?? 0;
 }
@@ -2472,7 +2488,7 @@ export async function finalizeTakeover(clientUserId: number, planId: string): Pr
   const db = await getDb();
   if (!db) return;
   await db.update(subscriptions)
-    .set({ planId, status: 'active' })
+    .set({ planId, status: 'active', planChangedAt: new Date() } as any)
     .where(eq(subscriptions.userId, clientUserId));
   await db.update(users)
     .set({ takeoverPendingAt: null, parentAgencyUserId: null })
