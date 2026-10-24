@@ -382,3 +382,9 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - @shin_honetugi（acc21・1日1件）：今日 19:17 に承認待ちが同時刻2件。10/24 の1件は canceled → 夜間整備で重複の原因を確認。
 - デプロイは 226fd95＝origin/main の先頭と一致（Coolify 記録 10/25 00:10 JST finished）。/api/health 200。AccountHealth 完了（accounts=28 restricted=0 missingAlerts=0）。返信待ち 1件（#63 お礼のみ）。LINE 残り 3,701 通。生成で消えた枠なし。不自然な投稿なし。試験の切り口は3本（#4613・#4728・#4693）問題なし。
 - 手元の main が origin/main と分岐（ahead 3 / behind 3）で git pull 不可。この追記もコミットしていない → 夜間整備で統合。
+
+### 2026-10-25 朝の点検（日曜）
+- デプロイは 226fd95＝origin/main の先頭と一致（Coolify 記録 10/25 00:10 JST finished・SSH経由、SOURCE_COMMIT も一致）。/api/health 200。AccountHealth 完了（accounts=28 restricted=0 missingAlerts=0）。返信待ち 1件（#63 お礼のみ）。LINE 残り 3,701 通。生成で消えた枠なし。不自然な投稿 0件。
+- 約束の照合（当日の予定数）：acc18 4 ✅／acc11 5 ✅／acc38 4 ✅／acc26 2 ✅（11/1まで+1）／acc22 4 ✅（冷却明け・「消えた投稿の補填 あと9件を1日4件」がログで動いている＝昨日までの判断待ちは解消）／acc33 3／acc28 3／acc25 3（累計14件不足は判断待ちのまま）／acc12 1（冷却〜10/26）。
+- 試験の切り口の投稿 本日2本を全文確認、取り消しなし：#4693 玉島 対比（支払い方法＝お店の情報に「現金・クレジットカード・PayPay」と登録あり）／#4728 しっとる 失敗談。玉島の「マシンが支える」直近3日0件。
+- ピン留め確認 5アカウントすべて「ピン留めなし」（確認済みにした0件）。11:00 フォローの未処理4件（香取様・大木様・斎藤様・山本様）。
