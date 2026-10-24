@@ -89,6 +89,21 @@ export function findWarmClosers(text: string): string[] {
   return out;
 }
 
+/**
+ * 行末の「〜ますよ😊」を「〜ます😊」（絵文字が無ければ「〜ます。」）に言い切る。
+ * 他の文・改行には触れない。直す所が無ければ null。
+ *
+ * ★2026-10-24 夜間整備：落ち着いた口調で登録した方（自社とお客様）で、下書きとリライトの両方に
+ *   「ますよ😊」が出て作り直しになるのが24時間で10回あった（作り直しても同じ形が出る）。
+ *   検査はそのまま（直した文も checkVoice を通す）、締めの「よ」だけを外す。
+ */
+export function repairWarmClosers(text: string): string | null {
+  const re = new RegExp("(ます|です|います|ました)よ(\\s*)(" + EMOJI_SRC + ")?[ \\t]*$", "gm");
+  const src = String(text || "");
+  const out = src.replace(re, (_m, stem: string, _sp: string, emoji?: string) => (emoji ? `${stem}${emoji}` : `${stem}。`));
+  return out === src ? null : out;
+}
+
 export interface VoiceVerdict {
   ok: boolean;
   reasons: string[];

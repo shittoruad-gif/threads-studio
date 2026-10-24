@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   checkVoice, findFragmentQuestions, findCasualClosers, findWarmClosers, isPoliteVoice, isFriendlyVoice,
+  repairWarmClosers,
 } from "../shared/voiceGuard";
 import { emojiAllowed, extractStyleTraits, styleTraitsNote } from "../shared/styleTraits";
 import { checkHealthClaims } from "../shared/healthClaimGuard";
@@ -140,5 +141,29 @@ describe("症状の予告断定（健康表現ガード）", () => {
     expect(v.ok).toBe(false);
     expect(v.hits).toContain("症状の予告断定");
     expect(v.text).not.toContain("不調が出ます");
+  });
+});
+
+/**
+ * 2026-10-24 夜間整備：落ち着いた口調の方で「ますよ😊」が下書き・リライトの両方に出て
+ * 作り直しが24時間で10回。締めの「よ」だけを外して言い切り、直した文が検査を通ること。
+ */
+describe("締めの「〜ますよ😊」を言い切りに直す", () => {
+  const CALM = "敬語で落ち着いた口調、沖縄出身でゆったりとした口調";
+  it("絵文字つきは「〜ます😊」にして検査を通る", () => {
+    const src = "肩の重さは、首の付け根から来ることが多いです。\nはいさい整骨院で一緒に整えていきますよ😊";
+    expect(checkVoice(src, CALM).ok).toBe(false);
+    const fixed = repairWarmClosers(src)!;
+    expect(fixed).toBe("肩の重さは、首の付け根から来ることが多いです。\nはいさい整骨院で一緒に整えていきます😊");
+    expect(checkVoice(fixed, CALM).ok).toBe(true);
+  });
+  it("絵文字なしは「〜ます。」にする", () => {
+    expect(repairWarmClosers("お待ちしていますよ")).toBe("お待ちしています。");
+    expect(repairWarmClosers("楽になりましたよ☺️")).toBe("楽になりました☺️");
+  });
+  it("直す所が無ければ null・他の理由は残る", () => {
+    expect(repairWarmClosers("お待ちしています。")).toBeNull();
+    const frag = "腰が重い朝、心当たり？\nお待ちしていますよ😊";
+    expect(checkVoice(repairWarmClosers(frag)!, CALM).ok).toBe(false);
   });
 });

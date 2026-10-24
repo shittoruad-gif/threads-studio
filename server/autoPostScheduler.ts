@@ -1612,8 +1612,20 @@ export async function generateAutoPost(
     // ★登録された口調との矛盾（shared/voiceGuard.ts）。2026-09-08 三上様「二度と不自然な日本語を出さない」。
     //   リライト後が矛盾していてリライト前が大丈夫なら前に戻す。両方ダメなら作り直す（呼び出し側で最大3回）。
     try {
-      const { checkVoice } = await import('../shared/voiceGuard');
-      const vAfter = checkVoice(naturalMain, brandVoice);
+      const { checkVoice, repairWarmClosers } = await import('../shared/voiceGuard');
+      let vAfter = checkVoice(naturalMain, brandVoice);
+      // ★締めの「〜ますよ😊」だけが理由なら、その「よ」を外して言い切る（2026-10-24・検査は直した文にもかける）
+      if (!vAfter.ok) {
+        const repaired = repairWarmClosers(naturalMain);
+        if (repaired && checkVoice(repaired, brandVoice).ok) {
+          console.warn(`[AutoPost] voiceGuard: ${vAfter.reasons.join('・')} → 締めの「よ」を外して言い切り userId=${userId}`);
+          naturalMain = repaired;
+          vAfter = { ok: true, reasons: [] };
+          if (!isDryRun()) void db
+            .recordPostReject({ userId, threadsAccountId, guard: 'voiceGuardRepaired', detail: 'ますよ→ます', gaveUp: false })
+            .catch(() => undefined);
+        }
+      }
       if (!vAfter.ok) {
         const vBefore = checkVoice(beforeNaturalize, brandVoice);
         if (vBefore.ok && !findBannedTic(beforeNaturalize)) {
@@ -1660,7 +1672,9 @@ export async function generateAutoPost(
           const placeholder = (w: string) => /^(なし|無し|未定|特になし|-|ー|―|オンライン.*|全国.*)$/.test(w.trim());
           const sig = [areaShort, project.storeName].filter((w): w is string => !!w && !placeholder(String(w)) && okWord(String(w))).join('の');
           if (sig) naturalMain = `${naturalMain.trim()}\n\n${sig}より。`;
-          console.warn(`[AutoPost] identityGuard: 最後の作り直しのため署名「${sig}」を足して公開へ userId=${userId} projectId=${project.id}`);
+          console.warn(sig
+            ? `[AutoPost] identityGuard: 最後の作り直しのため署名「${sig}」を足して公開へ userId=${userId} projectId=${project.id}`
+            : `[AutoPost] identityGuard: 最後の作り直し・店名と地名はご本人が消しているため署名なしで公開へ userId=${userId} projectId=${project.id}`);
         } else {
           console.warn(`[AutoPost] identityGuard: この店を指す言葉が無い → 作り直し userId=${userId} projectId=${project.id}`);
           noteReject('identityGuard', userId, threadsAccountId, postingTimeIndex, idv.hint,
