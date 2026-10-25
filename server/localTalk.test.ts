@@ -43,23 +43,28 @@ describe("地元の会話：ふだんの生成での割合", () => {
     expect(getAngle(LOCAL_TALK_ANGLE_ID)?.label).toBe("地元の会話");
     expect(activeAngles(Date.now(), "store").map((a) => a.id)).toContain(LOCAL_TALK_ANGLE_ID);
   });
-  it("割合は1つの定数（LOCAL_TALK.share）で、4〜5本に1本", () => {
-    expect(LOCAL_TALK.share).toBeGreaterThanOrEqual(0.2);
-    expect(LOCAL_TALK.share).toBeLessThanOrEqual(0.25);
+  it("割合は1つの定数（LOCAL_TALK.share）で、約3本に1本（10/25 0.22→0.33）", () => {
+    expect(LOCAL_TALK.share).toBeGreaterThanOrEqual(0.3);
+    expect(LOCAL_TALK.share).toBeLessThanOrEqual(0.36);
     const s = shareOf(4000);
     expect(s).toBeGreaterThan(LOCAL_TALK.share - 0.03);
     expect(s).toBeLessThan(LOCAL_TALK.share + 0.03);
   });
-  it("ほかの切り口の実績・試験の型・希望の型があっても割合は変わらない", () => {
-    const s = shareOf(4000, { studyExperiment: true, preferredAngles: ["pro_tip"], recentAngles: ["aruaru", "aruaru", "aruaru"] });
+  it("ほかの切り口の実績・希望の型があっても割合は変わらない", () => {
+    const s = shareOf(4000, { preferredAngles: ["pro_tip"], recentAngles: ["aruaru", "aruaru", "aruaru"] });
     expect(s).toBeGreaterThan(LOCAL_TALK.share - 0.03);
     expect(s).toBeLessThan(LOCAL_TALK.share + 0.03);
   });
-  it("✕が多いと下がり、◯が多いと上がる（上限 0.4）", () => {
+  it("試験の型（約半分）と希望の型（約35%）が両方ある運営のアカウントでは、残りの枠に収める（試験・希望の割合を削らない）", () => {
+    const s = shareOf(4000, { studyExperiment: true, preferredAngles: ["pro_tip"], recentAngles: ["aruaru", "aruaru", "aruaru"] });
+    expect(s).toBeGreaterThan(0.1);
+    expect(s).toBeLessThan(LOCAL_TALK.share + 0.03);
+  });
+  it("✕が多いと下がり、◯が多いと上がる（上限 0.5）", () => {
     expect(shareOf(3000, {}, { local_talk: { good: 0, bad: 2 } })).toBeLessThan(0.05);
     const up = shareOf(3000, {}, { local_talk: { good: 5, bad: 0 } });
-    expect(up).toBeGreaterThan(0.35);
-    expect(up).toBeLessThan(0.45);
+    expect(up).toBeGreaterThan(0.45);
+    expect(up).toBeLessThan(0.55);
   });
   it("使わないお店（地域なし・言い切りで終える方・求人）は 0、割合 0 で止まる、個人ブランディングでは出ない", () => {
     expect(shareOf(1000, { excludeLocalTalk: true })).toBe(0);

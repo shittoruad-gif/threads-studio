@@ -677,6 +677,8 @@ export async function generateAutoPost(
     // ★実績学習：実際に見られた回数（インプレッション）でも重みを補正する。
     //   クライアントが◯✕を押さなくても、結果そのものから伸びる型が増えていく。
     const perf: any = await db.getAnglePerformanceStats(userId, project.id);
+    // ★他のアカウントで伸びている切り口を、自分の数がたまるまでの目安にする（横展開・2026-10-25 三上様）
+    try { perf.pooledViews = await db.getPooledAngleViews(); } catch (e) { console.warn(`[AutoPost] 全体の実測をとばしました: ${(e as Error)?.message}`); }
     // ★1か月動かして反応が取れていないアカウントは、他店で反応が取れている切り口に寄せる（2026-10-02 三上様指示）
     try {
       const { isLowReaction } = await import('../shared/reactionBoost');

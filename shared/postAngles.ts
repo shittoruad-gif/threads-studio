@@ -1,3 +1,4 @@
+import { blendWithPooled } from './pooledViews';
 import { reactionMultiplier, type PooledReactions } from "./reactionBoost";
 import { LOCAL_TALK, LOCAL_TALK_ANGLE_ID, LOCAL_TALK_HINT } from "./localTalk";
 /**
@@ -273,6 +274,8 @@ export interface AnglePerformance {
   overallAvgReactions?: number;
   /** 全アカウントの実測（反応が取れていないアカウントだけ使う。shared/reactionBoost.ts） */
   pooled?: PooledReactions;
+  /** 全アカウントの実測：切り口ごとの「普段の何倍見られたか」（全員に使う・shared/pooledViews.ts・2026-10-25） */
+  pooledViews?: import('./pooledViews').PooledViews;
   /** 1か月動かして反応が取れていないアカウントか */
   lowReaction?: boolean;
 }
@@ -286,13 +289,20 @@ export interface AnglePerformance {
  * 3件で効き始め、8件で満額になるよう段階的に効かせる。
  */
 function performanceMultiplier(angleId: string, perf?: AnglePerformance): number {
-  if (!perf || perf.overallAvg <= 0) return 1;
+  if (!perf) return 1;
   const p = perf.perAngle[angleId];
-  if (!p || p.count < 3) return 1;
-  const ratio = p.avgImpressions / perf.overallAvg;
-  const confidence = Math.min(1, (p.count - 2) / 6); // 3件=0.17 … 8件=1.0
-  const raw = Math.min(1.8, Math.max(0.5, ratio));
-  return 1 + (raw - 1) * confidence;
+  // ★他のアカウントで伸びている切り口を、自分の数がたまるまでの目安にする（横展開・2026-10-25）。
+  //   以前は自分の数が3件未満だと一律1倍で、他店で2倍見られている型も、半分しか見られない型も同じ扱いだった。
+  // ただし体験談・変化の話（OUTCOME_RISK_ANGLES）は、他店で伸びていても押し上げない（健康系の広告の決まりに当たりやすい）
+  const pooled0 = perf.pooledViews?.[angleId];
+  const pooled = pooled0 && OUTCOME_RISK_ANGLES.includes(angleId) ? { ...pooled0, ratio: Math.min(1, pooled0.ratio) } : pooled0;
+  const ownRaw = perf.overallAvg > 0 && p && p.count >= 3 ? Math.min(1.8, Math.max(0.5, p.avgImpressions / perf.overallAvg)) : null;
+  if (!pooled) {
+    if (ownRaw == null) return 1;
+    const confidence = Math.min(1, (p!.count - 2) / 6); // 3件=0.17 … 8件=1.0
+    return 1 + (ownRaw - 1) * confidence;
+  }
+  return blendWithPooled(ownRaw, p?.count ?? 0, pooled);
 }
 
 /**

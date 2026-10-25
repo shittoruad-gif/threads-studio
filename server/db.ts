@@ -5223,6 +5223,29 @@ export async function getPooledAngleReactions(): Promise<import("../shared/react
   return value;
 }
 
+/**
+ * 全アカウントの実測：切り口ごとに「普段の何倍見られたか」（2026-10-25・shared/pooledViews.ts）。
+ * 直近30日・公開から24時間以上たった自動投稿。6時間だけ覚えておく。
+ */
+let pooledViewsCache: { at: number; value: import("../shared/pooledViews").PooledViews } | null = null;
+export async function getPooledAngleViews(): Promise<import("../shared/pooledViews").PooledViews> {
+  if (pooledViewsCache && Date.now() - pooledViewsCache.at < 6 * 3600_000) return pooledViewsCache.value;
+  const database = await getDb();
+  if (!database) return {};
+  const res: any = await database.execute(sql`
+    SELECT sp.threadsAccountId AS accountId, COALESCE(sp.angle, sp.experimentKey) AS angle, pa.impressions AS impressions
+    FROM scheduledPosts sp
+    JOIN postAnalytics pa ON pa.threadsPostId = sp.publishedThreadsPostId
+    WHERE sp.source = 'auto' AND sp.threadsAccountId IS NOT NULL
+      AND sp.postedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      AND sp.postedAt < DATE_SUB(NOW(), INTERVAL 24 HOUR)`);
+  const rows: any[] = Array.isArray(res?.[0]) ? res[0] : (res ?? []);
+  const { computePooledViews } = await import("../shared/pooledViews");
+  const value = computePooledViews(rows.map((r) => ({ accountId: Number(r.accountId), angle: r.angle ? String(r.angle) : null, impressions: Number(r.impressions) || 0 })));
+  pooledViewsCache = { at: Date.now(), value };
+  return value;
+}
+
 /** アカウントの連携日数と、直近30日の投稿数・反応（いいね＋再投稿）の合計（反応が取れていないかの判定用） */
 export async function getAccountReactionStatus(threadsAccountId: number): Promise<import("../shared/reactionBoost").ReactionStatus | null> {
   const database = await getDb();
