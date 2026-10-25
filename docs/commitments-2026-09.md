@@ -376,3 +376,9 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - 約束の照合（当日の予定数）：acc18 4 ✅／acc11 5 ✅／acc38 4 ✅／acc26 2 ✅（11/1まで+1）／acc28 3／acc25 3（累計14件不足は判断待ち）／acc22 1件（冷却の最終日・extraPostsPerDay=0 のまま＝**「1日+1件」の約束は未設定のまま、三上様のご判断待ち**）。
 - healthClaimGuard 1日2件以上：滝本様（userId 556・4件、うち3件は公開見送り）・川邊様（userId 12800・3件、2日続き）。
 - 不自然な投稿 2件（#4456・#4472）は昨日と同じ「パン屋さん」の誤検知。試験の切り口の投稿は本日1本（#4613 持論・@shittoru_official 22:13）、全文を読み問題なし。
+
+## 2026-10-25 朝の点検メモ（日曜）
+- 約束の照合（当日の予定数）：@daigo.sekkotsuin（acc18）4 ✅／@takimoto_sora（acc11）5 ✅（型の試し・10/27まで+2）／@matsusei5943（acc38）4 ✅（慣らし分の補填・あと9件）／@esthe_prestige_r（acc22）4 ✅＝冷却明け、消えた投稿の補填（あと9件）を1日+1件で開始（10/16 三上様ご判断の「1日+1件」が今日から動いた・全4件承認待ち）／@desire_6981（acc28）3／@black_eyes_1896（acc25）3（累計14件不足は判断待ちのまま）／@tama.yurazoku（acc31）3。
+- @shin_honetugi（acc21・1日1件）：今日 19:17 に承認待ちが同時刻2件。10/24 の1件は canceled → 夜間整備で重複の原因を確認。
+- デプロイは 226fd95＝origin/main の先頭と一致（Coolify 記録 10/25 00:10 JST finished）。/api/health 200。AccountHealth 完了（accounts=28 restricted=0 missingAlerts=0）。返信待ち 1件（#63 お礼のみ）。LINE 残り 3,701 通。生成で消えた枠なし。不自然な投稿なし。試験の切り口は3本（#4613・#4728・#4693）問題なし。
+- 手元の main が origin/main と分岐（ahead 3 / behind 3）で git pull 不可。この追記もコミットしていない → 夜間整備で統合。
