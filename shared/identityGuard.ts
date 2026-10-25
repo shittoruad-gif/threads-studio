@@ -40,6 +40,9 @@ export function identityTokens(p: IdentitySource): string[] {
   };
 
   add(p.storeName);
+  // 会社名の「株式会社」などを外した呼び名も店名（2026-10-25：「しっとる」と書いても店名なし扱いだった）
+  const bareName = norm(String(p.storeName || "")).replace(/^(株式会社|有限会社|合同会社|一般社団法人|医療法人社団|医療法人)|(株式会社|有限会社|合同会社)$/g, "");
+  if (Array.from(bareName).length >= 3) add(bareName);
 
   // 地域：都道府県は弱すぎるので除き、市区町村・町名を入れる（「八千代市」「八千代」「勝田台」）
   // 「なし」「未定」などは地域ではない（2026-10-08：地域欄「なし」が店を指す言葉として扱われ、署名「なしより。」が付いた）
@@ -49,7 +52,8 @@ export function identityTokens(p: IdentitySource): string[] {
   for (const part of parts) {
     if (/[都道府県]$/.test(part) && parts.length > 1) continue;
     add(part);
-    const bare = part.replace(/[市区町村]$/, "");
+    // 地域が県だけの登録は「岡山」も同じ地名（2026-10-25：「岡山駅前の…」が不合格で「株式会社しっとるより。」が付いた）
+    const bare = part === "北海道" ? part : part.replace(/[都府県市区町村]$/, "");
     if (Array.from(bare).length >= 2) add(bare);
   }
 

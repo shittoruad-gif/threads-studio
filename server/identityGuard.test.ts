@@ -48,6 +48,18 @@ describe("この店らしさの必須条件", () => {
   it("登録に何も無ければ止めない", () => {
     expect(checkIdentity("こんにちは", { storeName: null, area: null }).ok).toBe(true);
   });
+
+  // 2026-10-25 実測：地域が「岡山県」だけの登録で「岡山駅前の桃太郎像、待ち合わせで使います？笑」が不合格になり、
+  //   3回作り直した末に「株式会社しっとるより。」が付いて公開された（@shittoru_official・24時間で16回作り直し）
+  it("地域が県だけなら「岡山」も地名、会社名は「株式会社」を外した名前も店名", () => {
+    const SHITTORU = { storeName: "株式会社しっとる", area: "岡山県" };
+    expect(checkIdentity("岡山駅前の桃太郎像、待ち合わせで使います？笑", SHITTORU).ok).toBe(true);
+    expect(checkIdentity("岡山、朝晩の冷え込みにびっくりする毎日ですね。", SHITTORU).ok).toBe(true);
+    expect(checkIdentity("しっとるでは、LINEの流入経路を1人ずつ計測します。", SHITTORU).ok).toBe(true);
+    expect(checkIdentity("集客の費用対効果、把握できていますか？", SHITTORU).ok).toBe(false);
+    expect(identityTokens({ storeName: null, area: "北海道" })).toContain("北海道");
+    expect(identityTokens({ storeName: null, area: "大阪府" })).toContain("大阪");
+  });
 });
 
 /**
