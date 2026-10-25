@@ -42,11 +42,15 @@ export async function runLearningBurstOnce(now: Date = new Date()): Promise<Burs
       const project = account.defaultProjectId ? projects.find((p: any) => p.id === account.defaultProjectId) : projects[0];
       if (!project) { skip("お店の情報が無い"); continue; }
 
+      // ★冷却が明けた直後は少しずつ戻す（shared/learningAccounts.ts AFTER_COOLDOWN_LEARNING・2026-10-25）
+      const { afterCooldownLearningCap } = await import("../shared/learningAccounts");
+      const capAfter = afterCooldownLearningCap(account.cooldownUntil, now.getTime());
+      const todayTotal = capAfter == null ? total : Math.min(total, capAfter);
       const already = await db.countAccountAutoPostsScheduledToday(accountId).catch(() => 0);
-      const room = Math.max(0, total - already);
-      if (room === 0) { skip(`今日は目安の${total}本に届いている`); continue; }
+      const room = Math.max(0, todayTotal - already);
+      if (room === 0) { skip(`今日は目安の${todayTotal}本に届いている${capAfter != null ? "（冷却明けの段）" : ""}`); continue; }
       const occupied = await db.getAccountScheduledTimesToday(accountId).catch(() => [] as Date[]);
-      const grid = burstGrid(ymd, total);
+      const grid = burstGrid(ymd, todayTotal);
       const from = now.getTime() + 15 * 60_000;
       const to = now.getTime() + 80 * 60_000;
       const slots = burstSlotsToMake(grid, occupied, from, to).slice(0, room);

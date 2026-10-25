@@ -70,9 +70,26 @@ export function inLearning(accountId: number, now: number = Date.now()): boolean
  * 今日この口座に上乗せする学習の枠の数（冷却中・慣らし中は0）。
  * baseCount はその日の契約＋補填の本数（rampForAccount の結果）。段の日は「合計の目安 − baseCount」。
  */
-export function learningExtra(accountId: number, opts: { capped: boolean; baseCount?: number }, now: number = Date.now()): number {
+/**
+ * 冷却が明けた直後の学習の本数（2026-10-25 三上様「金光がほとんど投稿できていない、見直して」）。
+ *   acc12 は 10/18 に1日28本の日に1本消され、冷却（1日1本）に入った。明けた瞬間に1日30本へ戻すと、消されたときと同じ状態に戻る。
+ *   冷却が明けた日を0日目として、少しずつ戻す。8日目からいつもの本数。
+ */
+export const AFTER_COOLDOWN_LEARNING = [3, 5, 8, 12, 16, 20, 25] as const;
+
+export function afterCooldownLearningCap(cooldownUntil: Date | string | null | undefined, now: number = Date.now()): number | null {
+  if (!cooldownUntil) return null;
+  const until = cooldownUntil instanceof Date ? cooldownUntil.getTime() : Date.parse(String(cooldownUntil).replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(cooldownUntil)) ? "" : "Z"));
+  if (!Number.isFinite(until) || now < until) return null;
+  const day = Math.floor((Date.parse(jstYmd(now) + "T00:00:00Z") - Date.parse(jstYmd(until) + "T00:00:00Z")) / 86_400_000);
+  return day >= 0 && day < AFTER_COOLDOWN_LEARNING.length ? AFTER_COOLDOWN_LEARNING[day]! : null;
+}
+
+export function learningExtra(accountId: number, opts: { capped: boolean; baseCount?: number; cooldownUntil?: Date | string | null }, now: number = Date.now()): number {
   if (opts.capped || !inLearning(accountId, now)) return 0;
-  const total = burstTotalFor(jstYmd(now));
+  const total0 = burstTotalFor(jstYmd(now));
+  const cap = afterCooldownLearningCap(opts.cooldownUntil, now);
+  const total = total0 == null ? total0 : cap == null ? total0 : Math.min(total0, cap);
   if (total == null) return LEARNING_ACCOUNTS.legacyAccountIds.includes(accountId) ? LEARNING_ACCOUNTS.extraSlots : 0;
   return Math.max(0, total - Math.max(0, Math.floor(opts.baseCount ?? 0)));
 }
