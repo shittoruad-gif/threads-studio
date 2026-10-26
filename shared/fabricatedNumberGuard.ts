@@ -19,6 +19,13 @@ const IGNORE_RE = /(\d+\s*(時|分|秒|月|日|歳|代|丁目|番地|号|階|円
 
 const norm = (s: string) => String(s || "").replace(/[\s,、，]/g, "").replace(/％/g, "%");
 
+/**
+ * 登録情報の全角数字を半角にそろえる（2026-10-26 夜間整備）。
+ * どい接骨院様の実績「業界約２０年」が全角のため、投稿の「20年以上」が登録に無い数字として落ちていた。
+ * 投稿側（AIの出力）は半角で検査し、厳しさは変えない。
+ */
+const toHalfDigits = (s: string) => String(s || "").replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+
 export interface FabricatedNumber {
   /** 投稿に出てきた表現（例：3人に1人） */
   text: string;
@@ -29,7 +36,7 @@ export interface FabricatedNumber {
  * 何も無ければ空配列。
  */
 export function findFabricatedNumbers(postText: string, registeredFacts: string): FabricatedNumber[] {
-  const facts = norm(registeredFacts);
+  const facts = norm(toHalfDigits(registeredFacts));
   const body = String(postText || "").replace(IGNORE_RE, " ");
   const out: FabricatedNumber[] = [];
   const seen = new Set<string>();

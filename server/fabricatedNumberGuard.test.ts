@@ -29,6 +29,13 @@ describe("登録に無い数字の検出", () => {
     expect(r).toContain("3倍");
   });
 
+  it("登録が全角数字でも同じ数字なら通す（2026-10-26 どい接骨院様「業界約２０年」）", () => {
+    const doi = "創業８年　業界約２０年　日本足病学協会認定インソール療法スペシャリスト";
+    expect(findFabricatedNumbers("業界20年以上、足の悩みを見てきました。", doi)).toEqual([]);
+    // 登録に無い数字は従来どおり捕まえる
+    expect(findFabricatedNumbers("満足度98%の施術です。", doi).map((x) => x.text)).toContain("98%");
+  });
+
   it("本文が空なら何も返さない", () => {
     expect(findFabricatedNumbers("", facts)).toEqual([]);
   });
