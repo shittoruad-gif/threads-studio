@@ -179,17 +179,18 @@ describe("学習の試しの決まり（10/11 acc36 の見送り）", () => {
 
 describe("冷却が明けた直後は学習の本数を少しずつ戻す（10/25 金光）", async () => {
   const { afterCooldownLearningCap, learningExtra, AFTER_COOLDOWN_LEARNING } = await import("../shared/learningAccounts");
-  const until = new Date("2026-10-26T00:00:00Z"); // 10/26 09:00 JST
-  it("冷却中は null（冷却そのものが1日1本にする）・明けた日から 3→5→8…・8日目からいつもどおり", () => {
-    expect(afterCooldownLearningCap(until, Date.parse("2026-10-26T08:00:00+09:00"))).toBeNull();
-    expect(afterCooldownLearningCap(until, Date.parse("2026-10-26T10:00:00+09:00"))).toBe(3);
-    expect(afterCooldownLearningCap(until, Date.parse("2026-10-27T10:00:00+09:00"))).toBe(5);
-    expect(afterCooldownLearningCap(until, Date.parse("2026-11-01T10:00:00+09:00"))).toBe(AFTER_COOLDOWN_LEARNING[6]);
-    expect(afterCooldownLearningCap(until, Date.parse("2026-11-02T10:00:00+09:00"))).toBeNull();
+  const until = "2026-10-26"; // 10/26 まで1日1本（その日も抑える）
+  it("抑えの最終日は null・翌日から 3→5→8…・8日目からいつもどおり", () => {
+    expect(afterCooldownLearningCap(until, Date.parse("2026-10-26T10:00:00+09:00"))).toBeNull();
+    expect(afterCooldownLearningCap(until, Date.parse("2026-10-27T07:00:00+09:00"))).toBe(3);
+    expect(afterCooldownLearningCap(until, Date.parse("2026-10-28T10:00:00+09:00"))).toBe(5);
+    expect(afterCooldownLearningCap(until, Date.parse("2026-11-02T10:00:00+09:00"))).toBe(AFTER_COOLDOWN_LEARNING[6]);
+    expect(afterCooldownLearningCap(until, Date.parse("2026-11-03T10:00:00+09:00"))).toBeNull();
+    expect(afterCooldownLearningCap(new Date("2026-10-26T00:00:00Z"), Date.parse("2026-10-27T10:00:00+09:00"))).toBe(3);
     expect(afterCooldownLearningCap(null)).toBeNull();
   });
   it("学習の上乗せも同じ段に収まる", () => {
-    const now = Date.parse("2026-10-26T10:00:00+09:00");
+    const now = Date.parse("2026-10-27T10:00:00+09:00");
     expect(learningExtra(12, { capped: false, baseCount: 1, cooldownUntil: until }, now)).toBe(2);
     expect(learningExtra(12, { capped: false, baseCount: 1 }, now)).toBeGreaterThan(20);
   });

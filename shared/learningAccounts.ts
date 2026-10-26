@@ -90,9 +90,11 @@ export const AFTER_COOLDOWN_LEARNING = [3, 5, 8, 12, 16, 20, 25] as const;
 
 export function afterCooldownLearningCap(cooldownUntil: Date | string | null | undefined, now: number = Date.now()): number | null {
   if (!cooldownUntil) return null;
-  const until = cooldownUntil instanceof Date ? cooldownUntil.getTime() : Date.parse(String(cooldownUntil).replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(cooldownUntil)) ? "" : "Z"));
-  if (!Number.isFinite(until) || now < until) return null;
-  const day = Math.floor((Date.parse(jstYmd(now) + "T00:00:00Z") - Date.parse(jstYmd(until) + "T00:00:00Z")) / 86_400_000);
+  // cooldownUntil は「この日まで抑える」の日付（その日も1日1本・shared/accountRamp.ts inCooldown と同じ読み方）。
+  // 明けた日＝その翌日を0日目にする（2026-10-26：時刻として読んで、最終日を0日目＝3本の段が抑えの日に重なり、翌日がいきなり5本になっていた）
+  const s = cooldownUntil instanceof Date ? jstYmd(cooldownUntil.getTime()) : String(cooldownUntil).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const day = Math.floor((Date.parse(jstYmd(now) + "T00:00:00Z") - Date.parse(s + "T00:00:00Z")) / 86_400_000) - 1;
   return day >= 0 && day < AFTER_COOLDOWN_LEARNING.length ? AFTER_COOLDOWN_LEARNING[day]! : null;
 }
 
