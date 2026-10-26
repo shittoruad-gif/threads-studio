@@ -11,9 +11,9 @@ describe("投稿時間の試験（7〜23時の1時間ごと）", () => {
 
   it("期間の前後は null", () => {
     expect(postingTimeTestHours(10, jst("2026-09-23T23:59"))).toBeNull();
-    expect(postingTimeTestHours(10, jst("2026-10-28T06:00"))).toBeNull();
+    expect(postingTimeTestHours(10, jst("2026-10-26T06:00"))).toBeNull(); // 10/26 切り上げ（end 10/25）
     expect(postingTimeTestHours(10, jst("2026-09-24T06:00"))).not.toBeNull();
-    expect(postingTimeTestHours(10, jst("2026-10-27T06:00"))).not.toBeNull();
+    expect(postingTimeTestHours(10, jst("2026-10-25T06:00"))).not.toBeNull();
   });
 
   it("候補は7時〜23時の17通り", () => {
@@ -30,7 +30,7 @@ describe("投稿時間の試験（7〜23時の1時間ごと）", () => {
 
   it("1日の枠は重ならず、ランダムの分を足しても60分以上あく（4・5件目を含む・9/28 玉島 11:08/11:11 の連投）", () => {
     for (const acc of POSTING_TIME_TEST.accountIds) {
-      for (let d = 0; d < 34; d++) {
+      for (let d = 0; d < 32; d++) {
         const hs = postingTimeTestHours(acc, dayN(d))!;
         expect(hs).toHaveLength(5);
         expect(new Set(hs).size).toBe(5);

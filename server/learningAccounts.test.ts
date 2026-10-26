@@ -32,10 +32,10 @@ describe("学習用アカウント", () => {
     // 冷却・慣らしで抑えている日は30本の日でも0
     expect(learningExtra(12, { capped: true, baseCount: 5 }, at("2026-10-11"))).toBe(0);
   });
-  it("候補時刻は7:00〜23:20を等分し、30本でも25分以上あく", () => {
+  it("候補時刻は10:00〜23:20を等分し、30本でも25分以上あく（10/26 朝は外す）", () => {
     const g = burstGrid("2026-10-14", 30);
     expect(g.length).toBe(30);
-    expect(fmt(g[0])).toBe("07:00");
+    expect(fmt(g[0])).toBe("10:00");
     for (let i = 1; i < g.length; i++) expect(g[i].getTime() - g[i - 1].getTime()).toBeGreaterThanOrEqual(LEARNING_BURST.minGapMinutes * 60_000);
     expect(fmt(g[g.length - 1]) <= "23:20").toBe(true);
   });
@@ -62,7 +62,7 @@ describe("学習用アカウント", () => {
     }
   });
   it("学習の枠の時刻：投稿時間の試験の5枠のあいだに、ほかの枠と1時間以上あけて2本置ける（試験の全日程）", () => {
-    for (let d = 0; d < 34; d++) for (const a of LEARNING_ACCOUNTS.accountIds) {
+    for (let d = 0; d < 32; d++) for (const a of LEARNING_ACCOUNTS.accountIds) {
       const now = new Date(at("2026-09-24") + d * 86400e3);
       const hours = postingTimeTestHours(a, now)!;
       const times = learningSlotTimes(hours, 2, "2026-10-10");

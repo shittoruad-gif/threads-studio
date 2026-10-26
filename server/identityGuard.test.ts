@@ -126,17 +126,18 @@ describe("生成プロンプトと検査の矛盾を無くす（2026-09-10）", 
     expect(p).not.toContain("毎回・1行目に無理に入れない");
   });
 
-  it("渡した「この店を指す言葉」が必須条件として本文に入る", () => {
+  it("渡した「この店を指す言葉」は、自然に入るときだけ使う（10/26 無理に入れない・署名を付けない）", () => {
     const tokens = identityTokens({ storeName: "廿日市天神整体院", area: "広島県廿日市市" });
     const p = generateThreadsPrompt({ ...base, storeName: "廿日市天神整体院", identityTokens: tokens });
-    expect(p).toContain("この店だと分かる言葉を1つ入れる");
+    expect(p).toContain("この店だと分かる言葉（自然に入るときだけ）");
     expect(p).toContain("廿日市");
-    expect(p).toContain("1行目に入れる必要はない");
+    expect(p).toContain("無理に入れない");
+    expect(p).not.toContain("必ず入れること");
   });
 
   it("材料が無い店では、余計な必須条件を足さない（これまでどおり生成する）", () => {
     const p = generateThreadsPrompt({ ...base, identityTokens: [] });
-    expect(p).not.toContain("この店だと分かる言葉を1つ入れる");
+    expect(p).not.toContain("この店だと分かる言葉（自然に入るときだけ）");
   });
 
   it("必須条件に出す言葉は、検査で実際に通る言葉と同じもの", () => {

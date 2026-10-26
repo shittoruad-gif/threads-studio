@@ -54,7 +54,8 @@ export const LEARNING_BURST = {
     { from: "2026-10-11", total: 30 },
   ] as const,
   /** 1日のうち学習の投稿を置く範囲（JST・分） */
-  firstMinute: 7 * 60,
+  // ★10/26 7:00→10:00（学習用917本で 7時0.67・8〜12時0.83〜0.89、15時以降が1.0〜1.6。三上様「伸びる時間はすべて反映」）
+  firstMinute: 10 * 60,
   lastMinute: 23 * 60 + 20,
   /** ほかの投稿との最小の間隔（分） */
   minGapMinutes: 25,

@@ -404,7 +404,11 @@ ${text}
 //   伸び倍率: 15時=1.25 / 21時=1.24 / 22〜23時=1.19
 //   朝7〜8時=0.84 / 10時=0.79 / 昼12時=0.87（投稿が集中して埋もれる）
 // → 朝・昼を廃止。21時は「人が多いのに伸びる」唯一の時間帯なので1本目に。
-const POSTING_HOURS = [21, 15, 22];
+// ★2026-10-26 自社の実測（直近30日・自動投稿・各アカウントの普段比の中央値）で見直し（三上様「伸びる時間はすべて反映」）：
+//   お客様1,876本：20時1.17・15時1.14・21時1.14・22時1.13 … 8時0.69・11時0.69・9時0.77
+//   学習用917本：21時1.59・20時1.49・15時1.28 … 22時0.92・7時0.67
+// → 21時・15時・20時。4件目（補填）は22時。
+const POSTING_HOURS = [21, 15, 20];
 
 const JSON_SCHEMA = {
   type: 'json_schema' as const,
@@ -450,7 +454,7 @@ function getNextPostingTime(index: number, customHours?: number[] | null): Date 
   // データ不足（null）のときは従来のデフォルト時刻を使う。
   const hours = customHours && customHours.length > 0 ? customHours : POSTING_HOURS;
   // ★補填で4件目があるときは、既定の3枠と重ねず昼12時台に出す
-  const list = index >= hours.length && hours.length < 4 ? [...hours, 12] : hours;
+  const list = index >= hours.length && hours.length < 4 ? [...hours, 22] : hours;
   const hour = list[index % list.length];
   const randMinute = Math.floor(Math.random() * 30); // 自然さのためのランダム分
 
@@ -1662,26 +1666,11 @@ export async function generateAutoPost(
             const guarded = await enforceNgWords({ mainPost: naturalMain } as any, ngWords);
             naturalMain = (guarded as any).mainPost || naturalMain;
           } catch { /* 生成時ガードは通過済みなのでそのまま使う */ }
-        } else if (lastAttempt && (project.storeName || project.area)) {
-          // ★最後の作り直しでも店名・地名が入らなかったら、枠を捨てずに署名の1行を足す（2026-09-10）。
-          //   9/10 香取様（ライト・1日1件）は3回とも「この店を指す言葉が無い」で落ち、その日の投稿がゼロになった。
-          //   足すのは登録どおりの地名と店名だけ（事実以外は足さない）。
-          const areaShort = String(project.area || '').replace(/^(東京都|北海道|(?:京都|大阪)府|[一-龠]{2,3}県)/, '').trim();
-          // ご本人が何度も消している地名・店名は署名にも入れない（2026-10-08）
-          const removedNorm = ownerRemovedFirm.map((w) => w.replace(/\s/g, ''));
-          const okWord = (w: string) => !removedNorm.some((r) => r.includes(w) || w.includes(r));
-          // 「なし」「未定」のような地域欄は地名ではない（10/8 試しで「なしより。」が付いた）
-          const placeholder = (w: string) => /^(なし|無し|未定|特になし|-|ー|―|オンライン.*|全国.*)$/.test(w.trim());
-          const sig = [areaShort, project.storeName].filter((w): w is string => !!w && !placeholder(String(w)) && okWord(String(w))).join('の');
-          if (sig) naturalMain = `${naturalMain.trim()}\n\n${sig}より。`;
-          console.warn(sig
-            ? `[AutoPost] identityGuard: 最後の作り直しのため署名「${sig}」を足して公開へ userId=${userId} projectId=${project.id}`
-            : `[AutoPost] identityGuard: 最後の作り直し・店名と地名はご本人が消しているため署名なしで公開へ userId=${userId} projectId=${project.id}`);
         } else {
-          console.warn(`[AutoPost] identityGuard: この店を指す言葉が無い → 作り直し userId=${userId} projectId=${project.id}`);
-          noteReject('identityGuard', userId, threadsAccountId, postingTimeIndex, idv.hint,
-            { detail: 'この店を指す言葉が無い', gaveUp: lastAttempt });
-          return false;
+          // ★店名・地名が入っていなくても作り直さない・署名も足さない（2026-10-26 三上様「地域名を無理やり入れて不自然」
+          //   「『株式会社しっとるより』と書くのは不自然すぎる」）。以前は作り直しで地名を無理に入れさせ、
+          //   最後の回は文末に「〇〇の△△より。」を足していた（acc36 の直近40本中19本の末尾が「株式会社しっとるより。」）。
+          console.log(`[AutoPost] identityGuard: この店を指す言葉なし（作り直さず・署名も足さずそのまま） userId=${userId} projectId=${project.id}`);
         }
       }
     } catch (e) { console.warn(`[AutoPost] identityGuard skipped: ${(e as Error)?.message}`); }

@@ -18,7 +18,7 @@ const src = readFileSync(join(__dirname, "autoPostScheduler.ts"), "utf8");
 /** 品質ガードで落ちたときに必ず記録される検査の名前 */
 const GUARDS = [
   "voiceGuard",
-  "identityGuard",
+  // identityGuard は 10/26 から作り直さない（店名・地名が無くてもそのまま・署名も足さない）ので外した
   "naturalnessReview",
   "healthClaimGuard",
   "fabricatedNumberGuard",
@@ -28,6 +28,10 @@ const GUARDS = [
 ];
 
 describe("作り直しの理由はDBに残す", () => {
+  it("店名・地名が無いだけでは作り直さず、署名「〇〇より。」も足さない（10/26 三上様）", () => {
+    expect(src).not.toContain("より。`");
+    expect(src).not.toContain("noteReject('identityGuard'");
+  });
   it("lastRejectReason.set を直に呼ぶ場所は noteReject の中だけ", () => {
     const calls = src.match(/lastRejectReason\.set\(/g) ?? [];
     // ★1つだけ＝noteReject の中の1行。増えていたら、その場所はDBに残していない。
@@ -54,7 +58,7 @@ describe("作り直しの理由はDBに残す", () => {
 
   it("枠を捨てた作り直し（gaveUp）が分かる形で渡っている", () => {
     // 投稿ゼロの追跡に使うので、最後の作り直しで落とす検査は gaveUp を渡す
-    for (const g of ["voiceGuard", "identityGuard", "naturalnessReview", "healthClaimGuard", "fabricatedNumberGuard", "duplicatePhrase"]) {
+    for (const g of ["voiceGuard", "naturalnessReview", "healthClaimGuard", "fabricatedNumberGuard", "duplicatePhrase"]) {
       const at = src.indexOf(`noteReject('${g}'`);
       expect(at, `${g} が見つからない`).toBeGreaterThan(-1);
       expect(src.slice(at, at + 400), `${g} に gaveUp が渡っていない`).toContain("gaveUp");
