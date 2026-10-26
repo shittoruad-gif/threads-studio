@@ -22,7 +22,7 @@ import { isPersonalMode, personalModePromptOverride } from "../shared/personalBr
 import { stripRawUrls } from "../shared/sanitize";
 import { earlierRejectedNote } from "../shared/naturalnessRetryHint";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
-import { trialRules, inLearning } from "../shared/learningAccounts";
+import { trialRules, inLearning, isUncappedAccount } from "../shared/learningAccounts";
 import { bannedRuleFor, scrubProjectForAccount, findAccountBannedWord, accountBannedNote } from "../shared/accountBannedWords";
 import { LOCAL_TALK_ANGLE_ID, localTalkNote, localTalkPlaces, localTalkOptedOut, localTalkOptedOutByRules } from "../shared/localTalk";
 
@@ -2436,12 +2436,16 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           // ★学習用アカウント（自社の 10・12・36）は月の上限で止めない（2026-10-23 夜間整備）。
           //   学習の枠（1日30本）が月の本数に数えられ、プロの120本を超えた月中から契約の枠まで止まっていた
           //   （acc12 は 10/19〜冷却の1日1件も出ず0本。「monthly cap (244/120) - skip」）。お客様のアカウントは従来どおり。
-          if (monthlyCap !== -1 && !inLearning(account.id)) {
+          // ★月の上限に届いても、契約の1日分（プロ3件・ライト1件）は必ず作る。上乗せ（補填・慣らし明けの追加）だけ止める
+          //   （2026-10-26 三上様「契約通りの本数が消化されるように」）。補填や試しで多く出した分まで上限に数えられ、
+          //   月末の数日が0本になっていた（acc11 は 124/120 で 10/26〜0本）。身内のアカウントは上限で止めない。
+          let capReached = false;
+          if (monthlyCap !== -1 && !inLearning(account.id) && !isUncappedAccount(account.id)) {
             // B-5: 当月公開済み＋当月予約済みの合計で判定（自動投稿の予約で枠超過を防ぐ）。
             const used = await db.countAccountMonthlyUsage(account.id);
             if (used >= monthlyCap) {
-              console.log(`[AutoPost] account ${account.id} reached monthly cap (${used}/${monthlyCap}) - skip`);
-              continue;
+              capReached = true;
+              console.log(`[AutoPost] account ${account.id} reached monthly cap (${used}/${monthlyCap}) - 契約の1日分だけ作る（上乗せなし）`);
             }
           }
 
@@ -2526,7 +2530,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           const contractCount = Math.min(getPostCount(eff.autoPostFrequency), maxPerDay);
           let carried = 0;
           // ★前の晩の回（forTomorrow）では足さない。届かなかった枠は翌朝6時の回が「今日の不足」として作り直す
-          if (!opts.fillToday && !opts.forTomorrow) {
+          if (!opts.fillToday && !opts.forTomorrow && !capReached) {
             try {
               const { carryOverCount, jstDateString, inCooldown } = await import('../shared/accountRamp');
               const fullAcct: any = await db.getThreadsAccountById(account.id);
@@ -2542,7 +2546,12 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
               }
             } catch (e) { console.warn(`[AutoPost] 自動補填の判定に失敗 account=${account.id}: ${(e as Error)?.message}`); }
           }
-          void contractCount;
+          // ★月の上限に届いた日は、上乗せを外して契約の1日分にそろえる（慣らし運転・冷却で少ない日はそのまま）
+          if (capReached && postCount > contractCount) {
+            console.log(`[AutoPost] account ${account.id} 月の上限のため上乗せなし（${postCount}→${contractCount}件）`);
+            postCount = contractCount;
+            pendingDecrement = null;
+          }
 
           // ★R1（2026-09-13）：今日すでに予定・公開されている自動投稿（前日に上限で翌日へ送られた分など）を先に数え、
           //   新規はその差だけ作る。これが無いと翌日へ送った分と新規が重なって、また上限超えになる。

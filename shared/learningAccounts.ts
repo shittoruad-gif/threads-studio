@@ -16,6 +16,16 @@ import { LOCAL_TALK, LOCAL_TALK_ANGLE_ID } from "./localTalk";
  *  - 自社アカウントだけ。お客様のアカウントには入れない（三上様の承諾なく契約本数を超えて出さない）。
  */
 
+/**
+ * 月の上限で止めない身内のアカウント（学習用とは別。学習の枠は付けない）。
+ * 2026-10-26 三上様「身内なので普通にどんどん出して結果を出すように」。
+ * 補填・試しで多めに出した分まで月の上限（プロ120本）に数えられ、10/26から月末まで0本になっていた。
+ */
+export const UNCAPPED_ACCOUNT_IDS: readonly number[] = [11];
+export function isUncappedAccount(accountId: number): boolean {
+  return UNCAPPED_ACCOUNT_IDS.includes(accountId);
+}
+
 export const LEARNING_ACCOUNTS = {
   accountIds: [10, 12, 36] as readonly number[],
   /** 10/10 まで（1日7本の時期）の上乗せ本数。Moveact 2店だけ */
