@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  mergeProposal, removeProposal, isScheduleItem, dropAlreadyRegistered, splitNgItems, proposalMessage, proposalSize,
+  mergeProposal, removeProposal, isScheduleItem, isNavLabel, dropAlreadyRegistered, splitNgItems, proposalMessage, proposalSize,
   EMPTY_PROPOSAL, FOLLOWUP_DAYS, FOLLOWUP_MIN_DECLINES, type MaterialProposal,
 } from "@shared/declineFollowup";
 import { websiteUrlOf } from "./declineFollowup";
@@ -194,5 +194,18 @@ describe("使わない言葉（NGワード）を含む案は入れない（2026-
   it("NGワードが無ければそのまま", () => {
     expect(splitNgItems(["a案", "b案"], null).kept).toEqual(["a案", "b案"]);
     expect(splitNgItems(["a案"], "").kept).toEqual(["a案"]);
+  });
+});
+
+describe("ページの見出し・ボタン名はメニューに入れない（2026-10-26 夜間整備）", () => {
+  it("10/26 の案に並んだ見出しは、メニューではないと見分ける", () => {
+    for (const s of ["コンセプト", "初めての方へ", "スタッフ紹介", "LINEで相談", "アクセス", "お問い合わせ", "よくある質問"]) {
+      expect(isNavLabel(s)).toBe(true);
+    }
+  });
+  it("施術・コース・機器の名前は残す", () => {
+    for (const s of ["骨盤矯正", "運動療法コース", "姿勢分析", "ハイボルテージ", "交通事故の施術"]) {
+      expect(isNavLabel(s)).toBe(false);
+    }
   });
 });

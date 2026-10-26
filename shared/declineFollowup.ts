@@ -78,6 +78,15 @@ function key(s: string): string {
   return String(s ?? "").replace(/[\s　、。,.・「」（）()]/g, "");
 }
 
+/**
+ * ホームページの見出し・案内のボタン名（メニューではない）を見分ける（2026-10-26 夜間整備）。
+ * acc37 の案で［メニュー・機器］に「コンセプト」「初めての方へ」「スタッフ紹介」「LINEで相談」が並んだ。
+ */
+const NAV_LABEL = /^(?:トップ|ホーム|top|home|コンセプト|当院について|当店について|院について|はじめての方へ|初めての方へ|初めての方|スタッフ紹介|院長紹介|院長あいさつ|院長挨拶|ごあいさつ|ご挨拶|アクセス|地図|お問い?合わ?せ|ご予約|予約|web予約|ネット予約|line予約|lineで相談|lineで予約|lineで問い合わせ|電話で予約|料金|料金表|料金案内|メニュー|施術メニュー|メニュー一覧|ブログ|お知らせ|新着情報|よくある質問|faq|会社概要|プライバシーポリシー|採用情報|求人|サイトマップ|お客様の声|症例|症状一覧|施術の流れ|院内紹介|店内紹介|営業時間|診療時間)$/i;
+export function isNavLabel(s: string): boolean {
+  return NAV_LABEL.test(String(s ?? "").replace(/[\s　・「」（）()>＞|｜]/g, ""));
+}
+
 /** すでに登録にある（ほぼ同じ文がある）ものを外す */
 export function dropAlreadyRegistered(items: readonly string[], registered: readonly string[]): string[] {
   const reg = registered.map(key).filter((k) => k.length >= 4);

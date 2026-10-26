@@ -15,7 +15,7 @@ import { sql } from "drizzle-orm";
 import * as db from "./db";
 import {
   FOLLOWUP_DAYS, FOLLOWUP_MIN_DECLINES, FOLLOWUP_COOLDOWN_DAYS,
-  EMPTY_PROPOSAL, dropAlreadyRegistered, isScheduleItem, splitNgItems, mergeProposal, removeProposal, proposalMessage, proposalSize,
+  EMPTY_PROPOSAL, dropAlreadyRegistered, isScheduleItem, isNavLabel, splitNgItems, mergeProposal, removeProposal, proposalMessage, proposalSize,
   type MaterialProposal,
 } from "@shared/declineFollowup";
 
@@ -124,6 +124,7 @@ export async function buildMaterialProposal(project: any, url: string): Promise<
     `- 料金・価格・クーポンは出さない。\n` +
     `- 営業時間・受付時間・定休日・予約の決まりは出さない（登録している内容を正とする）。\n` +
     `- 登録内容とホームページで数字や事実が食い違うもの（例：登録「11年勤務」／ページ「10年以上勤務」）は、各項目に入れず discrepancies に「登録：〜／ページ：〜」の形で書く。\n` +
+    `- menu は実際に受けられる施術・コース・機器の名前だけ。ページの見出しや案内のボタン名（コンセプト・初めての方へ・スタッフ紹介・LINEで相談など）は出さない。\n` +
     `- 1件は60文字以内。各項目は最大6件。\n\n` +
     `【すでに登録されている内容】\n${registered.slice(0, 3000)}\n\n` +
     `【ホームページ】\n${page.slice(0, 7000)}`;
@@ -160,7 +161,8 @@ export async function buildMaterialProposal(project: any, url: string): Promise<
       strength: clean(raw.strength),
       realEpisodes: clean(raw.realEpisodes).filter((x) => !OUTCOME_WORDS.test(x)),
       faq: clean(raw.faq),
-      menu: clean(raw.menu).filter((x) => !/[0-9０-９,，]+\s*円/.test(x)),
+      // ★ページの見出し・ボタン名（「コンセプト」「スタッフ紹介」など）はメニューではない（2026-10-26）
+      menu: clean(raw.menu).filter((x) => !/[0-9０-９,，]+\s*円/.test(x) && !isNavLabel(x)),
       realProofs: clean(raw.realProofs),
       discrepancies: [
         ...(Array.isArray(raw.discrepancies) ? raw.discrepancies.map(String) : []).slice(0, 5),
