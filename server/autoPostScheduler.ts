@@ -6,6 +6,7 @@
  * generates posts and adds them to the scheduled post queue.
  */
 
+import { mediaPostNote } from '../shared/mediaPosts';
 import cron from "node-cron";
 import * as db from "./db";
 import { getPlan } from "../shared/plans";
@@ -641,6 +642,8 @@ export async function generateAutoPost(
     //   香取様の3案がすべて「24時間の電話受付」になった。案ごとに材料をずらし、前の案と同じ話題を主役にしない。
     choiceIndex?: number;
     siblingTexts?: string[];
+    /** 写真・動画を付ける回（server/mediaItems.ts・2026-10-26） */
+    mediaItem?: { id: number; kind: string; description: string | null } | null;
   } = {},
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
@@ -1457,6 +1460,8 @@ export async function generateAutoPost(
           + ownerRulesNote
           // ★アカウントごとの書かない言葉（shared/accountBannedWords.ts）。運営の方針なので末尾近くに置く
           + accountBannedNote(threadsAccountId)
+          // ★写真・動画を付ける回（2026-10-26・shared/mediaPosts.ts）
+          + (opts.mediaItem ? mediaPostNote(opts.mediaItem.kind, opts.mediaItem.description) : '')
           // ★学習の試し（shared/learningAccounts.ts）は最末尾。途中に置くと、後ろの「切り口（最優先）」「長さ」に上書きされ、
           //   10/7 の試しで「1行目に数字」に数字が無い・「箇条書き」に箇条書きが無い投稿になっていた。
           + (opts.learningTrial ? `\n\n【今回の試し（ここまでのすべての指示より優先・厳守）】\n- ${opts.learningTrial.note}\n- 上の切り口・長さ・書き出しの指示と食い違うところは、この試しに合わせる。試すのはこの1点だけで、それ以外はいつもどおり。\n${trialRules(allowEmoji).map((r) => `- ${r}`).join('\n')}` : ''),
@@ -2256,7 +2261,12 @@ export async function generateAutoPost(
       metaAiAskText,
       // ★ネタ帳のどのネタから作ったか（使った記録・2026-09-30）
       materialItemId: ledgerItem?.id ?? null,
+      // ★写真・動画を付ける回（2026-10-26）
+      mediaItemId: opts.mediaItem?.id ?? null,
     } as any);
+    if (opts.mediaItem) {
+      try { await (await import('./mediaItems')).markMediaUsed(opts.mediaItem.id); } catch { /* 記録の失敗で止めない */ }
+    }
     // ★ここから先で失敗しても、投稿は保存済み。false を返すと呼び出し側が同じ枠をもう1件作り、
     //   契約本数を超える（2026-10-04 比嘉様 acc26：契約3件で4件の日が続いた）。
     saved = true;
@@ -2725,6 +2735,16 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             let success = false;
             const rk = rejectKey(user.id, account.id, i);
             clearReject(rk);
+            // ★写真・動画を付ける回（2026-10-26・プロ以上・1日1本・同じものは2週間あける）。その日の1本目（21時の枠）に付ける
+            let mediaItem: { id: number; kind: string; description: string | null } | null = null;
+            if (i === 0 && !learningTrial && !hitPatternId && !feature) {
+              try {
+                const mi = await import('./mediaItems');
+                const { MEDIA_POSTS } = await import('../shared/mediaPosts');
+                if ((await mi.mediaPostsToday(user.id)) < MEDIA_POSTS.perDay) mediaItem = await mi.pickMediaForUser(user.id);
+                if (mediaItem) console.log(`[AutoPost] 写真・動画つきの回 account=${account.id} media=${mediaItem.id}（${mediaItem.kind}）`);
+              } catch (e) { console.warn(`[AutoPost] 写真・動画の選択をとばしました: ${(e as Error)?.message}`); }
+            }
             for (let attempt = 1; attempt <= 3 && !success; attempt++) {
               if (attempt > 1 && await slotAlreadySaved()) {
                 console.warn(`[AutoPost] slot=${i} は保存済みのため作り直さない account=${account.id}`);
@@ -2746,7 +2766,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                 hint,
                 attempt === 3,
                 false,
-                learningTrial ? { learningTrial } : hitPatternId ? { hitPatternId } : feature ? { feature } : {},
+                learningTrial ? { learningTrial } : hitPatternId ? { hitPatternId } : feature ? { feature } : mediaItem ? { mediaItem } : {},
               );
               if (!success && attempt < 3) console.log(`[AutoPost] user=${user.id} account=${account.id} slot=${i} 作り直し ${attempt + 1}回目${hint ? '（前回の理由を渡す）' : ''}`);
             }

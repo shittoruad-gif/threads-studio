@@ -13,6 +13,7 @@
  */
 import { featureNote } from "../shared/threadsFeatures";
 import * as db from "./db";
+import { createHmac } from "node:crypto";
 
 // ── 返信メッセージの組み立て ───────────────────────────────────
 type QuickItem = { label: string; data: string };
@@ -68,6 +69,12 @@ export function fmtJst(v: Date | string | null): string {
  * 承認待ち投稿のカード（トーク内で完結。ボタンはすべてpostback）。
  * 本文は全文を載せる（見に行かせない）。1カード=1投稿・最大5件。
  */
+/** 承認カードから、その投稿に付く写真・動画を見るURL（投稿番号＋署名・推測できない） */
+export function mediaPreviewUrl(postId: number): string {
+  const sig = createHmac("sha256", process.env.JWT_SECRET || "ts").update(`media:${postId}`).digest("hex").slice(0, 24);
+  return `${(process.env.APP_BASE_URL || "https://threads-studio.com").replace(/\/$/, "")}/m/p/${postId}/${sig}?openExternalBrowser=1`;
+}
+
 export function buildPostCards(
   posts: Array<{ id: number; postContent: string | null; scheduledAt: Date | string | null; accountName?: string | null; accountEmphasis?: boolean; angle?: string | null; choiceGroupId?: string | null; pollOptions?: string | null; reachNote?: string | null }>,
   opts: { one?: boolean; bulk?: boolean; choice?: boolean } = {},
@@ -142,6 +149,11 @@ export function buildPostCards(
         ...(p.reachNote ? [{
           type: "text", wrap: true, size: "xs", color: "#0B6E72", text: p.reachNote,
         }] : []),
+        // ★写真・動画つきの回（2026-10-26・server/mediaItems.ts）。どれが付くかを押す前に見られるように
+        ...((p as any).mediaItemId ? [{
+          type: "text", wrap: true, size: "xs", color: "#0B6E72",
+          text: "この投稿は、預かったお店の写真・動画を付けて出します。下の「付ける写真・動画を見る」で確かめられます。",
+        }] : []),
         ...(isCall ? [{
           type: "text", wrap: true, size: "xs", color: "#8A6D3B",
           text: "Meta AIに呼びかけて、その返事でお店を広めてもらう投稿です。「@meta.ai」を残したまま、このまま公開するのがおすすめです。返事が付くかはThreads側の段階提供によります。",
@@ -170,6 +182,8 @@ export function buildPostCards(
         //   直されていた。押すと本文が普通のメッセージで届き、長押しでコピーできる。
         { type: "button", style: "link", height: "sm",
           action: { type: "postback", label: "文章をコピーして自分で直す", data: `a=selfedit&i=${p.id}${suffix}`, displayText: "文章をコピーして自分で直す" } },
+        ...((p as any).mediaItemId ? [{ type: "button", style: "link", height: "sm",
+          action: { type: "uri", label: "付ける写真・動画を見る", uri: mediaPreviewUrl(p.id) } }] : []),
       ],
     },
   }); });

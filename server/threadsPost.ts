@@ -310,6 +310,8 @@ export async function createAndPublishThread(
     accessToken: string; threadsUserId: string; topicTag?: string; quotePostId?: string;
     pollAttachment?: Record<string, string>; textEntities?: Array<{ entity_type: string; offset: number; length: number }>;
     locationId?: string; crossreshareToIg?: boolean;
+    /** 1本目に付ける写真・動画（2026-10-26） */
+    media?: { kind: 'image' | 'video'; url: string } | null;
   },
   segments: string[],
 ): Promise<{ id: string; replyIds: string[] }> {
@@ -321,7 +323,9 @@ export async function createAndPublishThread(
     accessToken: base.accessToken,
     threadsUserId: base.threadsUserId,
     text: clean[0],
-    mediaType: 'TEXT',
+    mediaType: base.media ? (base.media.kind === 'video' ? 'VIDEO' : 'IMAGE') : 'TEXT',
+    imageUrl: base.media?.kind === 'image' ? base.media.url : undefined,
+    videoUrl: base.media?.kind === 'video' ? base.media.url : undefined,
     topicTag: base.topicTag,
     quotePostId: base.quotePostId, // 引用投稿（固定投稿の再露出）
     pollAttachment: base.pollAttachment,
@@ -335,10 +339,16 @@ export async function createAndPublishThread(
   } catch (err) {
     // ★場所のタグ・同時シェア・ネタバレ・アンケートは「付け足し」。これが原因で投稿そのものが止まらないよう、
     //   付け足しがある投稿は外して1回だけ出し直す（コンテナ作成で弾かれた＝まだ何も公開されていない）。
-    const extras = rootParams.locationId || rootParams.crossreshareToIg || rootParams.textEntities || rootParams.pollAttachment;
-    if (!extras || !/create media container/i.test(String((err as Error)?.message ?? ''))) throw err;
-    console.warn(`[ThreadsPost] 付け足し（場所/同時シェア/ネタバレ/アンケート）付きで作れなかったため外して出し直し: ${String((err as Error)?.message).slice(0, 200)}`);
-    root = await createAndPublishPost({ ...rootParams, locationId: undefined, crossreshareToIg: undefined, textEntities: undefined, pollAttachment: undefined });
+    // ★写真・動画で作れなかったときは、文章だけで出す（枠を捨てない・2026-10-26）
+    if (base.media && /create media container|container/i.test(String((err as Error)?.message ?? ''))) {
+      console.warn(`[ThreadsPost] 写真・動画つきで出せなかったため文章だけで出し直し: ${String((err as Error)?.message).slice(0, 200)}`);
+      root = await createAndPublishPost({ ...rootParams, mediaType: 'TEXT', imageUrl: undefined, videoUrl: undefined });
+    } else {
+      const extras = rootParams.locationId || rootParams.crossreshareToIg || rootParams.textEntities || rootParams.pollAttachment;
+      if (!extras || !/create media container/i.test(String((err as Error)?.message ?? ''))) throw err;
+      console.warn(`[ThreadsPost] 付け足し（場所/同時シェア/ネタバレ/アンケート）付きで作れなかったため外して出し直し: ${String((err as Error)?.message).slice(0, 200)}`);
+      root = await createAndPublishPost({ ...rootParams, locationId: undefined, crossreshareToIg: undefined, textEntities: undefined, pollAttachment: undefined });
+    }
   }
 
   // ルート投稿後に失敗した場合は PartialThreadError を投げる（再試行で二重投稿しない）

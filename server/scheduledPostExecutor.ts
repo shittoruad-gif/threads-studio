@@ -351,6 +351,14 @@ export async function executePendingPosts() {
           result = await createAndPublishThread(
             {
               accessToken, threadsUserId: account.threadsUserId, topicTag, quotePostId: (post as any).quotePostId || undefined,
+              // ★写真・動画（2026-10-26・server/mediaItems.ts）。取り出せなければ文章だけ
+              media: await (async () => {
+                const mid = Number((post as any).mediaItemId || 0);
+                if (!mid) return null;
+                const mi = await import('./mediaItems');
+                const m = await mi.getMediaForPost(mid).catch(() => null);
+                return m ? { kind: m.kind === 'video' ? 'video' as const : 'image' as const, url: mi.mediaPublicUrl(m) } : null;
+              })(),
               pollAttachment: pollOpts ? pollAttachment(pollOpts) : undefined,
               textEntities: spoilers ?? undefined,
               // 場所のタグ・Instagramストーリーズ同時シェア（その権限で連携したアカウントだけ）

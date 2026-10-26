@@ -221,6 +221,22 @@ async function startServer() {
             try { await db.removeLineFollower(lineUserId); } catch { /* 記録の削除は失敗しても続行 */ }
             continue;
           }
+          // ★写真（2026-10-26・server/mediaItems.ts）：お店の写真を預かり、自動投稿に付ける（プロ以上）
+          if (ev.type === 'message' && ev.message?.type === 'image') {
+            try {
+              const u = await db.getUserByLineUserId(lineUserId);
+              if (!u) {
+                await replyMessage(ev.replyToken, '写真を預かるには、先にアカウントの連携が必要です。メニューの「アカウント連携」からお願いします。');
+              } else {
+                const { saveLineImage } = await import('../mediaItems');
+                await replyMessage(ev.replyToken, await saveLineImage(Number(u.id), String(ev.message.id)));
+              }
+            } catch (e) {
+              console.error('[Media] 写真の受け取りに失敗:', e);
+              await replyMessage(ev.replyToken, '写真を受け取れませんでした。少し時間をおいて、もう一度送ってください。');
+            }
+            continue;
+          }
           if (ev.type === 'message' && ev.message?.type === 'text') {
             const text = String(ev.message.text || '').trim();
             if (text === '解除') {
@@ -1537,6 +1553,48 @@ async function startServer() {
       <p>この投稿は予定どおり公開されます。数分以内にThreadsへ反映されます。</p>
       ${choiceCanceled > 0 ? `<p class="meta">選ばれなかった${choiceCanceled}件は公開されません。</p>` : ''}
       <a class="btn" href="/post-history">投稿履歴を見る</a>`));
+  });
+
+  // ★写真・動画の自動投稿（2026-10-26・server/mediaItems.ts）
+  //   Threads が写真を取りに来る公開URL（推測できない32桁）
+  app.get(/^\/m\/([0-9a-f]{32})\.jpg$/, async (req, res) => {
+    try {
+      const { servePublicImage } = await import('../mediaItems');
+      const img = await servePublicImage(String((req.params as any)[0]));
+      if (!img) return res.status(404).end();
+      res.setHeader('Content-Type', img.mime);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.end(img.data);
+    } catch { return res.status(500).end(); }
+  });
+  //   承認カードの「付ける写真・動画を見る」（投稿番号＋署名）
+  app.get(/^\/m\/p\/(\d+)\/([0-9a-f]{24})$/, async (req, res) => {
+    try {
+      const postId = Number((req.params as any)[0]);
+      const { mediaPreviewUrl } = await import('../lineChat');
+      if (!mediaPreviewUrl(postId).includes(`/${(req.params as any)[1]}?`)) return res.status(404).end();
+      const p: any = await db.getScheduledPostById(postId);
+      const mi = await import('../mediaItems');
+      const m = p?.mediaItemId ? await mi.getMediaForPost(Number(p.mediaItemId)) : null;
+      if (!m) return res.status(404).send('写真・動画が見つかりませんでした。');
+      return res.redirect(302, mi.mediaPublicUrl(m));
+    } catch { return res.status(500).end(); }
+  });
+  //   マカセルの動画を受け取る（マカセルがプランを確かめてから送る・合言葉 MEDIA_INTAKE_SECRET）
+  app.post('/api/media/intake', express.json(), async (req, res) => {
+    const secret = process.env.MEDIA_INTAKE_SECRET || '';
+    const given = String(req.headers['x-media-secret'] || '');
+    const crypto = await import('node:crypto');
+    if (!secret || given.length !== secret.length || !crypto.timingSafeEqual(Buffer.from(given), Buffer.from(secret))) return res.status(401).json({ ok: false });
+    try {
+      const { intakeVideo } = await import('../mediaItems');
+      const b = req.body || {};
+      const r = await intakeVideo({ email: String(b.email || ''), videoUrl: String(b.videoUrl || ''), title: b.title ? String(b.title) : undefined, sourceRef: String(b.sourceRef || '') });
+      return res.json(r);
+    } catch (e) {
+      console.error('[Media] 動画の受け取りに失敗:', e);
+      return res.status(500).json({ ok: false });
+    }
   });
 
   // Health check endpoint

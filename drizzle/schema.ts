@@ -1,4 +1,6 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint, tinyint, uniqueIndex, index, date, mediumtext } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint, tinyint, uniqueIndex, index, date, mediumtext, customType } from "drizzle-orm/mysql-core";
+
+const mediumblob = customType<{ data: Buffer }>({ dataType() { return "mediumblob"; } });
 
 /**
  * Core user table backing auth flow.
@@ -597,6 +599,8 @@ export const scheduledPosts = mysqlTable("scheduledPosts", {
   // 「どの切り口が実際に伸びたか」を学習するために使う。
   publishedThreadsPostId: varchar("publishedThreadsPostId", { length: 255 }),
   postedAt: timestamp("postedAt"),
+  // 写真・動画（mediaItems.id・0112）。あれば1本目を写真・動画つきで出す
+  mediaItemId: int("mediaItemId"),
   errorMessage: text("errorMessage"),
   // Store the post content snapshot at scheduling time
   postContent: text("postContent"),
@@ -1177,3 +1181,26 @@ export const materialItems = mysqlTable("materialItems", {
   index("idx_mi_project").on(table.projectId, table.status),
 ]);
 export type MaterialItem = typeof materialItems.$inferSelect;
+
+
+/**
+ * 写真・動画の置き場（2026-10-26・shared/mediaPosts.ts）。
+ *  写真は公式LINEで送っていただいたものを data に持ち、/m/<token>.jpg で公開（Threads が取りに来る）。
+ *  動画はマカセルで作ったものの URL（externalUrl）。
+ */
+export const mediaItems = mysqlTable("mediaItems", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  token: varchar("token", { length: 40 }).notNull().unique(),
+  kind: varchar("kind", { length: 10 }).notNull(),
+  mime: varchar("mime", { length: 40 }).notNull(),
+  data: mediumblob("data"),
+  externalUrl: text("externalUrl"),
+  description: text("description"),
+  source: varchar("source", { length: 20 }).notNull(),
+  sourceRef: varchar("sourceRef", { length: 120 }),
+  enabled: tinyint("enabled").default(1).notNull(),
+  usedCount: int("usedCount").default(0).notNull(),
+  lastUsedAt: timestamp("lastUsedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [index("idx_mediaItems_user").on(table.userId)]);
