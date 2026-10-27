@@ -40,6 +40,7 @@ import { isAlreadyExistsError } from "../migrationErrors";
 import { initTrialReminderScheduler } from "../trialReminder";
 import { initPaymentFollowUpScheduler } from "../paymentFollowUp";
 import { startTokenRefreshJob } from "../tokenRefreshJob";
+import { registerMediaApi } from "../mediaApi";
 
 /**
  * Univapay Webhookでプランを特定できず手続きが宙に浮いたとき、ユーザーへ案内する。
@@ -1580,22 +1581,8 @@ async function startServer() {
       return res.redirect(302, mi.mediaPublicUrl(m));
     } catch { return res.status(500).end(); }
   });
-  //   マカセルの動画を受け取る（マカセルがプランを確かめてから送る・合言葉 MEDIA_INTAKE_SECRET）
-  app.post('/api/media/intake', express.json(), async (req, res) => {
-    const secret = process.env.MEDIA_INTAKE_SECRET || '';
-    const given = String(req.headers['x-media-secret'] || '');
-    const crypto = await import('node:crypto');
-    if (!secret || given.length !== secret.length || !crypto.timingSafeEqual(Buffer.from(given), Buffer.from(secret))) return res.status(401).json({ ok: false });
-    try {
-      const { intakeVideo } = await import('../mediaItems');
-      const b = req.body || {};
-      const r = await intakeVideo({ email: String(b.email || ''), videoUrl: String(b.videoUrl || ''), title: b.title ? String(b.title) : undefined, sourceRef: String(b.sourceRef || '') });
-      return res.json(r);
-    } catch (e) {
-      console.error('[Media] 動画の受け取りに失敗:', e);
-      return res.status(500).json({ ok: false });
-    }
-  });
+  //   マカセルから呼ばれる口（動画の受け取り・「確かめる」・合言葉 MEDIA_INTAKE_SECRET）2026-10-28 mediaApi.ts へ移した
+  registerMediaApi(app);
 
   // Health check endpoint
   app.get("/api/health", (_req, res) => {

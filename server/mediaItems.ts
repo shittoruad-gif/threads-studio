@@ -2,6 +2,7 @@
  * 写真・動画の置き場と、その出し入れ（shared/mediaPosts.ts・2026-10-26）。
  *  - 公式LINEで送られた写真を預かる（saveLineImage）
  *  - マカセルの動画を受け取る（POST /api/media/intake・合言葉 MEDIA_INTAKE_SECRET）
+ *  - マカセルの設定画面の「確かめる」（POST /api/media/link-check・同じ合言葉・2026-10-28）
  *  - Threads が取りに来る公開URL（GET /m/<token>.jpg）
  *  - 自動投稿で1本に付けるものを選ぶ（pickMediaForUser）・使った記録（markMediaUsed）
  */
@@ -46,7 +47,8 @@ async function describeImage(url: string): Promise<string | null> {
 /** 公式LINEで送られた写真を預かる。結果はお返しの文 */
 export async function saveLineImage(userId: number, messageId: string): Promise<string> {
   if (!(await mediaAllowed(userId))) {
-    return "写真を付けた自動投稿は、プロプラン（ビジネスプランを含む）でお使いいただけます。\nいまは準備中のため、順番にご案内しています。";
+    // 2026-10-28 mode=on にしたので「準備中」の一文を外した
+    return "写真を付けた自動投稿は、プロプラン（ビジネスプランを含む）でお使いいただけます。";
   }
   const token = process.env.LINE_NOTIFY_CHANNEL_ACCESS_TOKEN;
   if (!token) return "ただいま写真を受け取れませんでした。少し時間をおいて、もう一度送ってください。";
@@ -71,6 +73,28 @@ export async function saveLineImage(userId: number, messageId: string): Promise<
     "",
     "人の顔が写っている写真は、写っている方の了承がある写真だけにしてください。施術の前後の比較の写真は使えません。",
   ].filter((l, i) => l || i === 3).join("\n");
+}
+
+/** マカセルからの呼び出しの合言葉（MEDIA_INTAKE_SECRET）が合っているか。未設定なら常に不可（2026-10-28 共通化） */
+export function mediaSecretOk(given: unknown): boolean {
+  const secret = process.env.MEDIA_INTAKE_SECRET || "";
+  const g = String(given ?? "");
+  if (!secret || g.length !== secret.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(g), Buffer.from(secret));
+}
+
+/**
+ * マカセルの「確かめる」（2026-10-28 三上様）。
+ * このメールアドレスの会員がいるか・動画を受け取れるプラン（プロ以上）か、の2つだけを返す。
+ * 名前・番号・プラン名は返さない（マカセル側にも出さない）。
+ */
+export async function linkCheck(emailRaw: string): Promise<{ ok: boolean; found: boolean; proOrAbove: boolean }> {
+  const email = String(emailRaw || "").trim().toLowerCase();
+  if (!email || email.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, found: false, proOrAbove: false };
+  const d: any = await db.getDb();
+  const u = rows(await d.execute(sql`SELECT id FROM users WHERE LOWER(email)=${email} LIMIT 1`))[0];
+  if (!u) return { ok: true, found: false, proOrAbove: false };
+  return { ok: true, found: true, proOrAbove: await mediaAllowed(Number(u.id)) };
 }
 
 /** マカセルの動画を受け取る（マカセルがプランを確かめてから送る）。Threads Studio 側はプロ以上かを見る */

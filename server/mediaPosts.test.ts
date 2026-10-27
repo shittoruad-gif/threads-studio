@@ -6,10 +6,16 @@ describe("写真・動画の自動投稿（プロ以上のみ）", () => {
     for (const p of ["pro", "pro_campaign", "pro_seminar", "business", "business_campaign", "business_seminar"]) expect(isProOrAbove(p)).toBe(true);
     for (const p of ["light", "light_campaign", "light_seminar", "free", "", null]) expect(isProOrAbove(p as any)).toBe(false);
   });
-  it("最初は運営の会員だけ（mode=trial）", () => {
-    expect(MEDIA_POSTS.mode).toBe("trial");
+  // 2026-10-28：新しい契約はプロ以上だけ → mode=on（プロ以上の全員）
+  it("mode=on：プロ以上なら誰でも・ライトや無料は使えない・運営の会員はプランに関係なく使える", () => {
+    expect(MEDIA_POSTS.mode).toBe("on");
+    expect(MEDIA_POSTS.trialUserIds).toContain(78);
+    expect(mediaPostsEnabledFor(1234, "pro")).toBe(true);
+    expect(mediaPostsEnabledFor(1234, "business_campaign")).toBe(true);
+    expect(mediaPostsEnabledFor(1234, "light")).toBe(false);
+    expect(mediaPostsEnabledFor(1234, null)).toBe(false);
     expect(mediaPostsEnabledFor(78, "pro")).toBe(true);
-    expect(mediaPostsEnabledFor(1234, "pro")).toBe(false);
+    expect(mediaPostsEnabledFor(78, null)).toBe(true);
   });
   it("動画を先に・使った回数が少ないもの・2週間あけたものだけ", () => {
     const now = Date.parse("2026-10-26T12:00:00Z");

@@ -3,14 +3,17 @@
  *  - 写真：Threads Studio のプロ以上（プロ・ビジネス。特別価格・モニター価格も含む）の方だけ
  *  - 動画：Threads Studio のプロ以上で、マカセルを契約している方（マカセル側の判定はマカセルが行ってから送る）
  *  - まずは試し（mode=trial：運営の会員だけ）。数字を見てからお客様に広げる
+ *  - 2026-10-28 三上様：新しい契約はプロ以上だけになるため mode=on にした。プロ以上の方は全員が対象。
+ *    写真・動画を預けていない方は、これまでと何も変わらない（付ける物が無ければ普段どおりの投稿）。
+ *    trialUserIds はプランに関係なく使える運営の会員として残す。
  *
  * 1日のうち1本だけ、預かった写真・動画を付けて出す。同じものは MEDIA_POSTS.reuseDays 日あける。
  * 写真・動画の中身に合った短い文を書く（説明しすぎない・効果の話をしない・写っている人のことを書かない）。
  * 実測の根拠：Threads 運用者114アカウントの分析で、動画は1.6倍見られ反応7倍・使っている投稿は0.8%だけ。
  */
 export const MEDIA_POSTS = {
-  /** trial＝trialUserIds だけ／on＝条件に合う全員 */
-  mode: "trial" as "trial" | "on",
+  /** trial＝trialUserIds だけ／on＝プロ以上の全員＋trialUserIds（2026-10-28〜 on） */
+  mode: "on" as "trial" | "on",
   trialUserIds: [78] as readonly number[],
   /** 1日に写真・動画を付ける本数 */
   perDay: 1,
