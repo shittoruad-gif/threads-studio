@@ -34,8 +34,9 @@ export function registerMediaApi(app: Express, deps?: MediaApiDeps): void {
     }
   });
 
-  // 「確かめる」は人が押す物なので回数は少ない。メールアドレスの当てずっぽうを防ぐため、15分で60回まで
-  const linkCheckLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false, message: { ok: false } });
+  // 「確かめる」は人が押す物なので回数は少ない。メールアドレスの当てずっぽうを防ぐため、15分で300回まで
+  // （呼ぶのはマカセルのサーバー1台＝全お客様で同じIP。マカセル側でも1アカウント10分20回に絞っている）
+  const linkCheckLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false, message: { ok: false } });
   app.post("/api/media/link-check", linkCheckLimiter, express.json(), async (req, res) => {
     const d = await get();
     if (!d.secretOk(req.headers["x-media-secret"])) return res.status(401).json({ ok: false });
