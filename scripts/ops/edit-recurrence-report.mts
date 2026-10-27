@@ -35,9 +35,15 @@ for (const x of accts) {
   const ended = await db.isEndedCustomer(Number(x.u));
   // 最新の生成（AIが作った文そのもの）。★その直しを最後にされた時より後に作られたものだけを見る
   //   （10/10 #26：直された投稿そのものが「直近5本」に入り、直した後の生成には出ていないのに「まだ直っていない」と出ていた）
+  // ご本人が直した後の文に2回以上そのまま書いている行（決まった挨拶など）は、生成に出ても「消す直し」が残っているとは見ない
+  //   （10/27 #26：挨拶「ハイサイ♪はいさい整骨院の比嘉です(^^)」の中の「い整骨院」が、本文の店名を消した直しと同じ言葉に数えられ、
+  //     挨拶が正しく入った生成まで「まだ直っていない」と出ていた）
+  const ownLineCount = new Map<string, number>();
+  for (const p of pairs) for (const l of new Set(p.after.split(/\n+/).map(norm).filter((l) => l.length >= 4))) ownLineCount.set(l, (ownLineCount.get(l) ?? 0) + 1);
+  const stripOwnLines = (t: string) => t.split(/\n+/).filter((l) => (ownLineCount.get(norm(l)) ?? 0) < 2).join('\n');
   const recent = (((await d.execute(sql`SELECT COALESCE(originalContent, postContent) t, createdAt c FROM scheduledPosts
     WHERE threadsAccountId = ${x.a} AND source = 'auto' AND postContent IS NOT NULL ORDER BY id DESC LIMIT 40`)) as any)[0] as any[])
-    .map((r) => ({ t: norm(r.t), at: new Date(r.c).getTime() }));
+    .map((r) => ({ t: norm(stripOwnLines(String(r.t))), at: new Date(r.c).getTime() }));
   const latestFor = (e: { kind: string; text: string }) => {
     const k = norm(e.text);
     const lastEdit = Math.max(0, ...pairs.filter((p) => e.kind === '消す'
