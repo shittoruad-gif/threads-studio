@@ -41,6 +41,122 @@ declare global {
   var __loginAttempts: Map<string, { count: number; lockedUntil: number }> | undefined;
 }
 
+
+/** 運営へ知らせる（社内のメール・ログだけ。お客様には送らない・shared/connectCheck.ts） */
+async function notifyConnectCheck(userId: number, kind: 'mismatch' | 'same_as_existing', expected: string | null, got: string, device: 'android' | 'iphone' | 'pc', decided: 'accepted' | 'rejected' | null) {
+  try {
+    const u: any = await db.getUserById(userId).catch(() => null);
+    const { mismatchOwnerNote } = await import('../shared/connectCheck');
+    const { notifyOwner } = await import('./_core/notification');
+    await notifyOwner(mismatchOwnerNote({ userId, storeName: u?.storeName ?? u?.name ?? null, expected, got, kind, device, decided }));
+  } catch (e) { console.warn('[ThreadsConnect] 運営への知らせに失敗:', (e as Error)?.message); }
+}
+
+/** 連携の保存と、連携した直後の処理（お店の情報の案内・自己紹介の提案・文体の取り込み・デモ解除・今日の投稿づくり） */
+async function finalizeThreadsConnect(userId: number, profile: any, longLivedToken: { access_token: string; expires_in: number }) {
+  const ctx = { user: { id: userId } };
+  // Check if this is a re-connection of an existing account
+  const existingAccounts = await db.getThreadsAccountsByUserId(ctx.user.id);
+  const isReconnection = existingAccounts.some(a => a.threadsUserId === profile.id);
+  
+  // Also check inactive accounts for re-activation
+  const allAccounts = await db.getAllThreadsAccountsByUserId(ctx.user.id);
+  const isReactivation = !isReconnection && allAccounts.some(a => a.threadsUserId === profile.id);
+  
+  // Check account limit for new accounts and re-activations (re-connection of an active account is fine)
+  // ★解除ずみのアカウントの再連携も上限に数える（解約後に昔のアカウントを全部戻せていた・2026-10-03）
+  if (!isReconnection) {
+    const subscription = await db.getSubscriptionByUserId(ctx.user.id);
+    const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
+    const plan = await db.withFreeGrace(ctx.user.id, getPlan(planId)); // 今いるフリーの方は10/31までこれまでの上限
+
+    if (plan && plan.features.maxThreadsAccounts !== -1) {
+      if (existingAccounts.length >= plan.features.maxThreadsAccounts) {
+        throw new TRPCError({ 
+          code: 'FORBIDDEN', 
+          message: `Threadsアカウント連携数の上限（${plan.features.maxThreadsAccounts}件）に達しています。` 
+        });
+      }
+    }
+  }
+  
+  // Calculate expiration date
+  const expiresAt = new Date();
+  expiresAt.setSeconds(expiresAt.getSeconds() + longLivedToken.expires_in);
+
+  // Save to database (upsert - creates new or updates existing)
+  await db.createThreadsAccount({
+    userId: ctx.user.id,
+    threadsUserId: profile.id,
+    threadsUsername: profile.username,
+    profilePictureUrl: profile.threads_profile_picture_url,
+    biography: profile.threads_biography,
+    accessToken: longLivedToken.access_token,
+    tokenExpiresAt: expiresAt,
+    // このトークンを返信権限付きで取得したか（threadsAuth.tsのスコープ既定と対で真実を記録）
+    hasReplyScope: (await import("./threadsAuth")).wantsReplyScope(ctx.user.id),
+    // 場所のタグ・Instagram同時シェアの権限を求めたか（審査の承認前は録画用ユーザーだけ）
+    grantedExtraScopes: (await import("./threadsAuth")).wantsExtraScopes(ctx.user.id).join(",") || null,
+  } as any);
+
+  // ★2つ目以降のアカウントを連携した直後に「どのお店の情報で投稿するか」を聞く（2026-10-06 三上様「早急に改善」）。
+  //   それまでは翌朝6時の投稿づくりで初めて案内していたため、選ぶまで投稿が止まったままになっていた
+  //   （プレステージ様：サロン用のアカウントで連携から約1週間、AI投稿が1本も公開されなかった）。
+  void (async () => {
+    try {
+      const accts: any[] = (await db.getThreadsAccountsByUserId(ctx.user.id)).filter((x: any) => x.isActive);
+      const mine = accts.find((x: any) => String(x.threadsUsername) === String(profile.username));
+      if (mine && !mine.defaultProjectId && accts.length >= 2) {
+        const { notifyProjectMissing } = await import('./accountProjectNotice');
+        await notifyProjectMissing({ id: ctx.user.id }, { ...mine, projectMissingNoticeAt: null });
+      }
+    } catch (e) { console.warn('[ThreadsConnect] お店の情報のご案内を送れませんでした:', (e as Error)?.message); }
+  })();
+
+  // ★連携直後：自己紹介が空のままなら、貼るだけの提案を公式LINEへ（2026-09-06 三上様指示）
+  void import('./profileAdvice').then((m) => m.nudgeAfterConnect(ctx.user.id, String(profile.username))).catch(() => undefined);
+  // ★本人がもともと投稿していた文章を「文体のお手本」に自動で取り込む（2026-09-07 三上様指示）
+  void (async () => {
+    try {
+      const accts: any[] = await db.getThreadsAccountsByUserId(ctx.user.id);
+      const a = accts.find((x: any) => String(x.threadsUsername) === String(profile.username));
+      if (a) {
+        const { fillStyleSamplesForAccount } = await import('./styleSamplesFromThreads');
+        const r = await fillStyleSamplesForAccount(Number(a.id));
+        console.log(`[StyleSamples] connect user=${ctx.user.id} @${profile.username}:`, JSON.stringify(r));
+        // ★過去投稿が無くて取り込めなかった方には、理想の投稿を貼ってもらう（2026-09-08 三上様指示）
+        if (!r.filled && r.reason !== 'already set (manual)' && r.projectId) {
+          try {
+            const lineIds = await db.getLineUserIdsForUser(ctx.user.id);
+            const { pushMessages } = await import('./lineNotify');
+            const msg = {
+              type: 'text',
+              text: 'Threadsの過去の投稿が少ないため、文章の手本を取り込めませんでした。\n「こういう投稿を出したい」という例を1〜3本貼っていただくと、毎日の投稿の言葉づかいや長さをそこに寄せて作ります。ご自身の投稿でも、いいなと思った他の方の投稿でも構いません。',
+              quickReply: { items: [{ type: 'action', action: { type: 'postback', label: '理想の投稿を貼る', data: `c=ideal&p=${r.projectId}`, displayText: '理想の投稿を貼る' } }] },
+            };
+            for (const to of lineIds) await pushMessages(to, [msg]);
+          } catch (e) { console.warn('[StyleSamples] ask-ideal push failed:', (e as Error)?.message); }
+        }
+      }
+    } catch (e) { console.warn('[StyleSamples] connect fill failed:', (e as Error)?.message); }
+  })();
+
+  // ★Threadsがつながった時点で、デモモードは自動で終了する。
+  //   以前は「本番モードに切り替える」を別途押す必要があり、連携済みなのに
+  //   「体験版として利用中」の帯が出続ける方がいた（2026-09-03 三上様指示）。
+  //   連携＝本番で使う意思なので、ここで切り替える。
+  await db.setUserDemoMode(ctx.user.id, false).catch((e) => {
+    console.error(`[ThreadsConnect] デモモード解除に失敗 user=${ctx.user.id}:`, e);
+  });
+
+  // 連携できた瞬間に、今日の分の投稿を作る（朝6時を待たない）
+  import('./autoPostScheduler')
+    .then(({ runAutoPostCatchUpForUser }) => runAutoPostCatchUpForUser(ctx.user.id, 'Threads連携'))
+    .catch(() => {});
+
+  return { success: true as const, needsConfirm: false as const, profile, isReconnection: isReconnection || isReactivation };
+}
+
 export const appRouter = router({
   system: systemRouter,
 
@@ -2119,6 +2235,10 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
     handleCallback: protectedProcedure
       .input(z.object({
         code: z.string(),
+        // ★つなぎたいアカウントの @ユーザー名（任意・shared/connectCheck.ts・2026-10-29）
+        expectedUsername: z.string().max(100).nullable().optional(),
+        intent: z.enum(['first', 'add', 'reconnect']).nullable().optional(),
+        device: z.enum(['android', 'iphone', 'pc']).nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { exchangeCodeForToken, exchangeForLongLivedToken, getThreadsProfile } = await import("./threadsAuth");
@@ -2141,106 +2261,43 @@ ${cloneNgWords.map((w) => `    ・「${w}」`).join('\n')}
         // Get user profile
         const profile = await getThreadsProfile(longLivedToken.access_token);
         
-        // Check if this is a re-connection of an existing account
-        const existingAccounts = await db.getThreadsAccountsByUserId(ctx.user.id);
-        const isReconnection = existingAccounts.some(a => a.threadsUserId === profile.id);
-        
-        // Also check inactive accounts for re-activation
-        const allAccounts = await db.getAllThreadsAccountsByUserId(ctx.user.id);
-        const isReactivation = !isReconnection && allAccounts.some(a => a.threadsUserId === profile.id);
-        
-        // Check account limit for new accounts and re-activations (re-connection of an active account is fine)
-        // ★解除ずみのアカウントの再連携も上限に数える（解約後に昔のアカウントを全部戻せていた・2026-10-03）
-        if (!isReconnection) {
-          const subscription = await db.getSubscriptionByUserId(ctx.user.id);
-          const planId = resolveEffectivePlanId(subscription?.planId, subscription?.status);
-          const plan = await db.withFreeGrace(ctx.user.id, getPlan(planId)); // 今いるフリーの方は10/31までこれまでの上限
-
-          if (plan && plan.features.maxThreadsAccounts !== -1) {
-            if (existingAccounts.length >= plan.features.maxThreadsAccounts) {
-              throw new TRPCError({ 
-                code: 'FORBIDDEN', 
-                message: `Threadsアカウント連携数の上限（${plan.features.maxThreadsAccounts}件）に達しています。` 
-              });
-            }
+        // ★つなぎたいアカウントか確かめる。違えば保存しない・投稿も作らない（ご本人に選んでいただく）
+        {
+          const { judgeConnect } = await import('../shared/connectCheck');
+          const active = await db.getThreadsAccountsByUserId(ctx.user.id);
+          const j = judgeConnect({ expected: input.expectedUsername, got: String(profile.username), intent: input.intent ?? null, existingUsernames: active.map((a: any) => String(a.threadsUsername ?? '')) });
+          if (j.kind !== 'ok') {
+            const { stashPendingConnect } = await import('./pendingConnect');
+            stashPendingConnect(ctx.user.id, { profile, longLivedToken, kind: j.kind, expected: j.kind === 'mismatch' ? j.expected : null, device: input.device ?? 'pc' });
+            void notifyConnectCheck(ctx.user.id, j.kind, j.kind === 'mismatch' ? j.expected : null, String(profile.username), input.device ?? 'pc', null);
+            console.log(`[ThreadsConnect] つなぎたいアカウントと違うため保留 user=${ctx.user.id} kind=${j.kind} expected=${j.kind === 'mismatch' ? j.expected : '-'} got=${profile.username}`);
+            return {
+              success: false as const,
+              needsConfirm: true as const,
+              kind: j.kind,
+              expected: j.kind === 'mismatch' ? j.expected : null,
+              profile: { id: String(profile.id), username: String(profile.username), name: (profile as any).name ?? null, threads_profile_picture_url: profile.threads_profile_picture_url ?? null },
+              isReconnection: false,
+            };
           }
         }
-        
-        // Calculate expiration date
-        const expiresAt = new Date();
-        expiresAt.setSeconds(expiresAt.getSeconds() + longLivedToken.expires_in);
+        return finalizeThreadsConnect(ctx.user.id, profile, longLivedToken);
+      }),
 
-        // Save to database (upsert - creates new or updates existing)
-        await db.createThreadsAccount({
-          userId: ctx.user.id,
-          threadsUserId: profile.id,
-          threadsUsername: profile.username,
-          profilePictureUrl: profile.threads_profile_picture_url,
-          biography: profile.threads_biography,
-          accessToken: longLivedToken.access_token,
-          tokenExpiresAt: expiresAt,
-          // このトークンを返信権限付きで取得したか（threadsAuth.tsのスコープ既定と対で真実を記録）
-          hasReplyScope: (await import("./threadsAuth")).wantsReplyScope(ctx.user.id),
-          // 場所のタグ・Instagram同時シェアの権限を求めたか（審査の承認前は録画用ユーザーだけ）
-          grantedExtraScopes: (await import("./threadsAuth")).wantsExtraScopes(ctx.user.id).join(",") || null,
-        } as any);
-
-        // ★2つ目以降のアカウントを連携した直後に「どのお店の情報で投稿するか」を聞く（2026-10-06 三上様「早急に改善」）。
-        //   それまでは翌朝6時の投稿づくりで初めて案内していたため、選ぶまで投稿が止まったままになっていた
-        //   （プレステージ様：サロン用のアカウントで連携から約1週間、AI投稿が1本も公開されなかった）。
-        void (async () => {
-          try {
-            const accts: any[] = (await db.getThreadsAccountsByUserId(ctx.user.id)).filter((x: any) => x.isActive);
-            const mine = accts.find((x: any) => String(x.threadsUsername) === String(profile.username));
-            if (mine && !mine.defaultProjectId && accts.length >= 2) {
-              const { notifyProjectMissing } = await import('./accountProjectNotice');
-              await notifyProjectMissing({ id: ctx.user.id }, { ...mine, projectMissingNoticeAt: null });
-            }
-          } catch (e) { console.warn('[ThreadsConnect] お店の情報のご案内を送れませんでした:', (e as Error)?.message); }
-        })();
-
-        // ★連携直後：自己紹介が空のままなら、貼るだけの提案を公式LINEへ（2026-09-06 三上様指示）
-        void import('./profileAdvice').then((m) => m.nudgeAfterConnect(ctx.user.id, String(profile.username))).catch(() => undefined);
-        // ★本人がもともと投稿していた文章を「文体のお手本」に自動で取り込む（2026-09-07 三上様指示）
-        void (async () => {
-          try {
-            const accts: any[] = await db.getThreadsAccountsByUserId(ctx.user.id);
-            const a = accts.find((x: any) => String(x.threadsUsername) === String(profile.username));
-            if (a) {
-              const { fillStyleSamplesForAccount } = await import('./styleSamplesFromThreads');
-              const r = await fillStyleSamplesForAccount(Number(a.id));
-              console.log(`[StyleSamples] connect user=${ctx.user.id} @${profile.username}:`, JSON.stringify(r));
-              // ★過去投稿が無くて取り込めなかった方には、理想の投稿を貼ってもらう（2026-09-08 三上様指示）
-              if (!r.filled && r.reason !== 'already set (manual)' && r.projectId) {
-                try {
-                  const lineIds = await db.getLineUserIdsForUser(ctx.user.id);
-                  const { pushMessages } = await import('./lineNotify');
-                  const msg = {
-                    type: 'text',
-                    text: 'Threadsの過去の投稿が少ないため、文章の手本を取り込めませんでした。\n「こういう投稿を出したい」という例を1〜3本貼っていただくと、毎日の投稿の言葉づかいや長さをそこに寄せて作ります。ご自身の投稿でも、いいなと思った他の方の投稿でも構いません。',
-                    quickReply: { items: [{ type: 'action', action: { type: 'postback', label: '理想の投稿を貼る', data: `c=ideal&p=${r.projectId}`, displayText: '理想の投稿を貼る' } }] },
-                  };
-                  for (const to of lineIds) await pushMessages(to, [msg]);
-                } catch (e) { console.warn('[StyleSamples] ask-ideal push failed:', (e as Error)?.message); }
-              }
-            }
-          } catch (e) { console.warn('[StyleSamples] connect fill failed:', (e as Error)?.message); }
-        })();
-
-        // ★Threadsがつながった時点で、デモモードは自動で終了する。
-        //   以前は「本番モードに切り替える」を別途押す必要があり、連携済みなのに
-        //   「体験版として利用中」の帯が出続ける方がいた（2026-09-03 三上様指示）。
-        //   連携＝本番で使う意思なので、ここで切り替える。
-        await db.setUserDemoMode(ctx.user.id, false).catch((e) => {
-          console.error(`[ThreadsConnect] デモモード解除に失敗 user=${ctx.user.id}:`, e);
-        });
-
-        // 連携できた瞬間に、今日の分の投稿を作る（朝6時を待たない）
-        import('./autoPostScheduler')
-          .then(({ runAutoPostCatchUpForUser }) => runAutoPostCatchUpForUser(ctx.user.id, 'Threads連携'))
-          .catch(() => {});
-
-        return { success: true, profile, isReconnection: isReconnection || isReactivation };
+    // ★つなぎたいアカウントと違ったときの、ご本人の選択（保留しておいた連携を使う／捨てる）
+    resolvePendingConnect: protectedProcedure
+      .input(z.object({ accept: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const { takePendingConnect } = await import('./pendingConnect');
+        const p = takePendingConnect(ctx.user.id);
+        if (!p) {
+          if (!input.accept) return { success: true as const, discarded: true as const };
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: '確認の時間が過ぎました。お手数ですが、もう一度「連携」を押してください。' });
+        }
+        void notifyConnectCheck(ctx.user.id, p.kind, p.expected, String(p.profile.username), p.device, input.accept ? 'accepted' : 'rejected');
+        if (!input.accept) return { success: true as const, discarded: true as const };
+        const r = await finalizeThreadsConnect(ctx.user.id, p.profile, p.longLivedToken);
+        return { ...r, discarded: false as const };
       }),
 
     // Disconnect account

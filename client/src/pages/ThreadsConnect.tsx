@@ -27,9 +27,27 @@ import { getLoginUrl } from '@/const';
 import PageGuide from '@/components/PageGuide';
 import { useEffect, useState, useRef } from 'react';
 import { isPhoneLike, CONNECT_PAGE_URL } from '@shared/mobileOAuth';
+import { connectDeviceOf, type ConnectIntent } from '@shared/connectCheck';
+import { WantedAccountDialog, ConnectMismatchDialog, type PendingConnectView } from '@/components/ConnectCheckDialogs';
 
 /** LINEから来られたことを、OAuthの往復をまたいで覚えておくための印 */
 const FROM_LINE_KEY = 'ts-oauth-from-line';
+/** 連携の目的・つなぎたいアカウント・端末を、OAuthの往復をまたいで覚えておく（shared/connectCheck.ts・2026-10-29）。
+ *  以前は useRef だけで覚えていたため、Threadsから戻ってページが読み直されると消え、
+ *  「同じアカウントが連携されました」の案内が一度も出ていなかった。 */
+const OAUTH_INTENT_KEY = 'ts-oauth-intent';
+const LAST_WANTED_KEY = 'ts-oauth-last-wanted';
+type StoredIntent = { intent: ConnectIntent; expected: string | null; device: 'android' | 'iphone' | 'pc'; at: number };
+function readStoredIntent(): StoredIntent | null {
+  try {
+    const raw = localStorage.getItem(OAUTH_INTENT_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as StoredIntent;
+    // 30分より前の印は使わない（別の日の連携の印が残っていても混ぜない）
+    if (!v || typeof v.at !== 'number' || Date.now() - v.at > 30 * 60_000) return null;
+    return v;
+  } catch { return null; }
+}
 
 export default function ThreadsConnect() {
   const { isAuthenticated, loading } = useAuth();
@@ -78,7 +96,9 @@ export default function ThreadsConnect() {
   useEffect(() => {
     if (oauthCode && isAuthenticated && !callbackProcessed.current) {
       callbackProcessed.current = true;
-      handleCallback.mutate({ code: oauthCode });
+      const stored = readStoredIntent();
+      oauthIntentRef.current = stored;
+      handleCallback.mutate({ code: oauthCode, expectedUsername: stored?.expected ?? null, intent: stored?.intent ?? null, device: stored?.device ?? device });
       setOauthCode(null);
     }
   }, [oauthCode, isAuthenticated]);
@@ -109,6 +129,14 @@ export default function ThreadsConnect() {
   // Track whether the user explicitly intended to add a DIFFERENT account
   // (set when they confirm the pre-OAuth guide modal)
   const userIntentRef = useRef<'add-different' | 'reconnect' | null>(null);
+  const oauthIntentRef = useRef<StoredIntent | null>(null);
+  const [device] = useState(() => (typeof navigator === 'undefined' ? 'pc' : connectDeviceOf(navigator.userAgent, navigator.maxTouchPoints || 0)));
+  // 連携の前に聞く「つなぎたいアカウント」（モードと初期値）
+  const [askWanted, setAskWanted] = useState<{ mode: 'reconnect' | 'switch'; initial: string | null } | null>(null);
+  // スマホの案内のあとも、聞いた名前を持ち越す
+  const wantedRef = useRef<string | null>(null);
+  // 違うアカウントが戻ってきたとき（保存していない）
+  const [pendingConnect, setPendingConnect] = useState<PendingConnectView | null>(null);
   const [showSameAccountGuide, setShowSameAccountGuide] = useState(false);
   // スマホで押されたときに先に出す「パソコンでお願いします」（中身は待たせている連携の種類）
   const [phoneGuideMode, setPhoneGuideMode] = useState<'reconnect' | 'switch' | null>(null);
@@ -153,12 +181,20 @@ export default function ThreadsConnect() {
   const handleCallback = trpc.threads.handleCallback.useMutation({
     onSuccess: (data) => {
       setIsProcessingCallback(false);
+      try { localStorage.removeItem(OAUTH_INTENT_KEY); } catch { /* 消せなくても30分で使わなくなる */ }
+      // ★つなぎたいアカウントと違った：保存していないので、ご本人に選んでいただく
+      if ((data as any).needsConfirm) {
+        const d = data as any;
+        setPendingConnect({ kind: d.kind, expected: d.expected ?? null, profile: d.profile });
+        userIntentRef.current = null;
+        return;
+      }
       // 連携と同時にサーバー側でデモモードが解除されるので、帯（DemoModeBanner）を即座に消す
       utils.setup.getDemoMode.invalidate();
       if (data.isReconnection) {
         // If the user clicked "別のThreadsアカウントを連携" but ended up reconnecting
         // the SAME account, show a guide explaining how to switch Threads account.
-        if (userIntentRef.current === 'add-different') {
+        if (userIntentRef.current === 'add-different' || oauthIntentRef.current?.intent === 'add') {
           setShowSameAccountGuide(true);
         } else {
           toast.success(t("Threadsとの接続をやり直しました（有効期限を更新）"));
@@ -179,6 +215,23 @@ export default function ThreadsConnect() {
       userIntentRef.current = null;
       try { localStorage.removeItem(FROM_LINE_KEY); } catch { /* 消せなくても支障はない */ }
       toast.error(`${t('連携エラー')}: ${error.message}`);
+    },
+  });
+
+  const resolvePending = trpc.threads.resolvePendingConnect.useMutation({
+    onSuccess: (data) => {
+      if (!data.discarded) {
+        setPendingConnect(null);
+        utils.setup.getDemoMode.invalidate();
+        toast.success(t("Threadsアカウントを連携しました"));
+        setJustConnected(true);
+        try { localStorage.removeItem(FROM_LINE_KEY); } catch { /* 支障なし */ }
+        refetch();
+      }
+    },
+    onError: (error) => {
+      setPendingConnect(null);
+      toast.error(error.message);
     },
   });
 
@@ -240,7 +293,15 @@ export default function ThreadsConnect() {
   //  - mode 'reconnect': reuse current Threads session (token refresh / first connect)
   //  - mode 'switch':    force re-authentication so the user can pick a different
   //                      Threads account (auth_type=reauthenticate)
-  const startOAuth = (mode: 'reconnect' | 'switch', fromPhoneGuide = false) => {
+  const startOAuth = (mode: 'reconnect' | 'switch', fromPhoneGuide = false, opts?: { wanted?: string | null; asked?: boolean; initial?: string | null }) => {
+    // ★先に「つなぎたいアカウント」を聞く（違うアカウントがつながったら保存せずに止めるため・2026-10-29）
+    if (!opts?.asked) {
+      let last: string | null = null;
+      try { last = localStorage.getItem(LAST_WANTED_KEY); } catch { /* なくてよい */ }
+      setAskWanted({ mode, initial: opts?.initial ?? last });
+      return;
+    }
+    wantedRef.current = opts.wanted ?? null;
     // ★スマホではThreadsアプリが許可画面を横取りして、ホームが開くだけになる。飛ぶ前に一度案内する
     if (!fromPhoneGuide && typeof navigator !== 'undefined' && isPhoneLike(navigator.userAgent, navigator.maxTouchPoints || 0)) {
       setPhoneGuideMode(mode);
@@ -259,6 +320,10 @@ export default function ThreadsConnect() {
       // ★LINEから来られた方は、戻ってきたときに「LINEに戻る」を出す必要がある。
       //   往路のクエリはThreadsの戻り先に引き継がれないので、ここで印を残す。
       if (fromLine) localStorage.setItem(FROM_LINE_KEY, '1');
+      const intent: ConnectIntent = mode === 'switch' ? 'add' : (accounts?.length || 0) > 0 ? 'reconnect' : 'first';
+      const stored: StoredIntent = { intent, expected: wantedRef.current, device, at: Date.now() };
+      localStorage.setItem(OAUTH_INTENT_KEY, JSON.stringify(stored));
+      if (wantedRef.current) localStorage.setItem(LAST_WANTED_KEY, wantedRef.current);
     } catch (e) {
       // Ignore localStorage errors
     }
@@ -280,8 +345,8 @@ export default function ThreadsConnect() {
   };
 
   // Per-account "再連携" button → token refresh for the SAME account
-  const handleReconnect = () => {
-    startOAuth('reconnect');
+  const handleReconnect = (username?: string | null) => {
+    startOAuth('reconnect', false, { initial: username ?? null });
   };
 
   const maxAccounts = subscription?.plan?.features?.maxThreadsAccounts || 0;
@@ -580,7 +645,7 @@ export default function ThreadsConnect() {
                   variant="outline"
                   size="sm"
                   className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                  onClick={handleReconnect}
+                  onClick={() => handleReconnect(account.threadsUsername)}
                   disabled={handleCallback.isPending}
                   title={t("Threadsのログイン画面でやり直して接続を作り直します（別のアカウントへの切り替えもこちら）")}
                 >
@@ -985,13 +1050,34 @@ export default function ThreadsConnect() {
             <Button
               variant="outline"
               className="w-full"
-              onClick={() => { const m = phoneGuideMode; setPhoneGuideMode(null); if (m) startOAuth(m, true); }}
+              onClick={() => { const m = phoneGuideMode; setPhoneGuideMode(null); if (m) startOAuth(m, true, { asked: true, wanted: wantedRef.current }); }}
             >
               {t("このままスマホで進める")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <WantedAccountDialog
+        open={askWanted !== null}
+        initial={askWanted?.initial ?? null}
+        onCancel={() => setAskWanted(null)}
+        onConfirm={(wanted) => { const a = askWanted; setAskWanted(null); if (a) startOAuth(a.mode, false, { asked: true, wanted }); }}
+      />
+
+      <ConnectMismatchDialog
+        pending={pendingConnect}
+        device={device}
+        busy={resolvePending.isPending}
+        onAccept={() => resolvePending.mutate({ accept: true })}
+        onRetry={() => {
+          const wanted = pendingConnect?.expected ?? null;
+          resolvePending.mutate({ accept: false }, {
+            onSettled: () => { setPendingConnect(null); startOAuth('switch', false, { asked: true, wanted }); },
+          });
+        }}
+        onClose={() => { resolvePending.mutate({ accept: false }); setPendingConnect(null); }}
+      />
 
       <Dialog open={showSameAccountGuide} onOpenChange={setShowSameAccountGuide}>
         <DialogContent className="max-w-md">
