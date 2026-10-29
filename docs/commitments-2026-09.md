@@ -415,6 +415,12 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - ピン留め確認 5アカウントすべて「ピン留めなし」（確認済み0）。11:00 フォローの未処理4件（香取様・大木様・斎藤様・山本様）。
 - 手元の main が origin/main と分岐していたため rebase（push はしていない・夜間整備で push）。
 
+### 2026-10-29 朝の点検（木曜）
+- 動いているコンテナは 417296e＝origin/main の先頭（10/28 12:55 JST 起動＝日中の反映・healthy）。Coolify API の 8000番は外から応答せず（ssh 経由で確認）。/api/health 200。AutoPost 64件生成・失敗0。AccountHealth 完了（accounts=28 restricted=0）。返信待ち 1件（#63 お礼のみ・10/25 に「返事不要のお礼」で処理済み）。LINE 残り 3,459 通。生成で消えた枠なし。不自然な投稿 0件。
+- 約束の照合（当日の予定数）：acc11 3 ✅／acc18 3（補填 extraPostsUntil=10/27 で終了・不足の点検に出ていない＝36件の補填は完了扱い）／acc38 4 ✅（慣らし分の補填 あと5件）／acc22 3（予定4のうち #5170 が canceled）／acc26 2 ✅（11/1まで+1）／acc25 累計15件不足・acc22 累計30件不足・acc21 累計51件不足は判断待ちのまま。昨日の公開 acc10 27件・acc36 21件は学習の枠どおり、ほかに契約＋補填を超えた方は無し。
+- 試験の切り口：今日の分は #5164（@shittoru_official 19:00・気をつけて）1件。脅し・断定・他施術の否定は無し（取り消しなし）。
+- ピン留め確認 5アカウントすべて「ピン留めなし」（確認済み0）。11:00 フォローの未処理4件（香取様・大木様・斎藤様・山本様）のまま。
+
 ### 2026-10-30 朝の点検（木曜）
 - デプロイは a5cfa00＝origin/main の先頭と一致（Coolify 記録 10/30 00:10 JST finished・SSH経由）。/api/health 200。AccountHealth 完了（accounts=29 restricted=0 missingAlerts=0）。AutoPost 66本生成・失敗0。返信待ち 1件（#63 お礼のみ）。LINE 残り 3,404 通。生成で消えた枠なし。不自然な投稿 0件。
 - 約束の照合（当日の予定数）：acc38 4 ✅（慣らし運転分の補填 あと4件）／acc22 4 ✅／acc26 2 ✅（11/1まで+1）／acc18 3（累計不足は解消＝shortfall-check の対象外）／acc11 3 ✅／acc25 3／acc28 3／acc27 3／acc31 3／acc33 3。
