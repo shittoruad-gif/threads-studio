@@ -57,7 +57,13 @@ for (const x of accts) {
     return e.kind === '消す' ? latest.some((t) => t.includes(norm(e.text))) : e.count * 2 >= pairs.length && latest.every((t) => !t.includes(norm(e.text)));
   });
   if (rec.length > 0 && !ended) flagged++;
-  console.log(`\n#${x.a} @${x.name}  手直し${x.n}本（${days}日）${ended ? '  ※ご契約終了（生成は止まっている・対象外）' : ''}`);
+  // 全文の書き換え（別の話を書いた回）は、言葉の直しには数えない（shared/editLessons.ts keptRatio）。何本あったかだけ出す
+  const { keptRatio, EDIT_LESSONS } = await import('../../shared/editLessons');
+  const rewrites = pairs.filter((p) => keptRatio(p.before, p.after) < EDIT_LESSONS.targetedEditKeptRatio).length;
+  console.log(`\n#${x.a} @${x.name}  手直し${x.n}本（${days}日）${rewrites > 0 ? `・うち全文の書き換え ${rewrites}本` : ''}${ended ? '  ※ご契約終了（生成は止まっている・対象外）' : ''}`);
+  // ご本人が3回以上そのまま書いている行（決まった挨拶・締め・URLなど）。生成で真似させるより定型として付ける方が確実＝三上様の判断待ちで報告に載せる
+  const fixedLines = Array.from(ownLineCount.entries()).filter(([, n]) => n >= 3).sort((p, q) => q[1] - p[1]).slice(0, 4);
+  for (const [l, n] of fixedLines) console.log(`  定型「${l.slice(0, 60)}」 ${n}本でそのまま`);
   if (rec.length === 0) { console.log('  くり返している直し：なし'); continue; }
   for (const e of rec) {
     const n = latestFor(e).length;

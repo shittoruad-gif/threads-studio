@@ -27,6 +27,11 @@ export const EDIT_LESSONS = {
   maxRules: 8,
   /** プロンプトに見せる「直す前→直した後」の組 */
   showPairs: 3,
+  /**
+   * 「言葉を直した」と見る下限：直す前の文のうち、4文字以上つながったまま残っている割合。
+   * これより少なければ全文の書き換え（別の話を書いた）とみなし、くり返しの直し（recurringEdits）には数えない。
+   */
+  targetedEditKeptRatio: 0.3,
 } as const;
 
 const clip = (s: string, n: number) => String(s || "").replace(/<\/?\s*(pair|before|after)[^>]*>/gi, "").slice(0, n);
@@ -102,21 +107,38 @@ export function buildEditLessonsNote(rules: readonly string[], pairs: readonly E
 
 /** 文字単位の差分（最長共通部分列）で、after にだけある連続した文字のまとまりを返す */
 function insertedSegments(beforeRaw: string, afterRaw: string): string[] {
+  return diffWalk(beforeRaw, afterRaw).inserted;
+}
+
+/**
+ * 直す前の文のうち、直した後にも4文字以上つながったまま残っている割合（0〜1）。
+ * 1に近いほど「言葉を直した」、0に近いほど「全文を書き換えた（別の話を書いた）」。
+ */
+export function keptRatio(beforeRaw: string, afterRaw: string): number {
+  const d = diffWalk(beforeRaw, afterRaw);
+  if (d.beforeLength === 0) return 1;
+  return d.keptRuns.map((r) => Array.from(r).length).filter((l) => l >= 4).reduce((s, l) => s + l, 0) / d.beforeLength;
+}
+
+/** 文字単位の差分（最長共通部分列）。after にだけある連続した文字のまとまりと、両方に残っている連続したまとまり */
+function diffWalk(beforeRaw: string, afterRaw: string): { inserted: string[]; keptRuns: string[]; beforeLength: number } {
   const a = Array.from(String(beforeRaw || "").replace(/[\s　]/g, "")).slice(0, 700);
   const b = Array.from(String(afterRaw || "").replace(/[\s　]/g, "")).slice(0, 700);
   const n = a.length, m = b.length;
   const dp: Uint16Array[] = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
   for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
-  const segs: string[] = [];
-  let cur = "";
+  const inserted: string[] = [];
+  const keptRuns: string[] = [];
+  let cur = "", kept = "";
   let i = 0, j = 0;
   while (j < m) {
-    if (i < n && a[i] === b[j]) { if (cur) { segs.push(cur); cur = ""; } i++; j++; }
-    else if (i < n && dp[i + 1][j] >= dp[i][j + 1]) { i++; }
-    else { cur += b[j]; j++; }
+    if (i < n && a[i] === b[j]) { if (cur) { inserted.push(cur); cur = ""; } kept += b[j]; i++; j++; }
+    else if (i < n && dp[i + 1][j] >= dp[i][j + 1]) { if (kept) { keptRuns.push(kept); kept = ""; } i++; }
+    else { if (kept) { keptRuns.push(kept); kept = ""; } cur += b[j]; j++; }
   }
-  if (cur) segs.push(cur);
-  return segs;
+  if (cur) inserted.push(cur);
+  if (kept) keptRuns.push(kept);
+  return { inserted, keptRuns, beforeLength: n };
 }
 
 /**
@@ -157,6 +179,26 @@ export function ownerRemovedRuns(pairs: readonly EditPair[], minLen = 4): string
   return ownerAddedRuns(pairs.map((p) => ({ before: p.after, after: p.before })), minLen);
 }
 
+/**
+ * ご本人が直した後の文に、そのまま（1行まるごと同じ）minCount 本以上書いている行＝決まった挨拶・締め・署名。
+ * 2026-10-29 #26：毎回の挨拶「ハイサイ♪はいさい整骨院の比嘉です(^^)」の言葉（比嘉・ハイサイ）が「使いすぎの話題」に数えられ、
+ * 決まり「冒頭に挨拶を足す」どおりに書いた文が sameTopic で作り直され、最後は挨拶が落ちていた。この行の言葉は毎回出てよい。
+ */
+export function ownerFixedLines(pairs: readonly EditPair[], minCount = 2): string[] {
+  const count = new Map<string, { n: number; text: string }>();
+  for (const p of pairs) {
+    const seen = new Set<string>();
+    for (const line of String(p.after || "").split(/\n+/)) {
+      const key = line.replace(/[\s　]/g, "");
+      if (Array.from(key).length < 4 || seen.has(key)) continue;
+      seen.add(key);
+      const cur = count.get(key);
+      if (cur) cur.n++; else count.set(key, { n: 1, text: line.trim() });
+    }
+  }
+  return Array.from(count.values()).filter((v) => v.n >= minCount).sort((a, b) => b.n - a.n).map((v) => v.text).slice(0, 6);
+}
+
 export interface RecurringEdit { kind: "足す" | "消す"; text: string; count: number }
 
 /**
@@ -165,9 +207,19 @@ export interface RecurringEdit { kind: "足す" | "消す"; text: string; count:
  */
 export function recurringEdits(pairs: readonly EditPair[], minCount = 3): RecurringEdit[] {
   const out: RecurringEdit[] = [];
+  // ★全文を書き換えた手直し（直す前の文がほとんど残っていない）は「この言葉を消した／足した」ではなく「別の話を書いた」なので数えない。
+  //   2026-10-29 #26：ご本人が別の話題に全文を書き換えた回で、AIが決まりどおり付けた挨拶「ハイサイ♪はいさい整骨院」が
+  //   「消した言葉」に5回数えられ、生成の指示に「使わない・厳守」と入って決まり「冒頭に挨拶を書く」と食い違っていた。
+  //   同じく、書き換えた全文が「足した言葉」として他の直しと4文字重なるだけで10回扱いになっていた。
+  const targeted = pairs.filter((p) => keptRatio(p.before, p.after) >= EDIT_LESSONS.targetedEditKeptRatio);
   for (const kind of ["足す", "消す"] as const) {
-    const lists = pairs.map((p) => (kind === "足す" ? ownerAddedRuns([p], 3) : ownerRemovedRuns([p], 3)));
-    const same = (x: string, y: string) => commonRunLength(x, y) >= Math.min(4, Array.from(x).length, Array.from(y).length);
+    const lists = targeted.map((p) => (kind === "足す" ? ownerAddedRuns([p], 3) : ownerRemovedRuns([p], 3)));
+    // 「同じ直し」＝片方がもう片方をほぼ含む（共通する連続部分が、短い方の6割以上）。4文字が偶然重なるだけでは同じと見ない
+    const same = (x: string, y: string) => {
+      const shorter = Math.min(Array.from(x).length, Array.from(y).length);
+      const run = commonRunLength(x, y);
+      return run >= Math.min(4, shorter) && run >= Math.ceil(shorter * 0.6);
+    };
     const counted: string[] = [];
     for (const runs of lists) {
       for (const r of runs) {

@@ -924,6 +924,8 @@ export async function generateAutoPost(
     let editLessonsNote = '';
     let ownerEditCount = 0;
     let ownerAdded: string[] = [];
+    // ご本人が毎回そのまま書く行（決まった挨拶・締め）。この行の言葉は「使いすぎの話題」に数えない（2026-10-29 #26）
+    let ownerFixed: string[] = [];
     let ownerRemovedFirm: string[] = [];
     let ownerLikesQuestion = false;
     let ownerAfterTexts: string[] = [];
@@ -936,6 +938,7 @@ export async function generateAutoPost(
       ownerEditCount = lessons.pairs.length;
       ownerEditPairs = lessons.pairs;
       ownerAdded = (await import('../shared/editLessons')).ownerAddedRuns(lessons.pairs);
+      ownerFixed = (await import('../shared/editLessons')).ownerFixedLines(lessons.pairs);
       ownerAfterTexts = lessons.pairs.slice(0, 3).map((p) => p.after);
       // お手本（直した後の文）も、このアカウントの手直しだけから作る（以前はお客様単位で別のアカウントの直しが混ざっていた）
       editPreferenceNote = buildPreferenceNote(lessons.pairs.slice(0, 5).map((p) => ({ originalContent: p.before, postContent: p.after })));
@@ -1102,7 +1105,9 @@ export async function generateAutoPost(
     let topicAnchors: string[] = [];
     // ご本人から「同じ」と言われた・見送りが続く方か（作り直しの理由の書き方を変えるだけ・2026-10-05）
     let sameComplained = false;
-    const freshProtect = [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title];
+    // ★ご本人が毎回そのまま書く行（挨拶「ハイサイ♪はいさい整骨院の比嘉です(^^)」など）の言葉も毎回出てよい（2026-10-29 #26：
+    //   「比嘉・ハイサイ」が使いすぎに数えられ、決まりどおり挨拶を付けた文が sameTopic で作り直され、最後は挨拶が落ちていた）
+    const freshProtect = [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title, ...ownerFixed];
     try {
       const ft = await import('../shared/freshTopic');
       const declined7 = await db.getRecentDeclinedContents(threadsAccountId, 7, 10).catch(() => [] as string[]);
@@ -1127,8 +1132,8 @@ export async function generateAutoPost(
             : [project.strength, project.usp, project.proof, project.n1Customer, (project as any).belief,
               (project as any).customerWords, ...(cr.realProofs ?? []), ...(cr.realEpisodes ?? []), ...(cr.faq ?? []), ...(cr.menu ?? [])])
             .map((m) => dropAvoided(m as string, '主題の候補')),
-          // 毎回出てよい言葉（店名・地名・業種・対象のお客様）は数えない
-          protect: [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title],
+          // 毎回出てよい言葉（店名・地名・業種・対象のお客様・ご本人が毎回書く挨拶や締め）は数えない
+          protect: freshProtect,
           index: postTypeIndex * PURPOSES.length + purposeIndex,
           // ★ご本人が3回以上消している言葉を含む材料は、今日の主題にしない（10/8 #25：4回消している「文化勲章の授賞式」の材料が
           //   主題に選ばれ、「主題を書け」と「この言葉は書かない」がぶつかっていた）。末尾の助詞は外して材料と照らす

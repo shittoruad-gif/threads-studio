@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildEditLessonsPrompt, parseEditLessons, buildEditLessonsNote, EDIT_LESSONS, ownerAddedRuns, recurringEdits } from "../shared/editLessons";
+import { buildEditLessonsPrompt, parseEditLessons, buildEditLessonsNote, EDIT_LESSONS, ownerAddedRuns, recurringEdits, keptRatio, ownerFixedLines } from "../shared/editLessons";
 
 // 2026-10-08 クレーム「ほんまにAI学習しとる？訂正しても毎回同じ所を訂正しとる感じがする」
 const pairs = [
@@ -81,6 +81,46 @@ describe("同じ直しのくり返し（夜間整備の見張り）", () => {
   it("消した言葉のくり返しも拾う", () => {
     const ps = [1, 2, 3].map((i) => ({ before: `今日の話${i}。セルフケアが大切です。`, after: `今日の話${i}。` }));
     expect(recurringEdits(ps).some((e) => e.kind === "消す" && e.text.includes("セルフケア"))).toBe(true);
+  });
+  // 2026-10-29 #26：別の話題に全文を書き換えた回で、決まりどおり付いていた挨拶が「消した言葉（使わない・厳守）」に数えられ、
+  // 「冒頭に挨拶を書く」決まりと食い違っていた
+  it("全文を書き換えた手直しは「この言葉を消した／足した」に数えない（挨拶を消したことにならない）", () => {
+    const greet = "ハイサイ♪はいさい整骨院の比嘉です(^^)";
+    const ps = [
+      { before: `${greet}\n〜施術頻度の考え方〜\n施術って、自分の生活スタイルに合わせたいですよね？\n忙しい毎日でも、無理なく続けられるのが一番です😊`, after: "ガッツリウチナーグチ🌺\n『アレ、1回ガンミカしとかんとよぉ』\n↪️あの人、1回脅かしとかなきゃよ\n子供の頃に親に言われた事なんかもあるかも知れません😵‍💫" },
+      { before: `${greet}\n膝が痛いからと安静にしすぎると、逆効果になることもあります。\n70代男性Bさんも、施術とリハビリで散歩を楽しめるようになりました😊`, after: "ドラマ『おいしい給食』にて、もずく丼✨が出ていましたが私は食べた事がありません😳\n我が母校では出なかったのかな？（笑" },
+      { before: `${greet}\nちょこっとウチナークトゥバ🌺\n『イチャリバチョーデー』は、「一度会えば皆んな兄弟」という意味です。`, after: "〜急性期の症状②〜\n🔥炎症の五大徴候🔥\n1.自発痛（安静時痛）\n2.熱感（患部が熱い）\n3.腫脹（腫れている）\nこのような症状がある場合は炎症があり一般的に72時間続くと言われています😵" },
+      { before: `${greet}\n痛い場所だけ揉んでもダメ。20年の経験で、身体全体を見て根本にアプローチします😊`, after: "〜急性期の症状③〜\n🔥自宅での注意点🔥\n・お風呂はシャワー程度\n・お酒はNG\n・患部を5〜10分アイシング\n急性期の炎症期間（72時間）は患部に傷がある状態です💦" },
+    ];
+    expect(recurringEdits(ps).some((e) => e.kind === "消す" && e.text.includes("ハイサイ"))).toBe(false);
+    expect(recurringEdits(ps).length).toBe(0);
+    expect(keptRatio(ps[0].before, ps[0].after)).toBeLessThan(0.3);
+    // 言葉を直しただけなら残っている
+    expect(keptRatio("伏見区の僕です。腰の話。", "伏見区で接骨院をしている僕です。腰の話。")).toBeGreaterThan(0.6);
+  });
+  it("ご本人が毎回そのまま書く行（挨拶）は定型として拾い、その言葉は「使いすぎの話題」に数えない", async () => {
+    const greet = "ハイサイ♪はいさい整骨院の比嘉です(^^)";
+    const ps = [
+      { before: "膝の話。", after: `${greet}\n\n〜急性期の症状②〜\n炎症の五大徴候を知っておきましょう。` },
+      { before: "腰の話。", after: `${greet}\n\n〜急性期の症状③〜\n自宅での注意点。お風呂はシャワー程度に。` },
+      { before: "肩の話。", after: "ドラマの話。もずく丼が出ていました。" },
+    ];
+    const fixed = ownerFixedLines(ps);
+    expect(fixed).toEqual([greet]);
+    const { planFreshTopic } = await import("../shared/freshTopic");
+    const recentPosts = Array.from({ length: 8 }, (_, i) => `${greet}\n今日は${["肩", "腰", "膝", "首", "足", "手", "背中", "股関節"][i]}の話です。`);
+    const p = planFreshTopic({ recentPosts, materials: ["業界歴20年"], protect: ["はいさい整骨院", "八千代市", ...fixed] });
+    for (const w of ["比嘉", "ハイサイ", "整骨院"]) expect(p.overused).not.toContain(w);
+  });
+  it("4文字が偶然重なるだけの別々の文は「同じ直し」に数えない", () => {
+    const ps = [
+      { before: "今日の話1。", after: "今日の話1。朝の冷え込みで腰が固まる方はご相談ください。" },
+      { before: "今日の話2。", after: "今日の話2。長く座った後の立ち上がりがつらい方はご相談ください。" },
+      { before: "今日の話3。", after: "今日の話3。運動の後のケアで迷ったらご相談ください。" },
+    ];
+    const r = recurringEdits(ps);
+    // 共通するのは「ご相談ください」だけ。長い文のどれかを代表にして3回とは数えない
+    expect(r.every((e) => Array.from(e.text).length <= 12)).toBe(true);
   });
 });
 
