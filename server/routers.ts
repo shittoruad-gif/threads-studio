@@ -3446,6 +3446,11 @@ ${input.commentText}
         pendingPlanEffectiveAt: null,
       } as any);
 
+      {
+        const { notifyContract } = await import('./contractNotice');
+        await notifyContract('cancel_requested', { userId: ctx.user.id, planId: subscription.planId, until: stillPaidFor ? periodEnd : null,
+          detail: stillPaidFor ? 'ご本人がアプリから解約しました。期間の終わりまでは投稿が続きます。' : 'ご本人がアプリから解約しました。投稿は止まります。' });
+      }
       return {
         success: true,
         accessUntil: stillPaidFor && periodEnd ? periodEnd.toISOString() : null,

@@ -107,6 +107,7 @@ export async function runBillingReconcileJob(): Promise<ReconcileResult> {
       await db.update(subscriptions).set({ status: 'canceled' }).where(eq(subscriptions.id, row.id));
       result.updated.push({ subscriptionId: row.id, userId: row.userId, from: 'active', to: 'canceled' });
       console.log(`[BillingReconcile] sub=${row.id} 解約の猶予期間が終了 → canceled`);
+      { const { notifyContract } = await import('./contractNotice'); await notifyContract('ended', { userId: Number(row.userId), planId: row.planId, detail: '解約後の利用期間が終わり、投稿を止めました。' }); }
       continue;
     }
     let remote: any;
@@ -132,6 +133,7 @@ export async function runBillingReconcileJob(): Promise<ReconcileResult> {
         if (periodEnd) await db.update(subscriptions).set({ currentPeriodEnd: periodEnd }).where(eq(subscriptions.id, row.id));
         result.updated.push({ subscriptionId: row.id, userId: row.userId, from: `UnivaPay ${remoteStatus}`, to: 'UnivaPay 解約（解約の予約どおり・利用は期間の終わりまで）' });
         console.log(`[BillingReconcile] sub=${row.id} 解約の予約どおり UnivaPay の定期課金を止めた`);
+        { const { notifyContract } = await import('./contractNotice'); await notifyContract('cancel_stopped', { userId: Number(row.userId), planId: row.planId, until: periodEnd, detail: '次の決済は起きません。期間の終わりまでは投稿が続きます。' }); }
       } catch (e: any) {
         result.failed.push({ subscriptionId: row.id, reason: `解約の予約を UnivaPay に反映できません: ${String(e?.message ?? e).slice(0, 150)}` });
       }

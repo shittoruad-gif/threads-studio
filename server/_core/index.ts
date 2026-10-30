@@ -561,8 +561,11 @@ async function startServer() {
         // プラン特定用（継続額を最優先）
         const planAmount = subscriptionAmount ?? chargeAmount ?? anyAmount;
 
-        const univapaySubId: string | null =
-          data?.subscription_id ?? data?.subscription?.id ?? data?.id ?? event?.id ?? null;
+        // ★課金の知らせの data.id は「課金の番号」で、定期課金の番号ではない。課金の知らせでは使わない
+        //   （2026-10-30 カード確認の1円の課金番号を、契約の定期課金番号として書き込んでいた）
+        const univapaySubId: string | null = /charge|payment/.test(eventType)
+          ? (data?.subscription_id ?? data?.subscription?.id ?? null)
+          : (data?.subscription_id ?? data?.subscription?.id ?? data?.id ?? event?.id ?? null);
 
         // 課金イベントの一意ID（Webhook再送の二重カウント防止に使う）
         const chargeEventId: string | null =
@@ -652,6 +655,28 @@ async function startServer() {
 
         const existing = await db.getSubscriptionByUserId(user.id);
 
+        // ★Threads Studio の契約を変えてはいけない知らせを先に見分ける（shared/billingEventGuard.ts・2026-10-30）。
+        //   カード確認の1円・カードの登録し直し・他のサービスの決済で、解約済みの方の契約が戻り、投稿が再開していた。
+        {
+          const { judgeBillingEvent, BILLING_GUARD_LABEL } = await import('../../shared/billingEventGuard');
+          const g = judgeBillingEvent({
+            eventType, dataType: data?.type ?? null, metadata: data?.metadata ?? null,
+            eventSubscriptionId: data?.subscription_id ?? data?.subscription?.id ?? null,
+            matchedPlanId, pendingPlanId: existing?.pendingPlanId ?? null,
+            existingStatus: existing?.status ?? null, existingSubscriptionId: existing?.univapaySubscriptionId ?? null,
+            wouldActivate: !isCanceled && !isFailed && (isPaidCharge || isSubscriptionStart),
+          });
+          if (g.ignore && g.reason) {
+            console.log(`[Univapay Webhook] 契約は変えずに見送り（${BILLING_GUARD_LABEL[g.reason]}）: user=${user.id} event=${eventType} amount=${amount} status=${existing?.status ?? 'なし'}`);
+            if (g.notify) {
+              const { notifyContract } = await import('../contractNotice');
+              await notifyContract('ignored', { userId: user.id, name: user.name, email: user.email, planId: existing?.planId ?? null, amount,
+                detail: `理由：${BILLING_GUARD_LABEL[g.reason]}\nいまの契約：${existing?.status ?? 'なし'}（そのまま）\n他のサービスの決済の可能性が高いため、Threads Studio の契約には使っていません。` });
+            }
+            return res.json({ received: true, note: `ignored: ${g.reason}` });
+          }
+        }
+
         if (isCanceled) {
           // ★同一メールで複数サブスクがあり得る（二重契約の整理・旧契約の解約等）。
           //   イベントのサブスクIDがアプリに記録されたIDと食い違う場合、それは
@@ -680,6 +705,10 @@ async function startServer() {
           }
           if (existing) {
             await db.updateSubscription(existing.id, { status: 'canceled' });
+            if (existing.status !== 'canceled') {
+              const { notifyContract } = await import('../contractNotice');
+              await notifyContract('canceled', { userId: user.id, name: user.name, email: user.email, planId: existing.planId, detail: `決済側（UnivaPay）で解約になりました（${eventType}）。自動投稿は止まります。` });
+            }
           }
           // ★代理店プランの解約: 配下クライアントは即停止せず「引き継ぎ猶予」に入れる。
           //   運営が同じ金額での直接契約を案内して引き継げるようにする
@@ -863,6 +892,17 @@ async function startServer() {
                 lastDunningReminderAt: null,
               });
               console.log(`[Univapay Webhook] サブスク更新→active: user=${user.id} plan=${planId}${isDuplicateCharge ? '（再送イベント・回数据え置き）' : ''}${pendingPlanId ? `（予定していたプラン変更 ${existing.planId}→${pendingPlanId} を適用）` : ''}`);
+              // ★契約・解約の知らせ（server/contractNotice.ts・2026-10-30）。毎月の更新（有効→有効）は送らない
+              {
+                const prev = existing.status;
+                const ev = prev === 'trialing' ? 'trial_to_paid' : prev === 'canceled' ? 'restarted' : prev === 'past_due' ? 'recovered'
+                  : (pendingPlanId && pendingPlanId !== existing.planId) ? 'plan_changed' : null;
+                if (ev && !isDuplicateCharge) {
+                  const { notifyContract } = await import('../contractNotice');
+                  await notifyContract(ev as any, { userId: user.id, name: user.name, email: user.email, planId, fromPlanId: existing.planId, amount: chargeAmount, until: currentPeriodEnd,
+                    detail: ev === 'restarted' ? '解約済みだった方の契約が、プランの額の決済で戻りました。ご本人のお申し込みか確かめてください。' : null });
+                }
+              }
               // 予定していたプラン変更が切り替わったことを、ご本人にお知らせする。
               if (pendingPlanId && pendingPlanId !== existing.planId) {
                 try {
@@ -895,6 +935,10 @@ async function startServer() {
                 lastChargeEventId: chargeEventId ?? undefined,
               } as any);
               console.log(`[Univapay Webhook] サブスク新規作成→active: user=${user.id} plan=${planId}`);
+              {
+                const { notifyContract } = await import('../contractNotice');
+                await notifyContract('new_paid', { userId: user.id, name: user.name, email: user.email, planId, amount: chargeAmount, until: currentPeriodEnd });
+              }
               // 初めての有料化。フリー（上限0）からの引き上げとして扱う。
               try {
                 const { raiseAutoPostFrequencyOnUpgrade } = await import('../planUpgrade');
@@ -1033,6 +1077,14 @@ async function startServer() {
               `[Univapay Webhook] お申し込み→${status}: user=${user.id} plan=${planId} ` +
               (trialEndsAt ? `トライアル終了=${trialEndsAt.toISOString()}` : 'トライアルなし（キャンペーン価格）'),
             );
+            {
+              const { notifyContract } = await import('../contractNotice');
+              const prev = existing?.status ?? null;
+              await notifyContract(prev === 'canceled' ? 'restarted' : status === 'trialing' ? 'new_trial' : 'new_paid', {
+                userId: user.id, name: user.name, email: user.email, planId, fromPlanId: existing?.planId ?? null, amount: chargeAmount, until: trialEndsAt,
+                detail: prev === 'canceled' ? '解約済みだった方の再お申し込みです。' : status === 'trialing' ? 'お試し期間の終わりに初回のお支払いになります。' : null,
+              });
+            }
             // ★お申し込みの時点で、自動投稿の回数をそのプランの上限まで引き上げる。
             //   セミナー価格・紹介コードのお客様はこの経路だけを通るので、
             //   ここが抜けていると「プロなのに1日1回」のまま始まってしまう。
