@@ -393,10 +393,18 @@ export function pickAngle(
     excludeLocalTalk?: boolean;
     /** 地元の会話の割合（既定は LOCAL_TALK.share。テスト・調整用） */
     localTalkShare?: number;
+    /** 今回は選ばない切り口（「代わりを作る」で、見送られた切り口を避ける・2026-10-30） */
+    excludeAngleIds?: readonly string[];
   } = {},
 ): PostAngle {
   let pool = activeAngles(now, mode);
   if (opts.excludeLocalTalk) pool = pool.filter((a) => a.id !== LOCAL_TALK_ANGLE_ID);
+  // ★2026-10-30 どい接骨院様（acc37）：「地元の会話」に✕→「代わりを作る」がまた地元の会話（#5322→#5323）で、続けて見送り。
+  //   代わりの投稿は見送った切り口を外して選ぶ（外すと候補が無くなるときだけ元のまま）。
+  if (opts.excludeAngleIds?.length) {
+    const rest = pool.filter((a) => !opts.excludeAngleIds!.includes(a.id));
+    if (rest.length > 0) pool = rest;
+  }
   // ★試験用の切り口（三上様のアカウントだけ）。勉強会の型を足して比べる。
   const experimentIds = new Set<string>();
   if (opts.studyExperiment) {

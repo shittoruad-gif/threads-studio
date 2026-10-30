@@ -644,6 +644,8 @@ export async function generateAutoPost(
     siblingTexts?: string[];
     /** 写真・動画を付ける回（server/mediaItems.ts・2026-10-26） */
     mediaItem?: { id: number; kind: string; description: string | null } | null;
+    /** 今回は選ばない切り口（「代わりを作る」で見送られた切り口・2026-10-30） */
+    avoidAngleIds?: string[];
   } = {},
 ): Promise<boolean> {
   const postType = POST_TYPES[postTypeIndex % POST_TYPES.length];
@@ -761,7 +763,7 @@ export async function generateAutoPost(
       return false;
     })();
     angle = forced
-      ?? pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment, excludeLocalTalk });
+      ?? pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment, excludeLocalTalk, excludeAngleIds: opts.avoidAngleIds });
     // ★他店の当たり型の枠（2026-09-28 三上様指示・shared/hitPatterns.ts）。型が読めなければ通常の切り口のまま
     if (!forced && opts.hitPatternId) {
       try {
@@ -788,7 +790,7 @@ export async function generateAutoPost(
       const { isNaturalStyleUser } = await import('../shared/naturalStyle');
       if (isNaturalStyleUser(userId)) {
         for (let k = 0; k < 6 && skipNatural(angle); k++) {
-          angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment, excludeLocalTalk });
+          angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment, excludeLocalTalk, excludeAngleIds: opts.avoidAngleIds });
         }
         if (skipNatural(angle)) angle = null;
         console.log(`[AutoPost] 自然な書き方モード：宣伝調の切り口を外した account=${threadsAccountId} → ${angle?.id ?? 'なし'}`);
@@ -3123,6 +3125,24 @@ async function recentOwnThreadsPosts(accountId: number): Promise<string[]> {
  * 元の予定時刻がまだ先ならその時刻に、過ぎていれば今日の次の時間帯（21時以降は翌朝10時台）に置く。
  * @returns 作れたら true（承認カードは呼び出し側が出す）
  */
+/** 代わりの投稿で選ばない切り口：見送った投稿と、同じアカウント・同じ枠（予定時刻）で見送られた投稿の切り口 */
+export async function replacementAvoidAngles(userId: number, post: any): Promise<string[]> {
+  const out = new Set<string>();
+  if (post?.angle) out.add(String(post.angle));
+  try {
+    const slot = new Date(post.scheduledAt).getTime();
+    const mine = (await db.getScheduledPostsByUserId(userId, Number(post.threadsAccountId))) as any[];
+    for (const p of mine) {
+      if (p.status !== 'canceled' || p.clientRating !== 'bad' || !p.angle) continue;
+      // 代わりは元の時刻が過ぎていると時刻がずれるので、30分以内の見送りも同じ枠の続きとみなす
+      const recent = Date.now() - new Date(p.updatedAt ?? 0).getTime() < 30 * 60 * 1000;
+      if (new Date(p.scheduledAt).getTime() !== slot && !recent) continue;
+      out.add(String(p.angle));
+    }
+  } catch { /* 読めなければ見送った1本の切り口だけ外す */ }
+  return Array.from(out);
+}
+
 export async function generateReplacementPost(userId: number, canceledPostId: number): Promise<boolean> {
   const post: any = await db.getScheduledPostById(canceledPostId);
   if (!post || Number(post.userId) !== Number(userId)) return false;
@@ -3154,12 +3174,16 @@ export async function generateReplacementPost(userId: number, canceledPostId: nu
   const hint = `お客様が見送った下書き：「${String(post.postContent || '').replace(/\s+/g, ' ').slice(0, 160)}」。同じ切り口・同じ言い回し・同じ書き出しを避け、別の話題で書く`;
   const typeIdx = Math.floor(Math.random() * POST_TYPES.length);
   const purposeIdx = Math.floor(Math.random() * PURPOSES.length);
+  // 見送った切り口は選ばない。同じ枠で「代わりを作る」を続けて見送った分も含める
+  //   （acc37：deep_worry ✕ → 代わり local_talk ✕ → 代わり local_talk ✕）
+  const avoidAngleIds = await replacementAvoidAngles(userId, post);
   const rk = rejectKey(userId, accountId, 99);
   clearReject(rk);
   let ok = false;
   for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
     const h = attempt === 1 ? hint : `${hint}。${lastRejectReason.get(rk) ?? ''}`;
-    ok = await generateAutoPost(userId, project, typeIdx, purposeIdx, accountId, 99, true, null, eff.postLength, at, h, attempt === 3);
+    ok = await generateAutoPost(userId, project, typeIdx, purposeIdx, accountId, 99, true, null, eff.postLength, at, h, attempt === 3,
+      false, { avoidAngleIds });
   }
   clearReject(rk);
   if (ok) console.log(`[AutoPost] 代わりの投稿を作成 user=${userId} account=${accountId} 元=${canceledPostId}`);
