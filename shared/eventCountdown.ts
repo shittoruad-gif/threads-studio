@@ -93,8 +93,32 @@ export function planCountdownSlots(eventDateStr: string, now: Date): CountdownSl
 }
 
 /** 開催日をJST表記（M/D）にする（投稿本文・画面表示用） */
-export function formatEventDateJst(dateStr: string): string {
+const WEEKDAYS_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;
+
+/** 開催日の曜日（日本時間）。「日」「月」…の1文字 */
+export function eventWeekdayJst(dateStr: string): string {
   const d = jstDateStart(dateStr);
   const jst = new Date(d.getTime() + JST_OFFSET_MS);
-  return `${jst.getUTCMonth() + 1}月${jst.getUTCDate()}日`;
+  return WEEKDAYS_JA[jst.getUTCDay()]!;
+}
+
+/**
+ * 開催日を「11月11日（水）」の形にする（2026-10-30：曜日を渡していなかったため、AIが「11日（土）」と推測で書いた）。
+ * withWeekday=false で従来の「11月11日」。
+ */
+export function formatEventDateJst(dateStr: string, withWeekday = true): string {
+  const d = jstDateStart(dateStr);
+  const jst = new Date(d.getTime() + JST_OFFSET_MS);
+  const md = `${jst.getUTCMonth() + 1}月${jst.getUTCDate()}日`;
+  return withWeekday ? `${md}（${WEEKDAYS_JA[jst.getUTCDay()]}）` : md;
+}
+
+/** 文の中に、開催日と違う曜日が書かれているか（「（土）」「土曜」など）。書かれていなければ false */
+export function hasWrongWeekday(text: string, dateStr: string): boolean {
+  const right = eventWeekdayJst(dateStr);
+  const found: string[] = [];
+  const t = String(text);
+  t.replace(/[（(]([日月火水木金土])[)）]/g, (_m, w: string) => { found.push(w); return _m; });
+  t.replace(/([日月火水木金土])曜/g, (_m, w: string) => { found.push(w); return _m; });
+  return found.some((w) => w !== right);
 }

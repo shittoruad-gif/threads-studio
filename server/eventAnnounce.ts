@@ -10,7 +10,7 @@
 
 import { invokeLLM } from "./_core/llm";
 import { checkNaturalized, polishPunctuation } from "../shared/jpQualityGuard";
-import { CountdownSlot, formatEventDateJst } from "../shared/eventCountdown";
+import { CountdownSlot, formatEventDateJst, hasWrongWeekday } from "../shared/eventCountdown";
 import * as db from "./db";
 
 export interface EventInput {
@@ -69,6 +69,8 @@ ${facts}
 - 「〜んです」系は最大1回。「〜ですよね」「〜いませんか」等の同意を求める疑問は禁止。
 - 絵文字は使わない。ハッシュタグは使わない。煽り表現（急いで・残りわずか等、事実にないもの）は禁止。
 - 宣伝臭くしない。お店の人が普段のトーンで知らせる感じ。
+- 曜日を書くときは、開催日の（　）の中の曜日をそのまま使う。推測で曜日を書かない。
+- 当日の申し込み・空き・残りの席など、上の事実にないことは書かない（「今からでも参加できます」も書かない）。
 
 投稿本文だけを出力してください。`;
 }
@@ -95,7 +97,11 @@ export async function createEventPosts(params: {
       const raw = (res.choices[0]?.message?.content ?? "").toString().trim();
       const polished = polishPunctuation(raw);
       const verdict = checkNaturalized(polished, polished, { allowQuestionEnding: false });
-      if (polished.length >= 20 && polished.length <= 200 && verdict.ok) {
+      const wrongDay = hasWrongWeekday(polished, event.eventDate);
+      const unverified = /今からでも|当日(参加|申し?込み)|まだ間に合|残りわずか|残り\d+(席|名)/.test(polished);
+      if (wrongDay || unverified) {
+        console.warn(`[EventAnnounce] ${wrongDay ? "曜日の間違い" : "確かめていない約束"}→テンプレ採用 event=${event.id} stage=${slot.stage.daysBefore}日前`);
+      } else if (polished.length >= 20 && polished.length <= 200 && verdict.ok) {
         content = polished;
       } else {
         console.warn(`[EventAnnounce] 品質不合格→テンプレ採用 event=${event.id} stage=${slot.stage.daysBefore}日前: ${verdict.reason ?? "長さ"}`);

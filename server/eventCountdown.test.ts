@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planCountdownSlots, COUNTDOWN_STAGES, formatEventDateJst, jstDateStart } from "../shared/eventCountdown";
+import { planCountdownSlots, COUNTDOWN_STAGES, formatEventDateJst, jstDateStart, eventWeekdayJst, hasWrongWeekday } from "../shared/eventCountdown";
 import { buildFallbackPost } from "./eventAnnounce";
 
 describe("イベント告知の逆算スケジュール", () => {
@@ -45,7 +45,8 @@ describe("イベント告知の逆算スケジュール", () => {
   });
 
   it("日付表示はJST基準", () => {
-    expect(formatEventDateJst("2026-09-20")).toBe("9月20日");
+    expect(formatEventDateJst("2026-09-20")).toBe("9月20日（日）");
+    expect(formatEventDateJst("2026-09-20", false)).toBe("9月20日");
     expect(jstDateStart("2026-09-20").toISOString()).toBe("2026-09-19T15:00:00.000Z");
   });
 });
@@ -54,7 +55,7 @@ describe("フォールバック文（AI失敗時・事実のみ）", () => {
   const ev = { id: 1, title: "3周年感謝祭", eventDate: "2026-09-20", eventTime: "14:00〜16:00", venue: "店内", offer: "予約不要・当日ご来店ください" };
 
   it("事前告知は開催日を、前日・当日はその旨を書く", () => {
-    expect(buildFallbackPost(ev, 7)).toContain("9月20日に開催します");
+    expect(buildFallbackPost(ev, 7)).toContain("9月20日（日）に開催します");
     expect(buildFallbackPost(ev, 1)).toContain("いよいよ明日です");
     expect(buildFallbackPost(ev, 0)).toContain("本日開催です");
   });
@@ -71,5 +72,18 @@ describe("フォールバック文（AI失敗時・事実のみ）", () => {
     const t = buildFallbackPost({ id: 2, title: "体験会", eventDate: "2026-09-20" }, 3);
     expect(t).not.toContain("場所：");
     expect(t).not.toContain("時間：");
+  });
+});
+
+describe("告知の曜日（10/30 11/11を「（土）」と書いた件）", () => {
+  it("開催日の曜日を日本時間で出す", () => {
+    expect(eventWeekdayJst("2026-11-11")).toBe("水");
+    expect(formatEventDateJst("2026-11-11")).toBe("11月11日（水）");
+  });
+  it("違う曜日が書かれていたら見つける", () => {
+    expect(hasWrongWeekday("MIRACLE Link＠岡山は11日（土）開催です。", "2026-11-11")).toBe(true);
+    expect(hasWrongWeekday("11月11日（水）19時から", "2026-11-11")).toBe(false);
+    expect(hasWrongWeekday("今週の土曜に開催", "2026-11-11")).toBe(true);
+    expect(hasWrongWeekday("19時からお待ちしています", "2026-11-11")).toBe(false);
   });
 });
