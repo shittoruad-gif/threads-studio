@@ -81,3 +81,44 @@ export function buildOwnerRulesNote(rules: readonly string[]): string {
     "事実（数字・実績・料金・効果）は入力情報だけ。決まりの文から事実を持ち込まない。",
   ].join("\n");
 }
+
+/**
+ * 「すべての投稿に必ず💫を入れる」のような決まりから、毎回入れる絵文字を取り出す（2026-10-31 三上様
+ *   「サロン名とかじゃなくて、すべての投稿に指定した絵文字をつけてくれとクライアントが言っている」）。
+ *   決まりの文はAIへの指示なので、口調の整えで絵文字が消える回がある。指定の絵文字だけは機械で必ず残す。
+ *   拾うのは「投稿」全体の話（すべて／全部／毎回／どの投稿）で、入れる・付けるの決まりだけ。
+ *   「サロン名は『〇〇💫』と書く」のような名前の書き方は、すべての投稿の決まりとして扱わない。
+ */
+const OWNER_EMOJI_SRC =
+  '(?:[\\u2600-\\u27BF\\u2728\\u2757\\u2049\\u203C\\u2B50\\u2B55]|\\uD83C[\\uDF00-\\uDFFF]|\\uD83D[\\uDC00-\\uDEFF]|\\uD83E[\\uDD00-\\uDFFF])\\uFE0F?(?:\\u200D(?:[\\u2600-\\u27BF]|\\uD83C[\\uDF00-\\uDFFF]|\\uD83D[\\uDC00-\\uDEFF]|\\uD83E[\\uDD00-\\uDFFF])\\uFE0F?)*';
+
+export function requiredEmojisFromRules(rules: readonly string[] | null | undefined): string[] {
+  const out: string[] = [];
+  for (const r of rules ?? []) {
+    const allPosts = /(すべて|全て|全部|毎回|どの|いつも|必ず).{0,6}投稿|投稿.{0,6}(すべて|全て|全部|毎回|いつも|必ず)/.test(r);
+    const put = /(入れ|いれ|付け|つけ|添え|そえ|使)/.test(r);
+    const neg = /(入れない|いれない|付けない|つけない|使わない|なし|無し|禁止)/.test(r);
+    if (!allPosts || !put || neg) continue;
+    for (const e of r.match(new RegExp(OWNER_EMOJI_SRC, 'g')) ?? []) if (!out.includes(e)) out.push(e);
+  }
+  return out;
+}
+
+/** 指定の絵文字が本文に無ければ、1行目の終わりに足す（「。」で終わる行は句点を絵文字に置き換える）。あれば触らない */
+export function ensureRequiredEmojis(text: string, emojis: readonly string[]): string {
+  const src = String(text ?? '');
+  if (!src.trim() || emojis.length === 0) return src;
+  const missing = emojis.filter((e) => !src.includes(e.replace(/️/g, '')));
+  if (missing.length === 0) return src;
+  const add = missing.join('');
+  const lines = src.split('\n');
+  const i = lines.findIndex((l) => l.trim().length > 0);
+  const line = lines[i]!.replace(/[\s　]+$/, '');
+  lines[i] = /。$/.test(line) ? line.slice(0, -1) + add : line + add;
+  return lines.join('\n');
+}
+
+/** 決まりの保存文字列（threadsAccounts.ownerRules）から、本文に指定の絵文字を入れた形を返す */
+export function applyOwnerRequiredEmojis(text: string, ownerRules: string | null | undefined): string {
+  return ensureRequiredEmojis(text, requiredEmojisFromRules(parseOwnerRules(ownerRules)));
+}

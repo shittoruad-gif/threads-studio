@@ -630,10 +630,27 @@ export async function countUserProjects(userId: number): Promise<number> {
 
 // ============ Scheduled Post Functions ============
 
+/**
+ * お客様の決まりで「すべての投稿に入れる」と指定された絵文字を本文に入れる（2026-10-31・shared/ownerRules.ts）。
+ *   投稿の保存と書き換えは必ずここを通すので、自動・告知・固定・手直し・代わりのどれでも抜けない。失敗しても保存は止めない。
+ */
+async function withOwnerRequiredEmojis(content: string | null | undefined, threadsAccountId: number | null | undefined): Promise<string | null | undefined> {
+  if (!content || !threadsAccountId) return content;
+  try {
+    const acct: any = await getThreadsAccountById(Number(threadsAccountId));
+    if (!acct?.ownerRules) return content;
+    const { applyOwnerRequiredEmojis } = await import('../shared/ownerRules');
+    return applyOwnerRequiredEmojis(content, acct.ownerRules);
+  } catch {
+    return content;
+  }
+}
+
 export async function createScheduledPost(data: InsertScheduledPost): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
+  if (data.postContent) data = { ...data, postContent: (await withOwnerRequiredEmojis(data.postContent, data.threadsAccountId)) ?? data.postContent };
   await db.insert(scheduledPosts).values(data);
 }
 
@@ -1048,6 +1065,10 @@ export async function updateScheduledPost(
   const db = await getDb();
   if (!db) return;
 
+  if (data.postContent) {
+    const accountId = data.threadsAccountId ?? (await getScheduledPostById(postId).catch(() => undefined))?.threadsAccountId;
+    data = { ...data, postContent: (await withOwnerRequiredEmojis(data.postContent, accountId)) ?? data.postContent };
+  }
   await db.update(scheduledPosts)
     .set(data)
     .where(eq(scheduledPosts.id, postId));
