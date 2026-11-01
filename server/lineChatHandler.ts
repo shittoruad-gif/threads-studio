@@ -250,15 +250,16 @@ async function repliesForPosts(userId: number, mode?: "one" | "all"): Promise<un
     .filter((p: any) => p.status === "awaiting_approval" && p.angle !== "pinned")
     .sort((a: any, b: any) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
   if (waiting.length === 0) {
-    const next = all
-      .filter((p: any) => p.status === "pending" && new Date(p.scheduledAt).getTime() > Date.now())
-      .sort((a: any, b: any) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())[0];
-    return [textWithQuick(
-      next
-        ? `いま確認をお待ちしている投稿はありません。\n次の投稿は ${fmtJst(next.scheduledAt)} に公開予定です。`
-        : "いま確認をお待ちしている投稿はありません。新しい投稿ができたら、このトークでお知らせします。",
-      MENU_HINT,
-    )];
+    // ★時刻だけでなく、出る投稿の中身と「確認済み」かを見せる（2026-11-02・shared/approvalLead.ts noWaitingText）
+    const upcoming = all
+      .filter((p: any) => p.status === "pending" && p.angle !== "pinned" && new Date(p.scheduledAt).getTime() > Date.now()
+        && new Date(p.scheduledAt).getTime() < Date.now() + 7 * 86400_000)
+      .sort((a: any, b: any) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
+      .slice(0, 3)
+      .map((p: any) => ({ at: p.scheduledAt, text: String(p.postContent || ""), confirmed: Boolean(p.approvedVia) }));
+    const owner: any = await db.getUserById(userId).catch(() => null);
+    const { noWaitingText } = await import("@shared/approvalLead");
+    return [textWithQuick(noWaitingText({ upcoming, reviewHour: owner?.reviewHour ?? null }), MENU_HINT)];
   }
   // ★3案からお選びいただく形（shared/threeChoice.ts）。
   //   待っているのが同じ枠の選択肢だけなら、「1件ずつ／まとめて／すべて承認する」の

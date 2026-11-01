@@ -128,3 +128,30 @@ export function deferredNoticeText(p: {
   }
   return lines.join("\n");
 }
+
+/**
+ * 「今日の投稿」を押して、確認を待っている投稿が無いときの文（2026-11-02 お客様「21時を過ぎても確認できない」）。
+ * 以前は「次の投稿は 11/2 21:13 に公開予定」と時刻だけで、何が出るのか・次の確認はいつ届くのかが分からなかった。
+ * 慣らし運転で翌日の枠が「前に確認した投稿」で埋まると、その晩は新しい案が届かない。出る投稿の中身と、確認済みかを見せる。
+ */
+export function noWaitingText(p: {
+  upcoming: Array<{ at: Date | string; text: string; confirmed: boolean }>;
+  /** users.reviewHour（夕方以降なら「前の日の夜○時ごろ」） */
+  reviewHour?: number | null;
+}): string {
+  const lines = ["いま確認をお待ちしている投稿はありません。"];
+  if (p.upcoming.length > 0) {
+    lines.push("", "これから出る予定の投稿です。");
+    for (const u of p.upcoming) {
+      const ms = new Date(u.at).getTime();
+      const head = u.text.replace(/\s+/g, " ").trim().slice(0, 24);
+      lines.push(`・${mdw(ms)} ${jstTimeLabel(ms)}「${head}…」${u.confirmed ? "（確認済み）" : ""}`);
+    }
+    if (p.upcoming.some((u) => u.confirmed)) lines.push("「確認済み」は、前に「これで投稿する」を押していただいた投稿です。もう一度押す必要はありません。");
+  }
+  const h = p.reviewHour;
+  lines.push("", h !== null && h !== undefined && h >= 15
+    ? `新しい投稿ができたら、前の日の夜${h > 12 ? h - 12 : h}時ごろにこのトークでお届けします。その日の分がすでに決まっているときは、届かない日もあります。`
+    : "新しい投稿ができたら、このトークでお知らせします。");
+  return lines.join("\n");
+}

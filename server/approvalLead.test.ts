@@ -67,3 +67,17 @@ describe("慣らし・冷却の日程を添える（2026-11-01）", () => {
     expect(t).toContain("11/9（月）からは1日3件に戻ります。");
   });
 });
+
+describe("確認を待っている投稿が無いとき（2026-11-02）", () => {
+  it("出る予定の中身と確認済みかを見せる", async () => {
+    const { noWaitingText } = await import("../shared/approvalLead");
+    const t = noWaitingText({ upcoming: [{ at: "2026-11-02T12:13:00Z", text: "ラジオでお話ししています\n毎月第4水曜", confirmed: true }], reviewHour: 21 });
+    expect(t).toContain("・11/2（月） 21:13「ラジオでお話ししています 毎月第4水曜…」（確認済み）");
+    expect(t).toContain("もう一度押す必要はありません");
+    expect(t).toContain("前の日の夜9時ごろ");
+  });
+  it("予定が無ければ短く", async () => {
+    const { noWaitingText } = await import("../shared/approvalLead");
+    expect(noWaitingText({ upcoming: [], reviewHour: null })).toBe("いま確認をお待ちしている投稿はありません。\n\n新しい投稿ができたら、このトークでお知らせします。");
+  });
+});
