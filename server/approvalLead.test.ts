@@ -46,3 +46,24 @@ describe("明日に回したお知らせ", () => {
     expect(jstTimeLabel(from)).toBe("21:13");
   });
 });
+
+describe("慣らし・冷却の日程を添える（2026-11-01）", () => {
+  const createdAt = "2026-10-29T18:30:00Z"; // 10/30 3:30 JST に連携
+  it("この先の段階を日付つきで出す", () => {
+    const t = capLine({ reason: "ramp", cap: 1, createdAt, contract: 3, now: Date.parse("2026-11-01T22:00:00+09:00") });
+    expect(t).toContain("・11/3（火）ごろまで：1日1件");
+    expect(t).toContain("・11/4（水）ごろから：1日2件");
+    expect(t).toContain("・11/9（月）ごろから：1日3件（減った分を補うため、しばらく1日4件）");
+    expect(t).toContain("Threadsのアプリから直接投稿した分も、この数に入ります。");
+  });
+  it("過ぎた段階は出さない", () => {
+    const t = capLine({ reason: "ramp", cap: 2, createdAt, contract: 3, now: Date.parse("2026-11-05T12:00:00+09:00") });
+    expect(t).not.toContain("1日1件");
+    expect(t).toContain("・11/8（日）ごろまで：1日2件");
+  });
+  it("冷却は明ける日と戻る本数", () => {
+    const t = capLine({ reason: "cooldown", cap: 1, untilLabel: "11月8日", untilJst: "2026-11-08", contract: 3 });
+    expect(t).toContain("11月8日まで1日1件");
+    expect(t).toContain("11/9（月）からは1日3件に戻ります。");
+  });
+});

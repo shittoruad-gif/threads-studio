@@ -83,6 +83,9 @@ export async function sendDeferredNotice(
       todayCount,
       direct: Math.max(0, todayCount - ours),
       untilLabel: dc.reason === "cooldown" ? dateJstLabel(dc.untilJst) : undefined,
+      createdAt: account.createdAt ?? null,
+      contract: dc.contract,
+      untilJst: dc.untilJst,
       moved,
     });
     const targets = await db.getLineUserIdsForUser(userId);

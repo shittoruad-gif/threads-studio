@@ -10,8 +10,8 @@ import { dailyCapDecision, threadsPostsTodayCount } from "./dailyCapCheck";
 import { rampCap, jstDateString } from "../shared/accountRamp";
 import { pickPostTime } from "../shared/linePostRequest";
 
-/** その日に出せる時刻（空いていなければ null） */
-export async function openSlotOnDay(account: any, userId: number, dayJst: string, now: number = Date.now()): Promise<Date | null> {
+/** その日の上限と、すでにある数（上限を掛けていない日は cap=null） */
+export async function dayCapacity(account: any, userId: number, dayJst: string, now: number = Date.now()): Promise<{ cap: number | null; used: number; existing: number[] }> {
   const existing = await db.getAccountPostTimesOnDay(Number(account.id), dayJst);
   const dc = await dailyCapDecision(account, userId);
   let cap: number | null = null;
@@ -22,16 +22,29 @@ export async function openSlotOnDay(account: any, userId: number, dayJst: string
       cap = r.capped ? r.count : null;
     }
   }
-  if (cap !== null) {
-    let used = existing.length;
-    // 今日はThreadsの実測（アプリから直接出した分を含む）も見る
-    if (dayJst === jstDateString(0, now)) {
-      const n = await threadsPostsTodayCount(account.accessToken, account.threadsUserId).catch(() => 0);
-      used = Math.max(used, n);
-    }
-    if (used >= cap) return null;
+  let used = existing.length;
+  // 今日はThreadsの実測（アプリから直接出した分を含む）も見る
+  if (cap !== null && dayJst === jstDateString(0, now)) {
+    const n = await threadsPostsTodayCount(account.accessToken, account.threadsUserId).catch(() => 0);
+    used = Math.max(used, n);
   }
+  return { cap, used, existing };
+}
+
+/** その日に出せる時刻（空いていなければ null） */
+export async function openSlotOnDay(account: any, userId: number, dayJst: string, now: number = Date.now()): Promise<Date | null> {
+  const { cap, used, existing } = await dayCapacity(account, userId, dayJst, now);
+  if (cap !== null && used >= cap) return null;
   return pickPostTime({ dayJst, now, existing });
+}
+
+/** 今日に入らなかった理由の一文（今日に入ったときは空） */
+export async function notTodayReason(account: any, userId: number, at: Date, now: number = Date.now()): Promise<string> {
+  const today = jstDateString(0, now);
+  if (jstDateString(0, at.getTime()) === today) return "";
+  const { cap, used } = await dayCapacity(account, userId, today, now);
+  if (cap !== null && used >= cap) return `今日はすでに${used}件の投稿があり、いまは1日${cap}件までのため、いちばん早く空いている日に入れました。`;
+  return "今日はこれから出せる時間が残っていないため、いちばん早く空いている日に入れました。";
 }
 
 /** 今日から順に、空いている日を最大 n 日（14日先まで見る） */

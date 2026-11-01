@@ -416,7 +416,7 @@ export async function sendApprovalPush(
         if (dc.strict) {
           const { capLine } = await import("@shared/approvalLead");
           const { dateJstLabel } = await import("@shared/dailyCap");
-          capNote = capLine({ reason: dc.reason === "cooldown" ? "cooldown" : "ramp", cap: dc.cap, untilLabel: dc.reason === "cooldown" ? dateJstLabel(dc.untilJst) : undefined });
+          capNote = capLine({ reason: dc.reason === "cooldown" ? "cooldown" : "ramp", cap: dc.cap, untilLabel: dc.reason === "cooldown" ? dateJstLabel(dc.untilJst) : undefined, createdAt: acc.createdAt ?? null, contract: dc.contract, untilJst: dc.untilJst });
         }
       }
     }

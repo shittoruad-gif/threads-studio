@@ -9,6 +9,8 @@
  */
 
 /** 予定日の「11月2日」 */
+import { RAMP_DAYS_1, RAMP_DAYS_2, COMPENSATION_EXTRA_PER_DAY } from "./accountRamp";
+
 export function jstMonthDayLabel(d: Date | string | number): string {
   const j = new Date(new Date(d).getTime() + 9 * 3600_000);
   return `${j.getUTCMonth() + 1}月${j.getUTCDate()}日`;
@@ -20,12 +22,47 @@ export function jstTimeLabel(d: Date | string | number): string {
   return `${String(j.getUTCHours()).padStart(2, "0")}:${String(j.getUTCMinutes()).padStart(2, "0")}`;
 }
 
-/** 1日の数を抑えているときに添える一文（直接の投稿も数に入ることを先に伝える） */
-export function capLine(p: { reason: "ramp" | "cooldown"; cap: number; untilLabel?: string }): string {
-  const head = p.reason === "cooldown"
-    ? `投稿が消えたあとのため、アカウントを守るために${p.untilLabel ? `${p.untilLabel}まで` : "しばらく"}1日${p.cap}件にしています。`
-    : `連携して間もないアカウントを守るため、いまは1日${p.cap}件までにしています。`;
-  return `※${head}Threadsのアプリから直接投稿した分も、この数に入ります。`;
+const WD = ["日", "月", "火", "水", "木", "金", "土"];
+/** 「11/4（水）」（時刻 ms → JSTの日付） */
+function mdw(ms: number): string {
+  const j = new Date(ms + 9 * 3600_000);
+  return `${j.getUTCMonth() + 1}/${j.getUTCDate()}（${WD[j.getUTCDay()]}）`;
+}
+
+/**
+ * 慣らし運転の日程（2026-11-01 三上様指示「どのようなスケジュールで進んでいくのかが相手にわかるように」）。
+ * 段階は shared/accountRamp.ts と同じ（連携から5日未満＝1件、10日未満＝2件、そのあと契約どおり＋減った分の補填）。
+ * 切り替わりは連携した時刻から24時間単位なので、日付には「ごろ」を付ける。過ぎた段階は出さない。
+ */
+export function rampScheduleLines(p: { createdAt: Date | string; contract: number; now?: number }): string[] {
+  const created = new Date(p.createdAt).getTime();
+  const now = p.now ?? Date.now();
+  if (!Number.isFinite(created)) return [];
+  const DAY = 86400_000;
+  const to2 = created + RAMP_DAYS_1 * DAY;
+  const toFull = created + RAMP_DAYS_2 * DAY;
+  const lines: string[] = [];
+  if (now < to2) lines.push(`・${mdw(to2 - DAY)}ごろまで：1日1件`);
+  if (now < toFull && p.contract >= 2) lines.push(`・${now < to2 ? `${mdw(to2)}ごろから` : `${mdw(toFull - DAY)}ごろまで`}：1日2件`);
+  if (p.contract >= 2) lines.push(`・${mdw(toFull)}ごろから：1日${p.contract}件（減った分を補うため、しばらく1日${p.contract + COMPENSATION_EXTRA_PER_DAY}件）`);
+  return lines;
+}
+
+/**
+ * 1日の数を抑えているときに添える文（直接の投稿も数に入ることを先に伝える）。
+ * 慣らし運転は createdAt と contract を渡すと、この先の日程も添える。冷却は明ける日と戻る本数。
+ */
+export function capLine(p: { reason: "ramp" | "cooldown"; cap: number; untilLabel?: string; createdAt?: Date | string | null; contract?: number; untilJst?: string; now?: number }): string {
+  const tail = "Threadsのアプリから直接投稿した分も、この数に入ります。";
+  if (p.reason === "cooldown") {
+    const back = p.untilJst && p.contract && p.contract > 1
+      ? `${mdw(Date.parse(`${p.untilJst}T12:00:00+09:00`) + 86400_000)}からは1日${p.contract}件に戻ります。`
+      : "";
+    return `※投稿が消えたあとのため、アカウントを守るために${p.untilLabel ? `${p.untilLabel}まで` : "しばらく"}1日${p.cap}件にしています。${back}${tail}`;
+  }
+  const schedule = p.createdAt && p.contract ? rampScheduleLines({ createdAt: p.createdAt, contract: p.contract, now: p.now }) : [];
+  if (schedule.length === 0) return `※連携して間もないアカウントを守るため、いまは1日${p.cap}件までにしています。${tail}`;
+  return ["※連携して間もないアカウントを守るため、投稿の数を少しずつ増やしています。", ...schedule, tail].join("\n");
 }
 
 export function approvalLeadText(p: {
@@ -67,13 +104,17 @@ export function deferredNoticeText(p: {
   /** そのうちThreadsアプリから直接の投稿 */
   direct: number;
   untilLabel?: string;
+  /** 日程を添えるため（慣らし：連携した時刻と契約本数・冷却：明ける日） */
+  createdAt?: Date | string | null;
+  contract?: number;
+  untilJst?: string;
   moved: Array<{ head: string; from: Date | string; to: Date | string }>;
 }): string {
   const lines: string[] = [`@${p.username} の投稿のお知らせです。`];
   lines.push(p.direct > 0
     ? `今日はThreadsのアプリから直接の投稿が${p.direct}件ありました。`
     : `今日はすでに${p.todayCount}件の投稿が出ています。`);
-  lines.push(capLine({ reason: p.reason, cap: p.cap, untilLabel: p.untilLabel }));
+  lines.push(capLine({ reason: p.reason, cap: p.cap, untilLabel: p.untilLabel, createdAt: p.createdAt, contract: p.contract, untilJst: p.untilJst }));
   lines.push("");
   lines.push("そのため、次の投稿を明日に回しました。消えたわけではありません。");
   for (const m of p.moved) {

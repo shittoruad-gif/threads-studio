@@ -4133,7 +4133,7 @@ async function handlePostRequestButton(lineUserId: string, userId: number, q: Re
       accounts.slice(0, 12).map((a: any) => ({ label: `@${String(a.threadsUsername || a.id)}`.slice(0, 20), data: `c=postme&a=${a.id}${rest}` })),
     )];
   }
-  const { openDays, openSlotOnDay, projectIdForAccount } = await import("./linePostRequest");
+  const { openDays, openSlotOnDay, projectIdForAccount, notTodayReason } = await import("./linePostRequest");
   if (q.w === "pick" && !q.d) {
     const days = await openDays(acct, userId, 7);
     if (days.length === 0) return [textWithQuick("この先2週間、空いている日が見つかりませんでした。お手数ですが「担当者に聞く」からご相談ください。", [{ label: "担当者に聞く", data: "m=staff" }, ...MENU_HINT])];
@@ -4167,7 +4167,9 @@ async function handlePostRequestButton(lineUserId: string, userId: number, q: Re
   } as any);
   await db.clearLineChatState(lineUserId);
   console.log(`[LineChat] 送られた文章を予約 user=${userId} account=${acct.id} post=${id} at=${at.toISOString()}`);
-  return [textWithQuick(postRequestBookedText(at), [
+  // 「いちばん早い日」で今日に入らなかったときは、理由を先に書く（上限か、時間が残っていないか）
+  const why = q.d ? "" : await notTodayReason(acct, userId, at).catch(() => "");
+  return [textWithQuick(`${why ? `${why}\n\n` : ""}${postRequestBookedText(at)}`, [
     ...(id ? [{ label: "取り消す", data: `c=postcancel&i=${id}` }] : []),
     ...MENU_HINT,
   ])];
