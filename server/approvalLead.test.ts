@@ -29,13 +29,12 @@ describe("承認カードの頭の文（設定どおりに書く・2026-11-01）
 describe("明日に回したお知らせ", () => {
   const from = new Date("2026-11-01T12:13:00Z"); // 21:13 JST
   const to = new Date("2026-11-02T12:13:00Z");
-  it("直接の投稿があった日は、その数と、担当者に送るよう書く", () => {
+  it("直接の投稿があった日は、その数と、このLINEに文章を送るよう書く", () => {
     const t = deferredNoticeText({ username: "sample_shop", reason: "ramp", cap: 1, todayCount: 3, direct: 3, moved: [{ head: "ラジオで毎月お話ししています", from, to }] });
     expect(t).toContain("今日はThreadsのアプリから直接の投稿が3件ありました。");
     expect(t).toContain("消えたわけではありません。");
     expect(t).toContain("今日 21:13 → 11月2日 21:13");
-    expect(t).toContain("担当者にお送りください");
-    expect(t).not.toContain("このLINEに送って");
+    expect(t).toContain("このLINEに文章を送ってください");
   });
   it("こちらの投稿だけで届いた日は、直接の投稿の話をしない", () => {
     const t = deferredNoticeText({ username: "sample_shop", reason: "ramp", cap: 1, todayCount: 1, direct: 0, moved: [{ head: "テスト", from, to }] });

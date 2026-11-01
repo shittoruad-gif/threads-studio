@@ -2519,6 +2519,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           let pendingDecrement: 'deleted' | 'apology' | null = null;
           // ★学習用アカウント（自社の Moveact 2店）の学習の枠の数（shared/learningAccounts.ts）
           let learningN = 0;
+          let rampCappedHere = false;
           // ★新しいアカウントの慣らし運転（shared/accountRamp.ts）。連携7日未満は1件、14日未満は2件。
           //   2026-09-06 連携4日目・フォロワー0のアカウントが本人確認→停止になった再発防止。
           {
@@ -2527,7 +2528,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             // ★学習の枠は朝の回では作らない。毎時の生成（server/learningBurstJob.ts）が次の1時間分ずつ作る（1日30本・2026-10-10）
             const learningInRamp = Number(r.learning ?? 0);
             learningN = 0;
-            if (r.capped) { console.log(`[AutoPost] account ${account.id} ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count; }
+            if (r.capped) { console.log(`[AutoPost] account ${account.id} ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count; rampCappedHere = true; }
             else if (r.extra) {
               console.log(`[AutoPost] account ${account.id} 補填: ${r.note}（契約${postCount}→${r.count}）`); postCount = r.count;
               // ★消えた投稿の補填（R6）・お詫びの補填（2026-09-21）は朝の生成で1日1件ずつ消化する。
@@ -2572,7 +2573,10 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           //   新規はその差だけ作る。これが無いと翌日へ送った分と新規が重なって、また上限超えになる。
           if (!opts.fillToday) {
             // ★前の晩の回は「明日の分」を数える。朝の回は、前の晩に作った今日の分もここで数える（二重に作らない）
-            const alreadyToday = await db.countAccountAutoPostsScheduledToday(account.id, opts.forTomorrow ? 1 : 0).catch(() => 0);
+            let alreadyToday = await db.countAccountAutoPostsScheduledToday(account.id, opts.forTomorrow ? 1 : 0).catch(() => 0);
+            // ★1日の数を抑えている間は、公式LINEから送られた文章の予約（approvedVia='line_post'）もその日の数に入れる（2026-11-01）。
+            //   数えないと、ご本人の投稿と自動の投稿が同じ日に並び、自動の方が翌日に回されてしまう。
+            if (rampCappedHere) alreadyToday += await db.countAccountLinePostsOnDay(account.id, opts.forTomorrow ? 1 : 0).catch(() => 0);
             if (alreadyToday > 0) {
               const before = postCount;
               postCount = Math.max(0, postCount - alreadyToday);

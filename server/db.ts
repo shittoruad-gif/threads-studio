@@ -836,6 +836,58 @@ export async function listAccountIdsUnderDailyCap(): Promise<number[]> {
   return ((rows as any)?.[0] ?? []).map((r: any) => Number(r.id));
 }
 
+/**
+ * その日（JST）にこのアカウントで出る予定・出た投稿の時刻（自動・手動とも。取り消し・失敗・返信・固定投稿の下書きは除く）。
+ * 公式LINEから送られた文章を予約するとき、空いている日と時間を選ぶのに使う（2026-11-01）。
+ */
+export async function getAccountPostTimesOnDay(accountId: number, dayJst: string): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({ scheduledAt: scheduledPosts.scheduledAt, postedAt: scheduledPosts.postedAt })
+    .from(scheduledPosts)
+    .where(and(
+      eq(scheduledPosts.threadsAccountId, accountId),
+      sql`${scheduledPosts.status} IN ('pending','awaiting_approval','processing','posted')`,
+      sql`${scheduledPosts.replyToThreadsId} IS NULL`,
+      sql`(${scheduledPosts.angle} IS NULL OR ${scheduledPosts.angle} <> 'pinned')`,
+      sql`DATE(CONVERT_TZ(IFNULL(${scheduledPosts.postedAt}, ${scheduledPosts.scheduledAt}),'+00:00','+09:00')) = ${dayJst}`,
+    ));
+  return rows.map((r) => new Date((r.postedAt ?? r.scheduledAt) as any).getTime());
+}
+
+/** このアカウントの投稿に使っているお店（プロジェクト）。直近の投稿から取る（2026-11-01） */
+export async function getLatestProjectIdForAccount(accountId: number): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db.select({ projectId: scheduledPosts.projectId })
+    .from(scheduledPosts)
+    .where(eq(scheduledPosts.threadsAccountId, accountId))
+    .orderBy(desc(scheduledPosts.id))
+    .limit(1);
+  return row?.projectId ?? null;
+}
+
+/** 投稿を作って、そのIDを返す（取り消しボタンに使う・2026-11-01） */
+export async function createScheduledPostReturningId(data: InsertScheduledPost): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  if (data.postContent) data = { ...data, postContent: (await withOwnerRequiredEmojis(data.postContent, data.threadsAccountId)) ?? data.postContent };
+  const res: any = await db.insert(scheduledPosts).values(data);
+  return Number(res?.[0]?.insertId ?? 0);
+}
+
+/** 公式LINEから送られた文章の予約（approvedVia='line_post'）のうち、その日（今日 or 明日・JST）の分（2026-11-01） */
+export async function countAccountLinePostsOnDay(accountId: number, dayOffset: 0 | 1 = 0): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows: any = await db.execute(sql`
+    SELECT COUNT(*) AS c FROM scheduledPosts
+    WHERE threadsAccountId = ${accountId} AND approvedVia = 'line_post'
+      AND status IN ('pending','processing','posted')
+      AND DATE(CONVERT_TZ(scheduledAt,'+00:00','+09:00')) = DATE_ADD(DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+09:00')), INTERVAL ${dayOffset === 1 ? 1 : 0} DAY)`);
+  return Number((rows as any)?.[0]?.[0]?.c ?? 0);
+}
+
 /** 投稿を別の日へ移す。承認待ちが日をまたいで見送りにならないよう「何日の分か」も合わせる（2026-11-01） */
 export async function moveScheduledPostToDay(postId: number, at: Date, forDate: string): Promise<void> {
   const db = await getDb();
