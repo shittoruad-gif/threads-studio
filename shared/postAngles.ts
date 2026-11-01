@@ -401,9 +401,16 @@ export function pickAngle(
   if (opts.excludeLocalTalk) pool = pool.filter((a) => a.id !== LOCAL_TALK_ANGLE_ID);
   // ★2026-10-30 どい接骨院様（acc37）：「地元の会話」に✕→「代わりを作る」がまた地元の会話（#5322→#5323）で、続けて見送り。
   //   代わりの投稿は見送った切り口を外して選ぶ（外すと候補が無くなるときだけ元のまま）。
+  // ★2026-11-01 夜間整備：外した切り口が「希望の型」「試験用の切り口」の再追加で候補に戻っていた
+  //   （acc37 は希望の型「常識・逆説型」＝surprise_fact・misconception。misconception ✕ #5561 →「代わりを作る」が
+  //   また misconception #5573 で、同じ「安静は逆効果」の話が公開された）。外しが効いた間は、再追加でも戻さない
+  const excluded = new Set<string>();
   if (opts.excludeAngleIds?.length) {
     const rest = pool.filter((a) => !opts.excludeAngleIds!.includes(a.id));
-    if (rest.length > 0) pool = rest;
+    if (rest.length > 0) {
+      pool = rest;
+      for (const id of opts.excludeAngleIds) excluded.add(id);
+    }
   }
   // ★試験用の切り口（三上様のアカウントだけ）。勉強会の型を足して比べる。
   const experimentIds = new Set<string>();
@@ -413,6 +420,7 @@ export function pickAngle(
     //   「揉みほぐしでは意味ない」「根本から見ないと繰り返します」が出た（2026-09-24）。
     if (!opts.excludeOutcomeAngles) for (const id of STUDY_EXPERIMENT_EXTRA_IDS) experimentIds.add(id);
     for (const id of Array.from(experimentIds)) {
+      if (excluded.has(id)) continue;
       if (!pool.some((a) => a.id === id)) {
         const a = ANGLE_BY_ID.get(id);
         if (a) pool = [...pool, a];
@@ -423,6 +431,7 @@ export function pickAngle(
   //   （お客様の希望が実験より優先。2026-09-08）
   const preferred = new Set((opts.preferredAngles ?? []).filter((id) => !(opts.excludeOutcomeAngles && OUTCOME_RISK_ANGLES.includes(id))));
   for (const id of Array.from(preferred)) {
+    if (excluded.has(id)) continue;
     if (!pool.some((a) => a.id === id)) {
       const a = ANGLE_BY_ID.get(id);
       if (a) pool = [...pool, a];

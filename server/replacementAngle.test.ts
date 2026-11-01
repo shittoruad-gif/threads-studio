@@ -44,3 +44,35 @@ describe("代わりの投稿：同じ枠で続けて見送った切り口もま�
     expect(got.sort()).toEqual(["deep_worry", LOCAL_TALK_ANGLE_ID].sort());
   });
 });
+
+/**
+ * 2026-11-01 夜間整備：どい接骨院様（acc37）は希望の型「常識・逆説型」（surprise_fact・misconception）。
+ * misconception の #5561 に✕ →「代わりを作る」がまた misconception（#5573）で、同じ「安静は逆効果」の話が公開された。
+ * 希望の型・試験用の切り口の再追加で、外した切り口が候補に戻っていた。
+ */
+describe("代わりの投稿：希望の型でも外した切り口は戻らない", () => {
+  it("acc37 の実例：希望の型 surprise_fact・misconception で misconception を外す", () => {
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const seen = new Set<string>();
+    for (let i = 0; i < 2000; i++) {
+      const a = pickAngle({}, rnd, undefined, Date.now(), "store", {
+        preferredAngles: ["surprise_fact", "misconception"],
+        excludeAngleIds: ["misconception"],
+      });
+      seen.add(a.id);
+      expect(a.id).not.toBe("misconception");
+    }
+    // もう一方の希望の型は今までどおり出る
+    expect(seen.has("surprise_fact")).toBe(true);
+  });
+
+  it("試験用の切り口（勉強会の型）も外した切り口は戻らない", () => {
+    let seed = 3;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 1000; i++) {
+      const a = pickAngle({}, rnd, undefined, Date.now(), "store", { studyExperiment: true, excludeAngleIds: ["misconception", "pro_tip"] });
+      expect(["misconception", "pro_tip"]).not.toContain(a.id);
+    }
+  });
+});

@@ -99,6 +99,29 @@ export function usedInRecentPosts(
   return findRepeatedPhraseForSetting(v, recentPosts, minChars) !== null;
 }
 
+/**
+ * はじめの設定の一覧（業界の誤解など）から、直近の投稿ですでに書かれた項目を外す。
+ *
+ * ★2026-11-01 夜間整備（どい接骨院様 acc37）：信条「「とりあえず安静」はかえって長引くことがある」は
+ *   usedInRecentPosts で外れていたのに、はじめの設定の industryMyths に同じ一文があり、そちらは
+ *   「見送りの共通点」でしか外していなかった。4日で「安静・動かないと長引く／逆効果」の投稿が4本
+ *   （#5193・#5441・#5561 ✕・#5573）。信条・実績と同じく、直近の投稿に出た項目はその日は渡さない。
+ *   外す項目が無ければそのまま。全部外れたら空の一覧（AIはほかの材料から書く）。
+ */
+export function dropUsedItems(
+  items: readonly unknown[] | null | undefined,
+  recentPosts: readonly string[],
+): { kept: string[]; dropped: string[] } {
+  const kept: string[] = [];
+  const dropped: string[] = [];
+  for (const it of items ?? []) {
+    const s = String(it ?? "").trim();
+    if (!s) continue;
+    (usedInRecentPosts(s, recentPosts) ? dropped : kept).push(s);
+  }
+  return { kept, dropped };
+}
+
 /** usedInRecentPosts 専用の最長一致（jpQualityGuard の findRepeatedPhrase と同じ考え方） */
 function findRepeatedPhraseForSetting(
   text: string,

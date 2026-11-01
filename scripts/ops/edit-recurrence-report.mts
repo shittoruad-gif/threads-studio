@@ -27,9 +27,13 @@ const accts: any[] = ((await d.execute(sql`
 const norm = (s: string) => String(s || '').replace(/[\s　]/g, '');
 let flagged = 0;
 for (const x of accts) {
-  const pairs = (((await d.execute(sql`SELECT originalContent b, postContent a, editedByUserAt e FROM scheduledPosts
+  const pairsAll = (((await d.execute(sql`SELECT originalContent b, postContent a, editedByUserAt e, eventId ev FROM scheduledPosts
     WHERE threadsAccountId = ${x.a} AND editedByUserAt >= UTC_TIMESTAMP() - INTERVAL ${days} DAY AND originalContent IS NOT NULL
-    ORDER BY editedByUserAt DESC LIMIT 20`)) as any)[0] as any[]).map((r) => ({ before: String(r.b), after: String(r.a), at: new Date(r.e).getTime() }));
+    ORDER BY editedByUserAt DESC LIMIT 20`)) as any)[0] as any[]).map((r) => ({ before: String(r.b), after: String(r.a), at: new Date(r.e).getTime(), event: r.ev != null }));
+  // ★イベント告知の投稿（eventId あり）への手直しは、会場・参加費などその催しの事実を足すもの（11/1 #42：「岡山駅西口」「＋1,000円」を3本に）。
+  //   ふつうの投稿の生成に出ないのは正しいので、くり返しの判定からは外す（本番の決まり作りには今までどおり入る）
+  const eventPairs = pairsAll.filter((p) => p.event).length;
+  const pairs = pairsAll.filter((p) => !p.event);
   const rec = recurringEdits(pairs);
   // 契約が終わった方は生成が止まっているので、直す対象にしない（10/10 #17 氷見様＝10/2 解約で「まだ直っていない」と出続けた）
   const ended = await db.isEndedCustomer(Number(x.u));
@@ -60,7 +64,7 @@ for (const x of accts) {
   // 全文の書き換え（別の話を書いた回）は、言葉の直しには数えない（shared/editLessons.ts keptRatio）。何本あったかだけ出す
   const { keptRatio, EDIT_LESSONS } = await import('../../shared/editLessons');
   const rewrites = pairs.filter((p) => keptRatio(p.before, p.after) < EDIT_LESSONS.targetedEditKeptRatio).length;
-  console.log(`\n#${x.a} @${x.name}  手直し${x.n}本（${days}日）${rewrites > 0 ? `・うち全文の書き換え ${rewrites}本` : ''}${ended ? '  ※ご契約終了（生成は止まっている・対象外）' : ''}`);
+  console.log(`\n#${x.a} @${x.name}  手直し${x.n}本（${days}日）${rewrites > 0 ? `・うち全文の書き換え ${rewrites}本` : ''}${eventPairs > 0 ? `・イベント告知の手直し ${eventPairs}本は対象外` : ''}${ended ? '  ※ご契約終了（生成は止まっている・対象外）' : ''}`);
   // ご本人が3回以上そのまま書いている行（決まった挨拶・締め・URLなど）。生成で真似させるより定型として付ける方が確実＝三上様の判断待ちで報告に載せる
   const fixedLines = Array.from(ownLineCount.entries()).filter(([, n]) => n >= 3).sort((p, q) => q[1] - p[1]).slice(0, 4);
   for (const [l, n] of fixedLines) console.log(`  定型「${l.slice(0, 60)}」 ${n}本でそのまま`);

@@ -161,3 +161,26 @@ describe("N1顧客像の指数は7行すべてを回る（2026-09-18 昼の修�
     }
   });
 });
+
+/**
+ * 2026-11-01 夜間整備（どい接骨院様 acc37）：信条は直近の投稿で使われて外れていたのに、
+ * はじめの設定の「業界の誤解」に同じ一文があり、そこから「安静は逆効果」の投稿が4日で4本出ていた。
+ */
+describe("業界の誤解：直近の投稿で書いた項目はその日は渡さない", () => {
+  const myths = ["「とりあえず安静」はかえって長引くことがある", "湿布を貼れば治るというのは誤解です"];
+  const recent = [
+    "とりあえず安静」という指示は、一時的な安心感を与えるかもしれません。\nしかし、症状の真の改善には、根拠に基づいた施術が不可欠です。",
+    "痛いからって動かないでいると、かえって長引くことってあるんです。\n\n八潮のどい接骨院では、運動することで体を整えることを大切にしています😊",
+  ];
+  it("acc37 の実例：#5441 で書いた「とりあえず安静」の項目を外し、まだ書いていない項目は残す", async () => {
+    const { dropUsedItems } = await import("../shared/topicRotation");
+    const r = dropUsedItems(myths, recent);
+    expect(r.dropped).toEqual(["「とりあえず安静」はかえって長引くことがある"]);
+    expect(r.kept).toEqual(["湿布を貼れば治るというのは誤解です"]);
+  });
+  it("直近の投稿が無ければ何も外さない", async () => {
+    const { dropUsedItems } = await import("../shared/topicRotation");
+    expect(dropUsedItems(myths, []).kept).toEqual(myths);
+    expect(dropUsedItems(undefined, recent).kept).toEqual([]);
+  });
+});

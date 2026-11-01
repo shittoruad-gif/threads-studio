@@ -1136,7 +1136,10 @@ export async function generateAutoPost(
             .map((m) => dropAvoided(m as string, '主題の候補')),
           // 毎回出てよい言葉（店名・地名・業種・対象のお客様・ご本人が毎回書く挨拶や締め）は数えない
           protect: freshProtect,
-          index: postTypeIndex * PURPOSES.length + purposeIndex,
+          // ★同じ枠で自然さの点検に落ちた回数ぶん、今日の主題を次の候補へずらす（2026-11-01 夜間整備 acc37：
+          //   主題「丁寧なカウンセリングと的確な施術で健康をサポート」が一般論にしかならず、3回とも同じ主題で落ちて枠が欠けた）
+          index: postTypeIndex * PURPOSES.length + purposeIndex
+            + (rejectedLinesBySlot.get(rejectKey(userId, threadsAccountId, postingTimeIndex))?.length ?? 0),
           // ★ご本人が3回以上消している言葉を含む材料は、今日の主題にしない（10/8 #25：4回消している「文化勲章の授賞式」の材料が
           //   主題に選ばれ、「主題を書け」と「この言葉は書かない」がぶつかっていた）。末尾の助詞は外して材料と照らす
           avoid: [...ngWords, ...stickyAvoid, ...ownerRemovedFirm.map((w) => w.replace(/[のへでをにはがと]+$/, '')).filter((w) => w.length >= 2)],
@@ -1290,7 +1293,7 @@ export async function generateAutoPost(
       f = g;
       return f;
     })();
-    const counselingForToday: any = (() => {
+    const counselingForToday: any = await (async () => {
       const r = filterCounseling(counselingResult, declinedPatterns);
       if (r.dropped > 0) console.log(`[AutoPost] はじめの設定の答えから、見送られた主張に触れる${r.dropped}項目を今日は外した account=${threadsAccountId}`);
       // ★はじめの設定の体験談（realEpisodes）にも、N1顧客像と同じ話が入っている（プレステージ様・2026-09-25）
@@ -1313,6 +1316,17 @@ export async function generateAutoPost(
         v = { ...(v || {}) };
         v.realEpisodes = ledgerItem?.kind === 'episode' ? [ledgerItem.content] : [];
         v.faq = ledgerItem?.kind === 'faq' ? [ledgerItem.content] : [];
+      }
+      // ★業界の誤解（industryMyths）は信条と同じ「主張」。直近の投稿にすでに出た項目はその日は渡さない
+      //   （2026-11-01 acc37：信条は外れていたのに industryMyths の同じ一文から「安静は逆効果」が4日で4本）。
+      //   「書いてよい事実」の照合（scrubPost）は元の counselingResult を使うので、事実そのものは消えない
+      if (v && Array.isArray(v.industryMyths) && v.industryMyths.length > 0 && recentPosts.length > 0) {
+        const { dropUsedItems } = await import('../shared/topicRotation');
+        const r = dropUsedItems(v.industryMyths, recentPosts);
+        if (r.dropped.length > 0) {
+          console.log(`[AutoPost] 業界の誤解${r.dropped.length}件は直近の投稿で使われているため今日は渡さない account=${threadsAccountId}「${r.dropped[0].replace(/\s+/g, ' ').slice(0, 30)}」`);
+          v = { ...v, industryMyths: r.kept };
+        }
       }
       return v;
     })();
