@@ -321,6 +321,21 @@ export async function executePendingPosts() {
             console.log(`[Scheduled Post] post ${post.id}: ツリー${segments.length}本→権限承認待ちのため1本目のみ公開`);
             segments = segments.slice(0, 1);
           }
+          // ★ツリーの試し（2026-11-02 三上様・shared/treeTrial.ts）：学習用の3アカウントだけ、期間中は id の偶奇で
+          //   「最初の1文を1本目・残りを返信」の形と、ふつうの1本を交互に出す。お客様のアカウントは変えない。
+          //   写真・動画・アンケート・クイズの投稿と、分けられない本文はふつうのまま。
+          if (segments.length === 1 && canReply && post.source === 'auto'
+            && !(post as any).mediaItemId && !(post as any).pollOptions && !(post as any).quotePostId
+            && (post as any).angle !== 'spoiler_quiz') {
+            const { inTreeTrial, treeArm, treeSplit } = await import('../shared/treeTrial');
+            if (inTreeTrial(Number(post.threadsAccountId)) && treeArm(Number(post.id)) === 'tree') {
+              const split = treeSplit(segments[0]);
+              if (split) {
+                segments = split;
+                console.log(`[Scheduled Post] post ${post.id}: ツリーの試し→2本に分けて公開`);
+              }
+            }
+          }
           // トピックタグ：お客様には付けない。学習用アカウントだけ期間中に「本文に合う言葉を付ける／付けない」を交互に
           //   （2026-10-18 三上様・shared/topicTagTrial.ts。7/5〜は店舗の悩みワードを全投稿に同じく付けていた）
           const topicTag = (await import('../shared/topicTagTrial')).scheduledPostTopicTag({
