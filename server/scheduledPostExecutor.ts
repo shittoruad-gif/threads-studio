@@ -76,8 +76,6 @@ async function notifyUserPostFailure(
 // 実際の処理時間より十分長く取り、処理中の投稿を誤って再投入して二重投稿になる
 // レースを避ける。
 const PROCESSING_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
-// ★上限で翌日に回したことの LINE 通知は、1アカウント1日1回だけ（同じ日に何件回しても繰り返さない）
-const capNoticeSentOn = new Map<number, string>();
 
 /**
  * Reset stuck processing posts back to pending
@@ -268,34 +266,22 @@ export async function executePendingPosts() {
         //   R8：冷却中の通知は「投稿が消されたため◯/◯まで1日1件」（「連携1日目の慣らし運転」と出ていた誤りを直す）。
         if (post.source === 'auto' && !(post as any).replyToThreadsId && !(post as any).quotePostId) {
           try {
-            const { dailyCapDecision } = await import('./dailyCapCheck');
-            const { nextDaySameTime, cooldownCapNotice, rampCapNotice, dateJstLabel } = await import('../shared/dailyCap');
+            const { dailyCapDecision, threadsPostsTodayCount, sendDeferredNotice } = await import('./dailyCapCheck');
+            const { nextDaySameTime } = await import('../shared/dailyCap');
             const dc = await dailyCapDecision({ ...(account as any), accessToken }, post.userId);
             let todayCount = 0;
             if (dc.strict) {
-              const { getThreadsUserPosts } = await import('./threadsApi');
-              const recent = await getThreadsUserPosts(accessToken, account.threadsUserId, 25);
-              const todayJst = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
-              todayCount = (recent || []).filter((p: any) => new Date(new Date(p.timestamp).getTime() + 9 * 3600e3).toISOString().slice(0, 10) === todayJst).length;
+              todayCount = await threadsPostsTodayCount(accessToken, account.threadsUserId);
             } else {
               todayCount = await db.countAccountAutoPostsPostedToday(account.id);
             }
             if (todayCount >= dc.cap) {
               const at = nextDaySameTime(post.scheduledAt, Date.now());
-              await db.updateScheduledPost(post.id, { scheduledAt: at } as any);
+              const { jstDateString } = await import('../shared/accountRamp');
+              await db.moveScheduledPostToDay(post.id, at, jstDateString(0, at.getTime()));
               console.log(`[Scheduled Post] daily cap (${dc.reason}): account ${account.id} today=${todayCount} cap=${dc.cap} → post ${post.id} moved to ${new Date(at.getTime() + 9 * 3600e3).toISOString().slice(0, 16)} JST`);
-              const todayKey = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
-              if (dc.strict && capNoticeSentOn.get(account.id) !== todayKey) {
-                capNoticeSentOn.set(account.id, todayKey);
-                try {
-                  const targets = await db.getLineUserIdsForUser(post.userId);
-                  const { pushMessages } = await import('./lineNotify');
-                  const text = dc.reason === 'cooldown'
-                    ? cooldownCapNotice(String(account.threadsUsername), dateJstLabel(dc.untilJst), todayCount)
-                    : rampCapNotice(String(account.threadsUsername), dc.days, todayCount, dc.cap);
-                  for (const to of targets) await pushMessages(to, [{ type: 'text', text }]);
-                } catch { /* 通知失敗は無視 */ }
-              }
+              // ★お知らせはやさしい言葉で1日1通（shared/approvalLead.ts・先に回す処理 deferOverCapToday と共有・2026-11-01）
+              await sendDeferredNotice(account, post.userId, dc, todayCount, [{ head: String(post.postContent ?? ''), from: post.scheduledAt, to: at }]);
               continue;
             }
           } catch (e) { console.warn(`[Scheduled Post] daily cap check skipped: ${(e as Error)?.message}`); }

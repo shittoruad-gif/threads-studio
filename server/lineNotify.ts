@@ -392,24 +392,39 @@ export async function sendApprovalPush(
   }
   if (normal.length === 0) return ok;
 
-  // ★2026-09-12 既定を「見送りしなければ予定時刻に公開」に変更。押せない日があっても投稿は止まらない
-  const tail = normal.length > 1
-    ? "内容をご確認ください。「見送る」を押さない限り、予定時刻にそのまま公開されます。直したいときは「書き直す」、出したくないときだけ「見送る」を押してください。"
-    : "内容をご確認ください。「見送る」を押さない限り、予定時刻にそのまま公開されます。直したいときは「書き直す」を押してください。";
-  // ★直してから7日以内なら「直した内容をもとに作り直している」ことを先に伝える（2026-09-30 三上様指示）
+  // ★頭の文は、その方の設定どおりに書く（2026-11-01・shared/approvalLead.ts）。
+  //   以前は全員に「見送るを押さない限り、予定時刻にそのまま公開」と書いていて、
+  //   「OKした分だけ公開」の方には事実と違っていた（押さないと出ない）。
   let editNote = "";
+  let softPublish = true;
+  let capNote: string | undefined;
   try {
     const anyId = normal.find((p) => p.threadsAccountId)?.threadsAccountId;
     if (anyId) {
       const db = await import("./db");
       const acc: any = await db.getThreadsAccountById(Number(anyId));
+      // ★直してから7日以内なら「直した内容をもとに作り直している」ことを先に伝える（2026-09-30 三上様指示）
       const { EDITED_RECENTLY_NOTE, EDIT_NOTE_DAYS } = await import("@shared/postPreference");
       const last = acc?.userId ? await db.getLatestUserEditAt(Number(acc.userId)) : null;
       if (last && Date.now() - new Date(last).getTime() <= EDIT_NOTE_DAYS * 86400_000) editNote = `${EDITED_RECENTLY_NOTE}\n`;
+      if (acc?.userId) {
+        const owner: any = await db.getUserById(Number(acc.userId));
+        softPublish = Boolean(owner?.autoPublishIfNoResponse);
+        // 1日の数を抑えている間は、直接の投稿も数に入ることを先に伝える（回ってから知らせるのでは遅い）
+        const { dailyCapDecision } = await import("./dailyCapCheck");
+        const dc = await dailyCapDecision(acc, Number(acc.userId));
+        if (dc.strict) {
+          const { capLine } = await import("@shared/approvalLead");
+          const { dateJstLabel } = await import("@shared/dailyCap");
+          capNote = capLine({ reason: dc.reason === "cooldown" ? "cooldown" : "ramp", cap: dc.cap, untilLabel: dc.reason === "cooldown" ? dateJstLabel(dc.untilJst) : undefined });
+        }
+      }
     }
   } catch { editNote = ""; }
+  const { approvalLeadText, jstMonthDayLabel } = await import("@shared/approvalLead");
+  const lead = approvalLeadText({ label, dateLabel: first ? jstMonthDayLabel(first) : "", count: normal.length, softPublish, editNote, capNote });
   const sentNormal = await pushMessage(lineUserId, [
-    { type: "text", text: `${label}の投稿が${normal.length}件できました。\n${editNote}${tail}` },
+    { type: "text", text: lead },
     buildPostCards(normal as any, { bulk: true }),
   ]);
   return ok || sentNormal;

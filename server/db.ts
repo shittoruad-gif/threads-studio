@@ -785,6 +785,64 @@ export async function countAccountAutoPostsPostedToday(accountId: number): Promi
   return Number((rows as any)?.[0]?.[0]?.c ?? 0);
 }
 
+/** 今日（JST）こちらから公開した数（自動・手動とも・返信を除く）。直接の投稿の数＝Threadsの実測−これ（2026-11-01） */
+export async function countAccountPostsPublishedToday(accountId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows: any = await db.execute(sql`
+    SELECT COUNT(*) AS c FROM scheduledPosts
+    WHERE threadsAccountId = ${accountId} AND status = 'posted' AND replyToThreadsId IS NULL
+      AND DATE(CONVERT_TZ(IFNULL(postedAt, scheduledAt),'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`);
+  return Number((rows as any)?.[0]?.[0]?.c ?? 0);
+}
+
+/**
+ * 今日（JST）まだ出ていない自動投稿（公開待ち・その日の分の承認待ち）。上限で先に明日へ回す対象（2026-11-01）。
+ * 公開時の上限判定（scheduledPostExecutor）と同じく、返信・引用・固定投稿の下書きは除く。
+ */
+export async function listTodaysRemainingAutoPosts(accountId: number): Promise<Array<{ id: number; scheduledAt: Date; postContent: string | null }>> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: scheduledPosts.id, scheduledAt: scheduledPosts.scheduledAt, postContent: scheduledPosts.postContent })
+    .from(scheduledPosts)
+    .where(and(
+      eq(scheduledPosts.threadsAccountId, accountId),
+      eq(scheduledPosts.source, 'auto'),
+      sql`${scheduledPosts.status} IN ('pending','awaiting_approval')`,
+      sql`${scheduledPosts.replyToThreadsId} IS NULL AND ${scheduledPosts.quotePostId} IS NULL`,
+      sql`(${scheduledPosts.angle} IS NULL OR ${scheduledPosts.angle} <> 'pinned')`,
+      sql`DATE(CONVERT_TZ(${scheduledPosts.scheduledAt},'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))`,
+      sql`(${scheduledPosts.status} <> 'awaiting_approval'
+           OR COALESCE(${scheduledPosts.forDate}, DATE(CONVERT_TZ(${scheduledPosts.createdAt},'+00:00','+09:00'))) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00')))`,
+    ))
+    .orderBy(scheduledPosts.scheduledAt) as any;
+}
+
+/**
+ * 1日の数を抑えている（かもしれない）アカウント：連携10日以内か冷却中で、今日まだ出ていない自動投稿があるもの。
+ * 本当に抑えているか（歴の長いアカウントは除く）は dailyCapDecision で決める（2026-11-01）。
+ */
+export async function listAccountIdsUnderDailyCap(): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows: any = await db.execute(sql`
+    SELECT DISTINCT ta.id FROM threadsAccounts ta
+    JOIN scheduledPosts sp ON sp.threadsAccountId = ta.id
+    WHERE ta.isActive = 1
+      AND (ta.createdAt >= UTC_TIMESTAMP() - INTERVAL 10 DAY
+           OR ta.cooldownUntil >= DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+09:00')))
+      AND sp.source = 'auto' AND sp.status IN ('pending','awaiting_approval')
+      AND DATE(CONVERT_TZ(sp.scheduledAt,'+00:00','+09:00')) = DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+09:00'))`);
+  return ((rows as any)?.[0] ?? []).map((r: any) => Number(r.id));
+}
+
+/** 投稿を別の日へ移す。承認待ちが日をまたいで見送りにならないよう「何日の分か」も合わせる（2026-11-01） */
+export async function moveScheduledPostToDay(postId: number, at: Date, forDate: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(scheduledPosts).set({ scheduledAt: at, forDate } as any).where(eq(scheduledPosts.id, postId));
+}
+
 /**
  * 今日の残りの自動投稿（未公開）を、先頭 keep 件だけ残して翌日の同じ時刻へ送る（2026-09-13 R5：冷却に入った日は1件に絞る）。
  * 今日すでに公開した分は keep に数える。固定投稿の下書きは対象外。戻り値は送った件数。

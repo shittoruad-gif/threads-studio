@@ -2499,6 +2499,15 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             // 夜の回は「夕方以降に確認される・公開前確認あり」のアカウントだけ（それ以外は朝6時に作る）
             continue;
           }
+          // ★明日の分を数える前に、今日の数に届いていれば今日の残りを先に明日へ回す（2026-11-01）。
+          //   回す前に作ると、明日に回ってくる投稿を数えずに明日の分を作り、明日が契約より多くなる。
+          if (opts.forTomorrow) {
+            try {
+              const { deferOverCapToday } = await import('./dailyCapCheck');
+              const n = await deferOverCapToday(account.id);
+              if (n > 0) console.log(`[AutoPost] 今日の数に届いていたため ${n}件を先に明日へ account=${account.id}`);
+            } catch (e) { console.warn(`[AutoPost] 先に明日へ回す判定に失敗 account=${account.id}: ${(e as Error)?.message}`); }
+          }
           if (!opts.fillToday && isDaytimeReview(reviewHour)) {
             acctHours = hoursAfterReview(acctHours ?? POSTING_HOURS, reviewHour as number);
             console.log(`[AutoPost] 確認は${reviewHour}時ごろ account=${account.id} → 公開は${(reviewHour as number) + 1}時以降（${acctHours.slice(0, 3).join(',')}時）`);
@@ -3079,6 +3088,20 @@ export function startAutoPostScheduler() {
   });
 
   console.log('[AutoPost Scheduler] Scheduled for 6:00 AM JST daily');
+
+  // ★慣らし・冷却中のアカウントは、今日の数に届いたら残りをその場で明日へ回す（2026-11-01・server/dailyCapCheck.ts）。
+  //   公開の直前まで待つと、そのあいだ画面とLINEに「今日」の予定が残り、お客様が食い違いに迷う。
+  cron.schedule('15 7-22 * * *', async () => {
+    try {
+      const ids = await db.listAccountIdsUnderDailyCap();
+      if (ids.length === 0) return;
+      const { deferOverCapToday } = await import('./dailyCapCheck');
+      for (const id of ids) {
+        try { await deferOverCapToday(id); }
+        catch (e) { console.warn(`[DailyCap] 先に明日へ回す判定に失敗 account=${id}: ${(e as Error)?.message}`); }
+      }
+    } catch (e) { console.warn(`[DailyCap] 毎時の判定に失敗: ${(e as Error)?.message}`); }
+  }, { timezone: 'Asia/Tokyo' });
 
   // ★前の晩に「明日の分」を作る（2026-09-24 三上様指示・shared/reviewTime.ts）。
   //   夕方以降に確認されるお客様（reviewHour 15〜23時）について、その時間の30分前に作ってお届けする。

@@ -4100,13 +4100,17 @@ async function applyPastedEdit(userId: number, post: any, text: string): Promise
     const d = new Date(new Date(post.scheduledAt).getTime() + 9 * 3600_000);
     return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
   })() : "";
+  // ★「押さなくても公開」は「見送りしなければ公開」の方だけ。OKした分だけ公開の方には事実と違う（2026-11-01）
+  const owner: any = await db.getUserById(userId).catch(() => null);
   return [
     { type: "text", text: `お送りいただいた文で、${when ? `${when}公開予定の` : ""}投稿を直しました。
 ${EDIT_LEARN_NOTE}` },
     { type: "text", text: next },
     textWithQuick(
       post.status === "awaiting_approval"
-        ? "この内容でよろしければ「これで投稿する」を押してください（押さなくても、見送らなければ予定の時間にこの内容で公開されます）。"
+        ? (owner?.autoPublishIfNoResponse
+          ? "この内容でよろしければ「これで投稿する」を押してください（押さなくても、見送らなければ予定の時間にこの内容で公開されます）。"
+          : "この内容でよろしければ「これで投稿する」を押してください。押すと、予定の時間にこの内容で公開されます。")
         : "予定の時間に、この内容で公開されます。",
       [
         ...(post.status === "awaiting_approval" ? [{ label: "これで投稿する", data: `a=ok&i=${id}` }] : []),

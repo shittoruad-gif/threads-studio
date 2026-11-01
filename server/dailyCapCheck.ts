@@ -46,3 +46,76 @@ export async function dailyCapDecision(account: any, userId: number): Promise<Da
   const reason: DailyCapDecision["reason"] = inCooldown(account) ? "cooldown" : rc.capped ? "ramp" : "contract";
   return { cap, contract, reason, strict: rc.capped, days: rc.days, untilJst: dateColToJst(account?.cooldownUntil), note: rc.note };
 }
+
+/** 「明日に回しました」を送った日（アカウントごと・1日1通）。公開時の判定（scheduledPostExecutor）と共有する */
+export const capNoticeSentOn = new Map<number, string>();
+
+/** 今日Threadsに出ている数（ご本人がThreadsアプリから直接出した分を含む・実測） */
+export async function threadsPostsTodayCount(accessToken: string, threadsUserId: string): Promise<number> {
+  const { getThreadsUserPosts } = await import("./threadsApi");
+  const recent = await getThreadsUserPosts(accessToken, threadsUserId, 25);
+  const today = jstDateString(0);
+  return (recent || []).filter((p: any) => jstDateString(0, new Date(p.timestamp).getTime()) === today).length;
+}
+
+/**
+ * 明日へ回したことを、やさしい言葉で1日1通だけ伝える（2026-11-01）。
+ * 直接の投稿の数＝Threadsの実測 − 今日こちらから出した数。
+ */
+export async function sendDeferredNotice(
+  account: any,
+  userId: number,
+  dc: DailyCapDecision,
+  todayCount: number,
+  moved: Array<{ head: string; from: Date | string; to: Date | string }>,
+): Promise<void> {
+  const today = jstDateString(0);
+  if (!dc.strict || moved.length === 0 || capNoticeSentOn.get(account.id) === today) return;
+  capNoticeSentOn.set(account.id, today);
+  try {
+    const ours = await db.countAccountPostsPublishedToday(account.id).catch(() => 0);
+    const { deferredNoticeText } = await import("../shared/approvalLead");
+    const { dateJstLabel } = await import("../shared/dailyCap");
+    const text = deferredNoticeText({
+      username: String(account.threadsUsername),
+      reason: dc.reason === "cooldown" ? "cooldown" : "ramp",
+      cap: dc.cap,
+      todayCount,
+      direct: Math.max(0, todayCount - ours),
+      untilLabel: dc.reason === "cooldown" ? dateJstLabel(dc.untilJst) : undefined,
+      moved,
+    });
+    const targets = await db.getLineUserIdsForUser(userId);
+    const { pushMessages } = await import("./lineNotify");
+    for (const to of targets) await pushMessages(to, [{ type: "text", text }]);
+  } catch (e) { console.warn(`[DailyCap] 明日に回したお知らせに失敗 account=${account.id}: ${(e as Error)?.message}`); }
+}
+
+/**
+ * 今日の数に届いていたら、今日の残りの自動投稿を「その場で」明日の同じ時刻へ回す（2026-11-01）。
+ *
+ * 以前は公開の直前にだけ回していた。そのあいだ画面とLINEには「今日21:13」と出たまま、
+ * 夜の「明日の分」づくりはまだ今日にある投稿を数えずに明日の分を作り、明日が契約より多くなっていた
+ * （11/1 慣らし中のお客様：ご本人の直接投稿3件 → 21:13の投稿が残ったまま、20:34に明日の分を作成）。
+ * 慣らし・冷却中（Threadsの実測で数えるアカウント）だけが対象。歴の長いアカウントは公開時の判定のまま。
+ */
+export async function deferOverCapToday(accountId: number): Promise<number> {
+  const account: any = await db.getThreadsAccountById(accountId);
+  if (!account?.accessToken || !account?.threadsUserId || !account?.userId) return 0;
+  const dc = await dailyCapDecision(account, Number(account.userId));
+  if (!dc.strict) return 0;
+  const rows = await db.listTodaysRemainingAutoPosts(accountId);
+  if (rows.length === 0) return 0;
+  const todayCount = await threadsPostsTodayCount(account.accessToken, account.threadsUserId);
+  if (todayCount < dc.cap) return 0;
+  const { nextDaySameTime } = await import("../shared/dailyCap");
+  const moved: Array<{ head: string; from: Date | string; to: Date | string }> = [];
+  for (const r of rows) {
+    const at = nextDaySameTime(r.scheduledAt, Date.now());
+    await db.moveScheduledPostToDay(r.id, at, jstDateString(0, at.getTime()));
+    moved.push({ head: String(r.postContent ?? ""), from: r.scheduledAt, to: at });
+    console.log(`[DailyCap] 先に明日へ (${dc.reason}): account ${accountId} today=${todayCount} cap=${dc.cap} → post ${r.id}`);
+  }
+  await sendDeferredNotice(account, Number(account.userId), dc, todayCount, moved);
+  return moved.length;
+}
