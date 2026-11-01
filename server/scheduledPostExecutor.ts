@@ -279,6 +279,8 @@ export async function executePendingPosts() {
               const at = nextDaySameTime(post.scheduledAt, Date.now());
               const { jstDateString } = await import('../shared/accountRamp');
               await db.moveScheduledPostToDay(post.id, at, jstDateString(0, at.getTime()));
+              // 取り出した時点で「処理中」にしているので、公開待ちに戻す（戻さないと10分間「処理中」と表示される）
+              await db.updateScheduledPost(post.id, { status: 'pending' } as any);
               console.log(`[Scheduled Post] daily cap (${dc.reason}): account ${account.id} today=${todayCount} cap=${dc.cap} → post ${post.id} moved to ${new Date(at.getTime() + 9 * 3600e3).toISOString().slice(0, 16)} JST`);
               // ★お知らせはやさしい言葉で1日1通（shared/approvalLead.ts・先に回す処理 deferOverCapToday と共有・2026-11-01）
               await sendDeferredNotice(account, post.userId, dc, todayCount, [{ head: String(post.postContent ?? ''), from: post.scheduledAt, to: at }]);
