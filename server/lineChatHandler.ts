@@ -19,7 +19,7 @@ import { saveCounselingAnswers } from "./counselingSave";
 import { contractSummary, type ContractInfo } from "../shared/contractSummary";
 import { classifyRequestKind as requestKind, isPastedContent, wantsTodayPosts, wantsNgWord, unwantedTopicWord, wantsPausePosting, looksLikeAnnouncement, isThanksOrGreeting, greetingOpener, looksLikeOwnPostMaterial, looksLikeMaterialOnly, looksLikeInvitationPhrase, isPlainStatement, wantsTopicPost, wantsHuman, isShortWish } from "../shared/requestKind";
 import { missingAutoPostFields } from "../shared/autoPostRequirements";
-import { postBodyFromMessage, dayButtonLabel, postRequestBookedText } from "../shared/linePostRequest";
+import { parsePostRequest, dayButtonLabel, postRequestBookedText, type PostRequest } from "../shared/linePostRequest";
 
 const MENU_HINT: { label: string; data: string }[] = MENU_ITEMS;
 
@@ -3302,6 +3302,17 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     }
   }
 
+  // ★「はじめの設定」を開いたまま、投稿のご依頼を送られた場合（2026-11-02 お客様：設定を開いた6分後から
+  //   「○日の18時頃 この投稿をお願いします」を6通送ったが、すべて設定の答えとして受け取られて予約にならなかった）。
+  //   「投稿してください」の行がはっきりあるものだけ予約へ回す（設定の途中経過は setLineChatState が控えに残す）。
+  if (st?.state === "counseling" && st.payload) {
+    const req = parsePostRequest(text);
+    if (req?.asked) {
+      const offered = await offerPostFromText(lineUserId, user.id, req.body, req.want);
+      if (offered) return offered;
+    }
+  }
+
   if (st?.state === "counseling" && st.payload) {
     try {
       const cs: CounselingState = JSON.parse(st.payload);
@@ -3670,9 +3681,9 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   // ★送っていただいた投稿の文章は、そのまま予約できるようにする（2026-11-01 三上様指示・shared/linePostRequest.ts）。
   //   以前は「そのまま投稿されることはありません」と返すだけで、告知はグループLINEなど別の経路で担当者が予約していた。
   {
-    const body = postBodyFromMessage(t);
-    if (body) {
-      const offered = await offerPostFromText(lineUserId, user.id, body);
+    const req = parsePostRequest(t);
+    if (req) {
+      const offered = await offerPostFromText(lineUserId, user.id, req.body, req.want);
       if (offered) return offered;
     }
   }
@@ -4080,7 +4091,7 @@ function replyToTopic(canSave: boolean): unknown[] {
 }
 
 /** 送っていただいた投稿の文章をお預かりして、「いつ出すか」を伺う。連携が無ければ null（今までどおりの案内へ） */
-async function offerPostFromText(lineUserId: string, userId: number, body: string): Promise<unknown[] | null> {
+async function offerPostFromText(lineUserId: string, userId: number, body: string, want?: PostRequest["want"]): Promise<unknown[] | null> {
   const accounts = await db.getThreadsAccountsByUserId(userId);
   if (accounts.length === 0) return null;
   const n = Array.from(body).length;
@@ -4090,13 +4101,19 @@ async function offerPostFromText(lineUserId: string, userId: number, body: strin
       MENU_HINT,
     )];
   }
-  await db.setLineChatState(lineUserId, "pending_post", JSON.stringify({ text: body }));
+  await db.setLineChatState(lineUserId, "pending_post", JSON.stringify({ text: body, want: want ?? null }));
+  // ★日と時刻の指定があれば、そのまま予約する（2026-11-02 お客様「明日3日の18時頃 この投稿をお願いします」）
+  if (want?.day && want.hour !== undefined && accounts.length === 1) {
+    return handlePostRequestButton(lineUserId, userId, { c: "postme", w: "want" });
+  }
   const head = body.replace(/\s+/g, " ").trim().slice(0, 30);
   return [textWithQuick(
     "お送りいただいた文章を、このまま投稿にできます。文章は変えずに出します。\n\n" +
     `「${head}${n > 30 ? "…" : ""}」\n\n` +
     "いつ出すか、下から選んでください。",
     [
+      ...(want?.day && want.hour !== undefined ? [{ label: `${dayButtonLabel(want.day)} ${want.hour}:${String(want.minute ?? 0).padStart(2, "0")}に出す`.slice(0, 20), data: "c=postme&w=want" }]
+        : want?.day ? [{ label: `${dayButtonLabel(want.day)}に出す`, data: `c=postme&d=${want.day}` }] : []),
       { label: "いちばん早い日に出す", data: "c=postme&w=first" },
       { label: "日にちを選ぶ", data: "c=postme&w=pick" },
       { label: "投稿しない", data: "c=postno" },
@@ -4120,8 +4137,9 @@ async function handlePostRequestButton(lineUserId: string, userId: number, q: Re
   }
   const st = await db.getLineChatState(lineUserId);
   let text = "";
+  let want: PostRequest["want"] | null = null;
   if (st?.state === "pending_post" && st.payload) {
-    try { text = String(JSON.parse(String(st.payload)).text || ""); } catch { text = ""; }
+    try { const pl = JSON.parse(String(st.payload)); text = String(pl.text || ""); want = pl.want ?? null; } catch { text = ""; }
   }
   if (!text) return [textWithQuick("お預かりしていた文章が見つかりませんでした。お手数ですが、もう一度お送りください。", MENU_HINT)];
   const accounts = await db.getThreadsAccountsByUserId(userId);
@@ -4134,7 +4152,7 @@ async function handlePostRequestButton(lineUserId: string, userId: number, q: Re
       accounts.slice(0, 12).map((a: any) => ({ label: `@${String(a.threadsUsername || a.id)}`.slice(0, 20), data: `c=postme&a=${a.id}${rest}` })),
     )];
   }
-  const { openDays, openSlotOnDay, projectIdForAccount, notTodayReason } = await import("./linePostRequest");
+  const { openDays, openSlotOnDay, projectIdForAccount, notTodayReason, wantedSlot } = await import("./linePostRequest");
   if (q.w === "pick" && !q.d) {
     const days = await openDays(acct, userId, 7);
     if (days.length === 0) return [textWithQuick("この先2週間、空いている日が見つかりませんでした。お手数ですが「担当者に聞く」からご相談ください。", [{ label: "担当者に聞く", data: "m=staff" }, ...MENU_HINT])];
@@ -4144,7 +4162,17 @@ async function handlePostRequestButton(lineUserId: string, userId: number, q: Re
     )];
   }
   let at: Date | null = null;
-  if (q.d) {
+  if (q.w === "want" && want?.day && want.hour !== undefined) {
+    const r = await wantedSlot(acct, userId, want.day, want.hour, want.minute ?? 0);
+    if (!r.ok) {
+      return [textWithQuick(r.reason, [
+        { label: "日にちを選ぶ", data: `c=postme&a=${acct.id}&w=pick` },
+        { label: "いちばん早い日に出す", data: `c=postme&a=${acct.id}&w=first` },
+        { label: "投稿しない", data: "c=postno" },
+      ])];
+    }
+    at = r.at;
+  } else if (q.d) {
     at = await openSlotOnDay(acct, userId, String(q.d));
     if (!at) return [textWithQuick("その日は、空いている時間がなくなっていました。ほかの日を選んでください。", [{ label: "日にちを選ぶ", data: `c=postme&a=${acct.id}&w=pick` }, { label: "投稿しない", data: "c=postno" }])];
   } else {
@@ -4169,7 +4197,7 @@ async function handlePostRequestButton(lineUserId: string, userId: number, q: Re
   await db.clearLineChatState(lineUserId);
   console.log(`[LineChat] 送られた文章を予約 user=${userId} account=${acct.id} post=${id} at=${at.toISOString()}`);
   // 「いちばん早い日」で今日に入らなかったときは、理由を先に書く（上限か、時間が残っていないか）
-  const why = q.d ? "" : await notTodayReason(acct, userId, at).catch(() => "");
+  const why = q.d || q.w === "want" ? "" : await notTodayReason(acct, userId, at).catch(() => "");
   return [textWithQuick(`${why ? `${why}\n\n` : ""}${postRequestBookedText(at)}`, [
     ...(id ? [{ label: "取り消す", data: `c=postcancel&i=${id}` }] : []),
     ...MENU_HINT,

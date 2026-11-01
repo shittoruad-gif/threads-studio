@@ -17,29 +17,100 @@ function isAskLine(line: string): boolean {
   return Array.from(s).length > 0 && Array.from(s).length <= 40 && !/[?？]/.test(s) && ASK_LINE_RE.test(s);
 }
 
+/** 「————」「ーーー」「＝＝＝」などの区切りの線 */
+function isSeparatorLine(line: string): boolean {
+  return /^[\s\-ー―－—–_＿=＝~〜・.]{3,}$/.test(line.trim());
+}
+
+/** 「明日3日の18時頃」「5日の18時頃」「今日のお昼12時ごろ」のような、いつ出すかの行（投稿の本文ではない） */
+const WHEN_LINE_RE = /^(今日|本日|明日|あした|明後日|あさって|\d{1,2}\s*[\/月]\s*\d{1,2}\s*日?|\d{1,2}\s*日)[^\n]{0,20}$|^[^\n]{0,8}\d{1,2}\s*(時|:\d{2})[^\n]{0,12}$/;
+function isWhenLine(line: string): boolean {
+  const s = line.trim();
+  return Array.from(s).length <= 30 && !/[?？]/.test(s) && WHEN_LINE_RE.test(s);
+}
+
+export type PostRequest = {
+  body: string;
+  /** 「投稿してください」などのご依頼の行があったか（無ければ、投稿文を貼っただけ） */
+  asked: boolean;
+  /** 日時の指定（「3日の18時頃」）。日だけ・時刻だけのこともある */
+  want?: { day?: string; hour?: number; minute?: number };
+};
+
+/** いつ出すかの行から、日付（YYYY-MM-DD・JST）と時刻を読む。now から見て過ぎた日は来月とみなす */
+export function parseWhen(line: string, now: number = Date.now()): PostRequest["want"] | undefined {
+  const s = line.normalize("NFKC");
+  const j = new Date(now + 9 * 3600_000);
+  const y = j.getUTCFullYear(), m = j.getUTCMonth(), d = j.getUTCDate();
+  const iso = (yy: number, mm: number, dd: number) => new Date(Date.UTC(yy, mm, dd)).toISOString().slice(0, 10);
+  let day: string | undefined;
+  const md = s.match(/(\d{1,2})\s*[\/月]\s*(\d{1,2})/);
+  const dOnly = s.match(/(\d{1,2})\s*日/);
+  if (md) {
+    const mm = Number(md[1]) - 1, dd = Number(md[2]);
+    day = iso(mm < m - 6 ? y + 1 : y, mm, dd);
+  } else if (dOnly) {
+    const dd = Number(dOnly[1]);
+    day = dd >= d ? iso(y, m, dd) : iso(y, m + 1, dd);
+  } else if (/明後日|あさって/.test(s)) day = iso(y, m, d + 2);
+  else if (/明日|あした/.test(s)) day = iso(y, m, d + 1);
+  else if (/今日|本日/.test(s)) day = iso(y, m, d);
+  let hour: number | undefined, minute: number | undefined;
+  const hm = s.replace(/(\d{1,2})\s*[\/月]\s*(\d{1,2})\s*日?/, "").replace(/\d{1,2}\s*日/, "").match(/(\d{1,2})\s*(?:時\s*(半|(\d{1,2})\s*分)?|:(\d{2}))/);
+  if (hm) {
+    hour = Number(hm[1]);
+    minute = hm[2] === "半" ? 30 : hm[3] ? Number(hm[3]) : hm[4] ? Number(hm[4]) : 0;
+    if (hour < 12 && /(午後|夕方|夜)/.test(s)) hour += 12;
+    if (hour > 23 || minute > 59) { hour = undefined; minute = undefined; }
+  } else if (/(お昼|昼)/.test(s)) { hour = 12; minute = 0; }
+  if (!day && hour === undefined) return undefined;
+  return { day, hour, minute };
+}
+
 /**
- * 投稿にする本文を取り出す。投稿の文章でなければ null。
- *  - 1行目か最後の行が「投稿してください」などのご依頼で、残りが15字以上 → 残りが本文
+ * 投稿にする本文と、ご依頼・日時の指定を取り出す。投稿の文章でなければ null。
+ *  - 頭か終わりの数行が「投稿してください」などのご依頼（「明日3日の18時頃」のような日時の行や区切りの線を含んでよい）で、
+ *    残りが15字以上 → 残りが本文
  *  - 投稿文をそのまま貼ったもの（isPastedContent） → 全文が本文
+ * ★2026-11-02 お客様の書き方「明日3日の18時頃／この投稿をお願いします／————／本文」で、日時の行と線まで本文に入っていた。
  */
-export function postBodyFromMessage(t: string): string | null {
+export function parsePostRequest(t: string, now: number = Date.now()): PostRequest | null {
   const s = String(t || "").trim();
   if (!s) return null;
   const rows = s.split(/\r?\n/);
-  const nonEmpty = rows.filter((r) => r.trim());
-  if (nonEmpty.length >= 2) {
-    if (isAskLine(nonEmpty[0])) {
-      const body = s.slice(s.indexOf(nonEmpty[0]) + nonEmpty[0].length).trim();
-      if (Array.from(body).length >= 15) return body;
-    }
-    const last = nonEmpty[nonEmpty.length - 1];
-    if (isAskLine(last)) {
-      const body = s.slice(0, s.lastIndexOf(last)).trim();
-      if (Array.from(body).length >= 15) return body;
-    }
+  const idx = rows.map((r, i) => (r.trim() ? i : -1)).filter((i) => i >= 0);
+  if (idx.length >= 2) {
+    const tryEdge = (order: number[]): PostRequest | null => {
+      // 端から最大4行（空行を除く）：ご依頼の行・日時の行・区切りの線だけで、ご依頼の行を1つ含むこと
+      let asked = false, when: string | null = null, used = 0;
+      for (const i of order.slice(0, 4)) {
+        const line = rows[i];
+        if (isAskLine(line)) { asked = true; if (!when && isWhenLine(line)) when = line; }
+        else if (isWhenLine(line)) when = when ?? line;
+        else if (isSeparatorLine(line)) { /* 線は本文に入れない */ }
+        else break;
+        used++;
+      }
+      if (!asked) return null;
+      const rest = order[0] === idx[0]
+        ? rows.slice(order[used - 1] + 1)
+        : rows.slice(0, order[used - 1]);
+      const body = rest.filter((r, k, a) => !(isSeparatorLine(r) && (k === 0 || k === a.length - 1))).join("\n").trim();
+      if (Array.from(body).length < 15) return null;
+      return { body, asked: true, want: when ? parseWhen(when, now) : undefined };
+    };
+    const head = tryEdge(idx);
+    if (head) return head;
+    const tail = tryEdge([...idx].reverse());
+    if (tail) return tail;
   }
-  if (isPastedContent(s)) return s;
+  if (isPastedContent(s)) return { body: s, asked: false };
   return null;
+}
+
+/** 本文だけ（以前の呼び出し口） */
+export function postBodyFromMessage(t: string): string | null {
+  return parsePostRequest(t)?.body ?? null;
 }
 
 /** 候補の時刻（JST）。昼→夕方→午後→夜→朝の順に、ふだん見られやすい時間から */

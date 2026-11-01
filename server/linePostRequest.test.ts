@@ -42,3 +42,26 @@ describe("空いている時刻を選ぶ", () => {
     expect(postRequestBookedText(new Date("2026-11-03T03:00:00Z"))).toContain("11/3（火） 12:00 に");
   });
 });
+
+describe("日時の行と区切り線のあるご依頼（2026-11-02）", () => {
+  const now = Date.parse("2026-11-02T05:00:00+09:00");
+  it("「明日3日の18時頃／この投稿をお願いします／線／本文」", async () => {
+    const { parsePostRequest } = await import("../shared/linePostRequest");
+    const r = parsePostRequest("明日３日の18時頃\nこの投稿をお願いします\n\n————————\n\n経営者の皆さんへ質問です\n\n初めての交流会で一番気になることは？", now);
+    expect(r?.body).toBe("経営者の皆さんへ質問です\n\n初めての交流会で一番気になることは？");
+    expect(r?.asked).toBe(true);
+    expect(r?.want).toEqual({ day: "2026-11-03", hour: 18, minute: 0 });
+  });
+  it("日だけの数字は、過ぎていれば来月", async () => {
+    const { parseWhen } = await import("../shared/linePostRequest");
+    expect(parseWhen("8日の18時頃", now)?.day).toBe("2026-11-08");
+    expect(parseWhen("1日の夜7時", now)).toEqual({ day: "2026-12-01", hour: 19, minute: 0 });
+    expect(parseWhen("今日のお昼", now)).toEqual({ day: "2026-11-02", hour: 12, minute: 0 });
+    expect(parseWhen("11/15 9:30", now)).toEqual({ day: "2026-11-15", hour: 9, minute: 30 });
+  });
+  it("ご依頼の行が無い貼り付けは asked=false", async () => {
+    const { parsePostRequest } = await import("../shared/linePostRequest");
+    const t = "サンプル交流会のお知らせ💫\n\n毎月第3水曜の夜に、駅前で開いています。\n名刺交換だけで終わらない会です。\n\n#岡山 #交流会";
+    expect(parsePostRequest(t, now)).toEqual({ body: t, asked: false });
+  });
+});

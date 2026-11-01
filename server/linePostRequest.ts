@@ -8,7 +8,7 @@
 import * as db from "./db";
 import { dailyCapDecision, threadsPostsTodayCount } from "./dailyCapCheck";
 import { rampCap, jstDateString } from "../shared/accountRamp";
-import { pickPostTime } from "../shared/linePostRequest";
+import { pickPostTime, dayButtonLabel, POST_REQUEST_LEAD_MS } from "../shared/linePostRequest";
 
 /** その日の上限と、すでにある数（上限を掛けていない日は cap=null） */
 export async function dayCapacity(account: any, userId: number, dayJst: string, now: number = Date.now()): Promise<{ cap: number | null; used: number; existing: number[] }> {
@@ -64,4 +64,22 @@ export async function projectIdForAccount(accountId: number, userId: number): Pr
   if (fromPosts) return fromPosts;
   const pjs = ((await db.getUserProjects(userId)) || []).filter((pj: any) => !String(pj.id).startsWith("demo_"));
   return pjs[0]?.id ? String(pjs[0].id) : null;
+}
+
+/**
+ * お客様が日と時刻を指定したとき（「明日3日の18時頃」）。その時刻で入れられるか。
+ * 入れられないのは、間に合わない時刻か、その日の数がいっぱい（慣らし・冷却中）のときだけ。
+ * 時刻はお客様の指定を優先し、ほかの投稿と近くても動かさない。
+ */
+export async function wantedSlot(account: any, userId: number, day: string, hour: number, minute: number, now: number = Date.now()): Promise<{ ok: true; at: Date } | { ok: false; reason: string }> {
+  const at = new Date(Date.parse(`${day}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+09:00`));
+  const label = `${dayButtonLabel(day)} ${hour}:${String(minute).padStart(2, "0")}`;
+  if (!Number.isFinite(at.getTime()) || at.getTime() < now + POST_REQUEST_LEAD_MS) {
+    return { ok: false, reason: `${label} には間に合わないため、予約できませんでした。ほかの日を選んでください。` };
+  }
+  const { cap, used } = await dayCapacity(account, userId, day, now);
+  if (cap !== null && used >= cap) {
+    return { ok: false, reason: `${dayButtonLabel(day)} はすでに${used}件の投稿が決まっていて、いまは1日${cap}件までのため、この日には入れられませんでした。ほかの日を選んでください。` };
+  }
+  return { ok: true, at };
 }

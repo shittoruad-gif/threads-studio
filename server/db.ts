@@ -876,13 +876,18 @@ export async function createScheduledPostReturningId(data: InsertScheduledPost):
   return Number(res?.[0]?.insertId ?? 0);
 }
 
-/** 公式LINEから送られた文章の予約（approvedVia='line_post'）のうち、その日（今日 or 明日・JST）の分（2026-11-01） */
+/**
+ * その日（今日 or 明日・JST）に出す、自動ではない投稿（LINEで送られた文章・担当が入れた告知など）の数（2026-11-01）。
+ * ★2026-11-02 approvedVia='line_post' だけを数えていたため、担当が入れた告知（line_one）がある日に自動の投稿が上乗せで作られ、
+ *   1日の上限を超えた分が翌日へ回っていた。固定投稿の下書き・返信は数えない。
+ */
 export async function countAccountLinePostsOnDay(accountId: number, dayOffset: 0 | 1 = 0): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
   const rows: any = await db.execute(sql`
     SELECT COUNT(*) AS c FROM scheduledPosts
-    WHERE threadsAccountId = ${accountId} AND approvedVia = 'line_post'
+    WHERE threadsAccountId = ${accountId} AND source = 'manual'
+      AND (angle IS NULL OR angle <> 'pinned') AND replyToThreadsId IS NULL
       AND status IN ('pending','processing','posted')
       AND DATE(CONVERT_TZ(scheduledAt,'+00:00','+09:00')) = DATE_ADD(DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+09:00')), INTERVAL ${dayOffset === 1 ? 1 : 0} DAY)`);
   return Number((rows as any)?.[0]?.[0]?.c ?? 0);

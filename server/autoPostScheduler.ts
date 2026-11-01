@@ -2588,7 +2588,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           if (!opts.fillToday) {
             // ★前の晩の回は「明日の分」を数える。朝の回は、前の晩に作った今日の分もここで数える（二重に作らない）
             let alreadyToday = await db.countAccountAutoPostsScheduledToday(account.id, opts.forTomorrow ? 1 : 0).catch(() => 0);
-            // ★1日の数を抑えている間は、公式LINEから送られた文章の予約（approvedVia='line_post'）もその日の数に入れる（2026-11-01）。
+            // ★1日の数を抑えている間は、自動ではない投稿（LINEで送られた文章・担当が入れた告知）もその日の数に入れる（2026-11-01・11-02 告知も）。
             //   数えないと、ご本人の投稿と自動の投稿が同じ日に並び、自動の方が翌日に回されてしまう。
             if (rampCappedHere) alreadyToday += await db.countAccountLinePostsOnDay(account.id, opts.forTomorrow ? 1 : 0).catch(() => 0);
             if (alreadyToday > 0) {
