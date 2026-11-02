@@ -65,3 +65,14 @@ describe("日時の行と区切り線のあるご依頼（2026-11-02）", () => 
     expect(parsePostRequest(t, now)).toEqual({ body: t, asked: false });
   });
 });
+
+describe("「配信お願いします」も依頼として読む（2026-11-02）", () => {
+  it("明日の12時頃配信お願いします", async () => {
+    const { parsePostRequest } = await import("../shared/linePostRequest");
+    const r = parsePostRequest("明日の12時頃配信お願いします\n\n——————\n\nこんにちは\n\n来週の交流会の準備を進めています。\n———\n奇数月の第3水曜\n———\nの固定で開きます", Date.parse("2026-11-02T09:30:00+09:00"));
+    expect(r?.asked).toBe(true);
+    expect(r?.want).toEqual({ day: "2026-11-03", hour: 12, minute: 0 });
+    expect(r?.body.startsWith("こんにちは")).toBe(true);
+    expect(r?.body).toContain("———\n奇数月の第3水曜\n———");
+  });
+});
