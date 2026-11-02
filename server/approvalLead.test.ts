@@ -81,3 +81,11 @@ describe("確認を待っている投稿が無いとき（2026-11-02）", () => 
     expect(noWaitingText({ upcoming: [], reviewHour: null })).toBe("いま確認をお待ちしている投稿はありません。\n\n新しい投稿ができたら、このトークでお知らせします。");
   });
 });
+
+describe("慣らしをかけないアカウント（2026-11-02）", () => {
+  it("申し出のあったアカウントだけ", async () => {
+    const { rampWaived } = await import("../shared/accountRamp");
+    expect(rampWaived(42)).toBe(true);
+    expect(rampWaived(10)).toBe(false);
+  });
+});
