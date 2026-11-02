@@ -674,3 +674,27 @@ function reviewHourLabel(h: number | null | undefined): string {
   if (h >= 15) return `前の日の${h}時ごろ（翌日の分）`;
   return `毎朝（${h}時ごろまでにお届けし、公開は${h + 1}時以降）`;
 }
+
+/**
+ * はじめの設定の答えから、こちらが出した質問文の行（案内・例・「スキップ」の案内など）をそのまま送り返した分を外す。
+ * ★LINEは長押しでメッセージ全体しかコピーできないため、質問を丸ごとコピーして答えを書き足して送ると、
+ *   「（なければ下の「スキップ」を押してください）」や質問の補足までお店の情報に入り、
+ *   毎晩の生成で「今日の主題」に選ばれていた（2026-10-15〜11-01 acc25 で15回以上・2026-11-02 夜間整備）。
+ * 先に入れておいた答え（「いまの登録内容」）の行は、「」を外して答えとして残す。全部が質問文なら元のまま返す。
+ */
+export function dropEchoedPromptLines(answer: string, promptText: string, proposed?: string | null): string {
+  const asked = new Set(String(promptText ?? "").split("\n").map((l) => l.trim()).filter(Boolean));
+  const keep = String(proposed ?? "").trim();
+  const out: string[] = [];
+  let dropped = false;
+  for (const raw of String(answer ?? "").split("\n")) {
+    const line = raw.trim();
+    if (!line || !asked.has(line)) { out.push(raw); continue; }
+    dropped = true;
+    const inner = line.replace(/^「([\s\S]*)」$/, "$1");
+    if (keep && inner !== line && keep.includes(inner)) out.push(inner);
+  }
+  // 質問文を外したときは、質問文の段落の空行も残さない
+  const res = (dropped ? out.filter((l) => l.trim()) : out).join("\n").trim();
+  return res || String(answer ?? "").trim();
+}

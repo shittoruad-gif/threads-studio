@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPostCards, parsePostback, textWithQuick, textWithChoices, settingsQuick, settingsSummary, helpQuick, shouldClearPendingInput, planUpgradeExitText } from "./lineChat";
+import { buildPostCards, parsePostback, textWithQuick, textWithChoices, settingsQuick, settingsSummary, helpQuick, shouldClearPendingInput, planUpgradeExitText, dropEchoedPromptLines } from "./lineChat";
 
 describe("LINEチャット完結UI", () => {
   it("投稿カードのボタンはすべてpostback（Webビューを開かない）", () => {
@@ -242,5 +242,20 @@ describe("フリープランの方への出口の案内", () => {
   });
   it("LINEの1通に収まる", () => {
     expect(Array.from(t).length).toBeLessThan(500);
+  });
+});
+
+// 2026-11-02 夜間整備 acc25：質問を丸ごとコピーして答えを書き足すと、案内の行までお店の情報に入り「今日の主題」に選ばれていた
+describe("はじめの設定：質問文を送り返した行は答えに入れない", () => {
+  const asked = "【津の国や の設定　12／20】\nお客様によく聞かれることは？\n\nそのまま「よくいただくご質問」の投稿にします。近いものをタップして直してもOK。無ければ「なし」でOK。\n\nいまの登録内容：\n「見るだけでも大丈夫か」\n\n合っていれば「これでOK」を押してください。変えたい場合は、新しい内容をそのまま送ってください。\n\n（なければ下の「スキップ」を押してください）\n\n（1つ前の質問に戻る場合は下の「戻る」を押してください）";
+  it("案内・スキップの行を外し、書き足した答えと先に入れた答えは残す", () => {
+    const sent = asked + "\n親の着物は着られるか";
+    const got = dropEchoedPromptLines(sent, asked, "見るだけでも大丈夫か");
+    expect(got).toBe("見るだけでも大丈夫か\n親の着物は着られるか");
+    expect(got).not.toMatch(/スキップ|タップして直して|これでOK|【/);
+  });
+  it("ふつうの答えはそのまま・全部が質問文なら元のまま", () => {
+    expect(dropEchoedPromptLines("見るだけでも大丈夫か\nお手入れはどうすれば良いか", asked, null)).toBe("見るだけでも大丈夫か\nお手入れはどうすれば良いか");
+    expect(dropEchoedPromptLines("（なければ下の「スキップ」を押してください）", asked, null)).toBe("（なければ下の「スキップ」を押してください）");
   });
 });

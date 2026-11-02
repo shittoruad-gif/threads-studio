@@ -1106,7 +1106,10 @@ async function advanceCounseling(userId: number, lineUserId: string, st: Counsel
   if (q.required && skipped && !q.allowEmptyShortcut) {
     return [{ type: "text", text: "こちらは必要な項目です。おおよそで構いませんので、お答えください。" }, ...askQuestion(st)];
   }
-  let stored = skipped ? "" : a.slice(0, 500);
+  // ★質問を丸ごとコピーして送り返された分（案内・例・「スキップ」の案内）は答えに入れない（2026-11-02 夜間整備 acc25）
+  const { dropEchoedPromptLines } = await import("./lineChat");
+  const askedText = skipped ? "" : askQuestion(st).map((m: any) => String(m?.text ?? "")).join("\n");
+  let stored = skipped ? "" : dropEchoedPromptLines(a, askedText, st.prefill?.[q.id as string]).slice(0, 500);
   if (Array.isArray(q.choices) && !skipped) {
     const hit = q.choices.find((c: any) => c.label === a || c.value === a);
     if (hit) stored = hit.value;
