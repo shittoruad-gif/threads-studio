@@ -148,13 +148,3 @@ export function inCooldown(account: { cooldownUntil?: Date | string | null } | n
   const until = dateColToJst(account?.cooldownUntil);
   return !!until && todayJst <= until;
 }
-
-/**
- * 慣らし運転をかけないアカウント（2026-11-02 三上様「自己責任でこの人は投稿を増やすと言っているので、それ前提で」）。
- * ご本人が「自分の責任で投稿を増やしたい」と申し出た方だけ。契約どおりの本数で作り、ご本人がLINEで送った投稿・告知はその上に足す。
- * 投稿が消されたときの冷却（1日1件）は、ここに入っていてもかかる（アカウントを守る最後の歯止め）。
- */
-export const RAMP_WAIVED_ACCOUNT_IDS: readonly number[] = [42];
-export function rampWaived(accountId: number): boolean {
-  return RAMP_WAIVED_ACCOUNT_IDS.includes(Number(accountId));
-}

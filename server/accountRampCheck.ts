@@ -5,7 +5,7 @@
  * を足す。判定は1日キャッシュ。
  */
 import * as db from "./db";
-import { rampWaived, rampCap, rampNote, compensationCount, compensationNote, manualExtraPosts, inCooldown, recentlyOutOfCooldown, dateColToJst, COMPENSATION_WINDOW_DAYS } from "../shared/accountRamp";
+import { rampCap, rampNote, compensationCount, compensationNote, manualExtraPosts, inCooldown, recentlyOutOfCooldown, dateColToJst, COMPENSATION_WINDOW_DAYS } from "../shared/accountRamp";
 
 const ESTABLISHED_DAYS = 30;
 const ESTABLISHED_FOLLOWERS = 100;
@@ -131,8 +131,6 @@ async function rampDecision(
   const r = rampCap(contract, account.createdAt);
   const base: RampDecision = { count: contract, capped: false, extra: false, days: r.days, note: "", established: false, shortfall: 0 };
   if (r.days >= COMPENSATION_WINDOW_DAYS) return base; // 30日を過ぎたら通常
-  // ★ご本人の申し出で慣らしをかけないアカウント（shared/accountRamp.ts RAMP_WAIVED_ACCOUNT_IDS）。契約どおり・補填は乗せない
-  if (rampWaived(account.id)) return base;
   const established = await isEstablishedAccount(account);
   if (established) return { ...base, established: true };
   if (r.capped) return { ...base, count: r.count, capped: true, note: rampNote(r.days, contract) };
