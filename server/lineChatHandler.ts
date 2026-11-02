@@ -2386,6 +2386,15 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     return [textWithQuick(await decideNewsletter(Number(q.n), v, Number(user.id)), MENU_HINT)];
   }
 
+  // ── 「できるようになったこと」の下見（三上様だけが押せる・2026-11-02・server/featureUpdates.ts）──
+  if (q.adm === "fu" && q.k && q.v) {
+    if ((user as any).role !== "admin") return [textWithQuick("この操作はできません。", MENU_HINT)];
+    const v = q.v === "send" || q.v === "skip" || q.v === "drop" ? q.v : null;
+    if (!v) return [textWithQuick("うまく受け取れませんでした。", MENU_HINT)];
+    const { decideFeatureUpdates } = await import("./featureUpdates");
+    return [textWithQuick(await decideFeatureUpdates(String(q.k), v, Number(user.id)), MENU_HINT)];
+  }
+
   // ── 週1回の◯✕アンケートの下見（三上様だけが押せる・2026-09-29・server/draftSurveyWeekly.ts）──
   if (q.adm === "sv" && q.k && q.v) {
     if ((user as any).role !== "admin") return [textWithQuick("この操作はできません。", MENU_HINT)];

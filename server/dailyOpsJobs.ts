@@ -504,6 +504,14 @@ export function initDailyOpsSchedulers(): void {
     const { runNewsletterJob } = await import("./newsletter");
     await runTrackedJob("newsletter_preview", runNewsletterJob);
   });
+  // 水曜 11:30 JST = 2:30 UTC — 「できるようになったこと」の週1回のお知らせ（2026-11-02 三上様・server/featureUpdates.ts）。
+  //   本番で動いたことを確かめた（verifiedAt あり）・まだ送っていない項目だけを三上様のLINEへ下見。0件の週は何もしない。
+  //   「この内容で送る」を押した週だけお客様へ届く（読み物＝火曜11:00・◯✕＝月曜11:30・フォロー＝毎日11:00 と重ならない）。
+  cron.schedule("30 2 * * 3", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runFeatureUpdatesJob } = await import("./featureUpdates");
+    await runTrackedJob("feature_updates_preview", runFeatureUpdatesJob);
+  });
   // 月曜 11:30 JST = 2:30 UTC — 案の◯✕アンケートを週1回（2026-09-29 三上様指示「型Bを定期的に」・server/draftSurveyWeekly.ts）。
   //   見送りが続き、公開もある方に8案を作り、三上様のLINEへ下見。「この8案を送る」を押したものだけお客様へ届く。
   cron.schedule("30 2 * * 1", async () => {
