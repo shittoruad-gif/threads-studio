@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isProOrAbove, mediaPostsEnabledFor, pickMedia, mediaPostNote, MEDIA_POSTS } from "../shared/mediaPosts";
+import { isProOrAbove, mediaPostsEnabledFor, pickMedia, mediaPostNote, MEDIA_POSTS, looksLikePhotoUseRequest } from "../shared/mediaPosts";
 
 describe("写真・動画の自動投稿（プロ以上のみ）", () => {
   it("プロ・ビジネス（特別価格・モニター価格を含む）だけ", () => {
@@ -36,5 +36,19 @@ describe("写真・動画の自動投稿（プロ以上のみ）", () => {
     expect(n).toMatch(/写っていない物・人・数字・効果は書かない/);
     expect(n).toMatch(/宣伝の言葉・予約の案内・URL/);
     expect(mediaPostNote("video", null)).toContain("動画");
+  });
+});
+
+// 2026-11-02 ご質問 #65：写真を続けて送った途中の一言が自動応答に回り「お店の情報にご登録を」と答えていた
+describe("写真の直後の「この辺を使って欲しい」", () => {
+  it("写真を使ってほしいという一言は当たる", () => {
+    for (const t of ["この辺を使って欲しい", "これ使ってほしい", "これらを載せてください", "この写真で投稿して", "全部使ってね", "これでお願いします"]) {
+      expect(looksLikePhotoUseRequest(t), t).toBe(true);
+    }
+  });
+  it("ご質問・使ってほしくない・長い文は当たらない", () => {
+    for (const t of ["使ってほしくない言葉がある", "写真は何枚まで使えますか？", "この写真はどうやって使われますか", "この写真は使わないで", "院の紹介として、平日の夜は仕事帰りの方が多く、腰の痛みの相談が増えています。こういう話を使ってほしい"]) {
+      expect(looksLikePhotoUseRequest(t), t).toBe(false);
+    }
   });
 });

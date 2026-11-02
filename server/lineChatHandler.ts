@@ -3789,6 +3789,14 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   // ★「〇〇をお勧めしたい」は、投稿で取り上げてほしい話題。ご質問として自動応答に回すと、
   //   AIが「担当者が登録します」と答えたまま誰にも届かず、どこにも残らなかった
   //   （2026-10-13 ご質問 #56）。ネタ帳の「書いてほしい話題」へその場で足せるようにする。
+  // ★写真を続けて送った途中の「この辺を使って欲しい」は、写真のこと。自動応答に回すと
+  //   「お店の情報にご登録ください」と的外れに答えていた（2026-11-02 ご質問 #65）。
+  try {
+    const { recentPhotoUseReply } = await import("./mediaItems");
+    const photoReply = await recentPhotoUseReply(Number(user.id), t);
+    if (photoReply) return [{ type: "text", text: photoReply }];
+  } catch { /* 写真の確認に失敗しても、ふだんの受け答えを続ける */ }
+
   if (wantsTopicPost(t)) {
     await recordMaterial(user.id, lineUserId, t);
     return replyToTopic(await stashTopic(lineUserId, user.id, t));

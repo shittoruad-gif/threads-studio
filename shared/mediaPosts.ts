@@ -63,6 +63,20 @@ export function mediaPostNote(kind: string, description: string | null | undefin
   ].join("\n");
 }
 
+/**
+ * 写真を送った直後の「この辺を使って欲しい」「これ載せて」のような一言か。
+ * ★2026-11-02 ご質問 #65：写真を10枚続けて送った途中のこの一言が自動応答に回り、
+ *   「お店の情報にご登録ください」と的外れに答えていた。写真は受け取った時点で預かってあるので、そのことをお返しする。
+ *   直近に写真を預かったときだけ使う（判定は呼び出し側・server/mediaItems.ts recentPhotoUseReply）。
+ */
+export function looksLikePhotoUseRequest(text: string): boolean {
+  const t = String(text ?? "").replace(/\s+/g, "");
+  if (!t || Array.from(t).length > 40) return false;
+  if (/[?？]|(どう|なぜ|いつ|何枚|何回|できますか|ますか|ですか)/.test(t)) return false;
+  return /(使っ|載せ|のせ|付け|つけ|投稿し|出し|だし)て(欲しい|ほしい|下さい|ください|お願い|おねがい|もらえ|ね|$)/.test(t)
+    || /^(この|これ|こっち|それ)(辺|へん|あたり|ら|ら全部|全部|写真|画像)?(で|を)?(お願い|おねがい|よろしく)/.test(t);
+}
+
 /** 写真の中身をAIに一言で説明させるときの指示（投稿文ではなく、選ぶ・書くための材料） */
 export const DESCRIBE_PROMPT =
   "この写真に写っているものを、日本語で1〜2文・60字以内で説明してください。お店の中・外・道具・料理・季節の物など、見えるものだけを書く。人が写っていれば「人が写っている」とだけ書き、顔・年齢・体のことは書かない。推測で場所や店名を書かない。";

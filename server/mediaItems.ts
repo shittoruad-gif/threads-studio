@@ -75,6 +75,24 @@ export async function saveLineImage(userId: number, messageId: string): Promise<
   ].filter((l, i) => l || i === 3).join("\n");
 }
 
+/**
+ * 写真を送った直後（15分以内）の「この辺を使って欲しい」へのお返し。当たらなければ null（2026-11-02 ご質問 #65）。
+ */
+export async function recentPhotoUseReply(userId: number, text: string): Promise<string | null> {
+  const { looksLikePhotoUseRequest } = await import("../shared/mediaPosts");
+  if (!looksLikePhotoUseRequest(text)) return null;
+  const d: any = await db.getDb();
+  const recent = Number(rows(await d.execute(sql`SELECT COUNT(*) n FROM mediaItems WHERE userId=${userId} AND source='line' AND createdAt >= NOW() - INTERVAL 15 MINUTE`))[0]?.n ?? 0);
+  if (recent === 0) return null;
+  if (!(await mediaAllowed(userId))) return "写真を付けた自動投稿は、プロプラン（ビジネスプランを含む）でお使いいただけます。";
+  const n = Number(rows(await d.execute(sql`SELECT COUNT(*) n FROM mediaItems WHERE userId=${userId} AND enabled=1`))[0]?.n ?? 0);
+  return [
+    `お送りいただいた写真は、届いた時点で預かっています（さきほど届いた写真：${recent}枚／いま預かっている写真：${n}枚）。`,
+    `このあと、1日1本の自動投稿に、預かった写真を1枚ずつ付けて出します（同じ写真は${MEDIA_POSTS.reuseDays}日あけて使います）。`,
+    "ほかにも使ってほしい写真があれば、そのまま送ってください。",
+  ].join("\n");
+}
+
 /** マカセルからの呼び出しの合言葉（MEDIA_INTAKE_SECRET）が合っているか。未設定なら常に不可（2026-10-28 共通化） */
 export function mediaSecretOk(given: unknown): boolean {
   const secret = process.env.MEDIA_INTAKE_SECRET || "";
