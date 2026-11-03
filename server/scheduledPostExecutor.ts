@@ -267,7 +267,6 @@ export async function executePendingPosts() {
         if (post.source === 'auto' && !(post as any).replyToThreadsId && !(post as any).quotePostId) {
           try {
             const { dailyCapDecision, threadsPostsTodayCount, sendDeferredNotice } = await import('./dailyCapCheck');
-            const { nextDaySameTime } = await import('../shared/dailyCap');
             const dc = await dailyCapDecision({ ...(account as any), accessToken }, post.userId);
             let todayCount = 0;
             if (dc.strict) {
@@ -276,7 +275,9 @@ export async function executePendingPosts() {
               todayCount = await db.countAccountAutoPostsPostedToday(account.id);
             }
             if (todayCount >= dc.cap) {
-              const at = nextDaySameTime(post.scheduledAt, Date.now());
+              // ★時刻を決めてあるアカウント（fixedPostHours）は翌日の決めた時刻へ。決めていなければ nextDaySameTime と同じ
+              const { deferredPostTime } = await import('./fixedPostHoursCheck');
+              const at = await deferredPostTime(account as any, post.scheduledAt, post.id, Date.now());
               const { jstDateString } = await import('../shared/accountRamp');
               await db.moveScheduledPostToDay(post.id, at, jstDateString(0, at.getTime()));
               // 取り出した時点で「処理中」にしているので、公開待ちに戻す（戻さないと10分間「処理中」と表示される）

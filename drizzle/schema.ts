@@ -426,6 +426,8 @@ export const threadsAccounts = mysqlTable("threadsAccounts", {
   metaAiCallLightAt: timestamp("metaAiCallLightAt"),
   // お客様が自分で足す「書き方の決まり」（1行1つ・最大10件・0109）。生成の最後で、手直しの決まりと同じ位置で渡す
   ownerRules: text("ownerRules"),
+  // 自動投稿の時刻を決めておく（カンマ区切りの時・JST。例 "12,15"・NULL＝今まで通り・0114・shared/fixedPostHours.ts）
+  fixedPostHours: varchar("fixedPostHours", { length: 20 }),
   /**
    * 「このアカウントのお店の情報が登録されていません」とLINEでご案内した日時。
    * ★アカウントが2つ以上あって紐づけが無いときは、もう一方の情報で文章を作らず止める。

@@ -916,10 +916,13 @@ export async function deferTodaysAutoPostsBeyond(accountId: number, keep: number
     ORDER BY scheduledAt`);
   const list: any[] = (rows as any)[0] ?? [];
   const skip = Math.max(0, keep - posted);
-  const { nextDaySameTime } = await import("../shared/dailyCap");
+  // ★時刻を決めてあるアカウント（fixedPostHours）は翌日の決めた時刻へ。決めていなければ nextDaySameTime と同じ
+  const { deferredPostTime } = await import("./fixedPostHoursCheck");
+  const [acct] = await database.select({ id: threadsAccounts.id, fixedPostHours: threadsAccounts.fixedPostHours })
+    .from(threadsAccounts).where(eq(threadsAccounts.id, accountId)).limit(1);
   let n = 0;
   for (const r of list.slice(skip)) {
-    await database.update(scheduledPosts).set({ scheduledAt: nextDaySameTime(r.scheduledAt) }).where(eq(scheduledPosts.id, Number(r.id)));
+    await database.update(scheduledPosts).set({ scheduledAt: await deferredPostTime(acct ?? null, r.scheduledAt, Number(r.id)) }).where(eq(scheduledPosts.id, Number(r.id)));
     n++;
   }
   return n;
@@ -1396,6 +1399,29 @@ export async function getAccountScheduledTimesToday(accountId: number): Promise<
         sql`${scheduledPosts.status} IN ('pending', 'awaiting_approval', 'posted', 'processing')`,
         sql`${scheduledPosts.replyToThreadsId} IS NULL`,
         sql`DATE(DATE_ADD(${scheduledPosts.scheduledAt}, INTERVAL 9 HOUR)) = DATE(DATE_ADD(NOW(), INTERVAL 9 HOUR))`,
+      ),
+    );
+  return rows.map((r) => r.at).filter((d): d is Date => d instanceof Date);
+}
+
+/**
+ * 決めておいた時刻（fixedPostHours）を使うアカウントの、その日（JST・YYYY-MM-DD）の投稿の時刻。
+ * ご本人の投稿も自動の投稿も含む。固定投稿の下書き（angle='pinned'）・返信・excludePostId は除く。
+ */
+export async function getAccountSlotTimesOnDate(accountId: number, ymd: string, excludePostId: number | null = null): Promise<Date[]> {
+  const database = await getDb();
+  if (!database) return [];
+  const rows = await database
+    .select({ at: scheduledPosts.scheduledAt })
+    .from(scheduledPosts)
+    .where(
+      and(
+        eq(scheduledPosts.threadsAccountId, accountId),
+        sql`${scheduledPosts.status} IN ('pending', 'awaiting_approval', 'posted', 'processing')`,
+        sql`${scheduledPosts.replyToThreadsId} IS NULL`,
+        sql`(${scheduledPosts.angle} IS NULL OR ${scheduledPosts.angle} <> 'pinned')`,
+        sql`DATE(DATE_ADD(${scheduledPosts.scheduledAt}, INTERVAL 9 HOUR)) = ${ymd}`,
+        ...(excludePostId ? [sql`${scheduledPosts.id} <> ${excludePostId}`] : []),
       ),
     );
   return rows.map((r) => r.at).filter((d): d is Date => d instanceof Date);

@@ -111,10 +111,11 @@ export async function deferOverCapToday(accountId: number): Promise<number> {
   if (rows.length === 0) return 0;
   const todayCount = await threadsPostsTodayCount(account.accessToken, account.threadsUserId);
   if (todayCount < dc.cap) return 0;
-  const { nextDaySameTime } = await import("../shared/dailyCap");
+  // ★時刻を決めてあるアカウント（fixedPostHours）は、翌日の決めた時刻へ回す。決めていなければ今まで通り翌日の同じ時刻
+  const { deferredPostTime } = await import("./fixedPostHoursCheck");
   const moved: Array<{ head: string; from: Date | string; to: Date | string }> = [];
   for (const r of rows) {
-    const at = nextDaySameTime(r.scheduledAt, Date.now());
+    const at = await deferredPostTime(account, r.scheduledAt, r.id, Date.now());
     await db.moveScheduledPostToDay(r.id, at, jstDateString(0, at.getTime()));
     moved.push({ head: String(r.postContent ?? ""), from: r.scheduledAt, to: at });
     console.log(`[DailyCap] 先に明日へ (${dc.reason}): account ${accountId} today=${todayCount} cap=${dc.cap} → post ${r.id}`);

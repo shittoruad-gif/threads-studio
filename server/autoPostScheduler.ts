@@ -10,6 +10,7 @@ import { mediaPostNote } from '../shared/mediaPosts';
 import cron from "node-cron";
 import * as db from "./db";
 import { getPlan } from "../shared/plans";
+import { OCCUPIED_GAP_MINUTES, parseFixedPostHours, planFixedDaySlots, fixedSlotTimes, slotTimeForIndex } from "../shared/fixedPostHours";
 import { buildCtaText } from "../shared/autoPostCta";
 import { charBudgetFor, resolveWithAlternation, POST_LENGTHS, trimToBudget } from "../shared/postLength";
 import { applyTicSentenceRepair, checkNaturalized, endsWithQuestion, findAgreementQuestion, findBannedTic, findRepeatedHookNumber, findRepeatedPhraseExcept, findTicSentence, polishPunctuation } from "../shared/jpQualityGuard";
@@ -510,7 +511,6 @@ export function postingTimeOnDay(index: number, customHours: number[] | null | u
  */
 const SAME_DAY_EXTRA_HOURS = [23];
 const MIN_GAP_MINUTES = 25;
-const OCCUPIED_GAP_MINUTES = 60;
 
 export function buildSameDaySlots(
   count: number, preferred: number[] | null | undefined, now: Date = new Date(), occupied: Date[] = [],
@@ -2527,6 +2527,9 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             console.log(`[AutoPost] 確認は${reviewHour}時ごろ account=${account.id} → 公開は${(reviewHour as number) + 1}時以降（${acctHours.slice(0, 3).join(',')}時）`);
           }
           const acctIdBefore = await db.getMaxScheduledPostId().catch(() => 0);
+          // ★お客様が決めた自動投稿の時刻（threadsAccounts.fixedPostHours・shared/fixedPostHours.ts・2026-11-04）。null＝今まで通り
+          const fixedHours = parseFixedPostHours((account as any).fixedPostHours);
+          if (fixedHours) console.log(`[AutoPost] 決めてある時刻 account=${account.id}: ${fixedHours.join(',')}時`);
           if (testHours) console.log(`[AutoPost] 投稿時間の試験 account=${account.id} 今日の時間(JST): ${testHours.slice(0, 3).join(',')}（4件目以降 ${testHours.slice(3).join(',')}）`);
           // 1日の回数（アカウント別の設定をプラン上限で頭打ち）
           let postCount = Math.min(getPostCount(eff.autoPostFrequency), maxPerDay);
@@ -2610,7 +2613,16 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             const already = await db.countAccountAutoPostsScheduledToday(account.id).catch(() => 0);
             const shortfall = Math.max(0, postCount - already);
             const occupied = shortfall > 0 ? await db.getAccountScheduledTimesToday(account.id).catch(() => [] as Date[]) : [];
-            sameDaySlots = buildSameDaySlots(shortfall, acctHours, new Date(), occupied);
+            if (fixedHours && shortfall > 0) {
+              // ★時刻を決めてあるアカウント（fixedPostHours）：まだ来ていない決めた時刻を前から使い、残りは今まで通り（決めた時刻からも離す）
+              const { jstDateString } = await import('../shared/accountRamp');
+              const dayTimes = await db.getAccountSlotTimesOnDate(account.id, jstDateString(0)).catch(() => [] as Date[]);
+              const nowD = new Date();
+              const fixedToday = fixedSlotTimes({ hours: fixedHours, count: shortfall, dayOffset: 0, now: nowD, occupied: dayTimes, gapMinutes: OCCUPIED_GAP_MINUTES });
+              sameDaySlots = [...fixedToday, ...buildSameDaySlots(shortfall - fixedToday.length, acctHours, nowD, [...occupied, ...dayTimes, ...fixedToday])];
+            } else {
+              sameDaySlots = buildSameDaySlots(shortfall, acctHours, new Date(), occupied);
+            }
             todayCount = sameDaySlots.length;
             fillTarget = already + todayCount;
             console.log(
@@ -2636,6 +2648,27 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
           } catch (e) {
             if (!(e instanceof Error && e.message === '__skip__')) console.error(`[AutoPost] Meta AI呼びかけ投稿の作成に失敗 user=${user.id} account=${account.id}:`, e);
           }
+
+          // ★時刻を決めてあるアカウント：朝の回・前の晩の回は、この回で作る枠の時刻を先に決めておく（i 番目＝i 番目の枠）。
+          //   決めた時刻を前から使い（その時刻に投稿があれば次へ）、足りない分は今までの決め方で決めた時刻・既存の投稿から離す。
+          let plannedTimes: Date[] | null = null;
+          if (fixedHours && !opts.fillToday && regularCount > 0) {
+            try {
+              const { jstDateString } = await import('../shared/accountRamp');
+              const dOff = opts.forTomorrow ? 1 : 0;
+              const dayTimes = await db.getAccountSlotTimesOnDate(account.id, jstDateString(dOff));
+              plannedTimes = planFixedDaySlots({
+                hours: fixedHours, count: regularCount, dayOffset: dOff, now: new Date(), occupied: dayTimes,
+                gapMinutes: OCCUPIED_GAP_MINUTES,
+                defaultAt: (k) => (opts.forTomorrow ? postingTimeOnDay(k, acctHours, 1) : getNextPostingTime(k, acctHours)),
+              });
+              console.log(`[AutoPost] 決めてある時刻で配置 account=${account.id} → ${plannedTimes.map((t) => new Date(t.getTime() + JST_OFFSET_MS).toISOString().slice(11, 16)).join(' / ')}`);
+            } catch (e) { console.warn(`[AutoPost] 決めてある時刻の配置に失敗（今まで通りに置く） account=${account.id}: ${(e as Error)?.message}`); plannedTimes = null; }
+          }
+          // 枠 i の時刻（外で決めた時刻が無ければ null＝generateAutoPost の中で今まで通り決める）
+          const slotTimeFor = (i: number): Date | null => slotTimeForIndex(i, {
+            sameDaySlots, plannedTimes, forTomorrow: !!opts.forTomorrow, tomorrowAt: (k) => postingTimeOnDay(k, acctHours, 1),
+          });
 
           let accFailed = 0;
           // ★保証パスでお届けした件数（お客様への説明に使う。materialDepth の facts.guaranteed）
@@ -2666,7 +2699,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                   for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
                     ok = await generateAutoPost(
                       user.id, project, typeIdx, purposeIdx, account.id, 0,
-                      true, acctHours, eff.postLength, opts.forTomorrow ? postingTimeOnDay(0, acctHours, 1) : null,
+                      true, acctHours, eff.postLength, slotTimeFor(0),
                       lastRejectReason.get(rk) ?? null, attempt === 2, false,
                       { choiceGroupId: groupId, forcedAngleId: CHOICE_ANGLE_IDS[k], choiceIndex: k, siblingTexts },
                     );
@@ -2713,6 +2746,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
               const normal = regularCount - want;
               const hrs = acctHours && acctHours.length > 0 ? acctHours : POSTING_HOURS;
               const usedHours = Array.from({ length: normal }, (_, k) => {
+                if (plannedTimes?.[k]) return new Date(plannedTimes[k].getTime() + JST_OFFSET_MS).getUTCHours();
                 const list = k >= hrs.length && hrs.length < 4 ? [...hrs, 12] : hrs;
                 return list[k % list.length];
               });
@@ -2796,7 +2830,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                 eff.autoPostRequireApproval,
                 acctHours,
                 eff.postLength,
-                learningAt ?? (sameDaySlots ? sameDaySlots[i] : (opts.forTomorrow ? postingTimeOnDay(i, acctHours, 1) : null)),
+                learningAt ?? slotTimeFor(i),
                 hint,
                 attempt === 3,
                 false,
@@ -2857,7 +2891,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                   success = await generateAutoPost(
                     user.id, project, typeIdx, purposeIdx, account.id, i,
                     eff.autoPostRequireApproval, acctHours, eff.postLength,
-                    sameDaySlots ? sameDaySlots[i] : (opts.forTomorrow ? postingTimeOnDay(i, acctHours, 1) : null),
+                    slotTimeFor(i),
                     hintNow, true, true,
                   );
                 }
