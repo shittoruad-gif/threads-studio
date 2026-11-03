@@ -3122,6 +3122,11 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       [{ label: `元に戻す（${jp(prev)}）`, data: `s=len&v=${prev === "alternate" ? "alt" : prev}${a}` }, ...MENU_HINT],
     )];
   }
+  // ── 投稿の中身についてのご希望を書き方の決まりに入れる確認のボタン（2026-11-03・server/contentRequestFlow.ts） ──
+  if (q.s === "crok" || q.s === "crfix" || q.s === "crno") {
+    const { handleContentRulePostback } = await import("./contentRequestFlow");
+    return handleContentRulePostback(user.id, lineUserId, q);
+  }
   // 「〇〇の話題はいらない」のボタンから、その言葉をそのまま登録する（2026-10-15 ご質問 #57）
   if (q.s === "ngadd") {
     const w = String(q.w || "").trim();
@@ -3269,7 +3274,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     }
     // ★紹介コード・クーポンは受ける（再開の入口を塞がない・2026-10-04 点検）
     if (looksLikeReferralCode(text)) return referralLink(lineUserId, text.trim(), user.id);
-    return (await autoAnswer(user.id, lineUserId, text)) ?? [endedReply()];
+    return (await autoAnswer(user.id, lineUserId, text, { allowRules: false })) ?? [endedReply()];
   }
 
   const st = await db.getLineChatState(lineUserId);
@@ -3570,6 +3575,12 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     return addNgWords(user.id, st.payload ? String(st.payload) : null, words);
   }
 
+  // ── 投稿の中身のご希望を「直して登録する」のあとの、決まりの文の入力待ち（2026-11-03） ──
+  if (st?.state === "content_rule_fix") {
+    const { handleContentRuleFixText } = await import("./contentRequestFlow");
+    return handleContentRuleFixText(user.id, lineUserId, st.payload, text);
+  }
+
   // ── 書き方の決まりの入力待ち（「書き方の決まり」ボタンのあと） ──
   if (st?.state === "ownerrule" && st.payload) {
     if (isPastedContent(text) || text.split(/\r?\n/).filter((l) => l.trim()).length >= 4) {
@@ -3676,6 +3687,20 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     }
     const own = (near?.post as any) ?? await db.findOwnRecentPostByContent(user.id, t);
     if (own) return replyToOwnPost(own, near ? !near.identical : false);
+  }
+
+  // ★投稿の中身についてのご希望（「〇〇の話題はいらない」「〇〇を勧めたい」「絵文字を減らして」）は、
+  //   書き方の決まりの文に整えて「登録する」ボタンをお出しする（2026-11-03 三上様「自動的にきちんと反映できるように」）。
+  //   10/12・10/14 は自動の返事（「担当者が登録します」「NGワードをご自身で」）で終わり、だれも設定に入れなかった。
+  //   判定は shared/contentRequest.ts（規則だけ・短い文だけ）。アカウントが無い方は下の今までの受け口へ。
+  {
+    const { detectContentRequest } = await import("../shared/contentRequest");
+    const cr = detectContentRequest(t);
+    if (cr) {
+      const { offerContentRules } = await import("./contentRequestFlow");
+      const offered = await offerContentRules({ userId: user.id, lineUserId, question: t, request: cr });
+      if (offered) return offered;
+    }
   }
 
   // ★「〇〇という言い方はやめてほしい」は、NGワードのご登録で解決する。
@@ -4470,9 +4495,29 @@ async function escalateUnanswered(
  * ご質問に自動でお答えする。
  * 答えられた場合も「担当者に聞く」を必ず添えて、行き止まりにしない。
  */
-async function autoAnswer(userId: number, lineUserId: string, question: string): Promise<unknown[] | null> {
+async function autoAnswer(userId: number, lineUserId: string, question: string, opts?: { allowRules?: boolean }): Promise<unknown[] | null> {
   const { answerQuestion } = await import("./supportBot");
   const res = await answerQuestion({ question, userId, lineUserId, source: "line" });
+
+  // ★投稿の中身についてのご希望は、答えて終わりにしない（2026-11-03・server/contentRequestFlow.ts）。
+  //   規則（shared/contentRequest.ts）で拾えなかった言い方でも、自動の答えが決まりの文の案を出したら、確認のボタンをお出しする。
+  //   ご希望らしいのに案にできなかったときは、答えだけで終わらせず担当者へ回す（needsHuman=1・通知）。
+  if (opts?.allowRules !== false && res.available) {
+    const { contentRequestFromAi, aiMayProposeRules, looksLikeContentWish } = await import("../shared/contentRequest");
+    const flow = await import("./contentRequestFlow");
+    const cr = aiMayProposeRules(question) ? contentRequestFromAi(res.contentRules) : null;
+    if (cr) {
+      const offered = await flow.offerContentRules({ userId, lineUserId, question, request: cr, questionId: res.questionId });
+      if (offered) return offered;
+    }
+    if (looksLikeContentWish(question)) {
+      const notified = await flow.escalateContentWish(userId, lineUserId, question, res.questionId);
+      return [textWithQuick(
+        flow.escalatedText(res.confident && res.answer ? res.answer : null, notified),
+        [{ label: "担当者に聞く", data: `m=staff${res.questionId ? `&q=${res.questionId}` : ""}` }, ...MENU_HINT],
+      )];
+    }
+  }
 
   if (res.confident && res.answer) {
     // ★ご不満の声は、自動で答えられても担当者にも知らせる（shared/dissatisfactionDetect.ts・2026-10-01 香取様 #52）

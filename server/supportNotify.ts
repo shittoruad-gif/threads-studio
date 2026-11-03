@@ -129,3 +129,102 @@ export async function notifyStaffOfIndustryMismatch(params: {
   }
   return delivered;
 }
+
+/**
+ * 公式LINEの「投稿の中身についてのご希望」を、どう扱ったかを運営に知らせる（2026-11-03 三上様
+ * 「そのような問い合わせに対して、自動的にきちんと反映できるようなシステムを組み込んで」・server/contentRequestFlow.ts）。
+ *   registered  … お客様が「登録する」を押し、書き方の決まりに入れた（対応は要らない）
+ *   declined    … お客様が「登録しない」を選んだ（設定は変えていない）
+ *   needs_human … ご希望らしいが決まりの文にできなかった／上限で足せなかった（担当者の対応が要る）
+ * 届け先はお問い合わせと同じ（メール＋運営LINE）。
+ */
+export type ContentRuleOutcome = "registered" | "declined" | "needs_human" | "limit";
+
+const CONTENT_RULE_TITLE: Record<ContentRuleOutcome, string> = {
+  registered: "投稿の決まりを自動で登録しました",
+  declined: "投稿の決まりの登録をお客様が見送りました",
+  needs_human: "投稿の中身のご希望（担当者の対応が要ります）",
+  limit: "投稿の決まりが上限で登録できませんでした（担当者の対応が要ります）",
+};
+
+const CONTENT_RULE_FOOTER: Record<ContentRuleOutcome, string> = {
+  registered: "設定に入れ終わっているので、対応は要りません（ご質問の記録は自動で対応済みにしました）。",
+  declined: "お客様が「登録しない」を選びました。設定は変えていません。",
+  needs_human: "決まりの文にできなかったため、設定は変えていません。内容を確かめて、書き方の決まり・NGワード・ネタ帳のどれに入れるかご判断ください。",
+  limit: "書き方の決まりが上限（10件）までたまっていて足せませんでした。お客様には整理のお願いをお送りしています。",
+};
+
+/** 通知の本文（メール・LINE共通）。テストで中身を確かめられるように切り出す */
+export function contentRuleNoticeBody(params: {
+  outcome: ContentRuleOutcome;
+  who: string;
+  account?: string | null;
+  question: string;
+  rules: readonly string[];
+  ngWords?: readonly string[];
+  edited?: boolean;
+}): string {
+  const lines = [
+    `${params.who}${params.account ? `（@${params.account}）` : ""}`,
+    "",
+    "お客様の文面：",
+    params.question.slice(0, 600),
+  ];
+  if (params.rules.length) {
+    lines.push("", params.outcome === "registered" ? `登録した決まり${params.edited ? "（お客様が直した文）" : ""}：` : "決まりの案：", ...params.rules.map((r) => `・${r}`));
+  }
+  if (params.ngWords?.length) lines.push(`NGワードにも追加：${params.ngWords.join("、")}`);
+  lines.push("", CONTENT_RULE_FOOTER[params.outcome]);
+  return lines.join("\n");
+}
+
+export async function notifyStaffOfContentRule(params: {
+  outcome: ContentRuleOutcome;
+  questionId?: number;
+  userName?: string | null;
+  userEmail?: string | null;
+  account?: string | null;
+  question: string;
+  rules: readonly string[];
+  ngWords?: readonly string[];
+  edited?: boolean;
+}): Promise<boolean> {
+  if (process.env.QA_SAFE_MODE === "1") {
+    console.log("[SupportNotify] QA_SAFE_MODE のため投稿の決まりの通知は送りません:", params.outcome, params.rules.join(" / ").slice(0, 60));
+    return false;
+  }
+  const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+  const who = [params.userName, params.userEmail].filter(Boolean).join(" / ") || "（お名前不明）";
+  const link = `${base}/admin/questions${params.questionId ? `?id=${params.questionId}` : ""}`;
+  const title = CONTENT_RULE_TITLE[params.outcome];
+  const body = contentRuleNoticeBody({ ...params, who });
+  let delivered = false;
+
+  const to = staffEmail();
+  if (to) {
+    try {
+      const ok = await sendEmail({
+        to,
+        subject: `【Threads Studio】${title}（${who}）`,
+        html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',sans-serif;max-width:600px;margin:0 auto;padding:8px;">
+          <h2 style="font-size:18px;color:#0f172a;margin:0 0 12px;">${escapeHtml(title)}</h2>
+          <div style="margin:12px 0;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;color:#0f172a;white-space:pre-wrap;">${escapeHtml(body)}</div>
+          <p style="margin:16px 0 0;font-size:14px;">
+            <a href="${link}" style="display:inline-block;background:#059669;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:bold;">管理画面で見る</a>
+          </p>
+        </div>`,
+      });
+      delivered = delivered || ok !== false;
+    } catch (e) {
+      console.error("[SupportNotify] 投稿の決まりのメール通知に失敗:", e);
+    }
+  }
+  try {
+    const { notifyLine } = await import("./_core/notification");
+    delivered = (await notifyLine(title, `${body.slice(0, 1400)}\n\n${link}`)) || delivered;
+  } catch (e) {
+    console.error("[SupportNotify] 投稿の決まりのLINE通知に失敗:", e);
+  }
+  if (!delivered) console.warn("[SupportNotify] 通知先が未設定のため、記録のみ行いました。questionId=", params.questionId);
+  return delivered;
+}

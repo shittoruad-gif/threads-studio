@@ -258,9 +258,11 @@ export const appRouter = router({
           userId: ctx.user.id,
           source: 'web',
         });
+        // ★決まりの案だけで答えが空のとき（投稿の中身のご希望・2026-11-03）は、画面では答えられなかった扱いにする
+        const answered = res.confident && Boolean(res.answer);
         return {
-          answer: res.confident ? res.answer : '',
-          confident: res.confident,
+          answer: answered ? res.answer : '',
+          confident: answered,
           questionId: res.questionId ?? null,
         };
       }),

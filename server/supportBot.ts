@@ -8,6 +8,7 @@
  *  - 質問はすべて記録し、「よくある質問」への反映と説明会の題材づくりに使う。
  */
 import { productKnowledge, QUESTION_CATEGORIES } from "@shared/productKnowledge";
+import { hasUnkeptPromise } from "@shared/supportAnswerGuard";
 import * as db from "./db";
 
 export type BotAnswer = {
@@ -25,6 +26,13 @@ export type BotAnswer = {
   category: string;
   /** 記録した質問のID（担当者返信・FAQ反映で使う） */
   questionId?: number;
+  /**
+   * 投稿の中身・書き方についてのご希望だったときの、決まりの文の案（shared/contentRequest.ts で整えてから使う）。
+   * ご質問・操作の相談なら空。
+   */
+  contentRules: string[];
+  /** 答えに守る人のいない約束（「担当者が登録します」）が入っていたため、答えられなかった扱いにしたか */
+  unkeptPromise: boolean;
 };
 
 const SYSTEM_PROMPT = `あなたは「Threads Studio」というサービスのサポート担当です。
@@ -53,6 +61,14 @@ const SYSTEM_PROMPT = `あなたは「Threads Studio」というサービスの�
    担当者が代わりに行うと約束しないでください（confident が true の返事は担当者に届かないため、約束が守られません）。
    お客様ご自身でできる操作をご案内し、こちらの作業が要るときは confident を false にしてください。
    （2026-10-13 ご質問 #56「運動療法、リハサクをお勧めしたい」に「担当者が責任をもって登録させていただきます」と答え、どこにも登録されなかった）
+   「担当者からご連絡します」「担当者におつなぎします」とも書かないでください。担当者へおつなぎするときは、こちらで決まった文をお出しします。
+9. お客様の文が、ご自身の投稿の中身・書き方についてのご希望のとき（例：「〇〇の話題はいらない」「〇〇を勧めたい」「〇〇の話を増やして」
+   「絵文字を減らして」「短くして」「呼びかけは町名なしで」）は、contentRules に「書き方の決まり」の文を入れてください。
+   ・1つ80字以内の言い切り（例：「スポーツ選手の話題は書かない」「運動療法やリハサクをおすすめする」「絵文字は少なめにする」）
+   ・お客様が書いた言葉（メニュー名・話題の名前）はそのまま使い、数字・料金・実績などの事実を足さない
+   ・何を指すか分からない（「この辺を使って」「あれはやめて」）、ご質問・操作の相談・不具合のご連絡のときは空の配列 []
+   contentRules を入れたときは、登録の確認はこちらでお出しするので、answer は空でかまいません（confident は true）。
+   ご希望ではないときは、必ず空の配列 [] にしてください。
 
 【サービス情報】
 ${productKnowledge()}`;
@@ -74,8 +90,13 @@ const SCHEMA = {
       answer: { type: "string", description: "お客様への回答本文。答えられない場合は空文字" },
       confident: { type: "boolean", description: "サービス情報の範囲で確かに答えられたか" },
       category: { type: "string", enum: [...QUESTION_CATEGORIES], description: "質問の分類" },
+      contentRules: {
+        type: "array",
+        items: { type: "string" },
+        description: "投稿の中身・書き方についてのご希望なら、書き方の決まりの文（1つ80字以内の言い切り）。ご質問なら空の配列",
+      },
     },
-    required: ["answer", "confident", "category"],
+    required: ["answer", "confident", "category", "contentRules"],
     additionalProperties: false,
   },
   strict: true,
@@ -97,12 +118,14 @@ export async function answerQuestion(params: {
   source?: "line" | "web";
 }): Promise<BotAnswer> {
   const question = params.question.trim().slice(0, 1000);
-  let result: { answer: string; confident: boolean; category: string } = {
+  let result: { answer: string; confident: boolean; category: string; contentRules: string[] } = {
     answer: "",
     confident: false,
     category: "その他",
+    contentRules: [],
   };
   let available = false;
+  let unkeptPromise = false;
 
   // ★ご自身のご契約・件数のお尋ねは、知識だけでは答えようがない（誰にでも同じ説明しか持っていない）。
   //   読めた事実だけをプロンプトに添える。読めなくても今までどおり動く。
@@ -126,12 +149,23 @@ export async function answerQuestion(params: {
     const content = res?.choices?.[0]?.message?.content;
     if (typeof content === "string" && content.trim()) {
       const parsed = JSON.parse(content);
+      const contentRules = Array.isArray(parsed.contentRules)
+        ? parsed.contentRules.map((r: unknown) => String(r ?? "").trim()).filter(Boolean).slice(0, 5)
+        : [];
       result = {
         answer: String(parsed.answer || "").trim(),
-        confident: Boolean(parsed.confident) && Boolean(String(parsed.answer || "").trim()),
+        confident: Boolean(parsed.confident) && (Boolean(String(parsed.answer || "").trim()) || contentRules.length > 0),
         category: String(parsed.category || "その他"),
+        contentRules,
       };
       available = true;
+      // ★プロンプトで禁じても、守る人のいない約束（「担当者が登録します」）が出ることがある。
+      //   答えられた扱いにすると担当者に届かないので、答えられなかった扱いにして担当者へ回す（2026-11-03）。
+      if (result.confident && hasUnkeptPromise(result.answer)) {
+        console.warn("[SupportBot] 守る人のいない約束が入った答えのため、担当者へ回します:", result.answer.slice(0, 80));
+        result.confident = false;
+        unkeptPromise = true;
+      }
     }
   } catch (e) {
     console.error("[SupportBot] 自動応答に失敗:", e);
@@ -152,5 +186,5 @@ export async function answerQuestion(params: {
     console.error("[SupportBot] ご質問の記録に失敗:", e);
   }
 
-  return { ...result, available, questionId };
+  return { ...result, available, questionId, unkeptPromise };
 }

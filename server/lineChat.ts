@@ -238,6 +238,9 @@ const PENDING_TEXT_INPUT: Record<string, (q: Record<string, string>) => boolean>
   // 書き方の決まりの入力待ち／「決まり：〜」の預かり（どのアカウントかを選ぶボタン以外を押されたら捨てる）
   ownerrule: (q) => q.s === "rule",
   ownerrule_text: (q) => q.s === "ruleadd",
+  // 投稿の中身のご希望の決まりの案（押すまで預かる）と、「直して登録する」のあとの文の入力待ち（2026-11-03）
+  content_rule: (q) => q.s === "crok" || q.s === "crfix" || q.s === "crno",
+  content_rule_fix: (q) => q.s === "crfix",
   set_line_url: (q) => q.c === "seturl",
   self_edit: (q) => q.a === "selfedit",
   rewrite_free: (q) => q.a === "rw",
