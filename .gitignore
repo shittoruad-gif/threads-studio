@@ -110,3 +110,7 @@ temp/
 docs/study-sessions/
 # 一時スクリプト
 scripts/ops/tmp/
+scripts/ops/_local/
+scripts/ops/_katori-*
+scripts/ops/_higa-*
+scripts/ops/_readonly-higa-*
