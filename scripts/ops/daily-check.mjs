@@ -107,7 +107,11 @@ async function main() {
     for (const t of rd) {
       const p = t.latestProposal;
       // acc29 は別事業のHPで作った案 #23 を 10/9 に「skipped」にしたため、最新の案が skipped のままでも同じ扱い
-      const st = (p?.status === 'no_url' || p?.status === 'skipped') && HP_SEARCHED_NONE.has(Number(t.accountId)) ? 'HPなし（検索済み）→そのままでよい' : p ? (ST[p.status] || p.status) : '20:30のフォローで案を作る';
+      // 37：HPは登録に無いが、10/26 に doisekkotsuin.com から作った案 #27 を足し済み。20:30 のフォローは登録のHPしか見ないので no_url を作り直す
+      const HP_FOUND_ADDED = new Set([37]);
+      const st = (p?.status === 'no_url' || p?.status === 'skipped') && HP_SEARCHED_NONE.has(Number(t.accountId)) ? 'HPなし（検索済み）→そのままでよい'
+        : p?.status === 'no_url' && HP_FOUND_ADDED.has(Number(t.accountId)) ? '検索したHPから足した（案は済）→方向性を先生に伺うかは三上様の判断待ち'
+        : p ? (ST[p.status] || p.status) : '20:30のフォローで案を作る';
       console.log(`  @${t.username}（${t.userName}） 見送り${t.declines}回／公開${t.published}件 → ${st}`);
     }
     if (rd.length === 0) console.log('  なし');
