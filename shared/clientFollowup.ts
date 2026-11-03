@@ -64,7 +64,8 @@ export function isBlockingStep(key: string | null | undefined): boolean {
 }
 
 export type StallReason = "setup" | "silent";
-export type SilentCause = "approval" | "cooldown" | "failed" | "unknown";
+/** upcoming＝公開の予約は入っていて、まだその時刻が来ていないだけ（2026-11-02 初回の公開前に「原因不明」と出ていた） */
+export type SilentCause = "approval" | "cooldown" | "failed" | "upcoming" | "unknown";
 
 export interface StallInput {
   /** いまの工程（detectNextAction の key。何も無ければ null） */
@@ -112,7 +113,7 @@ export interface DraftInput {
 
 /** お客様へ送る文が作れない（運営側で対応する）ケース */
 export function needsInternalFixOnly(i: Pick<DraftInput, "reason" | "silentCause">): boolean {
-  return i.reason === "silent" && (i.silentCause === "failed" || i.silentCause === "cooldown" || i.silentCause === "unknown");
+  return i.reason === "silent" && (i.silentCause === "failed" || i.silentCause === "cooldown" || i.silentCause === "upcoming" || i.silentCause === "unknown");
 }
 
 function stepBody(key: string, acct: string): string {
@@ -177,8 +178,16 @@ const CAUSE_LABEL: Record<SilentCause, string> = {
   approval: "承認待ちのまま見送りになっている",
   cooldown: "Threadsに投稿を消されたため冷却期間中（1日1件）",
   failed: "投稿の公開に失敗している",
+  upcoming: "予約は入っていて、公開の時刻がまだ来ていない",
   unknown: "原因をまだ特定できていない",
 };
+
+/** カードの最後に添える一言（送る文を作らないとき） */
+export function internalNote(cause: SilentCause | undefined): string {
+  return cause === "upcoming"
+    ? "（予約どおり公開されれば対応は不要です。お客様へ送る文は作っていません）"
+    : "（お客様の操作では直らないため、送る文は作っていません。運営側で確認してください）";
+}
 
 /** 三上様へお送りする事実のまとめ */
 export function adminCard(i: AdminCardInput): string {

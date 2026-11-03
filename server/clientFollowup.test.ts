@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adminCard, decideStall, draftMessage, isBlockingStep, needsInternalFixOnly, stepLabel } from "../shared/clientFollowup";
+import { adminCard, decideStall, draftMessage, isBlockingStep, needsInternalFixOnly, internalNote, stepLabel } from "../shared/clientFollowup";
 
 const base = { stepKey: null, stepDays: 0, hasAccount: true, postedRecent: 0, daysSinceLastPost: null, daysSinceConnect: 30 };
 
@@ -30,6 +30,16 @@ describe("動いていないお客様の判定", () => {
     expect(needsInternalFixOnly({ reason: "silent", silentCause: "cooldown" })).toBe(true);
     expect(needsInternalFixOnly({ reason: "silent", silentCause: "failed" })).toBe(true);
     expect(needsInternalFixOnly({ reason: "silent", silentCause: "approval" })).toBe(false);
+    expect(needsInternalFixOnly({ reason: "silent", silentCause: "upcoming" })).toBe(true);
+  });
+
+  it("予約が入っていて時刻がまだ来ていないだけなら「原因不明」と書かない", () => {
+    const card = adminCard({ userName: "山田", planName: "プロ", reason: "silent", stepKey: null, days: 3, level: 1, silentCause: "upcoming", silentDetail: "次の公開予定 11/2 12:00（予約 13件）" });
+    expect(card).toContain("予約は入っていて、公開の時刻がまだ来ていない");
+    expect(card).toContain("次の公開予定 11/2 12:00");
+    expect(card).not.toContain("原因をまだ特定できていない");
+    expect(internalNote("upcoming")).toContain("対応は不要");
+    expect(internalNote("failed")).toContain("運営側で確認");
     expect(needsInternalFixOnly({ reason: "setup" })).toBe(false);
   });
 });

@@ -14,7 +14,7 @@ import { sql } from "drizzle-orm";
 import * as db from "./db";
 import { detectNextAction } from "./nextAction";
 import {
-  OPS_IGNORE_USER_IDS, REPROPOSE_DAYS, SILENT_DAYS, adminCard, decideStall, draftMessage, needsInternalFixOnly,
+  OPS_IGNORE_USER_IDS, REPROPOSE_DAYS, SILENT_DAYS, adminCard, decideStall, draftMessage, needsInternalFixOnly, internalNote,
   type SilentCause,
 } from "@shared/clientFollowup";
 
@@ -70,7 +70,20 @@ async function silentCauseOf(userId: number): Promise<{ cause: SilentCause; deta
   if (Number(cool?.n ?? 0) > 0) return { cause: "cooldown", detail: null };
   if (Number(r?.expired ?? 0) > 0) return { cause: "approval", detail: `承認されないまま見送りになった投稿 ${Number(r.expired)}件（直近${SILENT_DAYS}日）` };
   if (Number(r?.failed ?? 0) > 0) return { cause: "failed", detail: `失敗 ${Number(r.failed)}件：${String(r.lastError ?? "").slice(0, 60)}` };
-  return { cause: "unknown", detail: null };
+  // ★予約が入っていて時刻がまだ来ていないだけなら「原因不明」にしない（2026-11-02 初回の公開の1時間前に「原因をまだ特定できていない」と出た）
+  const up: any = await one(sql`
+    SELECT
+      SUM(CASE WHEN status = 'pending' AND scheduledAt >= NOW() THEN 1 ELSE 0 END) AS pending,
+      MIN(CASE WHEN status = 'pending' AND scheduledAt >= NOW() THEN scheduledAt END) AS next,
+      SUM(CASE WHEN status = 'awaiting_approval' THEN 1 ELSE 0 END) AS waiting
+    FROM scheduledPosts WHERE userId = ${userId}`);
+  const waiting = Number(up?.waiting ?? 0);
+  if (Number(up?.pending ?? 0) > 0 && up?.next && new Date(up.next).getTime() - Date.now() <= 24 * 3600_000) {
+    const at = new Date(new Date(up.next).getTime() + JST).toISOString();
+    const when = `${Number(at.slice(5, 7))}/${Number(at.slice(8, 10))} ${at.slice(11, 16)}`;
+    return { cause: "upcoming", detail: `次の公開予定 ${when}（予約 ${Number(up.pending)}件）${waiting > 0 ? `／確認待ちの下書き ${waiting}件` : ""}` };
+  }
+  return { cause: "unknown", detail: waiting > 0 ? `確認待ちの下書き ${waiting}件` : null };
 }
 
 export interface FollowupTarget {
@@ -168,7 +181,7 @@ export async function runClientFollowup(opts: { dryRun?: boolean } = {}): Promis
         userName: t.userName, reason: t.reason, stepKey: t.stepKey, accountName: t.accountName,
         days: t.days, level, proSupport: t.proSupport, silentCause: t.silentCause,
       });
-      messages.push(card + (draft ? `\n────\n${draft}` : "\n（お客様の操作では直らないため、送る文は作っていません。運営側で確認してください）"));
+      messages.push(card + (draft ? `\n────\n${draft}` : `\n${internalNote(t.silentCause)}`));
       if (opts.dryRun) continue;
 
       const ins: any = await database.execute(sql`
@@ -179,7 +192,7 @@ export async function runClientFollowup(opts: { dryRun?: boolean } = {}): Promis
       const { pushMessages } = await import("./lineNotify");
       const { textWithQuick } = await import("./lineChat");
       const msgs: unknown[] = internalOnly
-        ? [{ type: "text", text: `${card}\n\n（お客様の操作では直らないため、送る文は作っていません。運営側で確認してください）` }]
+        ? [{ type: "text", text: `${card}\n\n${internalNote(t.silentCause)}` }]
         : [
             { type: "text", text: `${card}\n\n次の文でお客様にお送りしますか？（押すまで送りません）` },
             textWithQuick(draft, [
