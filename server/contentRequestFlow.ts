@@ -139,7 +139,7 @@ export async function handleContentRulePostback(userId: number, lineUserId: stri
     const { notifyStaffOfContentRule } = await import("./supportNotify");
     await notifyStaffOfContentRule({
       outcome: "declined", questionId: qid || undefined, userName: user?.name, userEmail: user?.email,
-      question, rules: proposals.map((r) => r.rule),
+      question, rules: proposals.map((r) => r.rule), pressed: "登録しない", reply: DECLINED_TEXT,
     }).catch(() => false);
     return [textWithQuick(DECLINED_TEXT, MENU_HINT)];
   }
@@ -270,22 +270,27 @@ export async function registerRules(p: {
     if (p.qid) {
       await db.updateSupportQuestion(p.qid, { handledAt: new Date(), handledBy: CONTENT_RULE_HANDLED_BY.registered, needsHuman: failed.length ? 1 : 0, category: CONTENT_RULE_CATEGORY }).catch(() => undefined);
     }
-    await notifyStaffOfContentRule({ ...base, outcome: "registered", rules: okRules, ngWords: ngAdded, edited: p.edited }).catch(() => false);
-    if (failed.length) await notifyStaffOfContentRule({ ...base, outcome: full ? "limit" : "needs_human", rules: p.proposals.filter((pr) => !okRules.includes(pr.rule)).map((pr) => pr.rule) }).catch(() => false);
     const head = added.length
       ? registeredText(added, { ngWords: ngAdded, account })
       : `「${already.join("」「")}」は、すでに書き方の決まりに入っています。\n決まりは「設定」→「書き方の決まり」で見直せます。`;
     const alsoAlready = added.length && already.length ? `\n（「${already.join("」「")}」は、すでに入っていました）` : "";
     const tail = failed.length ? `\n\n登録できなかったもの：\n${failed.join("\n")}` : "";
-    return [textWithQuick(head + alsoAlready + tail, [{ label: "書き方の決まり", data: `s=rule&a=${p.acct.id}` }, ...MENU_HINT])];
+    const reply = head + alsoAlready + tail;
+    const pressed = p.edited ? "直して登録する" : "登録する";
+    await notifyStaffOfContentRule({ ...base, outcome: "registered", rules: okRules, ngWords: ngAdded, edited: p.edited, pressed, reply }).catch(() => false);
+    if (failed.length) await notifyStaffOfContentRule({ ...base, outcome: full ? "limit" : "needs_human", rules: p.proposals.filter((pr) => !okRules.includes(pr.rule)).map((pr) => pr.rule), pressed, reply }).catch(() => false);
+    return [textWithQuick(reply, [{ label: "書き方の決まり", data: `s=rule&a=${p.acct.id}` }, ...MENU_HINT])];
   }
 
   // 1つも足せなかった（上限・長すぎ）。担当者の対応が要るので記録に印を付けて知らせる
   if (p.qid) await db.updateSupportQuestion(p.qid, { needsHuman: 1, category: CONTENT_RULE_CATEGORY }).catch(() => undefined);
-  const notified = await notifyStaffOfContentRule({ ...base, outcome: full ? "limit" : "needs_human", rules: p.proposals.map((pr) => pr.rule) }).catch(() => false);
   const msg = full
     ? `書き方の決まりが上限の${OWNER_RULES.maxRules}件に達しているため、登録できませんでした。\n「設定」→「書き方の決まり」で使わなくなった決まりを消してから、もう一度お送りください。`
     : `登録できませんでした。\n${failed.join("\n")}`;
+  const notified = await notifyStaffOfContentRule({
+    ...base, outcome: full ? "limit" : "needs_human", rules: p.proposals.map((pr) => pr.rule),
+    pressed: p.edited ? "直して登録する" : "登録する", reply: `${msg}\n担当者にもお伝えしました。`,
+  }).catch(() => false);
   return [textWithQuick(
     msg + (notified ? "\n担当者にもお伝えしました。" : ""),
     [{ label: "書き方の決まり", data: `s=rule&a=${p.acct.id}` }, { label: "担当者に聞く", data: `m=staff${p.qid ? `&q=${p.qid}` : ""}` }, ...MENU_HINT],
@@ -308,6 +313,7 @@ export async function escalateContentWish(userId: number, lineUserId: string, qu
   const { notifyStaffOfContentRule } = await import("./supportNotify");
   return await notifyStaffOfContentRule({
     outcome: "needs_human", questionId: qid, userName: user?.name, userEmail: user?.email, question, rules: [],
+    reply: escalatedText(null, true),
   }).catch(() => false);
 }
 

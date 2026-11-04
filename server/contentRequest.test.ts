@@ -167,16 +167,20 @@ describe("自動の答えの約束文の検査（shared/supportAnswerGuard.ts）
   for (const t of OK) it(`約束と見ない：${t.slice(0, 24)}`, () => expect(hasUnkeptPromise(t)).toBe(false));
 });
 
-describe("運営への通知の本文（server/supportNotify.ts）", () => {
+describe("運営への知らせ（server/supportNotify.ts・三上様の公式LINEだけ）", () => {
   it("登録した・登録しない・担当者の対応が要る、がそれぞれ分かる", async () => {
-    const { contentRuleNoticeBody } = await import("./supportNotify");
-    const reg = contentRuleNoticeBody({ outcome: "registered", who: "QA / qa@example.com", account: "qa_clinic", question: "スポーツ選手の話題はいらない", rules: ["スポーツ選手の話題は書かない"], ngWords: ["スポーツ選手"] });
-    expect(reg).toContain("登録した決まり：\n・スポーツ選手の話題は書かない");
-    expect(reg).toContain("NGワードにも追加：スポーツ選手");
-    expect(reg).toContain("対応は要りません");
-    const no = contentRuleNoticeBody({ outcome: "declined", who: "QA", question: "x", rules: ["a"] });
-    expect(no).toContain("「登録しない」を選びました");
-    const human = contentRuleNoticeBody({ outcome: "needs_human", who: "QA", question: "この辺を使って欲しい", rules: [] });
-    expect(human).toContain("決まりの文にできなかったため");
+    const { contentRuleStaffAction, staffLineNoticeText } = await import("./supportNotify");
+    const reg = contentRuleStaffAction({ outcome: "registered", rules: ["スポーツ選手の話題は書かない"], ngWords: ["スポーツ選手"] });
+    expect(reg.outcome).toBe("applied");
+    expect(reg.action).toBe("書き方の決まりに「スポーツ選手の話題は書かない」を登録しました。NGワードにも「スポーツ選手」を足しました");
+    const text = staffLineNoticeText({ ...reg, name: "QA", account: "qa_clinic", question: "スポーツ選手の話題はいらない", pressed: "登録する", reply: "登録しました。", link: "L" });
+    expect(text).toContain("【自動で対応しました】QA 様（@qa_clinic）");
+    expect(text).toContain("（お客様が「登録する」を押して確定）");
+    const no = contentRuleStaffAction({ outcome: "declined", rules: ["a"] });
+    expect(no).toEqual({ outcome: "declined", action: "決まりの案「a」は登録していません" });
+    const human = contentRuleStaffAction({ outcome: "needs_human", rules: [] });
+    expect(human.outcome).toBe("needs_human");
+    expect(human.action).toContain("決まりの文にできませんでした");
+    expect(contentRuleStaffAction({ outcome: "limit", rules: ["b"] }).outcome).toBe("needs_human");
   });
 });

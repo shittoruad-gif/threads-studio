@@ -241,6 +241,8 @@ const PENDING_TEXT_INPUT: Record<string, (q: Record<string, string>) => boolean>
   // 投稿の中身のご希望の決まりの案（押すまで預かる）と、「直して登録する」のあとの文の入力待ち（2026-11-03）
   content_rule: (q) => q.s === "crok" || q.s === "crfix" || q.s === "crno",
   content_rule_fix: (q) => q.s === "crfix",
+  // ホームページから拾った話題の預かり（押すまで預かる・2026-11-04・server/settingRequestFlow.ts）
+  setting_topics: (q) => q.s === "tpok" || q.s === "tpno",
   set_line_url: (q) => q.c === "seturl",
   self_edit: (q) => q.a === "selfedit",
   rewrite_free: (q) => q.a === "rw",
@@ -574,17 +576,16 @@ export function settingsQuick(
   nextActionNotify = true,
   metaAiPaused = false,
 ): QuickItem[] {
-  // 「次にやること」の案内は、いつでも止められる／戻せるようにしておく。
-  const notifyToggle: QuickItem = nextActionNotify
-    ? { label: "案内を受け取らない", data: "n=off" }
-    : { label: "案内を受け取る", data: "n=on" };
+  // 「次にやること」の案内・昨日の投稿結果・交流の案内などは、「お知らせの受け取り」で1つずつ止める／戻す（2026-11-04）。
+  //   以前は「案内を受け取らない」と「交流の案内を受け取る」だけで、昨日の投稿結果を戻すボタンが無かった。
+  void nextActionNotify;
+  const notifyToggle: QuickItem = { label: "お知らせの受け取り", data: "s=notif" };
   if (maxPerDay <= 0) {
     // 自動投稿が使えないプラン。切り替えても意味がないので出さない。
     return [
       { label: "プランを見る", data: "s=plan" },
       { label: "NGワードを見る・足す", data: "s=ng" },
       { label: "書き方の決まり", data: "s=rule" },
-      { label: "交流の案内を受け取る", data: "ec=on" },
       notifyToggle,
     ];
   }
@@ -612,8 +613,7 @@ export function settingsQuick(
     { label: "NGワードを見る・足す", data: "s=ng" },
     // ★お客様が自分で足す「書き方の決まり」（2026-10-18）
     { label: "書き方の決まり", data: "s=rule" },
-    // ★毎日5分の交流の案内（2026-10-20）
-    { label: "交流の案内を受け取る", data: "ec=on" },
+    // ★毎日5分の交流の案内（2026-10-20）・昨日の投稿結果などのお知らせ（2026-11-04）
     notifyToggle,
   ];
 }

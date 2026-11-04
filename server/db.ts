@@ -5129,6 +5129,72 @@ export async function isNextActionNotifyEnabled(userId: number): Promise<boolean
   return Number(rows?.[0]?.v ?? 1) === 1;
 }
 
+/**
+ * 公式LINEの通知の受け取りを切り替える（2026-11-04・server/settingRequestFlow.ts）。
+ *   昨日の投稿結果（dailyResultNotifyEnabled）・次にやること（nextActionNotifyEnabled）・交流の案内（engagementCoachEnabled）
+ */
+export async function setUserNoticeFlag(
+  userId: number,
+  column: "dailyResultNotifyEnabled" | "nextActionNotifyEnabled" | "engagementCoachEnabled",
+  on: boolean,
+): Promise<void> {
+  const database = await getDb();
+  if (!database) return;
+  const set: Record<string, number> = { [column]: on ? 1 : 0 };
+  // 交流の案内は、戻したときに「やったが続けて無い回数」も0にする（engagementCoachJob の ec=on と同じ）
+  if (column === "engagementCoachEnabled" && on) set.engagementCoachMiss = 0;
+  await database.update(users).set(set as any).where(eq(users.id, userId));
+}
+
+/** 週1回の読み物を止めているか（newsletterOptOuts に行があるか） */
+export async function getNewsletterOptOut(userId: number): Promise<{ optedOut: boolean; note: string | null }> {
+  const database = await getDb();
+  if (!database) return { optedOut: false, note: null };
+  const rows: any = await database.execute(sql`SELECT note FROM newsletterOptOuts WHERE userId = ${userId} LIMIT 1`).catch(() => [[]]);
+  const r = (rows?.[0] ?? [])[0];
+  return r ? { optedOut: true, note: r.note ?? null } : { optedOut: false, note: null };
+}
+
+/** 公式LINEでお客様ご本人が止めた読み物の印（戻すときに、この印の行だけを消す） */
+export const NEWSLETTER_SELF_OPTOUT_NOTE = "ご本人がLINEで停止";
+
+/**
+ * 読み物を止める／戻す。止める＝行を足す（すでにあれば何もしない）。
+ * 戻す＝ご本人がLINEで止めた行（NEWSLETTER_SELF_OPTOUT_NOTE）だけを消す。担当者が入れた行は消さない（blocked=true）。
+ */
+export async function setNewsletterOptOut(userId: number, optOut: boolean): Promise<{ changed: boolean; blocked: boolean }> {
+  const database = await getDb();
+  if (!database) return { changed: false, blocked: false };
+  const cur = await getNewsletterOptOut(userId);
+  if (optOut) {
+    if (cur.optedOut) return { changed: false, blocked: false };
+    await database.execute(sql`INSERT IGNORE INTO newsletterOptOuts (userId, note) VALUES (${userId}, ${NEWSLETTER_SELF_OPTOUT_NOTE})`);
+    return { changed: true, blocked: false };
+  }
+  if (!cur.optedOut) return { changed: false, blocked: false };
+  if (cur.note !== NEWSLETTER_SELF_OPTOUT_NOTE) return { changed: false, blocked: true };
+  await database.execute(sql`DELETE FROM newsletterOptOuts WHERE userId = ${userId} AND note = ${NEWSLETTER_SELF_OPTOUT_NOTE}`);
+  return { changed: true, blocked: false };
+}
+
+/**
+ * 時刻を動かせる予約（ご本人の投稿・確認待ち／予約中・返信と固定投稿の下書きと3案は除く）。
+ * from〜to の予定のものを、早い順に（2026-11-04 公式LINEの「15時の予約を12時に」）。
+ */
+export async function listMovablePosts(userId: number, from: Date, to: Date): Promise<ScheduledPost[]> {
+  const database = await getDb();
+  if (!database) return [];
+  return await database.select().from(scheduledPosts).where(and(
+    eq(scheduledPosts.userId, userId),
+    sql`${scheduledPosts.status} IN ('pending','awaiting_approval')`,
+    sql`${scheduledPosts.replyToThreadsId} IS NULL`,
+    sql`(${scheduledPosts.angle} IS NULL OR ${scheduledPosts.angle} <> 'pinned')`,
+    sql`${scheduledPosts.choiceGroupId} IS NULL`,
+    gte(scheduledPosts.scheduledAt, from),
+    lte(scheduledPosts.scheduledAt, to),
+  )).orderBy(scheduledPosts.scheduledAt).limit(60);
+}
+
 // ── お客様からのご質問（自動応答・担当者対応・よくある質問への反映）─────────
 /** ご質問を1件記録する。戻り値は採番されたID。 */
 export async function createSupportQuestion(q: {

@@ -33,7 +33,23 @@ export type BotAnswer = {
   contentRules: string[];
   /** 答えに守る人のいない約束（「担当者が登録します」）が入っていたため、答えられなかった扱いにしたか */
   unkeptPromise: boolean;
+  /**
+   * 設定で解決できるご希望だったときの種類（2026-11-04・server/settingRequestFlow.ts）。
+   *   notice＝通知を止めたい／戻したい・topics_from_url＝ホームページを元に投稿を・post_time＝自動投稿の時刻・none＝それ以外
+   */
+  settingRequest: SettingRequestAi;
 };
+
+export const SETTING_REQUEST_VALUES = ["none", "notice", "topics_from_url", "post_time"] as const;
+export type SettingRequestAi = (typeof SETTING_REQUEST_VALUES)[number];
+
+/**
+ * 答えに Zoom のことが入っているのに、お客様の文に Zoom の言葉が無いか（2026-11-03「５日(木)12:00にお願いします」を
+ * Zoom のご希望と取り違え、「Zoom希望」と送るよう答えていた）。当たれば答えられなかった扱いにして担当者へ回す。
+ */
+export function mentionsZoomWithoutAsking(question: string, answer: string): boolean {
+  return /(zoom|ズーム)/i.test(String(answer ?? "")) && !/(zoom|ズーム|ずーむ|画面共有|オンライン(で|の)?(説明|相談|面談))/i.test(String(question ?? ""));
+}
 
 const SYSTEM_PROMPT = `あなたは「Threads Studio」というサービスのサポート担当です。
 お客様（店舗オーナー・個人事業主）からのご質問に、日本語の敬体でお答えします。
@@ -69,6 +85,14 @@ const SYSTEM_PROMPT = `あなたは「Threads Studio」というサービスの�
    ・何を指すか分からない（「この辺を使って」「あれはやめて」）、ご質問・操作の相談・不具合のご連絡のときは空の配列 []
    contentRules を入れたときは、登録の確認はこちらでお出しするので、answer は空でかまいません（confident は true）。
    ご希望ではないときは、必ず空の配列 [] にしてください。
+10. お客様の文が、設定で解決できるご希望のときは、settingRequest に種類を入れてください（それ以外は "none"）。
+   ・"notice"：通知・お知らせ・案内を止めたい／また受け取りたい（例：「投稿結果を送らないで」「朝のお知らせはいらない」）
+   ・"topics_from_url"：ホームページなどのURLを元に投稿を作ってほしい
+   ・"post_time"：自動投稿の時刻・予約の時刻を決めたい／動かしたい（例：「自動は12時に」「15時の予約を12時に」）
+   settingRequest を入れたときは、こちらで確認のボタンをお出しするので、answer は空でかまいません。
+   「できません」「指定は承っていません」とは答えないでください（決めた時刻に出す設定・予約を動かす操作があります）。
+11. 日付や時刻だけの文（例：「5日(木)12:00にお願いします」「10/1の12:30で」）は、Zoomの日程のお返事とは限りません。
+   お客様の文に「Zoom」の言葉が無いときは、Zoomのことを答えに書かないでください。投稿の時刻のご希望として settingRequest を "post_time" にしてください。
 
 【サービス情報】
 ${productKnowledge()}`;
@@ -95,8 +119,13 @@ const SCHEMA = {
         items: { type: "string" },
         description: "投稿の中身・書き方についてのご希望なら、書き方の決まりの文（1つ80字以内の言い切り）。ご質問なら空の配列",
       },
+      settingRequest: {
+        type: "string",
+        enum: [...SETTING_REQUEST_VALUES],
+        description: "設定で解決できるご希望の種類（通知の停止・URLから投稿・投稿の時刻）。それ以外は none",
+      },
     },
-    required: ["answer", "confident", "category", "contentRules"],
+    required: ["answer", "confident", "category", "contentRules", "settingRequest"],
     additionalProperties: false,
   },
   strict: true,
@@ -118,11 +147,12 @@ export async function answerQuestion(params: {
   source?: "line" | "web";
 }): Promise<BotAnswer> {
   const question = params.question.trim().slice(0, 1000);
-  let result: { answer: string; confident: boolean; category: string; contentRules: string[] } = {
+  let result: { answer: string; confident: boolean; category: string; contentRules: string[]; settingRequest: SettingRequestAi } = {
     answer: "",
     confident: false,
     category: "その他",
     contentRules: [],
+    settingRequest: "none",
   };
   let available = false;
   let unkeptPromise = false;
@@ -152,11 +182,15 @@ export async function answerQuestion(params: {
       const contentRules = Array.isArray(parsed.contentRules)
         ? parsed.contentRules.map((r: unknown) => String(r ?? "").trim()).filter(Boolean).slice(0, 5)
         : [];
+      const settingRequest: SettingRequestAi = (SETTING_REQUEST_VALUES as readonly string[]).includes(String(parsed.settingRequest))
+        ? (parsed.settingRequest as SettingRequestAi)
+        : "none";
       result = {
         answer: String(parsed.answer || "").trim(),
-        confident: Boolean(parsed.confident) && (Boolean(String(parsed.answer || "").trim()) || contentRules.length > 0),
+        confident: Boolean(parsed.confident) && (Boolean(String(parsed.answer || "").trim()) || contentRules.length > 0 || settingRequest !== "none"),
         category: String(parsed.category || "その他"),
         contentRules,
+        settingRequest,
       };
       available = true;
       // ★プロンプトで禁じても、守る人のいない約束（「担当者が登録します」）が出ることがある。
@@ -165,6 +199,12 @@ export async function answerQuestion(params: {
         console.warn("[SupportBot] 守る人のいない約束が入った答えのため、担当者へ回します:", result.answer.slice(0, 80));
         result.confident = false;
         unkeptPromise = true;
+      }
+      // ★Zoom の言葉が無いお尋ねに Zoom のことを答えたら、取り違え。答えられなかった扱いにして担当者へ回す（2026-11-04）
+      if (result.confident && mentionsZoomWithoutAsking(question, result.answer)) {
+        console.warn("[SupportBot] Zoom のお尋ねではないのに Zoom のことを答えたため、担当者へ回します:", result.answer.slice(0, 80));
+        result.confident = false;
+        if (result.settingRequest === "none" && /\d{1,2}\s*(時|:\d{2})/.test(question.normalize("NFKC"))) result.settingRequest = "post_time";
       }
     }
   } catch (e) {

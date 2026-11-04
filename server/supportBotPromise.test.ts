@@ -41,3 +41,29 @@ describe("自動の答えの約束文", () => {
     expect(p).toContain("contentRules に「書き方の決まり」の文を入れてください");
   });
 });
+
+describe("日時だけの文を Zoom のご希望と取り違えない・設定のご希望の種類（2026-11-04）", () => {
+  it("Zoom の言葉が無いのに Zoom のことを答えたら、答えられなかった扱い。時刻があれば投稿の時刻のご希望とする", async () => {
+    llmContent = { answer: "Zoomでのご相談をご希望でしたら「Zoom希望」とお送りください。", confident: true, category: "その他", contentRules: [], settingRequest: "none" };
+    const res = await answerQuestion({ question: "５日(木)12:00にお願いします", userId: 1 });
+    expect(res.confident).toBe(false);
+    expect(res.settingRequest).toBe("post_time");
+  });
+  it("お客様が Zoom と書いていれば、Zoom の答えはそのまま", async () => {
+    llmContent = { answer: "トークで「Zoom希望」と送ると日程を相談できます。", confident: true, category: "その他", contentRules: [], settingRequest: "none" };
+    const res = await answerQuestion({ question: "Zoomで教えてもらえますか", userId: 1 });
+    expect(res.confident).toBe(true);
+  });
+  it("settingRequest を受け取る（答えが空でも、種類があれば答えられた扱い）。知らない値は none", async () => {
+    llmContent = { answer: "", confident: true, category: "要望", contentRules: [], settingRequest: "notice" };
+    expect((await answerQuestion({ question: "朝の数字のお知らせは静かにしてほしい", userId: 1 })).settingRequest).toBe("notice");
+    llmContent = { answer: "はい。", confident: true, category: "要望", contentRules: [], settingRequest: "xxx" };
+    expect((await answerQuestion({ question: "はい", userId: 1 })).settingRequest).toBe("none");
+  });
+  it("プロンプトに、設定のご希望の種類と、日時だけの文を Zoom と取り違えない決まりがある", () => {
+    const p = systemPromptFor(null);
+    expect(p).toContain("settingRequest に種類を入れてください");
+    expect(p).toContain("日付や時刻だけの文（例：「5日(木)12:00にお願いします」");
+    expect(p).toContain("Zoomのことを答えに書かないでください");
+  });
+});

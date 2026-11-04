@@ -1431,7 +1431,9 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const allowed = q.s === "plan"
       || ["menu", "help", "support", "staff", "sendq", "cancel", "unlink", "stats", "profile", "refcode"].includes(String(q.m ?? ""))
       // よくある質問（カテゴリ hc=・質問 h=）と、案内を止めるボタン（n=off）は使える（2026-10-04 点検）
-      || q.hc != null || q.h != null || q.n === "off" || q.ec === "off";
+      || q.hc != null || q.h != null || q.n === "off" || q.ec === "off"
+      // お知らせを止めるボタン（2026-11-04・止めるほうだけ）
+      || (q.s === "ntset" && q.v === "off");
     if (!allowed) {
       await db.clearLineChatState(lineUserId).catch(() => undefined);
       return [endedReply()];
@@ -3127,6 +3129,20 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const { handleContentRulePostback } = await import("./contentRequestFlow");
     return handleContentRulePostback(user.id, lineUserId, q);
   }
+  // ── 設定で解決できるお問い合わせの確認のボタン（2026-11-04・server/settingRequestFlow.ts） ──
+  //   通知（ntok/ntno/ntset/notif）・ホームページの話題（tpok/tpno）・投稿の時刻（fhok/fhno/fhset/mvok/mvno/mvset/stno）
+  if (q.s === "ntok" || q.s === "ntno" || q.s === "ntset" || q.s === "notif") {
+    const { handleNoticePostback } = await import("./settingRequestFlow");
+    return handleNoticePostback(user.id, lineUserId, q);
+  }
+  if (q.s === "tpok" || q.s === "tpno") {
+    const { handleTopicsPostback } = await import("./settingRequestFlow");
+    return handleTopicsPostback(user.id, lineUserId, q);
+  }
+  if (["fhok", "fhno", "fhset", "mvok", "mvno", "mvset", "stno"].includes(String(q.s ?? ""))) {
+    const { handlePostTimePostback } = await import("./settingRequestFlow");
+    return handlePostTimePostback(user.id, lineUserId, q);
+  }
   // 「〇〇の話題はいらない」のボタンから、その言葉をそのまま登録する（2026-10-15 ご質問 #57）
   if (q.s === "ngadd") {
     const w = String(q.w || "").trim();
@@ -3687,6 +3703,18 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     }
     const own = (near?.post as any) ?? await db.findOwnRecentPostByContent(user.id, t);
     if (own) return replyToOwnPost(own, near ? !near.identical : false);
+  }
+
+  // ★設定で解決できるお問い合わせ（2026-11-04 三上様「このような問い合わせが来たら、自動的に対応するように」・
+  //   shared/settingRequest.ts・server/settingRequestFlow.ts）。確認のボタンを押していただいてから変える。
+  //   ・通知を止めたい／戻したい（「投稿結果を送らないで」）…下の「〇〇はいらない」（投稿の中身のご希望）より先に見る
+  //   ・ホームページのURL＋「これを元に投稿を」…ページの見出しから話題を拾い、ネタ帳に入れる
+  //   ・自動投稿の時刻（「自動は12時に」「15時の予約を12時に」「5日の12時にお願いします」）…本文つきは下の parsePostRequest へ
+  //   11/3 は「5日(木)12:00にお願いします」を自動の答えが Zoom のご希望と取り違えていた。
+  {
+    const { trySettingRequest } = await import("./settingRequestFlow");
+    const sr = await trySettingRequest({ userId: user.id, lineUserId, text: t });
+    if (sr) return sr;
   }
 
   // ★投稿の中身についてのご希望（「〇〇の話題はいらない」「〇〇を勧めたい」「絵文字を減らして」）は、
@@ -4509,6 +4537,13 @@ async function autoAnswer(userId: number, lineUserId: string, question: string, 
     if (cr) {
       const offered = await flow.offerContentRules({ userId, lineUserId, question, request: cr, questionId: res.questionId });
       if (offered) return offered;
+    }
+    // ★設定で解決できるご希望（通知・ホームページの話題・投稿の時刻）なのに、規則で読み取れなかった言い方は、
+    //   答えだけで終わらせず担当者へ回す（2026-11-04・server/settingRequestFlow.ts）
+    if (res.settingRequest && res.settingRequest !== "none") {
+      const { escalateSettingWish } = await import("./settingRequestFlow");
+      const kind = res.settingRequest === "notice" ? "notice" : res.settingRequest === "topics_from_url" ? "topics" : "postTime";
+      return escalateSettingWish({ userId, lineUserId, question, kind, questionId: res.questionId, reason: `自動の答えが「${res.settingRequest}」のご希望と読みました（規則では読み取れなかった言い方）` });
     }
     if (looksLikeContentWish(question)) {
       const notified = await flow.escalateContentWish(userId, lineUserId, question, res.questionId);

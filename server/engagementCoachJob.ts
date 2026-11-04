@@ -79,7 +79,7 @@ export async function handleCoachPostback(userId: number, action: string): Promi
   }
   if (action === "off") {
     await d.execute(sql`UPDATE users SET engagementCoachEnabled=0 WHERE id=${userId}`);
-    return "交流の案内を止めました。また受け取りたいときは「設定」の「交流の案内を受け取る」を押してください。";
+    return "交流の案内を止めました。また受け取りたいときは「設定」→「お知らせの受け取り」で戻せます。";
   }
   if (action === "on") {
     await d.execute(sql`UPDATE users SET engagementCoachEnabled=1, engagementCoachMiss=0 WHERE id=${userId}`);
