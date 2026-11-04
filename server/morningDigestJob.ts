@@ -116,7 +116,9 @@ export async function runMorningDigestJob(): Promise<void> {
 
       // ① 昨日の結果
       const rows = byUser.get(userId);
-      const count = rows ? await buildDailyCountTextForUser(userId, rows, dateLabel) : null;
+      // ★「投稿結果は送らないで」とおっしゃった方には出さない（2026-11-04・users.dailyResultNotifyEnabled）
+      const wantsResult = user.dailyResultNotifyEnabled !== 0 && user.dailyResultNotifyEnabled !== false;
+      const count = rows && wantsResult ? await buildDailyCountTextForUser(userId, rows, dateLabel) : null;
       if (count) parts.push(count.text);
       // ★昨日、承認待ちのまま1件も公開されなかった方には「承認がないと投稿されない」ことをはっきり伝え、
       //   承認が手間なら「自動（確認なし）」に切り替えられることを案内する（2026-09-11 三上様指示）

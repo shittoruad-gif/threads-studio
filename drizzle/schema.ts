@@ -62,6 +62,8 @@ export const users = mysqlTable("users", {
   emailOptOut: tinyint("emailOptOut").default(0).notNull(),
   // 「次にやること」の公式LINE通知。ご本人が「もう不要」と言えばOFFにできる。
   nextActionNotifyEnabled: tinyint("nextActionNotifyEnabled").default(1).notNull(),
+  // 朝のまとめの「昨日の投稿結果」を受け取るか（0115）。0＝出さない（お知らせ・承認待ちの件数は届く）
+  dailyResultNotifyEnabled: tinyint("dailyResultNotifyEnabled").default(1).notNull(),
   // 毎日5分の「交流」の案内（shared/engagementCoach.ts・0110）。受け取るか／最後に送った日時／「やった」が続けて無い回数／次の案内の番号
   engagementCoachEnabled: tinyint("engagementCoachEnabled").default(1).notNull(),
   engagementCoachLastAt: timestamp("engagementCoachLastAt"),
