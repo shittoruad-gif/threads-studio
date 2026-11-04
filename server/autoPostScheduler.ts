@@ -1125,6 +1125,12 @@ export async function generateAutoPost(
       sameComplained = ft.saidSameContent(skipReasons) || repeatDecliner;
       {
         const cr: any = counselingResult || {};
+        // ★健康系のお店では、主題の候補も本文の材料と同じく健康の断定を落としてから選ぶ（2026-11-04 夜間整備 acc37）。
+        //   本文の材料（threadsPrompts の scrubSettingText）は洗ってあるが、主題の候補は生の「強み」を見ていた。
+        //   「AI姿勢分析で…根本改善を実現」が主題に選ばれ、「主題を書け」と healthClaimGuard がぶつかって
+        //   「本文が短くなりすぎた」で枠が欠けていた（14日で3回・11/4 は見送りの代わりが作れず0本）。ガードは緩めない。
+        const hg = await import('../shared/healthClaimGuard');
+        const healthBiz = hg.isHealthBusiness(project.businessType);
         const plan = ft.planFreshTopic({
           recentPosts,
           // ★自然な書き方モードの方は、強み・実績・メニューを今日の主題にしない（2026-10-15 acc21：強みの欄に「24時間」が3つあり、
@@ -1133,7 +1139,8 @@ export async function generateAutoPost(
             ? [project.n1Customer, (project as any).belief, (project as any).customerWords, ...(cr.realEpisodes ?? []), ...(cr.faq ?? [])]
             : [project.strength, project.usp, project.proof, project.n1Customer, (project as any).belief,
               (project as any).customerWords, ...(cr.realProofs ?? []), ...(cr.realEpisodes ?? []), ...(cr.faq ?? []), ...(cr.menu ?? [])])
-            .map((m) => dropAvoided(m as string, '主題の候補')),
+            .map((m) => dropAvoided(m as string, '主題の候補'))
+            .map((m) => (healthBiz && m ? hg.scrubSettingText(m).text : m)),
           // 毎回出てよい言葉（店名・地名・業種・対象のお客様・ご本人が毎回書く挨拶や締め）は数えない
           protect: freshProtect,
           // ★同じ枠で自然さの点検に落ちた回数ぶん、今日の主題を次の候補へずらす（2026-11-01 夜間整備 acc37：

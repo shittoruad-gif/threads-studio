@@ -197,6 +197,19 @@ describe("はじめの設定を渡す前に洗う（scrubSettingText）", () => 
     expect(r.text).toContain("国家資格者による施術");
   });
 
+  it("acc37 の強み「…根本改善を実現」は主題の候補に残らない（11/4 主題と健康ガードがぶつかり枠が欠けた）", async () => {
+    const { planFreshTopic } = await import("../shared/freshTopic");
+    const strength = "AI姿勢分析で“見える化”された施術とリハビリで根本改善を実現";
+    expect(scrubSettingText(strength).text).toBe("");
+    const recentPosts = Array.from({ length: 8 }, (_, i) => `八潮のどい接骨院です。安静にしすぎると痛みが長引くことがあります。その${i}`);
+    const plan = planFreshTopic({
+      recentPosts,
+      materials: [strength, "土曜も夕方まで受付しています"].map((m) => scrubSettingText(m).text),
+      protect: ["どい接骨院", "八潮"],
+    });
+    expect(plan.topic ?? "").not.toContain("根本改善");
+  });
+
   it("userId=2907 の強みから体験談だけを落とし、残った行を壊れた日本語にしない", () => {
     const r = scrubSettingText(
       "整体院を開業して30年近く、豊富な経験と様々な実績があり、手術宣告を受けられた方が症状改善したり、杖をついて来られた方の杖がいらなくなったり、自宅での歩行器も不要になったり、施術効果はまさに世界トップクラス！！また、日本トップクラスの整体法を取得、更にMLBメジャーリーグ9名のトレーナーが小波津式を学び、ドイツの有名サッカーチームでも小波津式を学んでいます。",
