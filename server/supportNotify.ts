@@ -33,7 +33,20 @@ export async function notifyStaffOfQuestion(params: {
   const link = `${base}/admin/questions${params.questionId ? `?id=${params.questionId}` : ""}`;
   let delivered = false;
 
-  const to = staffEmail();
+  // ★届け先は運営のLINE（LINE_ADMIN_TARGET_ID）だけ（2026-11-05 三上様「普通のお問い合わせもメールは止めてLINEだけに」）。
+  try {
+    const { notifyLine } = await import("./_core/notification");
+    const ok = await notifyLine(
+      "お客様からのお問い合わせ",
+      `${who}\n\n${params.message.slice(0, 800)}\n\n返信はこちら\n${link}`,
+    );
+    delivered = delivered || ok;
+  } catch (e) {
+    console.error("[SupportNotify] LINE通知に失敗:", e);
+  }
+
+  // LINEに届かなかったときだけ、取りこぼさないようメールで送る。
+  const to = delivered ? null : staffEmail();
   if (to) {
     try {
       const ok = await sendEmail({
@@ -53,18 +66,6 @@ export async function notifyStaffOfQuestion(params: {
     } catch (e) {
       console.error("[SupportNotify] メール通知に失敗:", e);
     }
-  }
-
-  // 運営のLINE（LINE_ADMIN_TARGET_ID）にも届ける。既存の通知と同じ経路。
-  try {
-    const { notifyLine } = await import("./_core/notification");
-    const ok = await notifyLine(
-      "お客様からのお問い合わせ",
-      `${who}\n\n${params.message.slice(0, 800)}\n\n返信はこちら\n${link}`,
-    );
-    delivered = delivered || ok;
-  } catch (e) {
-    console.error("[SupportNotify] LINE通知に失敗:", e);
   }
 
   if (!delivered) {

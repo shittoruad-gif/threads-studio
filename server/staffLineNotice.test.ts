@@ -80,10 +80,17 @@ describe("自動で対応したお問い合わせの知らせは、三上様の�
     delete process.env.QA_SAFE_MODE;
   });
 
-  it("ふつうのお問い合わせ（自動で対応できなかったもの）は今まで通り：メール＋運営LINE", async () => {
+  it("ふつうのお問い合わせ（自動で対応できなかったもの）は運営LINEだけ・メールは送らない（2026-11-05）", async () => {
     await notify.notifyStaffOfQuestion({ questionId: 9, userName: "QA", message: "ログインできません" });
-    expect(emails).toHaveLength(1);
+    expect(emails).toHaveLength(0);
     expect(legacyLine).toHaveLength(1);
     expect(sent).toHaveLength(0);
+  });
+
+  it("運営LINEに届かなかったときだけ、取りこぼさないようメールで送る", async () => {
+    const { notifyLine } = await import("./_core/notification");
+    (notifyLine as any).mockImplementationOnce(async () => false);
+    await notify.notifyStaffOfQuestion({ questionId: 10, userName: "QA", message: "ログインできません" });
+    expect(emails).toHaveLength(1);
   });
 });
