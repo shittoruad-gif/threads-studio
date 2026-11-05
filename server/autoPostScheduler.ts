@@ -13,7 +13,7 @@ import { getPlan } from "../shared/plans";
 import { OCCUPIED_GAP_MINUTES, parseFixedPostHours, planFixedDaySlots, fixedSlotTimes, slotTimeForIndex } from "../shared/fixedPostHours";
 import { buildCtaText } from "../shared/autoPostCta";
 import { charBudgetFor, resolveWithAlternation, POST_LENGTHS, trimToBudget } from "../shared/postLength";
-import { applyTicSentenceRepair, checkNaturalized, endsWithQuestion, findAgreementQuestion, findBannedTic, findRepeatedHookNumber, findRepeatedPhraseExcept, findTicSentence, polishPunctuation } from "../shared/jpQualityGuard";
+import { applyTicSentenceRepair, checkNaturalized, endsWithQuestion, findAgreementQuestion, findBannedTic, findRepeatedHookNumber, hasTicOrAgreement, findRepeatedPhraseExcept, findTicSentence, polishPunctuation } from "../shared/jpQualityGuard";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
@@ -275,8 +275,20 @@ function noteReject(
  * この形が作り直し・最後の1回の公開まで残るようになったための対処。
  */
 export async function repairTicSentence(text: string): Promise<string | null> {
-  const bad = findTicSentence(text);
-  if (!bad) return null;
+  // ★2026-11-05 週次リサーチ：当たる文が複数ある投稿（箇条書きの各行が「〜ていませんか？」）を
+  //   1文ずつ順に直す。最大5文。最後に全体を検査し、1文でも残れば null（従来どおり作り直し）。
+  let cur = text;
+  for (let i = 0; i < 5; i++) {
+    const bad = findTicSentence(cur);
+    if (!bad) break;
+    const next = await repairOneTicSentence(cur, bad);
+    if (!next) return null;
+    cur = next;
+  }
+  return cur !== text && !hasTicOrAgreement(cur) ? cur : null;
+}
+
+async function repairOneTicSentence(text: string, bad: string): Promise<string | null> {
   try {
     const prompt = `次の1文は、読む人に同意を求める確認の疑問（「〜ていませんか？」「〜と思いませんか？」など）になっています（この形は禁止）。
 同じ意味のまま、疑問形にしない地の文の言い切り1文に直してください。
@@ -291,7 +303,7 @@ export async function repairTicSentence(text: string): Promise<string | null> {
 元の文：${bad.trim()}`;
     const res = await invokeLLM({ messages: [{ role: 'user', content: prompt }] });
     const out = (res.choices[0]?.message?.content ?? '').toString().trim();
-    return applyTicSentenceRepair(text, bad.trim(), out);
+    return applyTicSentenceRepair(text, bad.trim(), out, { allowOthers: true });
   } catch (e) {
     console.warn(`[AutoPost] 1文の差し替えに失敗: ${(e as Error)?.message}`);
     return null;

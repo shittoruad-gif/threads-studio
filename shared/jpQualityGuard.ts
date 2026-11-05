@@ -197,6 +197,19 @@
  *   人間コーパスの追試（まつ毛パーマ51本＋焼肉屋43本）: 店側の同意確認疑問は0本。
  *     「いませんか」は店側の募集型2本（当日の空き・モデル募集）と客側の本当の質問のみ。禁止語・閾値は変更なし。
  *
+ * 週次リサーチ（2026-11-05・自社生成の実測。直近7日844本＝通常の枠430本＋学習の枠414本 vs 前週733本）:
+ *   通常の枠: 決まり文句・族に当たる公開は0本（前週0）。「正直、」0本。
+ *   学習の枠: **1本すり抜け**（id 5604・acc12・list3・long）。箇条書きの各行が「〜ていませんか？」の4文で、
+ *     1文の差し替え（applyTicSentenceRepair）は「他の文に残っていたら不合格」のため必ず失敗し、
+ *     最後の1回で公開された（postRejectLog bannedTicPublished 1件・同期間の bannedTicRepaired は83件）。
+ *     → 当たる文を1文ずつ順に直す（最大5文・最後に全体を検査）ように直した。箇条書きの「・」も残す。禁止語・閾値は変更なし。
+ *     もう1本の「いませんか」（id 5507）は「〜を使いませんか。」の誘いで、族には当たらない（仕様どおり）。
+ *   「んです/本」0.18→0.11（通常の枠）、学習の枠0.03。ひらがな率61%・62%、字数74・63。
+ *   観察のみ（変更なし）:「〜ことはありませんか？」が通常の枠で4本（前週0・前々週7）。うち2本は acc11 の poll。
+ *     人間コーパスで同じ形は0本のまま。隔週で出たり消えたりしているため族への追加は三上さんへの提案に留める。
+ *     「ですよね」は通常の枠17本（前週25）・学習の枠24本（うち地元の会話13）。
+ *   人間コーパスの追試（外壁塗装38本・クリーニング店48本）: 店側の同意確認疑問は「〜を探していませんか？」1本（反応3）のみ。
+ *
  * ガードの原則:
  *   リライトはベストエフォートで、失敗しても「リライト前の文」という
  *   安全な代替が常にある。だからこのガードは**書き直さない**。
@@ -328,17 +341,30 @@ export function findTicSentence(text: string): string | null {
  * 1文の差し替え結果を検査して、本文に当てはめる（不合格なら null）。
  * 差し替え後の文に決まり文句・同意確認疑問が無く、疑問で終わらず、
  * 長さが元の文の半分〜1.6倍のときだけ採用する。他の文には一切触れない。
+ *
+ * ★2026-11-05 週次リサーチ：箇条書きの各行が「〜ていませんか？」の投稿（id 5604・4文）で、
+ *   1文直しても他の文が残るため常に不合格になり、最後の1回で公開された（bannedTicPublished）。
+ *   allowOthers=true のときは「他の文に残っているか」を見ない（呼び出し側が全文を順に直し、最後に全体を検査する）。
  */
-export function applyTicSentenceRepair(text: string, oldSentence: string, newSentence: string): string | null {
+export function applyTicSentenceRepair(
+  text: string,
+  oldSentence: string,
+  newSentence: string,
+  opts: { allowOthers?: boolean } = {},
+): string | null {
   let repl = String(newSentence ?? '').trim().replace(/^[「『"]|[」』"]$/g, '').split('\n')[0].trim();
   // 元の文がかぎかっこで始まっていたら残す（閉じかっこは次の断片として本文に残っている）
   if (repl && /^[「『]/.test(oldSentence.trim())) repl = oldSentence.trim()[0] + repl;
+  // 箇条書きの行頭の記号（・ ● ■ ✓ ① など）も残す（2026-11-05）
+  const bullet = oldSentence.trim().match(/^([・●○■□◆◇▶︎▷✓✔-]|[①-⑩])\s*/);
+  if (repl && bullet && !repl.startsWith(bullet[1])) repl = bullet[0] + repl;
   if (!repl || !text.includes(oldSentence)) return null;
   if (hasTicOrAgreement(repl) || /[？?]$/.test(repl)) return null;
   const oldLen = Array.from(oldSentence.trim()).length;
   const newLen = Array.from(repl).length;
   if (newLen < oldLen * 0.5 || newLen > oldLen * 1.6) return null;
   const out = text.replace(oldSentence, repl);
+  if (opts.allowOthers) return out;
   return hasTicOrAgreement(out) ? null : out;
 }
 

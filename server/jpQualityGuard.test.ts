@@ -313,4 +313,15 @@ describe("決まり文句の1文だけを差し替える（2026-10-15 週次リ�
     const out = applyTicSentenceRepair(q, s.trim(), "赤ちゃんの頭の形は、自然に整うと思われがちです。");
     expect(out).toBe("「赤ちゃんの頭の形は、自然に整うと思われがちです。」\n早めに見てあげることが大切です。");
   });
+
+  it("当たる文が複数あるとき、allowOthers なら1文ずつ順に直せる（2026-11-05 id 5604）", () => {
+    const multi = "気をつけたいこと2つ。\n・肩が内側に入っていませんか？\n・呼吸が浅くなっていませんか？";
+    const s1 = findTicSentence(multi)!.trim();
+    expect(applyTicSentenceRepair(multi, s1, "肩が内側に入りやすい。")).toBeNull();
+    const step1 = applyTicSentenceRepair(multi, s1, "肩が内側に入りやすい。", { allowOthers: true })!;
+    expect(step1).toBe("気をつけたいこと2つ。\n・肩が内側に入りやすい。\n・呼吸が浅くなっていませんか？");
+    const s2 = findTicSentence(step1)!.trim();
+    const step2 = applyTicSentenceRepair(step1, s2, "呼吸が浅くなりやすい。", { allowOthers: true })!;
+    expect(hasTicOrAgreement(step2)).toBe(false);
+  });
 });
