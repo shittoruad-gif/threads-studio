@@ -361,7 +361,6 @@ export default function Tour() {
           </div>
 
           <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-            まず試したい方には、1日1回のライトプラン（月額4,980円）もご用意しています。
             プランはいつでも変更・解約できます。表示回数はアカウントの状況や投稿内容によって変わり、成果を保証するものではありません。
           </p>
         </section>

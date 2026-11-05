@@ -186,7 +186,7 @@ export const RELATED_SERVICES: RelatedService[] = [
     },
     description: 'どの広告・投稿から公式LINEに登録されたかを、認証画面なしで計測します。流入経路ごとの自動フォロー配信もできます。',
     url: 'https://keiro.s-toru.com/',
-    price: 'ライト 月4,980円／プロ 月9,800円（税込）。14日間無料・契約期間の縛りなし',
+    price: '月9,800円（税込・1店舗あたり）。14日間無料・契約期間の縛りなし',
   },
   {
     label: '口コミ生成アプリ',

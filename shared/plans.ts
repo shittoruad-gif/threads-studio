@@ -40,6 +40,12 @@ export interface PlanConfig {
   normalCounterpartId?: string;
   /** キャンペーンの種別（クーポンコードで出し分け）。'seminar' or 'monitor' */
   campaignTier?: 'seminar' | 'monitor';
+  /**
+   * 新しいお申し込みの受付を終了したプラン（2026-11 ライトプラン）。
+   * すでにこのプラン（またはその特別価格・モニター価格）でご契約中の方は、そのまま使い続けられる。
+   * 料金表に出さず、新規の申込・他プランからの変更・引き継ぎ先としては選べない。
+   */
+  newSignupClosed?: boolean;
 }
 
 // ライト/プロ/ビジネスの機能定義（通常・キャンペーン共通で参照）
@@ -103,6 +109,7 @@ export const PLANS: Record<string, PlanConfig> = {
   //   を呼ぶ（env CAMPAIGN_AUTO_REVERT_ENABLED=true で有効・本番設定済み）。
   light_campaign: {
     id: 'light_campaign',
+    newSignupClosed: true,
     name: 'ライト モニター価格',
     description: '3ヶ月モニター特別価格（4ヶ月目から通常価格¥4,980に自動移行）。機能はライトプランと同じ',
     priceMonthly: 2980,
@@ -142,6 +149,7 @@ export const PLANS: Record<string, PlanConfig> = {
   // ═══════ セミナー種別キャンペーン（セミナーコードで適用。3回課金後、4ヶ月目から通常価格へ自動移行）═══════
   light_seminar: {
     id: 'light_seminar',
+    newSignupClosed: true,
     name: 'ライト 特別価格',
     description: '3ヶ月の特別価格（4ヶ月目から通常価格¥4,980に自動移行）。機能はライトプランと同じ',
     priceMonthly: 4480,
@@ -181,6 +189,7 @@ export const PLANS: Record<string, PlanConfig> = {
   // ───────── 通常プラン（継続課金）─────────
   light: {
     id: 'light',
+    newSignupClosed: true,
     name: 'ライトプラン',
     description: '個人利用・小規模店舗向け',
     priceMonthly: 4980,
@@ -383,6 +392,25 @@ export function currentPlanCardId(planId: string | null | undefined): string | n
   if (p?.isCampaign) return p.normalCounterpartId ?? planId;
   return planId;
 }
+
+/** 新しいお申し込みの受付を終了したプランか（特別価格・モニター価格も同じ扱い） */
+export function isNewSignupClosed(planId: string | null | undefined): boolean {
+  const p = planId ? PLANS[planId] : undefined;
+  return !!p?.newSignupClosed;
+}
+
+/**
+ * そのプランで新しく契約（申込・変更）してよいか。
+ * 受付終了のプランは、いま同じプラン（その特別価格・モニター価格を含む）でご契約中の方だけ選べる。
+ */
+export function canStartPlan(newPlanId: string, currentPlanId: string | null | undefined): boolean {
+  if (!isNewSignupClosed(newPlanId)) return true;
+  if (!currentPlanId) return false;
+  return currentPlanCardId(currentPlanId) === currentPlanCardId(newPlanId);
+}
+
+export const NEW_SIGNUP_CLOSED_MESSAGE =
+  'ライトプランは新しいお申し込みの受付を終了しました。プロプランまたはビジネスプランからお選びください（すでにライトプランでご契約中の方は、そのままお使いいただけます）。';
 
 /** キャンペーン価格の契約なら、画面に添える短い呼び名。通常プラン・未契約なら null。 */
 export function campaignPriceLabel(planId: string | null | undefined): string | null {

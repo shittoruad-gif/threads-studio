@@ -677,6 +677,22 @@ async function startServer() {
           }
         }
 
+        // ★2026-11 ライトプランは新規受付を終了。ライトの金額（通常・特別価格・モニター価格）で
+        //   ライト以外の方の契約が始まったら、古い決済リンクから申し込まれた可能性があるので運営へ知らせる。
+        //   お支払い済みの方の利用は止めない（対応は運営が判断する）。
+        if (matchedPlanId && !isCanceled && !isFailed && (isPaidCharge || isSubscriptionStart)) {
+          const { canStartPlan } = await import('../../shared/plans');
+          if (!canStartPlan(matchedPlanId, existing?.planId ?? null)) {
+            try {
+              const { notifyOwner } = await import('./notification');
+              await notifyOwner({
+                title: '⚠️ 新規受付を終了したライトプランでお申し込みがありました',
+                content: `顧客: ${user.name ?? '(名前未設定)'} <${user.email ?? '不明'}>\nプラン: ${matchedPlanId}（金額 ${planAmount}円）\nいまの契約: ${existing?.planId ?? 'なし'}\n古いライトの決済リンクから申し込まれた可能性があります。プロ・ビジネスへのご案内をご検討ください。`,
+              });
+            } catch (e) { console.error('[Univapay Webhook] ライト受付終了の通知に失敗:', e); }
+          }
+        }
+
         if (isCanceled) {
           // ★同一メールで複数サブスクがあり得る（二重契約の整理・旧契約の解約等）。
           //   イベントのサブスクIDがアプリに記録されたIDと食い違う場合、それは

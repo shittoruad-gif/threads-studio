@@ -106,7 +106,7 @@ const FAQ_ITEMS = [
   },
   {
     question: '複数のThreadsアカウントを管理できますか？',
-    answer: 'はい、プラン別に設定されたアカウント数まで連携可能です。ライトは1件、プロは3件、ビジネスは10件、代理店プランは無制限に管理できます。',
+    answer: 'はい、プラン別に設定されたアカウント数まで連携可能です。プロは3件、ビジネスは10件、代理店プランは無制限に管理できます（ライトプランでご契約中の方は1件）。',
   },
   {
     question: '代理店プランとは何ですか？',
@@ -248,7 +248,10 @@ export default function Pricing() {
   // キャンペーンプランはカードとして直接表示しない（コード適用時に通常カードの価格を切替）
   // agency_client（代理店が発行するクライアント枠）は購入対象ではないので料金表に出さない
   // ★フリープランは出さない（2026-10-03 三上様「フリープランは不要・1で進めて」）。お申し込み前の方は7日間無料から
-  const plans = Object.values(PLANS).filter((p) => !p.isCampaign && p.id !== 'agency_client' && p.id !== 'free');
+  // ★2026-11 ライトプランは新規受付を終了。ライトでご契約中の方にだけ「現在のプラン」として出す
+  const plans = Object.values(PLANS).filter(
+    (p) => !p.isCampaign && p.id !== 'agency_client' && p.id !== 'free' && (!p.newSignupClosed || currentCardPlanId === p.id),
+  );
 
   return (
     <div className="min-h-screen bg-muted/50">

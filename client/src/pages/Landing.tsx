@@ -552,9 +552,8 @@ export default function Landing() {
           <h2 className="text-3xl md:text-4xl font-bold mb-4 text-foreground">シンプルな料金プラン</h2>
           <p className="text-muted-foreground mb-12 text-lg">7日間無料トライアルで全機能をお試しいただけます</p>
           
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 max-w-6xl mx-auto mb-12">
+          <div className="grid md:grid-cols-3 gap-5 max-w-5xl mx-auto mb-12">
             {[
-              { name: "ライト", price: "￥4,980", period: "/月", features: ["自動投稿 1日1回", "Threads連携 1アカウント", "投稿の自動作成 月10回"], highlight: false },
               { name: "プロ", price: "￥9,800", period: "/月", features: ["自動投稿 1日3回", "Threads連携 3アカウント", "投稿の自動作成 無制限"], highlight: true },
               { name: "ビジネス", price: "￥29,800", period: "/月", features: ["自動投稿 1日3回", "Threads連携 10アカウント", "お店の登録 50件"], highlight: false },
               { name: "代理店", price: "￥55,000", period: "/月", features: ["クライアントID 100件まで発行", "発行IDはプロ相当", "クライアント側の課金なし"], highlight: false },

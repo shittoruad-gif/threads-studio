@@ -104,7 +104,7 @@ async function referralLink(lineUserId: string, code: string, userId?: number): 
     if (valid) {
       const { campaignTierForCode, getCampaignCounterpart } = await import("@shared/plans");
       const tier = campaignTierForCode(c);
-      const rows = ["light", "pro", "business"]
+      const rows = ["pro", "business"] // 2026-11 ライトは新規受付を終了
         .map((id) => getCampaignCounterpart(id, tier))
         .filter(Boolean)
         .map((p: any) => `・${p.name}：月額 ${p.priceMonthly.toLocaleString()}円（税込）`);

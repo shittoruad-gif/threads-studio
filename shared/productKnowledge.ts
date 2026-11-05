@@ -10,7 +10,8 @@
 import { PLANS, type PlanConfig } from './plans';
 
 /** 案内に使う通常プラン（キャンペーン価格・代理店クライアント枠は除く） */
-const PUBLIC_PLAN_IDS = ['free', 'light', 'pro', 'business', 'agency'] as const;
+// ★2026-11 ライトプランは新規受付を終了したので、新しく案内するプランから外す（下の plansKnowledge で一言添える）
+const PUBLIC_PLAN_IDS = ['free', 'pro', 'business', 'agency'] as const;
 
 const limitText = (n: number | undefined, unit: string) =>
   n === undefined ? '—' : n < 0 ? '無制限' : `${n}${unit}`;
@@ -41,6 +42,9 @@ export function plansKnowledge(): string {
     .map((id) => PLANS[id])
     .filter(Boolean)
     .map((p) => planLine(p as PlanConfig))
+    .concat([
+      '- ライトプラン（月額 4,980円・税込／1日1回の自動投稿・Threads連携1件）：新しいお申し込みの受付は終了しています。すでにライトプランでご契約中の方は、そのままお使いいただけます。新しく申し込みたい方・ほかのプランからライトへ変えたい方には、プロプランかビジネスプランをご案内してください。',
+    ])
     .join('\n');
 }
 

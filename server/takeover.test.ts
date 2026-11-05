@@ -40,7 +40,7 @@ describe("代理店解約の引き継ぎ猶予", () => {
   });
 
   it("引き継ぎ先は通常3プランのみ", () => {
-    expect(isTakeoverTargetPlan("light")).toBe(true);
+    expect(isTakeoverTargetPlan("light")).toBe(false); // 2026-11 ライトは新規受付を終了
     expect(isTakeoverTargetPlan("pro")).toBe(true);
     expect(isTakeoverTargetPlan("business")).toBe(true);
     expect(isTakeoverTargetPlan("agency")).toBe(false);

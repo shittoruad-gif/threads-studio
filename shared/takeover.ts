@@ -32,8 +32,8 @@ export function takeoverDaysLeft(pendingAt: Date | string, now: Date): number {
   return Math.ceil(msLeft / (24 * 60 * 60 * 1000));
 }
 
-/** 引き継ぎ先として選べる通常プラン（agency/agency_client/キャンペーンは不可） */
-export const TAKEOVER_TARGET_PLAN_IDS = ['light', 'pro', 'business'] as const;
+/** 引き継ぎ先として選べる通常プラン（agency/agency_client/キャンペーンは不可。ライトは2026-11に新規受付を終了） */
+export const TAKEOVER_TARGET_PLAN_IDS = ['pro', 'business'] as const;
 export type TakeoverTargetPlanId = (typeof TAKEOVER_TARGET_PLAN_IDS)[number];
 
 export function isTakeoverTargetPlan(planId: string): planId is TakeoverTargetPlanId {

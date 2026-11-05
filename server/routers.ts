@@ -10,7 +10,7 @@ import * as db from "./db";
 import { ENV } from "./_core/env";
 import bcrypt from "bcryptjs";
 import * as couponService from "./coupon";
-import { PLANS, TRIAL_DAYS, getPlan, resolveEffectivePlanId } from "../shared/plans";
+import { PLANS, TRIAL_DAYS, getPlan, resolveEffectivePlanId, canStartPlan, NEW_SIGNUP_CLOSED_MESSAGE } from "../shared/plans";
 import { TRPCError } from "@trpc/server";
 import { assertSubscribed } from "./endedGuard";
 import { approvedLocalTerms } from './localGeo';
@@ -825,6 +825,14 @@ export const appRouter = router({
 
         if (plan.priceMonthly === 0) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot checkout free plan' });
+        }
+
+        // ★2026-11 ライトプランは新規受付を終了（三上様指示）。ライトでご契約中の方の再登録だけは通す。
+        {
+          const current = await db.getSubscriptionByUserId(ctx.user.id);
+          if (!canStartPlan(plan.id, current?.planId)) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: NEW_SIGNUP_CLOSED_MESSAGE });
+          }
         }
 
         // 決済はUnivapayリンク経由に一本化。リンクが未設定なら設定不備として弾く。
@@ -3546,6 +3554,11 @@ ${input.commentText}
           });
         }
 
+        // ★2026-11 ライトプランは新規受付を終了。プロ・ビジネスからライトへの変更は受けない。
+        if (!canStartPlan(newPlan.id, currentPlanId)) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: NEW_SIGNUP_CLOSED_MESSAGE });
+        }
+
         // ★#3 ダウングレードで現在の利用量が新プラン上限を超える場合は、
         //   データを壊さずに「先に整理してください」とブロックする（grandfatheredによる
         //   「作れないのに残っている」混乱や、上限超過での運用を防ぐ）。
@@ -4711,7 +4724,7 @@ ${input.commentText}
       .mutation(async ({ input }) => {
         const { isTakeoverTargetPlan } = await import('../shared/takeover');
         if (!isTakeoverTargetPlan(input.planId)) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: '引き継ぎ先はライト/プロ/ビジネスのいずれかです' });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '引き継ぎ先はプロ/ビジネスのいずれかです（ライトプランは新規受付を終了）' });
         }
         const user = await db.getUserById(input.userId);
         if (!user?.takeoverPendingAt) {

@@ -71,7 +71,7 @@ function couponEffectText(coupon: { type: string; code: string }): string {
       };
       return (
         `プラン・課金はすぐには変わりません。モニター登録され、料金ページに${tierLabel}が表示されます：` +
-        `ライト${price('light')}／プロ${price('pro')}／ビジネス${price('business')}（月額・3回分。4回目のお支払いから通常価格に自動移行）。`
+        `プロ${price('pro')}／ビジネス${price('business')}（月額・3回分。4回目のお支払いから通常価格に自動移行）。ライトは新規受付を終了。`
       );
     }
     default:
