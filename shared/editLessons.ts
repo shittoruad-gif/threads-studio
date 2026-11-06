@@ -16,7 +16,17 @@
  */
 
 import { agreementQuestionCaveat } from "./jpQualityGuard";
-export interface EditPair { before: string; after: string }
+/** declined＝直した後にご本人が見送った投稿（決まりの材料には使うが、お手本の文にはしない・2026-11-06） */
+export interface EditPair { before: string; after: string; declined?: boolean }
+
+/**
+ * お手本の文として使ってよい手直しだけ（直した後に見送った投稿を外す）。
+ * acc37 どい接骨院様：11/3 にご本人が「歩行が困難であった方が走行可能な状態まで改善された事例もございます」と直してから見送った投稿が
+ * 「手直しの好み」のお手本に入り、11/5 の案がその文をそのまま写して、また見送られた（2026-11-06 夜間整備）。
+ */
+export function exemplarPairs<T extends EditPair>(pairs: readonly T[]): T[] {
+  return pairs.filter((p) => !p.declined);
+}
 
 export const EDIT_LESSONS = {
   /** 読む手直しの数 */

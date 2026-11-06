@@ -14,14 +14,19 @@ export async function getAccountEditPairs(userId: number, threadsAccountId: numb
   if (!d) return { pairs: [], latest: "" };
   const n = Math.min(Math.max(limit, 1), 30);
   const rows: any = await d.execute(sql`
-    SELECT originalContent, postContent, editedByUserAt FROM scheduledPosts
+    SELECT originalContent, postContent, editedByUserAt, status, clientRating, errorMessage FROM scheduledPosts
     WHERE userId = ${userId} AND editedByUserAt IS NOT NULL
       AND originalContent IS NOT NULL AND postContent IS NOT NULL
       ${threadsAccountId ? sql`AND threadsAccountId = ${threadsAccountId}` : sql``}
     ORDER BY editedByUserAt DESC LIMIT ${n}`);
   const list = ((rows as any)[0] ?? []) as any[];
   const pairs = list
-    .map((r) => ({ before: String(r.originalContent ?? ""), after: String(r.postContent ?? "") }))
+    .map((r) => ({
+      before: String(r.originalContent ?? ""),
+      after: String(r.postContent ?? ""),
+      // 見送りの数え方は db.getRecentDeclinedContents と同じ（✕で見送り／3案すべてを見送り）
+      declined: r.status === "canceled" && (r.clientRating === "bad" || r.errorMessage === db.CHOICE_ALL_SKIPPED_REASON),
+    }))
     .filter((p) => p.after.trim().length >= 20 && p.before.replace(/\s/g, "") !== p.after.replace(/\s/g, ""));
   return { pairs, latest: list[0]?.editedByUserAt ? new Date(list[0].editedByUserAt).toISOString() : "" };
 }

@@ -916,7 +916,9 @@ export async function generateAutoPost(
         const { splitStyleSamples } = await import('../shared/styleTraits');
         // ★このアカウントの手直しだけ（別のアカウントの手直しを混ぜない・2026-10-08）
         const { getAccountEditPairs } = await import('./editLessons');
-        const { pairs: editPairs } = await getAccountEditPairs(userId, threadsAccountId, 20).catch(() => ({ pairs: [] as Array<{ before: string; after: string }>, latest: '' }));
+        const { exemplarPairs } = await import('../shared/editLessons');
+        // ★直した後に見送った投稿の文は「ご本人の文」として繰り返しの判定から外さない（2026-11-06 acc37）
+        const editPairs = exemplarPairs((await getAccountEditPairs(userId, threadsAccountId, 20).catch(() => ({ pairs: [] as Array<{ before: string; after: string; declined?: boolean }>, latest: '' }))).pairs);
         ownerKeysCache = ownerKeys([
           ...editPairs.map((e) => e.after),
           ...splitStyleSamples((project as any).styleSamples || null),
@@ -950,12 +952,15 @@ export async function generateAutoPost(
       const { buildEditLessonsNote, EDIT_LESSONS } = await import('../shared/editLessons');
       const lessons = await getEditLessons(userId, threadsAccountId);
       ownerEditCount = lessons.pairs.length;
-      ownerEditPairs = lessons.pairs;
-      ownerAdded = (await import('../shared/editLessons')).ownerAddedRuns(lessons.pairs);
+      // ★決まり（lessons.rules）は見送った投稿の直しも含めて作るが、お手本の文・「ご本人が書いた言葉」の扱いは
+      //   見送らなかった投稿だけから作る（直した後に見送った文を写して、また見送られた・2026-11-06 acc37）
+      const kept = (await import('../shared/editLessons')).exemplarPairs(lessons.pairs);
+      ownerEditPairs = kept;
+      ownerAdded = (await import('../shared/editLessons')).ownerAddedRuns(kept);
       ownerFixed = (await import('../shared/editLessons')).ownerFixedLines(lessons.pairs);
-      ownerAfterTexts = lessons.pairs.slice(0, 3).map((p) => p.after);
+      ownerAfterTexts = kept.slice(0, 3).map((p) => p.after);
       // お手本（直した後の文）も、このアカウントの手直しだけから作る（以前はお客様単位で別のアカウントの直しが混ざっていた）
-      editPreferenceNote = buildPreferenceNote(lessons.pairs.slice(0, 5).map((p) => ({ originalContent: p.before, postContent: p.after })));
+      editPreferenceNote = buildPreferenceNote(kept.slice(0, 5).map((p) => ({ originalContent: p.before, postContent: p.after })));
       if (lessons.pairs.length >= EDIT_LESSONS.minPairs) editLessonsNote = buildEditLessonsNote(lessons.rules, lessons.pairs);
       // ★3回以上消している言葉は「書かない」と言い切る。店を指す言葉の検査（identityGuard）にも求めさせない（2026-10-08）
       const { recurringEdits } = await import('../shared/editLessons');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildEditLessonsPrompt, parseEditLessons, buildEditLessonsNote, EDIT_LESSONS, ownerAddedRuns, recurringEdits, keptRatio, ownerFixedLines } from "../shared/editLessons";
+import { buildEditLessonsPrompt, parseEditLessons, buildEditLessonsNote, EDIT_LESSONS, ownerAddedRuns, recurringEdits, keptRatio, ownerFixedLines, exemplarPairs } from "../shared/editLessons";
 
 // 2026-10-08 クレーム「ほんまにAI学習しとる？訂正しても毎回同じ所を訂正しとる感じがする」
 const pairs = [
@@ -154,5 +154,24 @@ describe("直した後の文にある同意確認の問いかけ（2026-10-15 �
     const note = buildPreferenceNote([{ originalContent: "運動が必要です。", postContent: "痩せる為には運動しなきゃいけないと思っていませんか？当店は運動なしです。" }]);
     expect(note).toContain("真似しない");
     expect(buildPreferenceNote([{ originalContent: "a", postContent: "当店のダイエットは運動なしで続けられる形です。" }])).not.toContain("真似しない");
+  });
+});
+
+// 2026-11-06 夜間整備 acc37 どい接骨院様：直した後に見送った投稿の文をお手本にして、同じ文をそのまま写した案がまた見送られた
+describe("直した後に見送った投稿はお手本にしない", () => {
+  it("見送った手直しを外し、見送っていない手直しは残す", () => {
+    const declined = {
+      before: "どい接骨院の運動療法で、歩けなかった方が走れるようになった例もあります😊",
+      after: "当院が提供する運動療法では、歩行が困難であった方が走行可能な状態まで改善された事例もございます。😊",
+      declined: true,
+    };
+    const ok = { before: "膝の痛み、多いです。", after: "膝の痛みにお悩みの方、多いです。", declined: false };
+    const kept = exemplarPairs([declined, ok]);
+    expect(kept).toEqual([ok]);
+    expect(kept.map((p) => p.after).join("\n")).not.toContain("走行可能");
+    expect(ownerAddedRuns(kept).join("|")).not.toContain("走行可能");
+  });
+  it("見送りの印が無い手直し（これまでの形）はそのまま残す", () => {
+    expect(exemplarPairs(pairs)).toHaveLength(pairs.length);
   });
 });
