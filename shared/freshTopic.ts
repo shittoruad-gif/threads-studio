@@ -500,3 +500,50 @@ export function questionEndingBlocked(recentPosts: readonly string[], endsWithQu
 
 export const QUESTION_ENDING_NOTE =
   "\n\n【締め方（厳守）】\n- 直近の投稿が問いかけで終わっている。今日は問いかけ（〜ですか？／〜ませんか？）で締めない。言い切るか、お店からのひとことで終える。";
+
+/**
+ * 「言っていることが違う」で見送られた投稿の話題の言葉（2026-11-07 三上様「すぐ入れて」）。
+ *
+ *   11/3・11/5・11/7 に #25 が「海外訪問の着物」の下書きを3回「言っていることが違う」で見送った。
+ *   見送りの共通点（言い回し）と「今日は使わない言葉」（7日・3回以上見送った方だけ・最後の材料には残る）では
+ *   話題が外れず、はじめの設定の体験談「海外訪問へ行かれる際」から毎回作られ、店にない仕立てまで書かれていた。
+ *
+ *   ここでは、材料の行（体験談・N1顧客像など）のうち、見送られた投稿に出ている「その行にしか無い言葉」を返す。
+ *   呼び出し側はこの言葉を含む材料を外し、下書きに残っていたら作り直す（1回の見送りで効く）。
+ *    - 言葉は行の中の漢字・カタカナの語の頭（「海外訪問」→「海外」）から、見送られた投稿に出る最短のものを取る
+ *    - ほかの材料の行にも出る言葉（「訪問」と「訪問着」）は取らない（お店の主題まで外さない）
+ *    - 店名・地名・業種など毎回出てよい言葉は取らない
+ *    - 直近に公開した投稿に出ている言葉は取らない（ご本人が通した話題＝見送りの理由ではない。
+ *      「海外へのお出かけ、お着物の寸法…」の見送りで、毎日出ている「寸法」まで外さない）
+ */
+export function claimDeclinedWords(params: {
+  claimDeclined: readonly string[];
+  materials: readonly (string | null | undefined)[];
+  recentPosts?: readonly string[];
+  protect?: readonly (string | null | undefined)[];
+  max?: number;
+}): string[] {
+  const posts = params.claimDeclined.map(norm).filter(Boolean);
+  if (posts.length === 0) return [];
+  const lines = Array.from(new Set(params.materials.flatMap((m) => String(m ?? "").split(/\r?\n/)).map(norm).filter((l) => l.length >= 2)));
+  const pw = protectWordsOf(params.protect ?? []);
+  // 直近の投稿には見送った下書きも入っている（getRecentPostContents）。見送られた本文そのものは「通した話題」に数えない
+  const recent = (params.recentPosts ?? []).map(norm).filter((r) => r && !posts.includes(r));
+  const ok = (c: string, i: number) =>
+    c.length >= 2 && !COMMON.has(c) && !/^ー/.test(c) &&
+    !pw.some((p) => p.includes(c) || c.includes(p)) &&
+    !lines.some((l, j) => j !== i && l.includes(c)) &&
+    !recent.some((r) => r.includes(c));
+  const hit = (c: string) => posts.some((p) => p.includes(c));
+  const out = new Set<string>();
+  lines.forEach((line, i) => {
+    for (const w of topicWordsOf(line)) {
+      const chars = Array.from(w);
+      let pick: string | undefined;
+      for (let n = 2; n <= chars.length && !pick; n++) { const c = chars.slice(0, n).join(""); if (ok(c, i) && hit(c)) pick = c; }
+      for (let n = 2; n <= chars.length && !pick; n++) { const c = chars.slice(chars.length - n).join(""); if (ok(c, i) && hit(c)) pick = c; }
+      if (pick) out.add(pick);
+    }
+  });
+  return Array.from(out).slice(0, params.max ?? 6);
+}

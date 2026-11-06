@@ -1102,15 +1102,39 @@ export async function generateAutoPost(
         }
       }
     } catch (e) { console.warn(`[AutoPost] ✕の題材を読めませんでした account=${threadsAccountId}: ${(e as Error)?.message}`); }
+    // ★「言っていることが違う」で見送られた話題は、1回の見送りで材料から外し、下書きに残れば作り直す
+    //   （shared/freshTopic.ts claimDeclinedWords・2026-11-07 三上様「すぐ入れて」：#25 が海外訪問の下書きを3回見送っていた）
+    let claimWords: string[] = [];
+    try {
+      const claimDeclined = await db.getRecentClaimDeclinedContents(threadsAccountId, 30, 10).catch(() => [] as string[]);
+      if (claimDeclined.length > 0) {
+        const cr: any = counselingResult || {};
+        claimWords = (await import('../shared/freshTopic')).claimDeclinedWords({
+          claimDeclined,
+          materials: [project.n1Customer, project.strength, project.usp, project.proof, project.mainProblem, (project as any).belief,
+            (project as any).customerWords, ...(cr.realEpisodes ?? []), ...(cr.realProofs ?? []), ...(cr.faq ?? []),
+            ...(cr.menu ?? []), ...(cr.benefitsDaily ?? [])],
+          recentPosts,
+          protect: [(project as any).storeName, project.area, (project as any).localTerms, project.businessType, project.target, (project as any).title],
+        });
+        if (claimWords.length > 0) console.log(`[AutoPost] 「言っていることが違う」と見送られた話題を外す account=${threadsAccountId} ${claimWords.join('・')}`);
+      }
+    } catch (e) { console.warn(`[AutoPost] 「言っていることが違う」の話題を読めませんでした account=${threadsAccountId}: ${(e as Error)?.message}`); }
+    const claimHit = (t: unknown): boolean => {
+      if (claimWords.length === 0) return false;
+      const n = String(t ?? '').replace(/[\s　]+/g, '');
+      return claimWords.some((w) => n.includes(w));
+    };
     const dropAvoided = (text: string | null | undefined, label: string): string | undefined => {
-      if (!surveyAvoid || !text) return text || undefined;
+      if ((!surveyAvoid && claimWords.length === 0) || !text) return text || undefined;
       const lines = String(text).split(/\r?\n/);
-      const kept = lines.filter((l) => hitsSurveyAvoid(l, surveyAvoid).length === 0);
+      const kept = lines.filter((l) => hitsSurveyAvoid(l, surveyAvoid).length === 0 && !claimHit(l));
       if (kept.length < lines.length) console.log(`[AutoPost] ${label}の${lines.length - kept.length}行は✕の題材のため渡さない account=${threadsAccountId}`);
       return kept.join('\n').trim() || undefined;
     };
     const dropAvoidedList = (list: unknown): unknown =>
-      surveyAvoid && Array.isArray(list) ? list.filter((x) => hitsSurveyAvoid(String(x ?? ''), surveyAvoid).length === 0) : list;
+      (surveyAvoid || claimWords.length > 0) && Array.isArray(list)
+        ? list.filter((x) => hitsSurveyAvoid(String(x ?? ''), surveyAvoid).length === 0 && !claimHit(x)) : list;
 
     let freshPlan: import('../shared/freshTopic').FreshTopicPlan | null = null;
     let freshNote = '';
@@ -1176,6 +1200,11 @@ export async function generateAutoPost(
           topicAnchors = ft.topicAnchorWords(plan.topic, freshProtect);
           console.log(`[AutoPost] 話題を変える account=${threadsAccountId} 使いすぎ=${plan.overused.join('・') || 'なし'} 型=${(plan.frames ?? []).join('・') || 'なし'} 今日の主題=${plan.topic ?? '指定なし'}`);
         }
+      }
+      // 「言っていることが違う」の話題は、見送りの回数に関係なく「使わない言葉」に足す（下書きに残れば最後でも止める）
+      if (claimWords.length > 0) {
+        stickyWords = Array.from(new Set([...stickyWords, ...claimWords]));
+        stickyAvoid = Array.from(new Set([...stickyAvoid, ...claimWords]));
       }
       freshNote += ft.buildStickyNote(stickyWords);
     } catch (e) { console.warn(`[AutoPost] 話題の偏りを数えられませんでした account=${threadsAccountId}: ${(e as Error)?.message}`); }
@@ -1249,10 +1278,10 @@ export async function generateAutoPost(
     const strengthForToday = dropAvoided(project.strength, '強み') ?? '';
     const mainProblemForToday = dropAvoided(project.mainProblem, '悩み') ?? '';
     // ★◯の付いた案・投稿も「写される」ので、その日の型に当たる文と✕の題材は外して渡す（2026-09-26）
-    if (freshPlan || surveyAvoid) {
+    if (freshPlan || surveyAvoid || claimWords.length > 0) {
       const liked = likedSamples
         .map((s) => dropFramedSentences(s, freshPlan))
-        .filter((s) => s.replace(/\s/g, '').length >= 10 && hitsSurveyAvoid(s, surveyAvoid).length === 0);
+        .filter((s) => s.replace(/\s/g, '').length >= 10 && hitsSurveyAvoid(s, surveyAvoid).length === 0 && !claimHit(s));
       if (liked.length !== likedSamples.length || liked.some((s, i) => s !== likedSamples[i])) {
         console.log(`[AutoPost] ◯の例から、今日の型・✕の題材に当たる文を外した account=${threadsAccountId}（${likedSamples.length}→${liked.length}件）`);
         preferenceNote = buildRatingNote(liked, dislikedSamples);
@@ -1312,7 +1341,7 @@ export async function generateAutoPost(
       if (f !== raw) console.log(`[AutoPost] 文体のお手本から、見送られた主張に触れる文を外した account=${threadsAccountId}（${raw.length}→${f.length}字）`);
       // ★今日の型に当たる文・✕の題材のお手本も外す（◯の案はお手本の先頭に入るため・2026-09-26）
       const g = dropFramedSentences(f, freshPlan).split(/\n?-{3,}\n?/)
-        .filter((b) => b.trim() && hitsSurveyAvoid(b, surveyAvoid).length === 0).join('\n---\n');
+        .filter((b) => b.trim() && hitsSurveyAvoid(b, surveyAvoid).length === 0 && !claimHit(b)).join('\n---\n');
       if (g !== f) console.log(`[AutoPost] 文体のお手本から、今日の型・✕の題材に当たる文を外した account=${threadsAccountId}（${f.length}→${g.length}字）`);
       f = g;
       return f;
@@ -1329,7 +1358,7 @@ export async function generateAutoPost(
         v = { ...v, realEpisodes: kept };
       }
       // ★✕の題材は、はじめの設定の答え（体験談・よくある質問・実績・良くなること）からも外す（2026-09-26）
-      if (surveyAvoid && v) {
+      if ((surveyAvoid || claimWords.length > 0) && v) {
         v = { ...v };
         for (const k of ['realEpisodes', 'faq', 'realProofs', 'benefitsDaily']) if (Array.isArray(v[k])) v[k] = dropAvoidedList(v[k]);
       }

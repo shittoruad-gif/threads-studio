@@ -4517,6 +4517,22 @@ export async function getRecentDeclinedContents(accountId: number, days: number 
   return (((rows as any)[0] ?? []) as any[]).map((r) => String(r.postContent || "")).filter(Boolean);
 }
 
+/**
+ * 「言っていることが違う」（postSkipFeedback.reason='claim'）で見送られた投稿の本文（新しい順・2026-11-07）。
+ */
+export async function getRecentClaimDeclinedContents(accountId: number, days: number = 30, limit: number = 10): Promise<string[]> {
+  const database = await getDb();
+  if (!database) return [];
+  const rows: any = await database.execute(sql`
+    SELECT sp.postContent FROM postSkipFeedback f
+    JOIN scheduledPosts sp ON sp.id = f.postId
+    WHERE f.threadsAccountId = ${accountId} AND f.reason = 'claim'
+      AND sp.postContent IS NOT NULL AND sp.postContent <> ''
+      AND f.createdAt >= DATE_SUB(NOW(), INTERVAL ${sql.raw(String(Math.max(1, Math.floor(days))))} DAY)
+    ORDER BY f.id DESC LIMIT ${sql.raw(String(Math.max(1, Math.floor(limit))))}`);
+  return (((rows as any)[0] ?? []) as any[]).map((r) => String(r.postContent || "")).filter(Boolean);
+}
+
 /** 3案をまとめて見送る（「見送る」＝本日は公開しない。三上様のご指示の文どおり） */
 export const CHOICE_ALL_SKIPPED_REASON = '3案すべてを見送り（本日は公開しない）';
 
