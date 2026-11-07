@@ -2234,8 +2234,8 @@ export async function generateAutoPost(
 
     // ★長い段落はスマホで読める長さに（文末でだけ切る）。2026-09-06 点検で167字の段落が1件あった
     {
-      const { softWrapLongLines } = await import('../shared/postFormat');
-      fullContent = softWrapLongLines(fullContent, 90);
+      const { softWrapLongLines, breakCrampedParagraphs } = await import('../shared/postFormat');
+      fullContent = breakCrampedParagraphs(softWrapLongLines(fullContent, 90));
     }
     // Threads API の1投稿500文字制限に対する最終安全網（通常は届かない）。
     const SAFETY_LIMIT = 480;
