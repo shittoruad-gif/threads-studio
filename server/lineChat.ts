@@ -245,6 +245,8 @@ const PENDING_TEXT_INPUT: Record<string, (q: Record<string, string>) => boolean>
   setting_topics: (q) => q.s === "tpok" || q.s === "tpno",
   set_line_url: (q) => q.c === "seturl",
   self_edit: (q) => q.a === "selfedit",
+  // コメント返信の文案を自分で直す（2026-11-08）
+  comment_self_edit: (q) => q.cr === "self",
   rewrite_free: (q) => q.a === "rw",
   staff_message: (q) => q.m === "staff",
   // URLだけ送ってこられたときの預かり。種類を選ぶボタン以外を押されたら捨てる

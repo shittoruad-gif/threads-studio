@@ -106,6 +106,12 @@ export async function buildCommentReplyCards(items: CommentItem[]): Promise<unkn
       }
       footer.push({ type: "button", style: "link", height: "sm",
         action: { type: "postback", label: "文案を作り直す", data: `cr=redo&a=${it.accountId}&c=${it.commentId}`, displayText: "文案を作り直す" } });
+      // ★投稿のカードと同じ「文章をコピーして自分で直す」（2026-11-08 お客様のご要望）。
+      //   文案だけを普通のメッセージで送り、直した文が届いたら、その文でカードを出し直す（送るのはご本人が押してから）
+      if (it.draft) {
+        footer.push({ type: "button", style: "link", height: "sm",
+          action: { type: "postback", label: "文章をコピーして自分で直す", data: `cr=self&a=${it.accountId}&c=${it.commentId}`, displayText: "文章をコピーして自分で直す" } });
+      }
     }
     // ★「返信しない」をどのカードにも置く。これが無かったため、返さないと決めた方が
     //   文章で状況を書いて送るしかなく、担当者送りになっていた（ご質問 #37）。
@@ -140,7 +146,7 @@ export async function buildCommentReplyCards(items: CommentItem[]): Promise<unkn
     `コメントが${items.length}件届きました。返信が早いほど、投稿は多くの人に表示されます。\n` +
     (normal.length > 0
       ? (normal.some((i) => i.hasReplyScope) ? "「この文で送る」で、その文のまま返信されます。" : "「Threadsアプリで返信する」を押すと、文章が入った返信画面が開きます。右下の「投稿」を押すだけです。") +
-        "\n文を変えたいときは「文案を作り直す」を押すか、コピーして直してください。"
+        "\n文を変えたいときは「文案を作り直す」か「文章をコピーして自分で直す」を押してください。"
       : "") +
     (spamCount > 0
       ? `${normal.length > 0 ? "\n\n" : ""}※ ${spamCount}件は勧誘・出会い系のようでしたので、文案はお作りしていません。返信せず「返信しない」を押してください（返さないことで不利になることはありません）。`

@@ -2177,6 +2177,18 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     if (r.error) return [textWithQuick(`返信を送れませんでした（${r.error.slice(0, 80)}）。「Threadsアプリで返信する」からお願いします。`, MENU_HINT)];
     return [textWithQuick(`返信しました。\n\n${draft}`, MENU_HINT)];
   }
+  if (q.cr === "self" && q.a && q.c) {
+    const acct: any = await db.getThreadsAccountById(Number(q.a));
+    if (!acct || acct.userId !== user.id) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    const draft = await db.getCommentReplyDraft(Number(acct.id), String(q.c));
+    if (!draft) return [textWithQuick("このカードの文案が残っていませんでした。「文案を作り直す」を押してから、もう一度お試しください。", MENU_HINT)];
+    await db.setLineChatState(lineUserId, "comment_self_edit", JSON.stringify({ a: Number(acct.id), c: String(q.c) }));
+    return [
+      { type: "text", text: "下の文案を長押し→「コピー」して、直したい箇所を変えて、そのまま送り返してください。直した文でカードをお送りしますので、「この文で送る」を押すまで返信はされません。" },
+      { type: "text", text: draft },
+      textWithQuick("やめる場合は「やめる」と送ってください。", [{ label: "やめる", data: "m=cancel" }]),
+    ];
+  }
   if (q.cr === "redo" && q.a && q.c) {
     const acct: any = await db.getThreadsAccountById(Number(q.a));
     if (!acct || acct.userId !== user.id) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
@@ -3441,7 +3453,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   // ★入力待ちの途中で「やめる」と打たれたら、その言葉を内容として使わずに抜ける。
   //   （NGワード待ち・書き直し待ちでこれが無く、「やめる」がそのまま
   //     NGワードや書き直し指示として使われてしまっていた）
-  if ((st?.state === "ngword" || st?.state === "ownerrule" || st?.state === "rewrite_free" || st?.state === "self_edit" || st?.state === "set_line_url" || st?.state === "set_call_focus" || st?.state === "ideal_posts" || st?.state === "skip_reason") &&
+  if ((st?.state === "ngword" || st?.state === "ownerrule" || st?.state === "rewrite_free" || st?.state === "self_edit" || st?.state === "comment_self_edit" || st?.state === "set_line_url" || st?.state === "set_call_focus" || st?.state === "ideal_posts" || st?.state === "skip_reason") &&
       /^(やめる|中止|キャンセル|戻る|終わり|終了)$/.test(text.trim())) {
     await db.clearLineChatState(lineUserId);
     return [textWithQuick("わかりました。中止しました。", MENU_HINT)];
@@ -3508,6 +3520,31 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
       "明日の投稿から、この書き方（言葉づかい・長さ・改行の癖）に寄せて作ります。内容は登録いただいたお店の情報だけで書きます。",
       [{ label: "もう1本足す", data: `c=ideal&p=${projectId}` }, ...MENU_HINT],
     )];
+  }
+  // ── コメント返信の文案を自分で直した文が届いた（2026-11-08）──
+  //   その場では送らない。直した文でカードを出し直し、「この文で送る」を押していただく
+  if (st?.state === "comment_self_edit" && st.payload) {
+    let a = 0, c = "";
+    try { const p = JSON.parse(st.payload); a = Number(p.a); c = String(p.c || ""); } catch { /* 下で弾く */ }
+    const next = text.trim();
+    if (Array.from(next).length > 500) {
+      return [{ type: "text", text: `文字数が${Array.from(next).length}字あります。Threadsは1件500字までのため、${Array.from(next).length - 500}字ほど削って、もう一度お送りください。` }];
+    }
+    if (Array.from(next).length < 2) {
+      return [{ type: "text", text: "内容が短すぎるようです。文案をコピーして直したものをお送りください。やめる場合は「やめる」と送ってください。" }];
+    }
+    await db.clearLineChatState(lineUserId);
+    const acct: any = a ? await db.getThreadsAccountById(a) : null;
+    if (!acct || acct.userId !== user.id || !c) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    const cm: any = await (await fetch(`https://graph.threads.net/v1.0/${encodeURIComponent(c)}?fields=id,text,username,shortcode&access_token=${acct.accessToken}`)).json().catch(() => null);
+    if (!cm?.id) return [textWithQuick("そのコメントが見つかりませんでした（削除された可能性があります）。", MENU_HINT)];
+    const { buildCommentReplyCards } = await import("./commentReply");
+    const cards = (await buildCommentReplyCards([{ accountId: Number(acct.id), accountUsername: String(acct.threadsUsername), hasReplyScope: !(acct.hasReplyScope === false || acct.hasReplyScope === 0), commentId: String(cm.id), shortcode: cm.shortcode ?? null, commenter: cm.username ?? null, commentText: String(cm.text || ""), draft: next, spam: false }])) as any[];
+    const scope = !(acct.hasReplyScope === false || acct.hasReplyScope === 0);
+    return [
+      { type: "text", text: scope ? "直した文でカードを作りました。よろしければ「この文で送る」を押してください。" : "直した文でカードを作りました。「Threadsアプリで返信する」を押すと、この文が入った返信画面が開きます。" },
+      cards[0],
+    ];
   }
   if (st?.state === "self_edit" && st.payload) {
     let postId = 0, one = false;

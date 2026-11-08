@@ -22,6 +22,12 @@ describe("コメント返信カード", () => {
     const msgs: any[] = await buildCommentReplyCards([{ accountId: 1, accountUsername: "a", hasReplyScope: true, commentId: "9", shortcode: "x", commentText: "いいですね", draft: "ありがとうございます" }]) as any[];
     expect(JSON.stringify(msgs[0])).toContain("cr=send&a=1&c=9");
   });
+  it("文案があれば「文章をコピーして自分で直す」も出す（2026-11-08）", async () => {
+    const msgs: any[] = await buildCommentReplyCards([{ accountId: 1, accountUsername: "a", hasReplyScope: true, commentId: "9", shortcode: "x", commentText: "いいですね", draft: "ありがとうございます" }]) as any[];
+    const json = JSON.stringify(msgs[0]);
+    expect(json).toContain("文章をコピーして自分で直す");
+    expect(json).toContain("cr=self&a=1&c=9");
+  });
 });
 
 describe("カードに出した文案の保存", () => {
