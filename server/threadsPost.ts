@@ -346,7 +346,13 @@ export async function createAndPublishThread(
     } else {
       const extras = rootParams.locationId || rootParams.crossreshareToIg || rootParams.textEntities || rootParams.pollAttachment;
       if (!extras || !/create media container/i.test(String((err as Error)?.message ?? ''))) throw err;
-      console.warn(`[ThreadsPost] 付け足し（場所/同時シェア/ネタバレ/アンケート）付きで作れなかったため外して出し直し: ${String((err as Error)?.message).slice(0, 200)}`);
+      // ★どの付け足しが弾かれたか・Threads側の理由（error_user_title）が読めるよう、付いていたものと本文を長めに残す
+      //   （2026-11-09 acc12 のアンケートが1回弾かれたが、200字では理由の手前で切れていて原因を追えなかった）
+      const attached = [
+        rootParams.locationId ? '場所' : '', rootParams.crossreshareToIg ? '同時シェア' : '',
+        rootParams.textEntities ? 'ネタバレ' : '', rootParams.pollAttachment ? `アンケート${JSON.stringify(Object.values(rootParams.pollAttachment))}` : '',
+      ].filter(Boolean).join('/');
+      console.warn(`[ThreadsPost] 付け足し（${attached}）付きで作れなかったため外して出し直し: ${String((err as Error)?.message).slice(0, 600)}`);
       root = await createAndPublishPost({ ...rootParams, locationId: undefined, crossreshareToIg: undefined, textEntities: undefined, pollAttachment: undefined });
     }
   }
