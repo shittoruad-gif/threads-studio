@@ -19,7 +19,7 @@ import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
 import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM, hasRecruitingMarker } from "../shared/recruitingPost";
 import { touchesDeclined, filterStyleSamples, normalizeForPatterns, filterCounseling } from "../shared/declinedPatterns";
-import { overusedHits, dropOverusedLines, dropFramedSentences, framesOf, hitsSurveyAvoid, lineHitsFrames, stickyHits, coversTopic } from "../shared/freshTopic";
+import { overusedHits, dropOverusedLines, dropFramedSentences, framesOf, hitsSurveyAvoid, lineHitsFrames, stickyHits, coversTopic, dropStickyLines } from "../shared/freshTopic";
 import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
 import { stripRawUrls } from "../shared/sanitize";
 import { earlierRejectedNote } from "../shared/naturalnessRetryHint";
@@ -1126,11 +1126,25 @@ export async function generateAutoPost(
       return claimWords.some((w) => n.includes(w));
     };
     const dropAvoided = (text: string | null | undefined, label: string): string | undefined => {
-      if ((!surveyAvoid && claimWords.length === 0) || !text) return text || undefined;
-      const lines = String(text).split(/\r?\n/);
-      const kept = lines.filter((l) => hitsSurveyAvoid(l, surveyAvoid).length === 0 && !claimHit(l));
-      if (kept.length < lines.length) console.log(`[AutoPost] ${label}の${lines.length - kept.length}行は✕の題材のため渡さない account=${threadsAccountId}`);
-      return kept.join('\n').trim() || undefined;
+      if (!text) return undefined;
+      let v: string | undefined = String(text);
+      if (surveyAvoid || claimWords.length > 0) {
+        const lines = v.split(/\r?\n/);
+        const kept = lines.filter((l) => hitsSurveyAvoid(l, surveyAvoid).length === 0 && !claimHit(l));
+        if (kept.length < lines.length) console.log(`[AutoPost] ${label}の${lines.length - kept.length}行は✕の題材のため渡さない account=${threadsAccountId}`);
+        v = kept.join('\n').trim() || undefined;
+      }
+      // ★見送られた主役の言葉（今日は1語も使わない）を含む材料の行は渡さない（2026-11-09 夜間整備 acc37：
+      //   強みの1行「丁寧な問診と検査で原因を明確にする」が渡る一方で「原因」を禁じており、1枠で stickyDeclined に8回当たっていた）。
+      //   1行しかない欄・外すと空になる欄はそのまま（shared/freshTopic.ts dropStickyLines）
+      if (v && stickyWords.length > 0) {
+        const before = v.split(/\r?\n/).filter((l) => l.trim()).length;
+        const after = dropStickyLines(v, stickyWords);
+        const afterN = String(after ?? '').split(/\r?\n/).filter((l) => l.trim()).length;
+        if (afterN < before) console.log(`[AutoPost] ${label}の${before - afterN}行は見送られた主役の言葉を含むため今日は渡さない account=${threadsAccountId}`);
+        v = after;
+      }
+      return v;
     };
     const dropAvoidedList = (list: unknown): unknown =>
       (surveyAvoid || claimWords.length > 0) && Array.isArray(list)

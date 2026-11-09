@@ -491,6 +491,28 @@ export function stickyHits(text: string, words: readonly string[]): string[] {
 }
 
 /**
+ * 材料（強み・N1顧客像・信条など、1行1項目）のうち、見送られた主役の言葉を含む行を今日は渡さない（2026-11-09 夜間整備 acc37）。
+ *
+ *   どい接骨院様の強みの1行「丁寧な問診と検査で原因を明確にする」が材料として渡る一方で、
+ *   見送られた4本の主役「原因」は「1語も使わない」と指示していた。材料がその言葉を書けと言い、ガードが止める形になり、
+ *   11/9 は1枠の作り直しで stickyDeclined「原因」に8回当たって7回あきらめていた（枠は補填で埋まったが、生成が回り続けていた）。
+ *   ガードは緩めず、矛盾する材料の行を手前で外す。
+ *    - 1行しかない材料（悩み「肩こり、腰痛、…」のように1行に何項目も並ぶ欄）は外さない（空になるため）
+ *    - 外すと全部なくなる場合も外さない（材料ゼロより、ガードで止める方がまし）
+ */
+export function dropStickyLines(text: string | null | undefined, words: readonly string[]): string | undefined {
+  const src = String(text ?? "");
+  if (!src.trim()) return undefined;
+  if (words.length === 0) return src;
+  const lines = src.split(/\r?\n/);
+  const nonEmpty = lines.filter((l) => l.trim());
+  if (nonEmpty.length < 2) return src;
+  const kept = lines.filter((l) => !l.trim() || stickyHits(l, words).length === 0);
+  if (kept.filter((l) => l.trim()).length === 0) return src;
+  return kept.join("\n");
+}
+
+/**
  * 問いかけの締めは3本に1本まで。直近2本（新しい順）のどちらかが問いかけで終わっていれば、今日は問いかけで締めない。
  * @param endsWithQuestion 末尾が問いかけかを判定する関数（jpQualityGuard.endsWithQuestion）
  */

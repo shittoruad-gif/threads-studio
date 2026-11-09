@@ -53,6 +53,13 @@ interface ComparisonFeature {
   }[];
 }
 
+type ComparisonKey = 'free' | 'light' | 'pro' | 'business' | 'agency';
+/** 料金表に出すプランの id → 比較表の列（キャンペーン・セミナー価格は元のプランの列） */
+function comparisonKeyOf(planId: string): ComparisonKey {
+  const base = planId.replace(/_(campaign|seminar)$/, '');
+  return (['free', 'light', 'pro', 'business', 'agency'] as const).includes(base as ComparisonKey) ? (base as ComparisonKey) : 'pro';
+}
+
 const COMPARISON_FEATURES: ComparisonFeature[] = [
   {
     category: '基本機能',
@@ -571,12 +578,14 @@ export default function Pricing() {
                     <Fragment key={`cat-${catIndex}`}>
                       <tr className="bg-muted/50">
                         <td
-                          colSpan={5}
+                          colSpan={plans.length + 1}
                           className="p-3 text-foreground font-semibold text-sm border-b border-border"
                         >
                           {category.category}
                         </td>
                       </tr>
+                      {/* ★列は見出しと同じ plans から作る（2026-11-09 夜間整備：ライトの受付終了で見出しが3列になっても
+                          値はライト込みの4列のままで、1列ずれて表示されていた） */}
                       {category.features.map((feature, featIndex) => (
                         <tr
                           key={`feat-${catIndex}-${featIndex}`}
@@ -585,18 +594,14 @@ export default function Pricing() {
                           <td className="p-4 text-muted-foreground text-sm">
                             {feature.name}
                           </td>
-                          <td className="p-4 text-center text-sm">
-                            {renderCellValue(feature.light)}
-                          </td>
-                          <td className="p-4 text-center text-sm bg-emerald-50/50">
-                            {renderCellValue(feature.pro)}
-                          </td>
-                          <td className="p-4 text-center text-sm">
-                            {renderCellValue(feature.business)}
-                          </td>
-                          <td className="p-4 text-center text-sm">
-                            {renderCellValue(feature.agency)}
-                          </td>
+                          {plans.map((plan) => (
+                            <td
+                              key={`${plan.id}-${catIndex}-${featIndex}`}
+                              className={`p-4 text-center text-sm ${plan.popular ? 'bg-emerald-50/50' : ''}`}
+                            >
+                              {renderCellValue(feature[comparisonKeyOf(plan.id)])}
+                            </td>
+                          ))}
                         </tr>
                       ))}
                     </Fragment>

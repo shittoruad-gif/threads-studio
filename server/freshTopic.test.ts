@@ -8,7 +8,7 @@
 import { describe, it, expect } from "vitest";
 import {
   planFreshTopic, overusedHits, dropOverusedLines, buildFreshTopicNote, saidSameContent, topicWordsOf,
-  framesOf, dropFramedSentences, surveyAvoidWords, hitsSurveyAvoid, buildSurveyAvoidNote, hasUnfilledPlaceholder, ownerKeepsWord,
+  framesOf, dropFramedSentences, surveyAvoidWords, hitsSurveyAvoid, buildSurveyAvoidNote, hasUnfilledPlaceholder, ownerKeepsWord, dropStickyLines,
 } from "@shared/freshTopic";
 
 const RECENT: string[] = [
@@ -368,5 +368,34 @@ describe("型：安静にすると逆効果（治療院の決まり文句）", (
   it("2本だけなら型にならない（ふつうのお店の生成は変えない）", () => {
     const few = [acc37[0], acc37[1], ...acc37.slice(4)];
     expect(planFreshTopic({ recentPosts: few, materials: [], protect: [] }).frames).not.toContain("rest_myth");
+  });
+});
+
+describe("見送られた主役の言葉を含む材料の行を今日は渡さない（2026-11-09 acc37）", () => {
+  const strength = [
+    "AI姿勢分析で“見える化”された施術とリハビリで根本改善を実現",
+    "丁寧なカウンセリングと的確な施術で健康をサポート",
+    "丁寧な問診と検査で原因を明確にする",
+    "肩こり・腰痛・膝の痛み・スポーツ障害など幅広い症状に対応",
+  ].join("\n");
+  it("強みの中の「原因」を含む行だけ外し、ほかの行は残す", () => {
+    const out = dropStickyLines(strength, ["原因"]);
+    expect(out).not.toContain("原因を明確にする");
+    expect(out).toContain("根本改善を実現");
+    expect(out).toContain("幅広い症状に対応");
+    expect(out?.split("\n")).toHaveLength(3);
+  });
+  it("1行に何項目も並ぶ欄（悩み）は、言葉が当たっても外さない", () => {
+    const problem = "肩こり、腰痛、交通事故治療、膝の痛み、骨折、捻挫、打撲、挫傷、姿勢のゆがみ、スポーツ障害";
+    expect(dropStickyLines(problem, ["痛み"])).toBe(problem);
+  });
+  it("外すと全部なくなるときはそのまま", () => {
+    const two = "原因を探す施術\n根本原因へのアプローチ";
+    expect(dropStickyLines(two, ["原因"])).toBe(two);
+  });
+  it("止める言葉が無ければそのまま・空なら undefined", () => {
+    expect(dropStickyLines(strength, [])).toBe(strength);
+    expect(dropStickyLines("", ["原因"])).toBeUndefined();
+    expect(dropStickyLines(null, ["原因"])).toBeUndefined();
   });
 });
