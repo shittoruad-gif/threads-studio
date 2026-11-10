@@ -569,3 +569,12 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - ピン留め確認 5アカウントすべて「ピン留めなし」（ご契約は @black_eyes_1896 岩根様）。11:00 フォローの未処理5件（香取様・大木様・斎藤様・山本様・しっとる白神）。
 - 斎藤様（pro_campaign・登録54日）は連携0件・投稿0件のまま。ネタ帳：廿日市天神整体院 0件（次は11/26）・津の国や本店 1件 → フォームのリンクを送るか判断待ち。
 - Coolify API（8000番）は Mac から直接は届かず（timeout）。ssh 経由の localhost で取得（prod-env.sh と同じ経路）。
+
+### 2026-11-11 朝の点検（水曜・しっとる経営 朝の回 6:13）
+- デプロイは ba6a4f8＝origin/main の先頭と一致（Coolify 記録 11/11 02:10 JST finished）。/api/health 200。ログにエラーなし。
+- ⚠️点検が 6:13 で、6時台の生成は途中（32本）・6:40 の AccountHealth は動く前。「消えた枠」と AccountHealth の最終確認は昼の回のキュー（2026-11-11_1200_threads-morning-recheck）で行う。6:13 時点では消えた枠なし。
+- 不自然な投稿 0件（直近2日・29アカウント）。昨日の公開数：お客様のアカウントで契約＋補填を超えたものなし（学習用 @moveact_seitai 27・@moveact_pilates_tamashima 25 は1日30本目安の範囲内）。
+- 累計不足（判断待ち）：@esthe_prestige_r 27（補填未設定）／@black_eyes_1896 19（手動補填は10/17で終了）／@doisekkotsuin 4（補填未設定）／@autoshop_zero 11・@miraclelink2026 9（補填中）／お試し：@desire_6981 68・@shittoru.s 40・@tama.yurazoku 23。@shittoru_official は冷却中（〜11/13）。
+- 試験の切り口：今日の公開前 1本（#6715 玉島 会話でオチ・問題なし）。玉島「マシン」表現 0件。昨日公開の学習枠 #6685・#6704（金光「揉むだけじゃ戻らない／揉むだけでは楽にならない」）は他の施術の否定に近い言い方 → 判断待ち。
+- ピン留め確認 5アカウントすべて「ピン留めなし」（ご契約は @black_eyes_1896）。11:00 フォローの未処理 5件（前日と同じ）。返信待ち 1件（#63 お礼のみ）。LINE 残り 4,380 通。
+- ネタ帳：@hatsukaichitenjinseitai 使える0件（次 11/26）→ フォームのリンクを送るか判断待ち。
