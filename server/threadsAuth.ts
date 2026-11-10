@@ -80,6 +80,20 @@ export function wantsReplyScope(userId?: number | null): boolean {
   if (userId == null) return false;
   const ids = String(process.env.THREADS_REVIEW_REPLY_SCOPE_USER_IDS || "")
     .split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0);
+  return ids.includes(Number(userId)) || isReplyPilotUser(userId);
+}
+
+/**
+ * 返信の権限だけを、決めたお客様から先に試す（THREADS_REPLY_SCOPE_PILOT_USER_IDS・カンマ区切り・2026-11-11）。
+ * 10/11 に3つの権限が承認されたあと、10/14 に3つを全員へ同時に広げたところ連携が1件も通らなくなり、同じ日に戻した。
+ * どの権限が原因かが分からないままなので、まず返信の権限（threads_manage_replies）1つだけを、
+ * テスターではないお客様1件で確かめてから全員に広げる。
+ * ここに入れたユーザーには、場所のタグ・Instagramへのシェアは求めない（wantsExtraScopes は見ない）。
+ */
+export function isReplyPilotUser(userId?: number | null): boolean {
+  if (userId == null) return false;
+  const ids = String(process.env.THREADS_REPLY_SCOPE_PILOT_USER_IDS || "")
+    .split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0);
   return ids.includes(Number(userId));
 }
 

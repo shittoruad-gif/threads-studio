@@ -3288,6 +3288,14 @@ export async function replacementAvoidAngles(userId: number, post: any): Promise
 export async function generateReplacementPost(userId: number, canceledPostId: number): Promise<boolean> {
   const post: any = await db.getScheduledPostById(canceledPostId);
   if (!post || Number(post.userId) !== Number(userId)) return false;
+  // ★同じアカウントの「代わりを作る」は順に動かす（shared/serialByKey.ts・2026-11-11）。
+  //   続けて押すと同時に走り、互いの文を知らないまま書いて、書き出しまで同じ2本が届いていた。
+  const { serialByKey } = await import('../shared/serialByKey');
+  return serialByKey(`replacement:${Number(post.threadsAccountId)}`, () => generateReplacementPostNow(userId, post));
+}
+
+async function generateReplacementPostNow(userId: number, post: any): Promise<boolean> {
+  const canceledPostId = Number(post.id);
   const user: any = await db.getUserById(userId);
   if (!user) return false;
   const projects = await db.getUserProjects(userId);

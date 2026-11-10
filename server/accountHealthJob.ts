@@ -2,6 +2,7 @@
  * アカウント健全性の日次点検（毎朝6:40 JST・自動投稿の前）。2026-09-06 梅原様の停止を受けて。
  *  1. 各アカウントのトークンで /me を叩き、制限・停止のエラーなら自動投稿を止めて本人と運営に通知
  *  2. 直近3日に公開した投稿がThreads上から消えていないか（スパム判定で消される兆候）を見る。2件以上消えていたら運営と本人に通知
+ *  3. 表示回数が以前の2割を切っていないか（公開できているのに表示されない状態）を見る。運営に通知して1日1件に絞る（2026-11-11）
  */
 import * as db from "./db";
 import { classifyThreadsError, restrictionNoticeForUser } from "../shared/accountRestriction";
@@ -125,5 +126,54 @@ export async function runAccountHealthJob(): Promise<void> {
       console.error(`[AccountHealth] account ${a.id} check failed:`, e);
     }
   }
-  console.log(`[AccountHealth] 完了 accounts=${accounts.length} restricted=${restricted} missingAlerts=${missing}`);
+  let reachAlerts = 0;
+  try { reachAlerts = await checkReachCollapse(accounts); } catch (e) { console.error(`[AccountHealth] reach check failed:`, e); }
+  console.log(`[AccountHealth] 完了 accounts=${accounts.length} restricted=${restricted} missingAlerts=${missing} reachAlerts=${reachAlerts}`);
+}
+
+/**
+ * 3. 表示回数の急な落ち込み（判定は shared/reachCollapse.ts・2026-11-11）。
+ *    投稿は公開できているのに表示されなくなったアカウントを見つけ、運営に知らせて1日1件に絞る。
+ *    すでに絞っている期間中のアカウントには何もしない（＝同じ知らせを毎朝くり返さない）。
+ *    お客様へは自動では何も送らない（お伝えの仕方は運営が決める）。
+ */
+export async function checkReachCollapse(accounts: Array<{ id: number; userId: number; threadsUsername: string }>): Promise<number> {
+  const d = await db.getDb();
+  if (!d || accounts.length === 0) return 0;
+  const { sql } = await import("drizzle-orm");
+  const { judgeReachCollapse, reachCollapseOwnerText, REACH_PRIOR_FROM_DAYS, REACH_RECENT_FROM_DAYS, REACH_RECENT_TO_DAYS } = await import("../shared/reachCollapse");
+  const { COOLDOWN_DAYS, jstDateString, inCooldown } = await import("../shared/accountRamp");
+  const { notifyOwner } = await import("./_core/notification");
+  const rr: any = await d.execute(sql`SELECT threadsAccountId AS a, impressions AS i,
+      (postedAt >= NOW() - INTERVAL ${REACH_RECENT_FROM_DAYS} DAY) AS recent
+    FROM postAnalytics
+    WHERE threadsAccountId IS NOT NULL AND postedAt >= NOW() - INTERVAL ${REACH_PRIOR_FROM_DAYS} DAY AND postedAt < NOW() - INTERVAL ${REACH_RECENT_TO_DAYS} DAY`);
+  const by = new Map<number, { recent: number[]; prior: number[] }>();
+  for (const r of ((rr as any)[0] ?? []) as any[]) {
+    const k = Number(r.a);
+    if (!by.has(k)) by.set(k, { recent: [], prior: [] });
+    (Number(r.recent) ? by.get(k)!.recent : by.get(k)!.prior).push(Number(r.i) || 0);
+  }
+  let alerts = 0;
+  for (const a of accounts) {
+    try {
+      const g = by.get(Number(a.id));
+      if (!g) continue;
+      const j = judgeReachCollapse(g.recent, g.prior);
+      if (!j.collapsed) continue;
+      if (await db.isEndedCustomer(Number(a.userId))) continue;
+      const acct: any = await db.getThreadsAccountById(Number(a.id));
+      if (!acct || inCooldown(acct)) continue;
+      const until = jstDateString(COOLDOWN_DAYS);
+      await db.updateThreadsAccount(Number(a.id), { cooldownUntil: until } as any);
+      let deferred = 0;
+      try { deferred = await db.deferTodaysAutoPostsBeyond(Number(a.id), 1); } catch (e) { console.warn(`[AccountHealth] defer (reach) failed:`, (e as Error)?.message); }
+      alerts++;
+      await notifyOwner({ title: "表示回数が急に落ちています（1日1件に絞りました）", content: reachCollapseOwnerText({ username: String(a.threadsUsername), userId: Number(a.userId), cooledUntil: until }, j) });
+      console.warn(`[AccountHealth] @${a.threadsUsername}: 表示の中央値 ${j.priorMedian}→${j.recentMedian}（冷却〜${until}・翌日へ${deferred}件）`);
+    } catch (e) {
+      console.error(`[AccountHealth] account ${a.id} reach check failed:`, e);
+    }
+  }
+  return alerts;
 }
