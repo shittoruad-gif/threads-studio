@@ -146,6 +146,7 @@ describe("地元の会話：プロンプト", () => {
   });
   it("決まり（短い・地名1回・小さな質問で終える・宣伝なし・その日の出来事を言い切らない・絵文字はときどき）が入る", () => {
     const n = localTalkNote({ places: ["倉敷", "玉島"], allowEmoji: true });
+    expect(n).toContain("自分が最近したことの報告"); // 2026-11-10 acc42 #6695「ついにコタツ出しちゃいました」
     for (const w of ["「倉敷」「玉島」", "20〜60字", "一言で答えられる", "国家資格", "な人へ", "その日の出来事", "ときどき", "1〜2個まで"]) expect(n, w).toContain(w);
     expect(n).not.toMatch(/https?:/);
     const plain = localTalkNote({ places: ["倉敷"], allowEmoji: false });

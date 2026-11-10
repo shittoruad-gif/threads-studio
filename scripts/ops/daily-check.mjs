@@ -162,6 +162,8 @@ async function main() {
   for (const u of all || []) {
     const plan = u.subscription?.planId || u.planId;
     if (!plan || plan === 'free') continue;
+    // ★解約が済んだ方は「契約中」に出さない（2026-11-10：氷見様・比嘉優様が解約後も並び、0本を「枠の欠け」と見誤りかけた）
+    if ((u.subscriptionStatus ?? u.subscription?.status) === 'canceled') continue;
     try {
       const uj = await mint(`email_${u.email}`);
       const call = async (proc) => {

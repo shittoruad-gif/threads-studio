@@ -86,3 +86,17 @@ describe('ひらがなだけの短い引用は採らない（2026-10-04 点検�
     expect(r.map((x) => x.quote)).toEqual(['今日は']);
   });
 });
+
+describe('書き手が最近したことの報告も作り話として挙げさせる（2026-11-10 acc42 #6695）', () => {
+  it('「ついにコタツ出しちゃいました」の型を history として挙げる決まりが指示文に入っている', () => {
+    const p = buildFabricationPrompt('岡山もすっかり秋ですね💫朝晩の冷え込みで、ついにコタツ出しちゃいました😊\n皆さんはもう出しましたか？', '地域：岡山駅周辺');
+    expect(p).toContain('書き手本人が最近したこと・起きたことの報告');
+    expect(p).toContain('ついにコタツを出しました');
+    // 感想と質問は挙げない（地元の会話の回を落としすぎない）
+    expect(p).toContain('相手への質問は挙げない');
+  });
+  it('返事に history が来たら、その文を外せる', () => {
+    const items = parseFabricationResult('{"items":[{"quote":"ついにコタツ出しちゃいました","kind":"history","reason":"登録に無い"}]}', '岡山もすっかり秋ですね💫朝晩の冷え込みで、ついにコタツ出しちゃいました😊\n皆さんはもう出しましたか？');
+    expect(items?.[0]?.kind).toBe('history');
+  });
+});
