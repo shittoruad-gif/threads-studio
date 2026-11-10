@@ -68,3 +68,35 @@ export const AUTO_MODE_ON_TEXT =
 export const AUTO_MODE_KEEP_TEXT =
   "承知しました。これまでどおり、公開前に確認していただく設定のままにします。\n" +
   "切り替えたくなったら、「設定」→「確認なしにする」からいつでも変えられます。この案内はもうお送りしません。";
+
+/**
+ * 前日に「承認されないまま見送り」になった投稿があった方への、翌朝の一言（2026-11-11 三上様
+ * 「承認待ちでスルーされてしまっている投稿が多い。自動投稿に切り替えましょうかという選択肢を」）。
+ * 以前の「昨日は1件も公開されませんでした」は、朝の時点で承認待ちがもう見送りに変わっていて一度も出ていなかった。
+ * declinedBefore＝「このまま確認する」を選んだことがある方（autoModeNudgeCount>=3）。事実の一言とボタンだけにして、しつこくしない。
+ */
+export function skippedApprovalMorningPart(p: {
+  expired: number; postedYesterday: number; softOn: boolean; declinedBefore: boolean;
+}): { text: string; buttons: Array<{ label: string; data: string }> } | null {
+  if (p.expired <= 0) return null;
+  const head =
+    `★昨日の投稿のうち ${p.expired}件が、承認されないまま見送りになりました（公開されていません）` +
+    (p.postedYesterday === 0 ? "。昨日は1件も公開されていません。" : "。");
+  const auto = { label: "自動投稿にする（確認なし）", data: "c=automode&v=on" };
+  const soft = { label: "見送りしなければ公開", data: "s=softappr&v=on" };
+  if (p.declinedBefore) {
+    return { text: head, buttons: [{ label: "今日の投稿", data: "m=posts" }, auto] };
+  }
+  const text =
+    head + "\n" +
+    "いまの設定では、「OK」を押した投稿だけが公開されます。\n" +
+    "押す時間がない日が多いようでしたら、自動投稿に切り替えませんか。\n" +
+    "・「自動投稿にする」：確認なしで、毎朝作られた投稿が予定時刻にそのまま公開されます\n" +
+    (p.softOn ? "" : "・「見送りしなければ公開」：カードは今までどおり届き、「見送る」を押さない限り予定時刻に公開されます\n") +
+    "・「このまま確認する」：今の設定のままにします（この案内は出さなくなります）\n" +
+    "どれも「設定」からいつでも戻せます。";
+  return {
+    text,
+    buttons: [auto, ...(p.softOn ? [] : [soft]), { label: "このまま確認する", data: "c=automode&v=keep" }, { label: "今日の投稿", data: "m=posts" }],
+  };
+}

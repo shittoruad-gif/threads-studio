@@ -15,6 +15,7 @@ import { textWithQuick } from "./lineChat";
 import { detectNextAction } from "./nextAction";
 import { buildDailyCountTextForUser, yesterdayLabelJst } from "./dailyPostCountReport";
 import { autoModeNudgePart } from "./autoModeNudgeJob";
+import { skippedApprovalMorningPart } from "../shared/autoModeNudge";
 import { announcementApplies, announcementForToday, renderAnnouncement } from "../shared/announcements";
 import { accountAgeDays } from "../shared/accountRamp";
 import { getPlan, resolveEffectivePlanId } from "../shared/plans";
@@ -120,23 +121,21 @@ export async function runMorningDigestJob(): Promise<void> {
       const wantsResult = user.dailyResultNotifyEnabled !== 0 && user.dailyResultNotifyEnabled !== false;
       const count = rows && wantsResult ? await buildDailyCountTextForUser(userId, rows, dateLabel) : null;
       if (count) parts.push(count.text);
-      // ★昨日、承認待ちのまま1件も公開されなかった方には「承認がないと投稿されない」ことをはっきり伝え、
-      //   承認が手間なら「自動（確認なし）」に切り替えられることを案内する（2026-09-11 三上様指示）
-      const stuck = !!(rows && rows.some((r) => r.posted === 0 && r.awaiting > 0) && !rows.some((r) => r.posted > 0));
-      let stuckText: string | null = null;
-      if (stuck && user.autoPostRequireApproval !== false && user.autoPublishIfNoResponse === false) {
-        stuckText =
-          "★昨日は、承認待ちのまま1件も公開されませんでした。\n" +
-          "いまの設定では、承認カードで「OK」を押していただかないと投稿は公開されません。お手すきのときに「今日の投稿」から承認をお願いします。\n" +
-          "押す時間がない日が多い場合は、「見送りしなければ公開」を押してください。カードは今までどおり届き、「見送る」を押さない限り予定時刻にそのまま公開されます。\n" +
-          "確認そのものが不要なら「自動にする（確認なし）」です。どちらも「設定」からいつでも戻せます。";
-        buttons.unshift(
-          { label: "今日の投稿", data: "m=posts" },
-          { label: "すべて承認する", data: "a=okall" },
-          { label: "見送りしなければ公開", data: "s=softappr&v=on" },
-          { label: "自動にする（確認なし）", data: "c=automode&v=on" },
-        );
-      }
+      // ★昨日、承認されないまま見送りになった投稿があった方には、その件数と「自動投稿に切り替えませんか」の選択肢を出す
+      //   （2026-09-11 三上様指示 → 2026-11-11 三上様「スルーされている投稿が多い。自動投稿に切り替える選択肢を」）。
+      //   以前は「承認待ちが残っていて公開0件」で判定していたが、朝には承認待ちが見送りに変わっていて一度も出ていなかった。
+      const expiredY = (rows ?? []).reduce((n, r) => n + (r.expired ?? 0) + (r.awaiting ?? 0), 0);
+      const postedY = (rows ?? []).reduce((n, r) => n + (r.posted ?? 0), 0);
+      // すでに確認なし（自動）に切り替えた方には出さない
+      const skipPart = user.autoPostRequireApproval !== false && user.autoPostRequireApproval !== 0
+        ? skippedApprovalMorningPart({
+            expired: expiredY, postedYesterday: postedY,
+            softOn: user.autoPublishIfNoResponse === true || user.autoPublishIfNoResponse === 1,
+            declinedBefore: Number(user.autoModeNudgeCount ?? 0) >= 3,
+          })
+        : null;
+      const stuckText: string | null = skipPart?.text ?? null;
+      if (skipPart) buttons.unshift(...skipPart.buttons);
 
       // ② その日のお知らせ（1人1回）。案内OFFの方にも出す（R3）。案内OFFで止めるのは③の「次にやること」「自動にしませんか」だけ
       const t = notifyMap.get(userId);
@@ -151,7 +150,8 @@ export async function runMorningDigestJob(): Promise<void> {
           actionText = action.text;
           buttons.push(...action.buttons, { label: "この案内は不要", data: "n=off" });
           after = async () => { await db.recordNextActionSent(userId, action.key); };
-        } else if (!action) {
+        } else if (!action && !skipPart) {
+          // ★見送りの案内（上）で自動投稿の選択肢を出した日は、同じお声がけを重ねない
           const n = nudgeMap.get(userId);
           if (n) {
             const part = await autoModeNudgePart(userId, n.nudgeCount, n.lastNudgeAt);

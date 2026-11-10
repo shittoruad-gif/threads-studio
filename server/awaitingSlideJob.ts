@@ -63,12 +63,12 @@ export async function runEveningApprovalReminderJob(): Promise<void> {
           `\n「今日の投稿」から「OK」を押していただくと、今日中に公開されます（21時を過ぎた分は明日の10時台に公開）。\n\n` +
           `押す時間がない日が多い場合は、次のどちらかを選べます（「設定」からいつでも戻せます）。\n` +
           `・「見送りしなければ公開」：カードは届き、「見送る」を押さない限り予定時刻にそのまま公開されます\n` +
-          `・「自動にする（確認なし）」：カードなしで、毎朝の投稿がそのまま公開されます`;
+          `・「自動投稿にする（確認なし）」：カードなしで、毎朝の投稿がそのまま公開されます`;
         const ok = await pushMessages(lineIds[0], [textWithQuick(text, [
           { label: "今日の投稿", data: "m=posts" },
           { label: `すべて承認する（${n}件）`, data: "a=okall" },
           { label: "見送りしなければ公開", data: "s=softappr&v=on" },
-          { label: "自動にする（確認なし）", data: "c=automode&v=on" },
+          { label: "自動投稿にする（確認なし）", data: "c=automode&v=on" },
         ])]);
         if (ok) sent++;
       } else if (user.email) {

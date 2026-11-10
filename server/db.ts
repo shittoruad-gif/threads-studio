@@ -1289,7 +1289,7 @@ export async function countAccountScheduledPosts(threadsAccountId: number): Prom
  * posted=公開済 / awaiting=承認待ち / canceled=取り消し / failed=失敗（いずれも自動投稿のみ）
  */
 export async function getYesterdayAutoPostStatsByAccount(): Promise<Array<{
-  userId: number; accountId: number; username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number;
+  userId: number; accountId: number; username: string; posted: number; awaiting: number; canceled: number; failed: number; pending: number; expired: number;
 }>> {
   const database = await getDb();
   if (!database) return [];
@@ -1299,7 +1299,9 @@ export async function getYesterdayAutoPostStatsByAccount(): Promise<Array<{
       SUM(CASE WHEN p.status='awaiting_approval' AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+09:00'), INTERVAL 1 DAY)) THEN 1 ELSE 0 END) AS awaiting,
       SUM(CASE WHEN p.status='canceled' AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+09:00'), INTERVAL 1 DAY)) THEN 1 ELSE 0 END) AS canceled,
       SUM(CASE WHEN p.status='failed' AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+09:00'), INTERVAL 1 DAY)) THEN 1 ELSE 0 END) AS failed,
-      SUM(CASE WHEN p.status IN ('pending','processing') AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+09:00'), INTERVAL 1 DAY)) THEN 1 ELSE 0 END) AS pending
+      SUM(CASE WHEN p.status IN ('pending','processing') AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+09:00'), INTERVAL 1 DAY)) THEN 1 ELSE 0 END) AS pending,
+      -- ★承認されないまま日をまたいで見送りになった分（2026-11-11）。朝の時点では awaiting はもう canceled に変わっているので別に数える
+      SUM(CASE WHEN p.status='canceled' AND p.errorMessage LIKE '承認されないまま日をまたいだ%' AND DATE(CONVERT_TZ(p.scheduledAt,'+00:00','+09:00'))=DATE(DATE_SUB(CONVERT_TZ(NOW(),'+00:00','+09:00'), INTERVAL 1 DAY)) THEN 1 ELSE 0 END) AS expired
     FROM threadsAccounts t
     LEFT JOIN scheduledPosts p ON p.threadsAccountId = t.id AND p.source = 'auto'
       AND p.scheduledAt >= DATE_SUB(NOW(), INTERVAL 3 DAY)
@@ -1310,7 +1312,7 @@ export async function getYesterdayAutoPostStatsByAccount(): Promise<Array<{
   return list.map((r) => ({
     userId: Number(r.userId), accountId: Number(r.accountId), username: String(r.username ?? ''),
     posted: Number(r.posted ?? 0), awaiting: Number(r.awaiting ?? 0), canceled: Number(r.canceled ?? 0),
-    failed: Number(r.failed ?? 0), pending: Number(r.pending ?? 0),
+    failed: Number(r.failed ?? 0), pending: Number(r.pending ?? 0), expired: Number(r.expired ?? 0),
   }));
 }
 
