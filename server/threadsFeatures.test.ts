@@ -36,6 +36,14 @@ describe("アンケートの選択肢", () => {
     expect(parsePollOptions(["https://example.com", "い"])).toBeNull();
     expect(parsePollOptions(["a", "b", "c", "d", "e"])).toEqual(["a", "b", "c", "d"]);
   });
+  it("実際の上限は25バイト（日本語8文字）。本番で弾かれた選択肢は付けない・通った選択肢は付ける（2026-11-10）", () => {
+    // 弾かれた実例：#6503（11/9）・#6601（11/10）「アンケートの選択肢の長さが無効です」
+    expect(parsePollOptions(["朝、起き上がる時", "長時間座っている時", "前かがみになる時", "特にない・その他"])).toBeNull();
+    expect(parsePollOptions(["ゴルフスイング時", "高い所の物を持つ時", "寝返りや寝る時", "その他"])).toBeNull();
+    // 通った実例：日本語8文字（24バイト）・半角まじりの9文字（21バイト）
+    expect(parsePollOptions(["首・肩がガチガチ", "腰・背中が辛い", "手足が冷えやすい", "特にないかも"])).toHaveLength(4);
+    expect(parsePollOptions(["SNS投稿の継続", "広告の効果測定", "LINE集客の成果", "その他"])).toHaveLength(4);
+  });
   it("API に渡す形", () => {
     expect(pollAttachment(["首", "肩", "腰"])).toEqual({ option_a: "首", option_b: "肩", option_c: "腰" });
   });

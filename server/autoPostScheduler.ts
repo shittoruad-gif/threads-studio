@@ -582,11 +582,11 @@ export function buildSameDaySlots(
  * アンケートの選択肢を本文から作る（shared/threadsFeatures.ts の決まりで検査）。合わなければ null。
  * 健康系のお店で結果を約束する選択肢（治る・改善 等）は付けない。
  */
-async function generatePollOptions(postText: string, project: any): Promise<string[] | null> {
-  const { parsePollOptions, POLL_OPTION_MAX } = await import('../shared/threadsFeatures');
+export async function generatePollOptions(postText: string, project: any): Promise<string[] | null> {
+  const { parsePollOptions, POLL_OPTION_MAX_JA_CHARS } = await import('../shared/threadsFeatures');
   const prompt = [
     'Threadsの投稿に付けるアンケートの選択肢を作ってください。',
-    `- 選択肢は3個か4個。1つ${POLL_OPTION_MAX}文字以内（短いほどよい。10文字前後が目安）。`,
+    `- 選択肢は3個か4個。1つ必ず${POLL_OPTION_MAX_JA_CHARS}文字以内（ひらがな・カタカナ・漢字・記号を1文字ずつ数える。${POLL_OPTION_MAX_JA_CHARS + 1}文字以上はアンケートごと付かなくなる）。短いほどよい。`,
     '- 投稿の最後の質問に、読む人が自分のこととして答えられるものにする。どれかを正解・おすすめにしない。',
     '- 「その他」「特になし」のような逃げ道を1つ入れてよい。',
     '- 効果・結果を約束する言葉（治る・改善・必ず 等）、URL、店名の宣伝は入れない。',
@@ -2308,7 +2308,7 @@ export async function generateAutoPost(
     const needsApproval = requireApproval || guarantee || Boolean(opts.choiceGroupId);
 
     // ★アンケートの選択肢は、出来上がった本文から別に作る（本文の作り直し・整形で消えないように）。
-    //   決まり（2〜4個・各25文字）に合わなければ、作り直しに回す。最後の作り直しではアンケートなしで出す。
+    //   決まり（2〜4個・各25バイト＝日本語8文字）に合わなければ、作り直しに回す。最後の作り直しではアンケートなしで出す。
     let pollOptions: string[] | null = null;
     if (opts.feature === 'poll') {
       pollOptions = await generatePollOptions(fullContent, project).catch(() => null);

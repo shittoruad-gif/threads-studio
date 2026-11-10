@@ -5,7 +5,7 @@
  *
  * 使うのは、いまの権限（threads_content_publish）のままで出せる機能だけ
  * （2026-09-28 に公式資料 developers.facebook.com/documentation/threads/create-posts で確認）:
- *   poll          … アンケート。選択肢2〜4個・各1〜25文字。テキストのみの投稿に付けられる。結果（割合・総数）は後から読める
+ *   poll          … アンケート。選択肢2〜4個・各1〜25文字（実際は25バイト＝日本語8文字まで。下の POLL_OPTION_MAX_BYTES）。テキストのみの投稿に付けられる。結果（割合・総数）は後から読める
  *   spoiler_quiz  … ネタバレ（text_entities の SPOILER）。クイズの答えを隠し、タップで見せる。1投稿10か所まで
  *   repost        … 再投稿（POST /{threads_id}/repost）。よく読まれた自分の投稿をもう一度フォロワーへ
  * 場所のタグ付け（threads_location_tagging）・Instagramストーリーズへの同時シェア（threads_share_to_instagram）は
@@ -87,8 +87,18 @@ export function featureAngle(kind: FeatureKind): { id: string; label: string; hi
   };
 }
 
-/** Threads のアンケートの決まり：選択肢2〜4個・各1〜25文字（コードポイントで数える） */
+/** Threads のアンケートの決まり：選択肢2〜4個・各1〜25文字（公式資料の書き方） */
 export const POLL_OPTION_MAX = 25;
+/**
+ * ★実際の上限は「UTF-8 で25バイト」＝日本語だと8文字まで（2026-11-10 夜間整備で実測）。
+ *   10/28〜11/10 のアンケート47本のうち、選択肢に27バイト以上（日本語9文字以上）を含む11本はすべて
+ *   「アンケートの選択肢の長さが無効です（1〜25文字にする必要があります）」で弾かれ、アンケートなしで公開されていた。
+ *   24バイト以下の36本はすべて付いた（「LINE集客の成果」＝9文字・21バイトも付いた）。
+ */
+export const POLL_OPTION_MAX_BYTES = 25;
+/** 日本語だけの選択肢で使える文字数（AIへの指示に使う） */
+export const POLL_OPTION_MAX_JA_CHARS = Math.floor(POLL_OPTION_MAX_BYTES / 3);
+const utf8Bytes = (t: string): number => new TextEncoder().encode(t).length;
 
 const URL_RE = /https?:\/\/|www\./i;
 
@@ -115,6 +125,7 @@ export function parsePollOptions(raw: unknown): string[] | null {
     const t = String(x ?? "").replace(/\s+/g, " ").trim();
     if (!t) continue;
     if (Array.from(t).length > POLL_OPTION_MAX) return null;
+    if (utf8Bytes(t) > POLL_OPTION_MAX_BYTES) return null;
     if (URL_RE.test(t)) return null;
     if (out.includes(t)) continue;
     out.push(t);
