@@ -23,12 +23,17 @@ import {
   SETTING_HANDLED_BY,
   UNSTOPPABLE_NOTE,
   decodeJst,
+  detectFrequencyRequest,
   detectNoticeRequest,
   detectPostTimeRequest,
   detectTopicUrlRequest,
   encodeJst,
   filterTopics,
   fixedHoursConfirmText,
+  frequencyConfirmText,
+  FREQ_OF_PER_DAY,
+  perDayFrom,
+  perDayOfFreq,
   headingsFromHtml,
   hm,
   jstAt,
@@ -41,6 +46,7 @@ import {
   parseTopicsFromConfirm,
   topicsConfirmText,
   type NoticeKey,
+  type PerDay,
   type NoticeRequest,
   type PostTimeRequest,
   type SettingKind,
@@ -57,9 +63,9 @@ const MOVE_GAP_MS = 30 * 60_000;
 /** 予約を探す範囲 */
 const LOOKAHEAD_MS = 14 * 86400_000;
 
-type Acct = { id: number; userId: number; threadsUsername?: string | null; isActive?: boolean | null; fixedPostHours?: string | null };
+type Acct = { id: number; userId: number; threadsUsername?: string | null; isActive?: boolean | null; fixedPostHours?: string | null; autoPostFrequency?: string | null };
 
-const KIND_OF: Record<SettingKind, SettingRequestKind> = { notice: "notice", topics: "topics", postTime: "post_time" };
+const KIND_OF: Record<SettingKind, SettingRequestKind> = { notice: "notice", topics: "topics", postTime: "post_time", frequency: "frequency" };
 
 async function activeAccounts(userId: number): Promise<Acct[]> {
   try {
@@ -151,7 +157,7 @@ function escalatedReply(notified: boolean, qid: number, lead = ""): unknown[] {
 
 /**
  * 公式LINEの自由文が、設定で解決できるお問い合わせなら、確認のボタンをお出しする。当たらなければ null（今までどおりの受け口へ）。
- *   順番：通知 → ホームページから話題 → 投稿の時刻（本文つきの投稿のご依頼は parsePostRequest が先に取る）。
+ *   順番：通知 → ホームページから話題 → 1日の回数 → 投稿の時刻（本文つきの投稿のご依頼は parsePostRequest が先に取る）。
  */
 export async function trySettingRequest(p: { userId: number; lineUserId: string; text: string; now?: number }): Promise<unknown[] | null> {
   const now = p.now ?? Date.now();
@@ -160,6 +166,11 @@ export async function trySettingRequest(p: { userId: number; lineUserId: string;
   const topic = detectTopicUrlRequest(p.text);
   if (topic) {
     const r = await offerTopicsFromUrl({ userId: p.userId, lineUserId: p.lineUserId, question: p.text, url: topic.url });
+    if (r) return r;
+  }
+  const freq = detectFrequencyRequest(p.text);
+  if (freq) {
+    const r = await offerFrequency({ userId: p.userId, lineUserId: p.lineUserId, question: p.text, perDay: freq.perDay });
     if (r) return r;
   }
   const time = detectPostTimeRequest(p.text, now);
@@ -837,4 +848,151 @@ async function applyMove(post: any, target: Date): Promise<void> {
   const dayChanged = jstDay(target) !== jstDay(post.scheduledAt);
   await db.updateScheduledPost(Number(post.id), { scheduledAt: target, ...(dayChanged ? { forDate: jstDay(target) } : {}) } as any);
   console.log(`[SettingRequest] 予約の時刻を動かしました post=${post.id} → ${target.toISOString()}`);
+}
+
+// ═════════════════════════ 4. 1日の回数 ═════════════════════════
+// 2026-11-11 ご質問 #73「…1日3回（共通）を 1日1回の個別設定に変更して下さい」。回数はアプリの設定でご本人が変えられる項目
+// （auto.updateSettings・threads.updateAccountSettings と同じ列）。LINE でも確認のボタンで変えられるようにする。
+
+async function commonFreq(userId: number): Promise<string> {
+  try { return String(((await db.getAutoPostSettings(userId)) as any)?.autoPostFrequency || "daily"); } catch { return "daily"; }
+}
+function nowPerDay(a: Acct, common: string, max: number): PerDay {
+  return Math.max(1, Math.min(perDayOfFreq(a.autoPostFrequency ?? common), max)) as PerDay;
+}
+function acctLabel(a: Acct): string {
+  return `@${String(a.threadsUsername || a.id).slice(0, 12)}`;
+}
+
+/** 自由文「1日1回に変更して下さい」→ 確認のボタン。自動投稿が使えないプラン・アカウントなしは null（今までの受け口へ） */
+export async function offerFrequency(p: { userId: number; lineUserId: string; question: string; perDay: PerDay }): Promise<unknown[] | null> {
+  const accts = await activeAccounts(p.userId);
+  const max = await maxPerDayOf(p.userId);
+  if (accts.length === 0 || max <= 0) return null;
+  if (p.perDay > max) {
+    const text = `ご利用中のプランでは、自動投稿は1日${max}回までです。回数は変えていません。\n1日${p.perDay}回にするには、プランのご変更が必要です。`;
+    const qid = await record({ userId: p.userId, lineUserId: p.lineUserId, question: p.question, text, kind: "frequency" });
+    await closeRow(qid, SETTING_HANDLED_BY.frequencyInfo, "frequency");
+    await notify({ kind: "frequency", outcome: "info", qid, userId: p.userId, question: p.question, details: [`プランの上限（1日${max}回）をご案内しました。回数は変えていません`], reply: text });
+    return [textWithQuick(text, [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT])];
+  }
+  const common = await commonFreq(p.userId);
+  const rows = accts.map((a) => ({ name: String(a.threadsUsername || a.id), now: nowPerDay(a, common, max) }));
+  if (rows.every((r) => r.now === p.perDay)) {
+    const text = `${accts.length >= 2 ? "どのアカウントも、" : ""}自動投稿は、すでに1日${p.perDay}回です。`;
+    const qid = await record({ userId: p.userId, lineUserId: p.lineUserId, question: p.question, text, kind: "frequency" });
+    await closeRow(qid, SETTING_HANDLED_BY.frequencyInfo, "frequency");
+    await notify({ kind: "frequency", outcome: "info", qid, userId: p.userId, question: p.question, details: [`すでに1日${p.perDay}回のため変えていません`], reply: text });
+    return [textWithQuick(text, MENU_HINT)];
+  }
+  const text = frequencyConfirmText(p.perDay, rows);
+  const qid = await record({ userId: p.userId, lineUserId: p.lineUserId, question: p.question, text, kind: "frequency" });
+  const buttons = accts.length >= 2
+    ? [
+        ...accts.slice(0, 8).map((a) => ({ label: `${acctLabel(a)}を${p.perDay}回に`, data: `s=fqok&q=${qid}&a=${a.id}&v=${p.perDay}` })),
+        { label: "すべてのアカウント", data: `s=fqok&q=${qid}&a=all&v=${p.perDay}` },
+      ]
+    : [{ label: `1日${p.perDay}回にする`, data: `s=fqok&q=${qid}&a=all&v=${p.perDay}` }];
+  return [textWithQuick(text, [...buttons, { label: "今のままにする", data: `s=fqno&q=${qid}` }])];
+}
+
+/**
+ * 回数を変える（押した方のアカウントだけ）。a＝アカウント番号ならそのアカウントだけ（個別設定）、"all" なら共通の設定。
+ *   "all" のとき、アカウント別に回数が決めてあると共通の設定が効かないので、その個別の回数は外してそろえる。
+ */
+async function applyFrequency(userId: number, a: string, perDay: PerDay | "inherit"): Promise<{ ok: false } | { ok: true; details: string[]; who: string; undo: string | null }> {
+  const accts = await activeAccounts(userId);
+  const max = await maxPerDayOf(userId);
+  const common = await commonFreq(userId);
+  if (a === "all") {
+    if (perDay === "inherit") return { ok: false };
+    const overridden = accts.filter((x) => x.autoPostFrequency != null);
+    await db.updateAutoPostSettings(userId, { autoPostFrequency: FREQ_OF_PER_DAY[perDay] } as any);
+    for (const x of overridden) await db.updateThreadsAccount(Number(x.id), { autoPostFrequency: null } as any);
+    const details = [`共通の設定：1日${perDayOfFreq(common)}回 → 1日${perDay}回`, ...overridden.map((x) => `@${x.threadsUsername || x.id} の個別の回数（1日${perDayOfFreq(x.autoPostFrequency)}回）を外してそろえました`)];
+    // 個別の回数を外したときは、ボタン1つでは元に戻せないので「元に戻す」は出さない
+    return { ok: true, details, who: accts.length >= 2 ? "すべてのアカウントの" : "", undo: overridden.length === 0 ? `s=fqset&a=all&v=${perDayOfFreq(common)}` : null };
+  }
+  const fresh: any = await db.getThreadsAccountById(Number(a)).catch(() => null);
+  if (!fresh || Number(fresh.userId) !== Number(userId)) return { ok: false };
+  const before = nowPerDay(fresh, common, Math.max(max, 1));
+  const undoV = fresh.autoPostFrequency == null ? "inherit" : String(perDayOfFreq(fresh.autoPostFrequency));
+  await db.updateThreadsAccount(Number(fresh.id), { autoPostFrequency: perDay === "inherit" ? null : FREQ_OF_PER_DAY[perDay] } as any);
+  const after = perDay === "inherit" ? `共通の設定（1日${perDayOfFreq(common)}回）` : `1日${perDay}回`;
+  return {
+    ok: true,
+    details: [`@${fresh.threadsUsername || fresh.id}：1日${before}回 → ${after}`],
+    who: `@${fresh.threadsUsername || fresh.id} の`,
+    undo: `s=fqset&a=${fresh.id}&v=${undoV}`,
+  };
+}
+
+function frequencyDoneText(who: string, perDay: PerDay | "inherit"): string {
+  return (
+    (perDay === "inherit" ? `${who}1日の回数を、共通の設定に戻しました。` : `${who}自動投稿を「1日${perDay}回」に変えました。`) +
+    "\n次に作る分から変わります。すでにお届けした案・予約はそのままです。"
+  );
+}
+
+/** s=freq（回数を選ぶ画面）/ s=fqset（ご本人の操作・元に戻す）/ s=fqok / s=fqno */
+export async function handleFrequencyPostback(userId: number, lineUserId: string, q: Record<string, string>): Promise<unknown[]> {
+  void lineUserId;
+  const max = await maxPerDayOf(userId);
+  const accts = await activeAccounts(userId);
+
+  // 設定の画面の「1日の回数を変える」。a があればそのアカウントだけ、無ければ共通の設定
+  if (q.s === "freq") {
+    if (max <= 0) return [textWithQuick("ご利用中のプランでは、自動投稿はご利用いただけません。", [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT])];
+    const acct = q.a ? accts.find((x) => String(x.id) === String(q.a)) : null;
+    if (q.a && !acct) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    const common = await commonFreq(userId);
+    const now = acct ? nowPerDay(acct, common, max) : (Math.min(perDayOfFreq(common), max) as PerDay);
+    const choices = ([1, 2, 3] as PerDay[]).filter((n) => n <= max && n !== now);
+    const head = acct ? `@${acct.threadsUsername} の自動投稿は、いま1日${now}回です。` : `自動投稿は、いま1日${now}回です${accts.length >= 2 ? "（共通の設定）" : ""}。`;
+    if (choices.length === 0) {
+      return [textWithQuick(`${head}\nご利用中のプランでは1日${max}回までです。`, [{ label: "プランを見る", data: "s=plan" }, { label: "設定に戻る", data: "m=settings" }])];
+    }
+    return [textWithQuick(
+      `${head}\n何回にしますか？${acct ? "このアカウントだけに効きます。" : ""}${max < 3 ? `\n（ご利用中のプランでは1日${max}回までです）` : ""}`,
+      [...choices.map((n) => ({ label: `1日${n}回にする`, data: `s=fqset&a=${acct ? acct.id : "all"}&v=${n}` })), { label: "設定に戻る", data: "m=settings" }],
+    )];
+  }
+
+  if (max <= 0) return [textWithQuick("ご利用中のプランでは、自動投稿はご利用いただけません。回数は変えていません。", [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT])];
+  const v: PerDay | "inherit" | null = q.v === "inherit" ? "inherit" : perDayFrom(q.v);
+  if (q.s === "fqset") {
+    if (!v || !q.a) return NOT_FOUND();
+    if (v !== "inherit" && v > max) return [textWithQuick(`ご利用中のプランでは、自動投稿は1日${max}回までです。回数は変えていません。`, [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT])];
+    const r = await applyFrequency(userId, String(q.a), v);
+    if (!r.ok) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+    return [textWithQuick(frequencyDoneText(r.who, v), [...(r.undo ? [{ label: "元に戻す", data: r.undo }] : []), { label: "設定に戻る", data: "m=settings" }, ...MENU_HINT])];
+  }
+
+  const qid = Number(q.q || 0);
+  const { row, mismatch, done } = await rowFor(userId, qid);
+  if (mismatch || !row) return NOT_FOUND();
+  const question = String(row.question ?? "");
+  if (done) {
+    return [textWithQuick(row.handledBy === SETTING_HANDLED_BY.declined ? "このご依頼は、変えずに終えています。" : "このご依頼の回数は、すでに変えています。", MENU_HINT)];
+  }
+  if (q.s === "fqno") {
+    await closeRow(qid, SETTING_HANDLED_BY.declined, "frequency");
+    const reply = [textWithQuick("承知しました。今のままにします。", MENU_HINT)];
+    await notify({ kind: "frequency", outcome: "declined", qid, userId, question, details: ["1日の回数は変えていません"], pressed: "今のままにする", reply });
+    return reply;
+  }
+  // s=fqok
+  if (!v || v === "inherit" || !q.a) return NOT_FOUND();
+  if (v > max) return [textWithQuick(`ご利用中のプランでは、自動投稿は1日${max}回までです。回数は変えていません。`, [{ label: "プランを見る", data: "s=plan" }, ...MENU_HINT])];
+  const r = await applyFrequency(userId, String(q.a), v);
+  if (!r.ok) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
+  await closeRow(qid, SETTING_HANDLED_BY.frequency, "frequency");
+  const reply = [textWithQuick(frequencyDoneText(r.who, v), [...(r.undo ? [{ label: "元に戻す", data: r.undo }] : []), ...MENU_HINT])];
+  await notify({
+    kind: "frequency", outcome: "applied", qid, userId, question, details: r.details,
+    account: q.a === "all" ? null : r.who.replace(/ の$/, ""),
+    pressed: q.a === "all" ? (accts.length >= 2 ? "すべてのアカウント" : `1日${v}回にする`) : `${r.who.replace(/ の$/, "")}を${v}回に`,
+    reply,
+  });
+  return reply;
 }

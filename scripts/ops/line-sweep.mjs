@@ -28,6 +28,8 @@ const BUTTONS = [
   'c=addproof', 'c=addtopic', 'c=focus', 'c=ideal', 'c=oneline', 'c=nourl', 'c=pintgt', 'c=proadv',
   'c=more&p=1', 'c=acct&a=1', 'c=newpj&a=1', 'c=pin&a=1&p=1', 'c=urlk&k=line',
   's=common', 's=inherit&a=1', 's=acct&a=1',
+  // 2026-11-11 追加：1日の回数（設定の画面のボタン・ご依頼への確認のボタン）
+  's=freq', 's=freq&a=1', 's=fqset&a=all&v=3', 's=fqset&a=1&v=inherit', 's=fqok&q=1&a=all&v=1', 's=fqno&q=1',
   's=metaai&v=on', 's=metaai&v=off',
   // 「見送りしなければ予定時刻に公開」の戻し方（2026-09-12 の既定変更の逃げ道。押せないと困る）
   's=softappr&v=off', 's=softappr&v=on',
@@ -49,6 +51,7 @@ const TEXTS = [
   'ありがとうございます',
   '運動療法、リハサクをお勧めしたい', // 2026-10-13 ご質問 #56（話題として登録）
   'アスリートの話題はいらない', // 2026-10-15 ご質問 #57（その言葉をNGワードに登録するボタン）
+  '1日1回に変更してください', // 2026-11-11 ご質問 #73（回数を変える確認のボタン）
   'あ',
   '設定',
 ];

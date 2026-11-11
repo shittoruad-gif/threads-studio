@@ -106,7 +106,7 @@ vi.mock("./db", () => {
       .filter((p) => p.threadsAccountId === aid && p.id !== exclude && new Date(p.scheduledAt.getTime() + 9 * 3600_000).toISOString().slice(0, 10) === ymd)
       .map((p) => p.scheduledAt),
     isNextActionNotifyEnabled: async () => user.nextActionNotifyEnabled !== 0,
-    getAutoPostSettings: async () => ({ autoPostEnabled: true, autoPostRequireApproval: false, postLength: "short", metaAiAskEnabled: true }),
+    getAutoPostSettings: async () => ({ autoPostEnabled: true, autoPostRequireApproval: false, postLength: "short", metaAiAskEnabled: true, autoPostFrequency: user.autoPostFrequency ?? "three_daily" }),
   };
   return new Proxy(impl, {
     has: () => true,
@@ -537,5 +537,124 @@ describe("4. 自動の答えが設定のご希望と読んだら、答えで終�
     const res = await handler.handleFreeText(LINE_USER, "投稿の出る時間帯をもう少し早めにしてほしいです");
     expect(textOf(res)).toContain("「担当者に聞く」を押してから");
     expect(dataList(res)[0]).toBe("m=staff&q=301");
+  });
+});
+
+// ═══════════════════ 5. 1日の回数（2026-11-11 ご質問 #73） ═══════════════════
+describe("5. 1日の回数：確認 → 押したら変える", () => {
+  const Q73 = "・自動投稿：ON・1日3回（共通）を\n1日1回の個別設定に変更して下さい";
+  const two = () => {
+    accounts = [
+      { id: 11, userId: 1, threadsUsername: "qa_a", isActive: true, autoPostFrequency: null },
+      { id: 12, userId: 1, threadsUsername: "qa_b", isActive: true, autoPostFrequency: null },
+    ];
+  };
+
+  it("ご質問 #73 の文：自動の答えにも担当者にも回さず、アカウントを選ぶボタン。押すまでは変えない", async () => {
+    two();
+    const res = await handler.handleFreeText(LINE_USER, Q73);
+    expect(askedAi).not.toHaveBeenCalled();
+    expect(textOf(res)).toContain("自動投稿を「1日1回」に変えます。変えるアカウントを選んでください。");
+    expect(dataList(res)).toEqual(["s=fqok&q=100&a=11&v=1", "s=fqok&q=100&a=12&v=1", "s=fqok&q=100&a=all&v=1", "s=fqno&q=100"]);
+    expect(acctUpdates).toHaveLength(0);
+    expect(autoSettings).toHaveLength(0);
+    expect(questions[100]).toMatchObject({ category: SETTING_CATEGORY.frequency, needsHuman: 0 });
+    expect(notices).toHaveLength(0);
+  });
+
+  it("アカウントを押すと、そのアカウントだけ1日1回（個別設定）・自動で対応済み・三上様へ知らせる・元に戻せる", async () => {
+    two();
+    await handler.handleFreeText(LINE_USER, Q73);
+    const res = await handler.handlePostback(LINE_USER, "s=fqok&q=100&a=11&v=1");
+    expect(acctUpdates).toEqual([{ id: 11, v: { autoPostFrequency: "daily" } }]);
+    expect(autoSettings).toHaveLength(0);
+    expect(textOf(res)).toContain("@qa_a の自動投稿を「1日1回」に変えました。");
+    expect(dataList(res)).toContain("s=fqset&a=11&v=inherit");
+    expect(questions[100].handledBy).toBe(SETTING_HANDLED_BY.frequency);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ kind: "frequency", outcome: "applied", questionId: 100, account: "@qa_a" });
+    expect(notices[0].details[0]).toBe("@qa_a：1日3回 → 1日1回");
+    expect(notices[0].reply).toBe(textOf(res));
+    // 2回押しても二重に変えない
+    const again = await handler.handlePostback(LINE_USER, "s=fqok&q=100&a=11&v=1");
+    expect(textOf(again)).toContain("すでに変えています");
+    expect(acctUpdates).toHaveLength(1);
+    expect(notices).toHaveLength(1);
+    // 元に戻す＝個別の回数を外す
+    await handler.handlePostback(LINE_USER, "s=fqset&a=11&v=inherit");
+    expect(acctUpdates[1]).toEqual({ id: 11, v: { autoPostFrequency: null } });
+  });
+
+  it("「すべてのアカウント」は共通の設定を変え、個別の回数は外してそろえる", async () => {
+    two();
+    accounts[1].autoPostFrequency = "twice_daily";
+    await handler.handleFreeText(LINE_USER, "1日1回に変更してください");
+    const res = await handler.handlePostback(LINE_USER, "s=fqok&q=100&a=all&v=1");
+    expect(autoSettings).toEqual([{ uid: 1, v: { autoPostFrequency: "daily" } }]);
+    expect(acctUpdates).toEqual([{ id: 12, v: { autoPostFrequency: null } }]);
+    expect(textOf(res)).toContain("すべてのアカウントの自動投稿を「1日1回」に変えました。");
+    // 個別の回数を外したときは、ボタン1つで戻せないので「元に戻す」を出さない
+    expect(dataList(res).some((d) => d.startsWith("s=fqset"))).toBe(false);
+  });
+
+  it("アカウント1つ：［1日2回にする］で共通の設定を変える・［元に戻す］は前の回数", async () => {
+    const res = await handler.handleFreeText(LINE_USER, "自動投稿を1日2回にしてください");
+    expect(dataList(res)).toEqual(["s=fqok&q=100&a=all&v=2", "s=fqno&q=100"]);
+    expect(labels(res)).toEqual(["1日2回にする", "今のままにする"]);
+    const done = await handler.handlePostback(LINE_USER, "s=fqok&q=100&a=all&v=2");
+    expect(autoSettings).toEqual([{ uid: 1, v: { autoPostFrequency: "twice_daily" } }]);
+    expect(dataList(done)).toContain("s=fqset&a=all&v=3");
+  });
+
+  it("［今のままにする］なら変えない", async () => {
+    await handler.handleFreeText(LINE_USER, "1日1回に変更してください");
+    const res = await handler.handlePostback(LINE_USER, "s=fqno&q=100");
+    expect(textOf(res)).toContain("今のままにします");
+    expect(autoSettings).toHaveLength(0);
+    expect(acctUpdates).toHaveLength(0);
+    expect(questions[100].handledBy).toBe(SETTING_HANDLED_BY.declined);
+  });
+
+  it("すでにその回数なら、変えずにそうお伝えする", async () => {
+    user.autoPostFrequency = "daily";
+    const res = await handler.handleFreeText(LINE_USER, "1日1回に変更してください");
+    expect(textOf(res)).toContain("すでに1日1回です");
+    expect(questions[100].handledBy).toBe(SETTING_HANDLED_BY.frequencyInfo);
+    expect(autoSettings).toHaveLength(0);
+  });
+
+  it("プランの上限より多い回数は変えずに、上限をお伝えする（ライト＝1日1回）", async () => {
+    plan = "light";
+    user.autoPostFrequency = "daily";
+    const res = await handler.handleFreeText(LINE_USER, "1日3回にしてください");
+    expect(textOf(res)).toContain("自動投稿は1日1回までです。回数は変えていません。");
+    expect(autoSettings).toHaveLength(0);
+    // ボタンのデータを書き換えて送っても変わらない
+    const forced = await handler.handlePostback(LINE_USER, "s=fqset&a=all&v=3");
+    expect(textOf(forced)).toContain("1日1回までです");
+    expect(autoSettings).toHaveLength(0);
+  });
+
+  it("ほかのお客様のアカウントは変えられない", async () => {
+    accounts.push({ id: 99, userId: 2, threadsUsername: "other", isActive: true, autoPostFrequency: null });
+    const res = await handler.handlePostback(LINE_USER, "s=fqset&a=99&v=1");
+    expect(textOf(res)).toContain("見つかりませんでした");
+    expect(acctUpdates).toHaveLength(0);
+  });
+
+  it("設定の画面の［1日の回数を変える］：今の回数以外を選べる・押すと変わる", async () => {
+    two();
+    const acct = await handler.handlePostback(LINE_USER, "s=acct&a=11");
+    expect(textOf(acct)).toContain("・1日の回数：1日3回（共通）");
+    expect(dataList(acct)).toContain("s=freq&a=11");
+    const menu = await handler.handlePostback(LINE_USER, "s=freq&a=11");
+    expect(textOf(menu)).toContain("@qa_a の自動投稿は、いま1日3回です。");
+    expect(dataList(menu)).toEqual(["s=fqset&a=11&v=1", "s=fqset&a=11&v=2", "m=settings"]);
+    const done = await handler.handlePostback(LINE_USER, "s=fqset&a=11&v=1");
+    expect(acctUpdates).toEqual([{ id: 11, v: { autoPostFrequency: "daily" } }]);
+    expect(textOf(done)).toContain("@qa_a の自動投稿を「1日1回」に変えました。");
+    // ご本人の操作なので、ご質問の記録も三上様への知らせも作らない
+    expect(Object.keys(questions)).toHaveLength(0);
+    expect(notices).toHaveLength(0);
   });
 });

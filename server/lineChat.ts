@@ -593,6 +593,8 @@ export function settingsQuick(
   }
   return [
     { label: s.autoPostEnabled ? "自動投稿を止める" : "自動投稿を始める", data: `s=auto&v=${s.autoPostEnabled ? "off" : "on"}` },
+    // ★1日の回数（2026-11-11：LINEの設定に回数を変えるボタンが無かった）
+    { label: "1日の回数を変える", data: "s=freq" },
     { label: s.autoPostRequireApproval ? "確認なしにする" : "公開前に確認する", data: `s=appr&v=${s.autoPostRequireApproval ? "off" : "on"}` },
     ...(s.autoPostRequireApproval
       ? [

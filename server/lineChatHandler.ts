@@ -1913,12 +1913,15 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const a = `&a=${acct.id}`;
     return [textWithQuick(
       `@${acct.threadsUsername} の設定です。\n` +
-      `・自動投稿：${e.autoPostEnabled ? `ON・${FREQ_LABEL[e.autoPostFrequency]}` : "OFF"}（${src("autoPostEnabled")}）\n` +
+      `・自動投稿：${e.autoPostEnabled ? "ON" : "OFF"}（${src("autoPostEnabled")}）\n` +
       `・公開前の確認：${e.autoPostRequireApproval ? "する" : "しない"}（${src("autoPostRequireApproval")}）\n` +
-      `・投稿の長さ：${LENGTH_LABEL[e.postLength]}（${src("postLength")}）\n\n` +
-      "変えたいものを選んでください。このアカウントだけに効きます。\n（1日の回数はアプリの「設定」から変えられます）",
+      `・投稿の長さ：${LENGTH_LABEL[e.postLength]}（${src("postLength")}）\n` +
+      `・1日の回数：${FREQ_LABEL[e.autoPostFrequency]}（${src("autoPostFrequency")}）\n\n` +
+      "変えたいものを選んでください。このアカウントだけに効きます。",
       [
         { label: e.autoPostEnabled ? "自動投稿を止める" : "自動投稿を始める", data: `s=auto&v=${e.autoPostEnabled ? "off" : "on"}${a}` },
+        // ★1日の回数（2026-11-11 ご質問 #73：ここに回数のボタンが無く、担当者へのご依頼になっていた）
+        { label: "1日の回数を変える", data: `s=freq${a}` },
         { label: e.autoPostRequireApproval ? "確認なしにする" : "公開前に確認する", data: `s=appr&v=${e.autoPostRequireApproval ? "off" : "on"}${a}` },
         { label: "短め にする", data: `s=len&v=short${a}` },
         { label: "長め にする", data: `s=len&v=long${a}` },
@@ -3151,6 +3154,11 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const { handleTopicsPostback } = await import("./settingRequestFlow");
     return handleTopicsPostback(user.id, lineUserId, q);
   }
+  // 1日の回数（freq＝回数を選ぶ画面／fqset＝ご本人の操作・元に戻す／fqok・fqno＝ご依頼への確認のボタン・2026-11-11 ご質問 #73）
+  if (["freq", "fqset", "fqok", "fqno"].includes(String(q.s ?? ""))) {
+    const { handleFrequencyPostback } = await import("./settingRequestFlow");
+    return handleFrequencyPostback(user.id, lineUserId, q);
+  }
   if (["fhok", "fhno", "fhset", "mvok", "mvno", "mvset", "stno"].includes(String(q.s ?? ""))) {
     const { handlePostTimePostback } = await import("./settingRequestFlow");
     return handlePostTimePostback(user.id, lineUserId, q);
@@ -3746,6 +3754,7 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
   //   shared/settingRequest.ts・server/settingRequestFlow.ts）。確認のボタンを押していただいてから変える。
   //   ・通知を止めたい／戻したい（「投稿結果を送らないで」）…下の「〇〇はいらない」（投稿の中身のご希望）より先に見る
   //   ・ホームページのURL＋「これを元に投稿を」…ページの見出しから話題を拾い、ネタ帳に入れる
+  //   ・1日の回数（「1日1回に変更して下さい」・2026-11-11）
   //   ・自動投稿の時刻（「自動は12時に」「15時の予約を12時に」「5日の12時にお願いします」）…本文つきは下の parsePostRequest へ
   //   11/3 は「5日(木)12:00にお願いします」を自動の答えが Zoom のご希望と取り違えていた。
   {

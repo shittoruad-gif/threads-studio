@@ -6,6 +6,7 @@
  *   1. 通知を止めたい／戻したい（「投稿結果を送らないで」「交流の案内はいらない」「また送って」）
  *   2. ホームページのURL＋「これを元に投稿を」（ページの見出しから話題を拾い、ネタ帳に入れる）
  *   3. 自動投稿の時刻（「自動は12時に」「15時の予約を12時に」「5日の12時にお願いします」）
+ *   4. 自動投稿の1日の回数（「1日1回に変更して下さい」・2026-11-11 ご質問 #73）
  *
  * 決めごと（shared/contentRequest.ts と同じ）
  *  - 取りこぼしより横取りの害が大きい。言葉がそろった短い文だけに当てる。困りごと・やり方のお尋ねには当てない。
@@ -33,6 +34,7 @@ export const SETTING_CATEGORY = {
   notice: "通知の設定",
   topics: "ネタ帳（ホームページ）",
   postTime: "投稿の時刻",
+  frequency: "1日の回数",
 } as const;
 export type SettingKind = keyof typeof SETTING_CATEGORY;
 
@@ -45,6 +47,8 @@ export const SETTING_HANDLED_BY = {
   fixedHours: "自動（自動投稿の時刻を決めた）",
   movePost: "自動（予約の時刻を動かした）",
   moveRefused: "自動（動かせない理由をご案内）",
+  frequency: "自動（1日の回数を変えた）",
+  frequencyInfo: "自動（1日の回数のご案内）",
   declined: "自動（お客様が見送り）",
 } as const;
 
@@ -478,3 +482,61 @@ export function moveConfirmText(p: { from: Date; to: Date; account?: string | nu
 /** 担当者へ回したときのお返し（自動で読み取れなかった設定のご希望） */
 export const SETTING_ESCALATED_TEXT =
   "設定のご希望として、担当者にお伝えしました。設定を変えたら、このトークでお知らせします。";
+
+// ───────────────────────── 4. 1日の回数 ─────────────────────────
+// 2026-11-11 ご質問 #73：アカウント別の設定の画面の行をそのまま写して「…1日3回（共通）を 1日1回の個別設定に変更して下さい」。
+//   LINE の画面に回数を変えるボタンが無く（「アプリの設定から」とだけ書いていた）、担当者へのご依頼になっていた。
+//   回数はアプリの設定でご本人が変えられる項目なので、確認のボタンを押していただいて変える。
+
+export type PerDay = 1 | 2 | 3;
+export const FREQ_OF_PER_DAY: Record<PerDay, "daily" | "twice_daily" | "three_daily"> = { 1: "daily", 2: "twice_daily", 3: "three_daily" };
+export function perDayOfFreq(f: string | null | undefined): PerDay {
+  return f === "three_daily" ? 3 : f === "twice_daily" ? 2 : 1;
+}
+export function perDayFrom(v: unknown): PerDay | null {
+  const n = Number(v);
+  return n === 1 || n === 2 || n === 3 ? n : null;
+}
+
+const KANJI_NUM: Record<string, number> = { "一": 1, "二": 2, "三": 3 };
+const FREQ_COUNT_RE = /((?:1|一)日(?:に|あたり)?)?([1-3一二三])(?:回|件|本|投稿)/g;
+/** 変えてほしい、の言い方（お尋ね・困りごとには当てない） */
+const FREQ_CHANGE_RE = /(変更|変えて|変えたい|にして|にしたい|でお願い|にお願い|減らして|減らしたい|増やして|増やしたい)/;
+/** 当てない言い方：お尋ね・困りごと・一部だけの話・時刻や長さと一緒の話 */
+const FREQ_SKIP_RE = /(方法|やり方|どうやって|どこ|ですか|でしょうか|ますか|なぜ|どうして|のに|しか|届か|来ない|来ません|なっていま|なってま|されて|うち|長め|短め|[0-9]時|:[0-9]{2}|解約|プラン|料金|返金)/;
+
+/**
+ * 「1日1回に変更して下さい」「自動投稿を1日2回にしてください」「1日3回を1回に減らして」。
+ *   回数が2つ書いてあるとき（「1日3回を1日1回に」）は、後ろの方が変えたい回数。
+ */
+export function detectFrequencyRequest(text: string): { perDay: PerDay } | null {
+  const s = normalizeText(text).replace(/\s+/g, "");
+  if (!s || len(s) > 80) return null;
+  if (!FREQ_CHANGE_RE.test(s) || FREQ_SKIP_RE.test(s)) return null;
+  let last: number | null = null;
+  let hasDay = false;
+  FREQ_COUNT_RE.lastIndex = 0;
+  for (let m = FREQ_COUNT_RE.exec(s); m; m = FREQ_COUNT_RE.exec(s)) {
+    if (m[1]) hasDay = true;
+    last = KANJI_NUM[m[2]] ?? Number(m[2]);
+  }
+  const n = perDayFrom(last);
+  return hasDay && n ? { perDay: n } : null;
+}
+
+/** 確認の文。accounts＝いま有効なアカウントと、それぞれの今の回数 */
+export function frequencyConfirmText(perDay: PerDay, accounts: ReadonlyArray<{ name: string; now: PerDay }>): string {
+  if (accounts.length >= 2) {
+    return (
+      `自動投稿を「1日${perDay}回」に変えます。変えるアカウントを選んでください。\n` +
+      accounts.map((a) => `・@${a.name}（いまは1日${a.now}回）`).join("\n") +
+      "\n次に作る分から変わります。すでにお届けした案・予約はそのままです。"
+    );
+  }
+  const now = accounts[0]?.now;
+  return (
+    `自動投稿を「1日${perDay}回」に変えます。よろしいですか。` +
+    (now ? `\n（いまは1日${now}回です）` : "") +
+    "\n次に作る分から変わります。すでにお届けした案・予約はそのままです。"
+  );
+}

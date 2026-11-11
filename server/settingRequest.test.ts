@@ -282,3 +282,52 @@ describe("三上様の公式LINEへの1通の本文", () => {
     expect(staffLineNoticeText({ ...base, outcome: "info" }).split("\n")[0]).toBe("【ご案内だけお返ししました】QA 様");
   });
 });
+
+// ═══════════════════ 4. 1日の回数（2026-11-11 ご質問 #73） ═══════════════════
+import { detectFrequencyRequest, frequencyConfirmText } from "../shared/settingRequest";
+
+describe("4. 1日の回数：当たる文", () => {
+  it.each([
+    // ご質問 #73 の文そのまま（アカウント別の設定の画面の行を写して送られた）
+    ["・自動投稿：ON・1日3回（共通）を\n1日1回の個別設定に変更して下さい", 1],
+    ["1日1回に変更してください", 1],
+    ["自動投稿を１日２回にしてください", 2],
+    ["1日3回を1回に減らしてほしいです", 1],
+    ["投稿は一日一回でお願いします", 1],
+    ["1日1件を1日3件に増やしてください", 3],
+    ["お店のアカウントだけ1日1回にしてください", 1],
+  ])("%s → 1日%i回", (text, n) => {
+    expect(detectFrequencyRequest(text as string)).toEqual({ perDay: n });
+  });
+});
+
+describe("4. 1日の回数：当たらない文（横取りしない）", () => {
+  it.each([
+    "1日3回にしているのに1回しか届きません",
+    "1日の回数はどこで変えられますか",
+    "1日1回に変更できますか？",
+    "1日3回のうち1回だけ長めにしてください",
+    "1日1回、12時に投稿してください",
+    "3回目の投稿を見送りにしてください",
+    "1日1回のプランに変更したいです",
+    "回数を変えてください",
+    "1日5回にしてください",
+  ])("%s", (text) => {
+    expect(detectFrequencyRequest(text)).toBeNull();
+  });
+});
+
+describe("4. 1日の回数：確認の文", () => {
+  it("アカウント1つ：今の回数と、いつから変わるかを書く", () => {
+    const t = frequencyConfirmText(1, [{ name: "qa_clinic", now: 3 }]);
+    expect(t).toContain("自動投稿を「1日1回」に変えます。よろしいですか。");
+    expect(t).toContain("いまは1日3回です");
+    expect(t).toContain("すでにお届けした案・予約はそのままです");
+  });
+  it("アカウント2つ：どのアカウントかを選んでいただく", () => {
+    const t = frequencyConfirmText(1, [{ name: "qa_a", now: 3 }, { name: "qa_b", now: 2 }]);
+    expect(t).toContain("変えるアカウントを選んでください");
+    expect(t).toContain("・@qa_a（いまは1日3回）");
+    expect(t).toContain("・@qa_b（いまは1日2回）");
+  });
+});

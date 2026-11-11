@@ -276,7 +276,7 @@ export async function notifyStaffOfContentRule(params: {
  *   info        … ご案内だけをした（すでにご希望どおり・止められない連絡など。設定は変えていない）
  *   needs_human … 自動では読み取れなかった／ページを読めなかった／変えられなかった（担当者の対応が要る）
  */
-export type SettingRequestKind = "notice" | "topics" | "post_time";
+export type SettingRequestKind = "notice" | "topics" | "post_time" | "frequency";
 export type SettingRequestOutcome = StaffLineOutcome;
 
 export async function notifyStaffOfSettingRequest(params: {
