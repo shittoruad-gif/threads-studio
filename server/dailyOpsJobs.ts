@@ -457,6 +457,12 @@ export function initDailyOpsSchedulers(): void {
     const { runRepetitionMonitorJob } = await import("./repetitionMonitor");
     await runTrackedJob("repetition_monitor", runRepetitionMonitorJob);
   });
+  // 月曜 4:40 JST = 日曜 19:40 UTC — 当たり型の週次の取り込み（2026-11-11・server/hitPatterns.ts）。よく読まれた・コメントが多い投稿から型だけを足す
+  cron.schedule("40 19 * * 0", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runHitPatternRefreshJob } = await import("./hitPatterns");
+    await runTrackedJob("hit_pattern_refresh", runHitPatternRefreshJob);
+  });
   // 毎時5分（JST 6:05〜22:05 = UTC 21:05〜13:05）— 学習用アカウントの次の1時間分の投稿（1日30本・2026-10-10 三上様・server/learningBurstJob.ts）
   cron.schedule("5 21-23,0-13 * * *", async () => {
     const { runTrackedJob } = await import("./jobRunner");

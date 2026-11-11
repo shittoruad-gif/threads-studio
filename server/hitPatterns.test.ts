@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  selectHitCandidates, leaksSource, validatePattern, isHitPatternSlot, businessGroupOf, inHitPatternTrial, HIT_PATTERN_TRIAL,
+  selectHitCandidates, leaksSource, inHitFocus, HIT_MIN_REPLIES, validatePattern, isHitPatternSlot, businessGroupOf, inHitPatternTrial, HIT_PATTERN_TRIAL,
 } from "../shared/hitPatterns";
 
 const mk = (acc: number, imps: number[], text = "「このくらいの痛みなら大丈夫」と我慢していませんか。痛いのが普通になる前に一度ご相談ください。") =>
@@ -71,5 +71,29 @@ describe("hitPatterns: 試しの枠", () => {
     expect(businessGroupOf("エステサロン")).toBe("beauty");
     expect(businessGroupOf("エステサロン", { recruiting: true })).toBe("recruit");
     expect(businessGroupOf("Web集客支援")).toBe("other");
+  });
+
+  describe("当たり型を中心に作るアカウント（2026-11-11）", () => {
+    const now = Date.parse("2026-11-12T10:00:00+09:00");
+    it("自社の3アカウントだけ・11/11から", () => {
+      for (const a of [10, 12, 36]) expect(inHitFocus(a, now)).toBe(true);
+      for (const a of [11, 21, 22]) expect(inHitFocus(a, now)).toBe(false);
+      expect(inHitFocus(10, Date.parse("2026-11-10T23:00:00+09:00"))).toBe(false);
+    });
+    it("1日5本（契約3＋2）のうち、後ろの3本が当たり型", () => {
+      expect([0, 1, 2, 3, 4, 5].map((i) => isHitPatternSlot(10, i, 3, now))).toEqual([false, false, true, true, true, false]);
+      // お客様のアカウントには入らない
+      expect([0, 1, 2, 3, 4].some((i) => isHitPatternSlot(22, i, 3, now))).toBe(false);
+    });
+    it("コメントが多く付いた投稿も当たりにする（表示が普段どおりでも）", () => {
+      const text = "あ".repeat(40);
+      const posts = [
+        ...Array.from({ length: 9 }, (_, i) => ({ threadsPostId: `n${i}`, accountId: 1, impressions: 100, text, replies: 0 })),
+        { threadsPostId: "c", accountId: 1, impressions: 100, text, replies: HIT_MIN_REPLIES },
+        { threadsPostId: "c2", accountId: 1, impressions: 100, text, replies: HIT_MIN_REPLIES - 1 },
+        { threadsPostId: "v", accountId: 1, impressions: 300, text, replies: 0 },
+      ];
+      expect(selectHitCandidates(posts).map((h) => h.threadsPostId)).toEqual(["v", "c"]);
+    });
   });
 });

@@ -21,7 +21,9 @@ import { LOCAL_TALK, LOCAL_TALK_ANGLE_ID } from "./localTalk";
  * 2026-10-26 三上様「身内なので普通にどんどん出して結果を出すように」。
  * 補填・試しで多めに出した分まで月の上限（プロ120本）に数えられ、10/26から月末まで0本になっていた。
  */
-export const UNCAPPED_ACCOUNT_IDS: readonly number[] = [11];
+// ★2026-11-11 学習（1日30本）を終えた自社の3アカウント（10・12・36）もここへ。1日5本（契約3＋当たり型2・shared/hitPatterns.ts HIT_FOCUS）は
+//   月の上限（120本）を超えるため。学習の期間中は inLearning で外れていたので、扱いは今までと同じ。
+export const UNCAPPED_ACCOUNT_IDS: readonly number[] = [11, 10, 12, 36];
 export function isUncappedAccount(accountId: number): boolean {
   return UNCAPPED_ACCOUNT_IDS.includes(accountId);
 }
@@ -32,7 +34,10 @@ export const LEARNING_ACCOUNTS = {
   extraSlots: 2,
   legacyAccountIds: [10, 12] as readonly number[],
   start: "2026-10-08",
-  until: "2026-11-30",
+  // ★2026-11-11 三上様「学習用のは止めていいよ。1日5本ぐらいにしといて。コメントが多く寄せられた投稿やリーチが伸びた投稿を中心に作るように」
+  //   → 11/10 で終了（もとは 11/30 まで）。以後は1日5本・うち3本を当たり型で作る（shared/hitPatterns.ts HIT_FOCUS）。
+  //   やめた理由：作り直しの46%（14日で1,396回）がこの3アカウントで、AIの原価の大きな部分を占めていた。
+  until: "2026-11-10",
   /** 学習の枠とほかの枠との最小の間隔（分）。これより狭くしか置けない日は置ける分だけ */
   minGapMinutes: 60,
 } as const;

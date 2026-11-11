@@ -27,7 +27,7 @@ const SCHEMA = {
 
 async function extractPattern(text: string): Promise<{ liveFact: boolean; pattern: string } | null> {
   const { invokeLLM } = await import("./_core/llm");
-  const prompt = `次のThreads投稿は、そのお店の普段の2倍以上読まれました。別のお店が同じ「型」で書けるように、型だけを取り出してください。
+  const prompt = `次のThreads投稿は、そのお店の普段よりよく読まれたか、コメントが多く付きました。別のお店が同じ「型」で書けるように、型だけを取り出してください。
 
 - 取り出すもの：1行目の形（例：よくある思い込みを一言で否定する／患者さんのセリフで始める）、段の順番と各段の役割、締め方、おおよその長さ
 - 書かないもの：店名・地名・人名・数字・固有の出来事・症状名の具体例・元の文の言い回し（元の文を8文字以上続けて写さない）
@@ -37,7 +37,7 @@ async function extractPattern(text: string): Promise<{ liveFact: boolean; patter
 ${text}
 ---`;
   try {
-    const res: any = await invokeLLM({ messages: [{ role: "user", content: prompt }], outputSchema: SCHEMA as any });
+    const res: any = await invokeLLM({ purpose: "hit_pattern_extract", messages: [{ role: "user", content: prompt }], outputSchema: SCHEMA as any });
     const content = res?.choices?.[0]?.message?.content;
     if (typeof content !== "string" || !content.trim()) return null;
     const parsed = JSON.parse(content);
@@ -53,7 +53,7 @@ export async function refreshHitPatterns(opts: { dryRun?: boolean; limit?: numbe
   if (!db) throw new Error("DB未接続");
   const sinceDays = opts.sinceDays ?? 90;
   const rows: any[] = ((await db.execute(sql`
-    SELECT DISTINCT pa.threadsPostId, pa.threadsAccountId accountId, pa.impressions, pa.postContent text
+    SELECT DISTINCT pa.threadsPostId, pa.threadsAccountId accountId, pa.impressions, pa.replies, pa.postContent text
     FROM postAnalytics pa
     JOIN threadsAccounts a ON a.id = pa.threadsAccountId AND a.userId = pa.userId
     JOIN users u ON u.id = a.userId
@@ -61,7 +61,7 @@ export async function refreshHitPatterns(opts: { dryRun?: boolean; limit?: numbe
       AND pa.postedAt >= NOW() - INTERVAL ${sinceDays} DAY
       AND pa.postedAt < NOW() - INTERVAL 24 HOUR`)) as any)[0] ?? [];
   const cands = selectHitCandidates(rows.map((r) => ({
-    threadsPostId: String(r.threadsPostId), accountId: Number(r.accountId), impressions: Number(r.impressions) || 0, text: r.text,
+    threadsPostId: String(r.threadsPostId), accountId: Number(r.accountId), impressions: Number(r.impressions) || 0, text: r.text, replies: Number(r.replies) || 0,
   })));
   let existing = new Set<string>();
   try {
@@ -102,7 +102,7 @@ export async function refreshHitPatterns(opts: { dryRun?: boolean; limit?: numbe
         if (!v.ok) { status = "rejected"; note = v.reason; }
       }
     }
-    lines.push(`${status === "active" ? "採用" : "不採用"} acc${c.accountId}(${group}) ${c.impressions}回・普段の${c.ratio}倍${note ? `／${note}` : ""}`);
+    lines.push(`${status === "active" ? "採用" : "不採用"} acc${c.accountId}(${group}) ${c.impressions}回・普段の${c.ratio}倍・コメント${c.replies}件${note ? `／${note}` : ""}`);
     if (opts.dryRun && status === "active") lines.push(pattern.split("\n").map((l) => "    " + l).join("\n"));
     if (status === "active") added++; else rejected++;
     if (!opts.dryRun) {
@@ -138,4 +138,10 @@ export async function getHitPatternText(id: number): Promise<string | null> {
   if (!db) return null;
   const rows: any[] = ((await db.execute(sql`SELECT pattern FROM hitPatterns WHERE id = ${id} AND status = 'active' LIMIT 1`)) as any)[0] ?? [];
   return rows[0]?.pattern ? String(rows[0].pattern) : null;
+}
+
+/** 週に1回、新しい当たり（よく読まれた・コメントが多い）から型を足す（2026-11-11）。9/27 から手動のままで増えていなかった */
+export async function runHitPatternRefreshJob(): Promise<void> {
+  const r = await refreshHitPatterns({ limit: 30, sinceDays: 45 });
+  console.log(`[HitPatterns] 週次の取り込み 候補${r.candidates}・採用${r.added}・不採用${r.rejected}`);
 }

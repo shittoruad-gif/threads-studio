@@ -10,7 +10,10 @@ const fmt = (d: Date) => new Date(d.getTime() + 9 * 3600e3).toISOString().slice(
 describe("学習用アカウント", () => {
   it("Moveact 2店と株式会社しっとる公式だけ・期間内だけ（10/10 から公式も）", () => {
     expect(inLearning(10, at("2026-10-08"))).toBe(true);
-    expect(inLearning(12, at("2026-11-30"))).toBe(true);
+    // ★11/11 三上様「学習用のは止めていいよ」→ 11/10 で終了
+    expect(inLearning(12, at("2026-11-10"))).toBe(true);
+    expect(inLearning(12, at("2026-11-11"))).toBe(false);
+    expect(inLearning(12, at("2026-11-30"))).toBe(false);
     expect(inLearning(36, at("2026-10-11"))).toBe(true);
     expect(inLearning(10, at("2026-10-07"))).toBe(false);
     expect(inLearning(10, at("2026-12-01"))).toBe(false);

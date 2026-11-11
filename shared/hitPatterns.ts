@@ -17,6 +17,8 @@
 export const HIT_PATTERN_ANGLE_ID = "hit_pattern";
 export const HIT_RATIO = 2;
 export const HIT_MIN_CHARS = 30;
+/** コメントがこの数以上付いた投稿も当たりにする（2026-11-11）。90日・7,086本のうち3件以上は101本（1.4%） */
+export const HIT_MIN_REPLIES = 3;
 
 /** 試しの対象：Moveact 玉島・金光、そら先生（滝本様）、しっとる公式。期限はJSTの終日まで */
 export const HIT_PATTERN_TRIAL = {
@@ -24,6 +26,25 @@ export const HIT_PATTERN_TRIAL = {
   until: "2026-10-27",
   extraSlots: 2,
 };
+
+/**
+ * 当たり型を中心に作るアカウント（2026-11-11 三上様「1日5本ぐらいに。コメントが多く寄せられた投稿やリーチが伸びた投稿を中心に作るように」）。
+ * 学習（1日30本）を終えた自社の3アカウント。1日5本（契約3＋上乗せ2）のうち、後ろの3本を当たり型で作る。
+ * 上乗せの2本は threadsAccounts.extraPostsPerDay（運営が決めた上乗せ）で持つ。冷却中・冷却明け7日以内は安全側の上限が先に効く。
+ * 当たり型が1つも無いとき・型が読めないときは、その枠は通常の切り口で作る（枠は減らさない）。
+ */
+export const HIT_FOCUS = {
+  accountIds: [10, 12, 36] as readonly number[],
+  from: "2026-11-11",
+  extraSlots: 2,
+  hitSlots: 3,
+};
+
+export function inHitFocus(accountId: number, now: number = Date.now()): boolean {
+  if (!HIT_FOCUS.accountIds.includes(accountId)) return false;
+  const from = Date.parse(HIT_FOCUS.from + "T00:00:00+09:00");
+  return Number.isFinite(from) && now >= from;
+}
 
 export type BusinessGroup = "health" | "beauty" | "recruit" | "other";
 
@@ -43,10 +64,14 @@ export function inHitPatternTrial(accountId: number, now: number = Date.now()): 
 
 /** この枠を当たり型で作るか。契約の本数（contractCount）より後ろの枠だけ */
 export function isHitPatternSlot(accountId: number, slotIndex: number, contractCount: number, now: number = Date.now()): boolean {
+  if (inHitFocus(accountId, now)) {
+    const end = contractCount + HIT_FOCUS.extraSlots;
+    return slotIndex >= Math.max(0, end - HIT_FOCUS.hitSlots) && slotIndex < end;
+  }
   return inHitPatternTrial(accountId, now) && slotIndex >= contractCount && slotIndex < contractCount + HIT_PATTERN_TRIAL.extraSlots;
 }
 
-export type HitCandidate = { threadsPostId: string; accountId: number; impressions: number; ratio: number; text: string };
+export type HitCandidate = { threadsPostId: string; accountId: number; impressions: number; ratio: number; text: string; replies: number };
 
 function median(xs: number[]): number {
   if (xs.length === 0) return 0;
@@ -63,7 +88,7 @@ export const LIVE_FACT_RE = /(今日|本日|明日|今週|今夜|今朝|空き|�
  * Meta AI への呼びかけ・短すぎる投稿・その場の事実が要る投稿は外す。
  */
 export function selectHitCandidates(
-  posts: ReadonlyArray<{ threadsPostId: string; accountId: number; impressions: number; text: string | null }>,
+  posts: ReadonlyArray<{ threadsPostId: string; accountId: number; impressions: number; text: string | null; replies?: number | null }>,
   opts: { minPostsPerAccount?: number } = {},
 ): HitCandidate[] {
   const minPosts = opts.minPostsPerAccount ?? 8;
@@ -83,13 +108,15 @@ export function selectHitCandidates(
     for (const p of list) {
       const text = String(p.text ?? "").trim();
       const imp = Number(p.impressions) || 0;
-      if (imp < med * HIT_RATIO) continue;
+      const replies = Number(p.replies) || 0;
+      // ★読まれた（普段の2倍以上）か、コメントが多く付いた（3件以上）か、どちらかで当たり
+      if (imp < med * HIT_RATIO && replies < HIT_MIN_REPLIES) continue;
       if (Array.from(text).length < HIT_MIN_CHARS) continue;
       if (LIVE_FACT_RE.test(text)) continue;
-      out.push({ threadsPostId: p.threadsPostId, accountId, impressions: imp, ratio: Math.round(imp / med), text });
+      out.push({ threadsPostId: p.threadsPostId, accountId, impressions: imp, ratio: Math.round(imp / med), text, replies });
     }
   }
-  return out.sort((a, b) => b.ratio - a.ratio);
+  return out.sort((a, b) => b.ratio - a.ratio || b.replies - a.replies);
 }
 
 /**
