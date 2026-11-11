@@ -79,7 +79,14 @@ ${ctx.localTalk ? "- この回は「地元の会話」（店主が地元の人�
 ${text}
 ---`;
   try {
+    // ★考える量は少なめ・温度は0（2026-11-11・原価と採点のぶれ）。
+    //   実測（公開ずみ30本＋採点で落ちた文25本）：既定のままだと1回の採点で考えた分が約1,300トークン（見える出力は約25）。
+    //   同じ文を2回採点して合否が一致したのは 既定55本中48本／少なめ51本。通す・落とすの割合は既定とほぼ同じ。
+    //   考える量を0にすると、公開ずみの文を通す数が30本中13本まで減る（作り直しが増える）ので0にはしない。
     const res: any = await invokeLLM({
+      purpose: "naturalness_review",
+      reasoningEffort: "low",
+      temperature: 0,
       messages: [{ role: "user", content: prompt }],
       outputSchema: SCHEMA as any,
     });

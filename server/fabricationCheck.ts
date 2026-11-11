@@ -15,6 +15,7 @@ export async function checkFabrication(draft: string, facts: string): Promise<Fa
   const rule = ruleBasedFabrications(draft, facts);
   try {
     const res = await invokeLLM({
+      purpose: 'fabrication_check',
       model: FABRICATION_CHECK_MODEL,
       temperature: 0,
       response_format: FABRICATION_SCHEMA,

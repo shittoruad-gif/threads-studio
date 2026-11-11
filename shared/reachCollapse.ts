@@ -52,12 +52,12 @@ export function judgeReachCollapse(recent: number[], prior: number[]): ReachJudg
 }
 
 /** 運営への知らせの本文（お客様の名前は入れず、アカウント名と数字だけ） */
-export function reachCollapseOwnerText(a: { username: string; userId: number; cooledUntil: string | null }, j: ReachJudgement): string {
+export function reachCollapseOwnerText(a: { username: string; userId: number }, j: ReachJudgement): string {
   const pct = j.ratio === null ? "-" : `${Math.round(j.ratio * 100)}%`;
   return [
     `@${a.username}（user ${a.userId}）`,
     `1投稿あたりの表示（中央値）：以前4週間 ${Math.round(j.priorMedian)}回（${j.priorCount}件）→ 直近1週間 ${Math.round(j.recentMedian)}回（${j.recentCount}件）＝${pct}`,
-    a.cooledUntil ? `${a.cooledUntil} まで1日1件に絞りました。お客様へはまだお知らせしていません。` : `すでに1日1件に絞っている期間中です。`,
-    `Threads側で表示を抑えられている可能性があります。投稿の中身（同じ言い回し・宣伝の強さ）とプロフィールを見直してください。`,
+    `本数は変えていません。お客様へもお知らせしていません。`,
+    `Threads側で表示を抑えられている可能性があります。投稿の中身（同じ言い回し・宣伝の強さ）とプロフィールを見直してください。次の知らせは7日後です。`,
   ].join("\n");
 }

@@ -31,11 +31,11 @@ describe("表示回数の急な落ち込みの判定", () => {
   });
   it("運営への知らせの本文", () => {
     const j = judgeReachCollapse(rep(19, 3), rep(68, 60));
-    const t = reachCollapseOwnerText({ username: "sample", userId: 1, cooledUntil: "2026-11-18" }, j);
+    const t = reachCollapseOwnerText({ username: "sample", userId: 1 }, j);
     expect(t).toContain("@sample");
     expect(t).toContain("60回");
     expect(t).toContain("3回");
-    expect(t).toContain("2026-11-18 まで1日1件");
-    expect(reachCollapseOwnerText({ username: "sample", userId: 1, cooledUntil: null }, j)).toContain("すでに1日1件");
+    expect(t).toContain("本数は変えていません");
+    expect(t).not.toContain("絞りました");
   });
 });

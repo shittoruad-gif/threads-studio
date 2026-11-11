@@ -70,6 +70,17 @@ export type InvokeParams = {
    * 失敗したら既定のモデルで1回やり直す（モデルの提供終了で投稿が止まらないように）。
    */
   model?: string;
+  /**
+   * 何のための呼び出しか（利用量の記録の見出し・server/llmUsage.ts・2026-11-11）。未指定は "other"。
+   * 半角英数字と _ だけ。お客様の名前や本文は入れない。
+   */
+  purpose?: string;
+  /**
+   * 考える量（Gemini の reasoning_effort）。未指定はモデルの既定（自動）。
+   * 考えた分は出力として課金されるので、点数を付けるだけの呼び出しでは "none" や "low" にして原価を抑える。
+   * 受け付けないモデルで 400 が返ったら、付けずに1回やり直す。
+   */
+  reasoningEffort?: "none" | "low" | "medium" | "high";
   maxTokens?: number;
   max_tokens?: number;
   outputSchema?: OutputSchema;
@@ -104,6 +115,7 @@ export type InvokeResult = {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
+    prompt_tokens_details?: { cached_tokens?: number };
   };
 };
 
@@ -288,14 +300,37 @@ const normalizeResponseFormat = ({
 const MODEL_NAME_RE = /^[a-z0-9][a-z0-9.\-]{1,63}$/;
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
+  const res = await invokeWithModelFallback(params);
+  // ★利用量を残す（server/llmUsage.ts・2026-11-11）。記録の失敗で呼び出しを止めない。
+  try {
+    const { recordLlmUsage } = await import("../llmUsage");
+    recordLlmUsage(params.purpose, res);
+  } catch { /* 記録できなくても続ける */ }
+  return res;
+}
+
+async function invokeWithModelFallback(params: InvokeParams): Promise<InvokeResult> {
   const wanted = params.model && MODEL_NAME_RE.test(params.model) ? params.model : undefined;
   if (params.model && !wanted) console.warn(`[LLM] 使えないモデル名を無視しました: ${String(params.model).slice(0, 40)}`);
-  if (!wanted || wanted === resolveModel()) return invokeOnce({ ...params, model: undefined });
+  if (!wanted || wanted === resolveModel()) return invokeWithEffortFallback({ ...params, model: undefined });
   try {
-    return await invokeOnce({ ...params, model: wanted });
+    return await invokeWithEffortFallback({ ...params, model: wanted });
   } catch (e) {
     console.warn(`[LLM] ${wanted} で失敗したため既定のモデルでやり直します: ${(e as Error)?.message?.slice(0, 200)}`);
-    return invokeOnce({ ...params, model: undefined });
+    return invokeWithEffortFallback({ ...params, model: undefined });
+  }
+}
+
+/** 考える量の指定を受け付けないモデル（400）のときは、指定を外して1回やり直す */
+async function invokeWithEffortFallback(params: InvokeParams): Promise<InvokeResult> {
+  if (!params.reasoningEffort) return invokeOnce(params);
+  try {
+    return await invokeOnce(params);
+  } catch (e) {
+    const msg = (e as Error)?.message ?? "";
+    if (!/LLM invoke failed: 400/.test(msg)) throw e;
+    console.warn(`[LLM] reasoning_effort=${params.reasoningEffort} を受け付けなかったため、指定なしでやり直します: ${msg.slice(0, 160)}`);
+    return invokeOnce({ ...params, reasoningEffort: undefined });
   }
 }
 
@@ -331,6 +366,7 @@ async function invokeOnce(params: InvokeParams): Promise<InvokeResult> {
   }
 
   payload.max_tokens = 32768;
+  if (params.reasoningEffort) payload.reasoning_effort = params.reasoningEffort;
   // ハルシネーション抑制：温度は既定で低め。呼び出し側指定があれば優先。
   payload.temperature = typeof params.temperature === 'number' ? params.temperature : 0.6;
 

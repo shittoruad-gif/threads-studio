@@ -301,7 +301,7 @@ async function repairOneTicSentence(text: string, bad: string): Promise<string |
 【出力】直した1文だけ。前置き・説明・引用符は不要。
 
 元の文：${bad.trim()}`;
-    const res = await invokeLLM({ messages: [{ role: 'user', content: prompt }] });
+    const res = await invokeLLM({ purpose: 'post_tic_repair', messages: [{ role: 'user', content: prompt }] });
     const out = (res.choices[0]?.message?.content ?? '').toString().trim();
     return applyTicSentenceRepair(text, bad.trim(), out, { allowOthers: true });
   } catch (e) {
@@ -395,7 +395,7 @@ ${voiceNote}
 ${text}
 ---`;
     const { applyLengthRange } = await import('../shared/sampleLength');
-    const res = await invokeLLM({ messages: [{ role: 'user', content: applyLengthRange(prompt, lengthRange ?? null) }] });
+    const res = await invokeLLM({ purpose: 'post_naturalize', messages: [{ role: 'user', content: applyLengthRange(prompt, lengthRange ?? null) }] });
     const out = (res.choices[0]?.message?.content ?? '').toString().trim();
     // 空・異常長（増えた/極端に短い）は失敗扱いで元文を使う
     const inLen = Array.from(text).length;
@@ -596,7 +596,7 @@ export async function generatePollOptions(postText: string, project: any): Promi
     '【投稿】',
     postText,
   ].join('\n');
-  const res = await invokeLLM({ messages: [{ role: 'user', content: prompt }] });
+  const res = await invokeLLM({ purpose: 'post_poll_options', messages: [{ role: 'user', content: prompt }] });
   const raw = String((res as any)?.choices?.[0]?.message?.content ?? '');
   const opts = parsePollOptions(raw);
   if (!opts) return null;
@@ -1501,6 +1501,7 @@ export async function generateAutoPost(
     const naturalStyle = isNaturalStyleUser(userId);
     if (naturalStyle) console.log(`[AutoPost] 自然な書き方モード userId=${userId} account=${threadsAccountId} model=${NATURAL_STYLE_MODEL}`);
     const response = await invokeLLM({
+      purpose: 'post_generate',
       ...(naturalStyle ? { model: NATURAL_STYLE_MODEL } : {}),
       messages: [{
         role: 'user',
@@ -1888,40 +1889,6 @@ export async function generateAutoPost(
       }
     }
 
-    // ★自然さの採点（server/naturalnessReview.ts）。正規表現で取れない不自然さの最終関門。
-    //   基準未満は公開せず作り直す。採点できないとき（API障害）は止めない。
-    //   ただし保証パスは採点できないまま出さない（2026-09-29：保証パスの文は作り直しで落ちた後の1本なので、無検査で届けない）。
-    try {
-      const { reviewNaturalness, NATURALNESS_MIN_SCORE } = await import('./naturalnessReview');
-      const rv = await reviewNaturalness(naturalMain, {
-        brandVoice, businessType: project.businessType, storeName: (project as any).storeName,
-        // ★手直しした文も「この方の理想の投稿」として渡す（途中の改行・【】・絵文字を減点しない・2026-10-08）
-        styleSamples: [styleSamplesForToday || '', ...ownerAfterTexts].filter(Boolean).join('\n---\n') || null, identityHint: identityHint || null,
-        localTalk: localTalkTurn,
-      });
-      // ★最後の作り直しでは3点を通す（2026-09-11）。9/11朝は35枠中19枠が失敗し、その3回目の理由の
-      //   半分以上が「3/5」だった（例：「土浦で11年。／早期回復をサポートしています。」）。
-      //   2点以下（明らかに不自然）は最後でも落として翌朝の自動補填に回す。
-      const minScore = lastAttempt ? NATURALNESS_MIN_SCORE - 1 : NATURALNESS_MIN_SCORE;
-      if (rv && rv.score < NATURALNESS_MIN_SCORE && rv.score >= minScore) {
-        console.log(`[AutoPost] naturalnessReview: ${rv.score}/5 だが最後の作り直しのため公開へ（${rv.problems.join(' / ')}） userId=${userId}`);
-      }
-      if (rv && rv.score < minScore) {
-        console.warn(`[AutoPost] naturalnessReview: ${rv.score}/5 ${rv.problems.join(' / ')} → 作り直し userId=${userId} projectId=${project.id}`);
-        noteReject('naturalnessReview', userId, threadsAccountId, postingTimeIndex,
-          (await import('../shared/naturalnessRetryHint')).naturalnessRetryHint(rv.problems, identityHint),
-          { detail: `${rv.score}/5 ${rv.problems.join(' / ')}`, gaveUp: lastAttempt, rejectedLines: rv.problems });
-        return false;
-      }
-      if (rv) console.log(`[AutoPost] naturalnessReview: ${rv.score}/5 userId=${userId}`);
-      if (!rv && guarantee) {
-        console.warn(`[AutoPost] naturalnessReview: 採点できず、保証パスのため出さない（明日の生成で補填） userId=${userId} account=${threadsAccountId}`);
-        noteReject('naturalnessReview', userId, threadsAccountId, postingTimeIndex, '',
-          { detail: '採点できず（保証パス）', gaveUp: true });
-        return false;
-      }
-    } catch (e) { console.warn(`[AutoPost] naturalnessReview skipped: ${(e as Error)?.message}`); }
-
     // ★健康系の断定・治療結果の体験談・価格連呼のガード（shared/healthClaimGuard.ts）。
     //   2026-09-06 停止されたアカウントの投稿に「杖なしで歩ける」「痛みなく」「初回1980円」が並んでいた。
     //   言い換え表で機械的に和らげ、価格は1文ごと落とす。空になったら公開しない。
@@ -2110,78 +2077,10 @@ export async function generateAutoPost(
       }
     }
 
-    // ★作り話チェック（2026-10-03 三上様「作り話チェックも入れて」・shared/fabricationCheck.ts）。
-    //   登録情報に無い出来事・気持ち・日付・数字・料金・経歴を、登録情報と突き合わせて探す。
-    //   見つかったら作り直し。最後の作り直しでは該当の文を外し、外せなければ公開しない（作り話は出さない）。
-    //   確認そのものが失敗したときは、既存の機械ガード（factGuard・数字ガード）だけで進める。
-    {
-      const { checkFabrication, factsText } = await import('./fabricationCheck');
-      const { fabricationRetryHint, removeFabricatedSentences, fabricationSummary } = await import('../shared/fabricationCheck');
-      const facts = factsText([
-        ['本人が書いた文体のお手本', String((project as any).styleSamples || '').slice(0, 2500)],
-        ['キャッチコピー', (project as any).catchphrase], ['案内先（リンク）', (project as any).links],
-        ['お店の名前', project.storeName], ['業種', project.businessType], ['地域', project.area],
-        ['地域の言葉', (project as any).localTerms], ['お客様像', (project as any).target],
-        ['お悩み', (project as any).mainProblem], ['強み', project.strength], ['実績', project.proof],
-        ['ほかとの違い', (project as any).usp], ['実際のお客様の話', (project as any).n1Customer],
-        ['考え方', (project as any).belief], ['お客様の言葉', (project as any).customerWords],
-        ['はじめの設定の答え', counselingResult],
-        ['ネタ帳の話', ledgerItem?.content ?? null],
-      ]);
-      const found = await checkFabrication(naturalMain, facts);
-      if (found && found.length > 0) {
-        const summary = fabricationSummary(found);
-        if (!lastAttempt) {
-          console.warn(`[AutoPost] 作り話チェック：${summary} → 作り直し userId=${userId} projectId=${project.id}`);
-          noteReject('fabricationCheck', userId, threadsAccountId, postingTimeIndex,
-            fabricationRetryHint(found), { detail: summary });
-          return false;
-        }
-        // ★アンケート・クイズは、文を外すと質問や答えの行が崩れるので、外さずに見送る（2026-10-04 点検）
-        // ★外すだけだと「その方は…」のように前の文を指す言葉が宙に浮くので、まずAIに最小限の直しを頼む
-        const cleaned = opts.feature ? null : (await (async () => {
-          try {
-            const { invokeLLM } = await import('./_core/llm');
-            const res = await invokeLLM({
-              temperature: 0.2,
-              messages: [{ role: 'user', content:
-                `次のSNS投稿から、下の「取り除く部分」だけを取り除き、残りの文が自然につながるよう最小限だけ直してください。\n` +
-                `- 新しい事実・出来事・数字・気持ちを足さない。言い回しは変えすぎない。改行の入れ方はそのまま。\n- 本文だけを出力する。\n\n` +
-                `【取り除く部分】\n${found.map((x) => `・${x.quote}`).join('\n')}\n\n【投稿】\n${naturalMain}` }],
-            });
-            const t = String(res.choices[0]?.message?.content ?? '').trim();
-            const len = (s: string) => Array.from(s.replace(/\s+/g, '')).length;
-            if (!t || found.some((x) => t.replace(/\s+/g, '').includes(x.quote.replace(/\s+/g, ''))) || len(t) < 40 || len(t) > len(naturalMain) * 1.1) return null;
-            return t;
-          } catch { return null; }
-        })()) ?? removeFabricatedSentences(naturalMain, found);
-        // 直したあとも、お店を指す言葉（店名・地名など）が残っているか確かめる
-        const idOk = cleaned ? await (async () => {
-          try { const { checkIdentity } = await import('../shared/identityGuard'); return checkIdentity(cleaned, project).ok !== false; } catch { return true; }
-        })() : false;
-        if (!cleaned || !idOk) {
-          console.warn(`[AutoPost] 作り話チェック：${summary} → 外すと文が成り立たないため公開しない userId=${userId} projectId=${project.id}`);
-          noteReject('fabricationCheck', userId, threadsAccountId, postingTimeIndex,
-            fabricationRetryHint(found), { detail: summary, gaveUp: true });
-          return false;
-        }
-        // 外したあとの文をもう一度確かめる（残りに別の作り話が無いか）
-        const again = await checkFabrication(cleaned, facts);
-        if (again && again.length > 0) {
-          console.warn(`[AutoPost] 作り話チェック：外したあとも ${fabricationSummary(again)} → 公開しない userId=${userId} projectId=${project.id}`);
-          noteReject('fabricationCheck', userId, threadsAccountId, postingTimeIndex,
-            fabricationRetryHint(again), { detail: fabricationSummary(again), gaveUp: true });
-          return false;
-        }
-        console.warn(`[AutoPost] 作り話チェック：最後の作り直しのため該当の文を外して公開へ（${summary}） userId=${userId} projectId=${project.id}`);
-        naturalMain = cleaned;
-      } else if (found) {
-        console.log(`[AutoPost] 作り話チェック：問題なし userId=${userId} account=${threadsAccountId}`);
-      } else if (found === null) {
-        console.warn(`[AutoPost] 作り話チェックができなかったため、機械ガードだけで進めます userId=${userId} projectId=${project.id}`);
-      }
-    }
-
+    // ★ここから下はAIを呼ぶ検査。AIを使わない検査を先にすべて済ませてから呼ぶ（2026-11-11・原価）。
+    //   以前は自然さの採点が切り口・同じ言い回し・少し前の投稿の写しの検査より前にあり、
+    //   どうせ落ちる文にも採点の呼び出しを使っていた（14日で約750回）。くり返しの検査も作り話チェックの後ろにあった（同323回）。
+    //   検査の中身は変えていない。順番だけ。
     // ★書き出し・同じ文・1行目の地名の繰り返し（shared/repetitionGuard.ts・2026-10-05 三上様「同じ投稿ばかり」）。
     //   既存の重複検査は店名・地名・実績の数字を外して比べるため、それらを含む文が丸ごと繰り返されても通っていた。
     //   ここでは外さずに比べる。枠を空けないよう、最後の作り直しと保証パスでは止めない。
@@ -2222,6 +2121,114 @@ export async function generateAutoPost(
         }
       } catch (e) { console.warn(`[AutoPost] repetition の後処理をとばしました: ${(e as Error)?.message}`); }
     }
+
+    // ★自然さの採点（server/naturalnessReview.ts）。正規表現で取れない不自然さの最終関門。
+    //   基準未満は公開せず作り直す。採点できないとき（API障害）は止めない。
+    //   ただし保証パスは採点できないまま出さない（2026-09-29：保証パスの文は作り直しで落ちた後の1本なので、無検査で届けない）。
+    try {
+      const { reviewNaturalness, NATURALNESS_MIN_SCORE } = await import('./naturalnessReview');
+      const rv = await reviewNaturalness(naturalMain, {
+        brandVoice, businessType: project.businessType, storeName: (project as any).storeName,
+        // ★手直しした文も「この方の理想の投稿」として渡す（途中の改行・【】・絵文字を減点しない・2026-10-08）
+        styleSamples: [styleSamplesForToday || '', ...ownerAfterTexts].filter(Boolean).join('\n---\n') || null, identityHint: identityHint || null,
+        localTalk: localTalkTurn,
+      });
+      // ★最後の作り直しでは3点を通す（2026-09-11）。9/11朝は35枠中19枠が失敗し、その3回目の理由の
+      //   半分以上が「3/5」だった（例：「土浦で11年。／早期回復をサポートしています。」）。
+      //   2点以下（明らかに不自然）は最後でも落として翌朝の自動補填に回す。
+      const minScore = lastAttempt ? NATURALNESS_MIN_SCORE - 1 : NATURALNESS_MIN_SCORE;
+      if (rv && rv.score < NATURALNESS_MIN_SCORE && rv.score >= minScore) {
+        console.log(`[AutoPost] naturalnessReview: ${rv.score}/5 だが最後の作り直しのため公開へ（${rv.problems.join(' / ')}） userId=${userId}`);
+      }
+      if (rv && rv.score < minScore) {
+        console.warn(`[AutoPost] naturalnessReview: ${rv.score}/5 ${rv.problems.join(' / ')} → 作り直し userId=${userId} projectId=${project.id}`);
+        noteReject('naturalnessReview', userId, threadsAccountId, postingTimeIndex,
+          (await import('../shared/naturalnessRetryHint')).naturalnessRetryHint(rv.problems, identityHint),
+          { detail: `${rv.score}/5 ${rv.problems.join(' / ')}`, gaveUp: lastAttempt, rejectedLines: rv.problems });
+        return false;
+      }
+      if (rv) console.log(`[AutoPost] naturalnessReview: ${rv.score}/5 userId=${userId}`);
+      if (!rv && guarantee) {
+        console.warn(`[AutoPost] naturalnessReview: 採点できず、保証パスのため出さない（明日の生成で補填） userId=${userId} account=${threadsAccountId}`);
+        noteReject('naturalnessReview', userId, threadsAccountId, postingTimeIndex, '',
+          { detail: '採点できず（保証パス）', gaveUp: true });
+        return false;
+      }
+    } catch (e) { console.warn(`[AutoPost] naturalnessReview skipped: ${(e as Error)?.message}`); }
+
+    // ★作り話チェック（2026-10-03 三上様「作り話チェックも入れて」・shared/fabricationCheck.ts）。
+    //   登録情報に無い出来事・気持ち・日付・数字・料金・経歴を、登録情報と突き合わせて探す。
+    //   見つかったら作り直し。最後の作り直しでは該当の文を外し、外せなければ公開しない（作り話は出さない）。
+    //   確認そのものが失敗したときは、既存の機械ガード（factGuard・数字ガード）だけで進める。
+    {
+      const { checkFabrication, factsText } = await import('./fabricationCheck');
+      const { fabricationRetryHint, removeFabricatedSentences, fabricationSummary } = await import('../shared/fabricationCheck');
+      const facts = factsText([
+        ['本人が書いた文体のお手本', String((project as any).styleSamples || '').slice(0, 2500)],
+        ['キャッチコピー', (project as any).catchphrase], ['案内先（リンク）', (project as any).links],
+        ['お店の名前', project.storeName], ['業種', project.businessType], ['地域', project.area],
+        ['地域の言葉', (project as any).localTerms], ['お客様像', (project as any).target],
+        ['お悩み', (project as any).mainProblem], ['強み', project.strength], ['実績', project.proof],
+        ['ほかとの違い', (project as any).usp], ['実際のお客様の話', (project as any).n1Customer],
+        ['考え方', (project as any).belief], ['お客様の言葉', (project as any).customerWords],
+        ['はじめの設定の答え', counselingResult],
+        ['ネタ帳の話', ledgerItem?.content ?? null],
+      ]);
+      const found = await checkFabrication(naturalMain, facts);
+      if (found && found.length > 0) {
+        const summary = fabricationSummary(found);
+        if (!lastAttempt) {
+          console.warn(`[AutoPost] 作り話チェック：${summary} → 作り直し userId=${userId} projectId=${project.id}`);
+          noteReject('fabricationCheck', userId, threadsAccountId, postingTimeIndex,
+            fabricationRetryHint(found), { detail: summary });
+          return false;
+        }
+        // ★アンケート・クイズは、文を外すと質問や答えの行が崩れるので、外さずに見送る（2026-10-04 点検）
+        // ★外すだけだと「その方は…」のように前の文を指す言葉が宙に浮くので、まずAIに最小限の直しを頼む
+        const cleaned = opts.feature ? null : (await (async () => {
+          try {
+            const { invokeLLM } = await import('./_core/llm');
+            const res = await invokeLLM({
+              purpose: 'post_fabrication_remove',
+              temperature: 0.2,
+              messages: [{ role: 'user', content:
+                `次のSNS投稿から、下の「取り除く部分」だけを取り除き、残りの文が自然につながるよう最小限だけ直してください。\n` +
+                `- 新しい事実・出来事・数字・気持ちを足さない。言い回しは変えすぎない。改行の入れ方はそのまま。\n- 本文だけを出力する。\n\n` +
+                `【取り除く部分】\n${found.map((x) => `・${x.quote}`).join('\n')}\n\n【投稿】\n${naturalMain}` }],
+            });
+            const t = String(res.choices[0]?.message?.content ?? '').trim();
+            const len = (s: string) => Array.from(s.replace(/\s+/g, '')).length;
+            if (!t || found.some((x) => t.replace(/\s+/g, '').includes(x.quote.replace(/\s+/g, ''))) || len(t) < 40 || len(t) > len(naturalMain) * 1.1) return null;
+            return t;
+          } catch { return null; }
+        })()) ?? removeFabricatedSentences(naturalMain, found);
+        // 直したあとも、お店を指す言葉（店名・地名など）が残っているか確かめる
+        const idOk = cleaned ? await (async () => {
+          try { const { checkIdentity } = await import('../shared/identityGuard'); return checkIdentity(cleaned, project).ok !== false; } catch { return true; }
+        })() : false;
+        if (!cleaned || !idOk) {
+          console.warn(`[AutoPost] 作り話チェック：${summary} → 外すと文が成り立たないため公開しない userId=${userId} projectId=${project.id}`);
+          noteReject('fabricationCheck', userId, threadsAccountId, postingTimeIndex,
+            fabricationRetryHint(found), { detail: summary, gaveUp: true });
+          return false;
+        }
+        // 外したあとの文をもう一度確かめる（残りに別の作り話が無いか）
+        const again = await checkFabrication(cleaned, facts);
+        if (again && again.length > 0) {
+          console.warn(`[AutoPost] 作り話チェック：外したあとも ${fabricationSummary(again)} → 公開しない userId=${userId} projectId=${project.id}`);
+          noteReject('fabricationCheck', userId, threadsAccountId, postingTimeIndex,
+            fabricationRetryHint(again), { detail: fabricationSummary(again), gaveUp: true });
+          return false;
+        }
+        console.warn(`[AutoPost] 作り話チェック：最後の作り直しのため該当の文を外して公開へ（${summary}） userId=${userId} projectId=${project.id}`);
+        naturalMain = cleaned;
+      } else if (found) {
+        console.log(`[AutoPost] 作り話チェック：問題なし userId=${userId} account=${threadsAccountId}`);
+      } else if (found === null) {
+        console.warn(`[AutoPost] 作り話チェックができなかったため、機械ガードだけで進めます userId=${userId} projectId=${project.id}`);
+      }
+    }
+
 
     // 「。」の直後に絵文字が続く形（「〜しますね。✨」）は人間の投稿に無い機械の癖。
     // 誤爆しない決定的な整形なので、どちらの経路（リライト採用/差し戻し）にも適用する。
