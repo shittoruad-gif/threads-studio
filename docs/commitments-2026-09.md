@@ -590,3 +590,15 @@ FROM threadsAccounts ta WHERE ta.isActive=1 ORDER BY ta.id\""
 - healthClaimGuard 12h：user 2768（@miraiseitai 系・髙木様）3件、user 78・user 12800 各1件。ramp cap なし。
 - ピン留め確認 5アカウントすべて「ピン留めなし」（ご契約は @black_eyes_1896 岩根様）。11:00 フォローの未処理5件（香取様・大木様・斎藤様・山本様・しっとる白神）。担当者の返信待ち #63（お礼のみ）。
 - 斎藤様（pro_campaign・登録55日）は連携0件・投稿0件のまま。ネタ帳：廿日市天神整体院 0件（次は11/26）・津の国や本店 1件 → 判断待ち。
+
+### 2026-11-12 朝の点検（木曜・8:10 の回）
+- デプロイは d7fee30＝origin/main の先頭と一致（Coolify 記録 11/12 00:11 JST finished・稼働中コンテナのタグも同じ）。/api/health 200。AutoPost 55本生成・15人・失敗0。`fill-shortfall --dry` は消えた枠なし。Coolify API（8000番）は ssh 経由で取得。
+- AccountHealth 完了（accounts=29 restricted=0 missingAlerts=0 reachAlerts=6：@moveact_pilates_tamashima 148→25・@miraiseitai.diet 85.5→10・@esthe_prestige_r 15→1・@angyomori.jiko 24.5→4・@matsusei5943 58→11。知らせるだけ）。
+- ★ご質問 #74（プレステージ様・11/11 10:52「1をお願いします」＝@esthe_prestige_r を1日1回に）が未対応。#73 で「こちらで設定してお知らせします」と返信済み。acc22 の autoPostFrequency は NULL のまま。設定変更とお知らせは三上様の承諾待ち。
+- 約束の照合（当日の予定数）：acc40 4 ✅（11/21まで+1）／acc42 4 ✅（補填+1）／acc10・12 各5（契約3＋2・当たり型）／acc11・15・16・19・22・24・25・27・31・33・34・35・38 各3／acc28 2＋取消1（お試し）／acc32・36・37 各1。
+- 昨日（11/11）：契約＋補填を超えたアカウントなし。acc25 @black_eyes_1896 は3件とも承認されず取り消し（11/10 に続き2日連続で公開0）。acc42 @miraclelink2026 は公開1・取消4、acc40 @autoshop_zero は公開1・取消3（いずれも未承認）。
+- 累計不足（判断待ち）：@esthe_prestige_r 32（補填未設定）／@black_eyes_1896 22／@doisekkotsuin 4（補填未設定）／@autoshop_zero 13・@miraclelink2026 11（補填中）／お試し：@desire_6981 69・@shittoru.s 43・@tama.yurazoku 27。@shittoru_official 冷却 〜11/13。
+- 不自然な投稿 1件：@shittoru.s #6799（未公開・「倉敷の経営者さんは」＝呼びかけで、誤検知の可能性）。
+- 試験の切り口：今日の公開前 0本。昨日公開 #6715（玉島・会話でオチ）問題なし。玉島「マシン」表現 0件。三上様アカウントの当日分で判断待ち：#6782（玉島 09:14「一時的なケアだけでは根本解決になりません／根本から整えて」）・#6796（金光 19:13「プロ野球選手の体づくり、浅口市でもサポート」）・#6721（金光 19:05「パーソナルもグループも」・前日から継続）。
+- ピン留め確認 5アカウントすべて「ピン留めなし」（ご契約は @black_eyes_1896）。11:00 フォローの未処理 5件（香取様・大木様・斎藤様・山本様・しっとる白神）。返信待ち #63 はお礼のみ（10/25 処理済みの記録あり）。LINE 残り 4,294 通。
+- ネタ帳：廿日市天神整体院 0件（次 11/26）・津の国や本店 1件 → 判断待ち。
