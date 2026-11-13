@@ -30,11 +30,17 @@ const SUPPORT_QUESTION_RE =
  */
 const LEADING_ASK_RE = /(わかりません|分かりません|わからない|分からない|できません|できない|教えて|どうすれば|どうしたら|やり方|[?？])/;
 
+const LEADING_ASK_WORD_RE = /(わかりません|分かりません|わからない|分からない|できません|できない|教えて|どうすれば|どうしたら|やり方)/;
+const LEADING_APP_RE = /(投稿|アプリ|設定|アカウント|プラン|ログイン|通知|自動|予約|承認|固定|ピン|Threads|スレッズ|LINE|ライン|画面|ボタン|メニュー|操作|連携|解約|請求|料金)/i;
+
 /** 1行目だけが短いお尋ねで、その下は引用（＝ご依頼ではなくご質問）か。 */
 export function hasLeadingAsk(t: string): boolean {
   const rows = t.split(/\r?\n/).filter((l) => l.trim());
   if (rows.length < 2) return false;
   const first = rows[0].trim();
+  // ★「急なケガで、困る時ありますよね？」のような、読み手への共感の書き出しはお尋ねではない（投稿文の1行目）。
+  //   アプリのことに触れていない「〜よね？」だけの行は外す（2026-11-13 ご質問 #75）。
+  if (/よね[?？]$/.test(first) && !LEADING_ASK_WORD_RE.test(first) && !LEADING_APP_RE.test(first)) return false;
   return Array.from(first).length <= 40 && LEADING_ASK_RE.test(first);
 }
 
@@ -53,7 +59,10 @@ export function isPastedContent(t: string): boolean {
     //   飾りつき・複数行・60字以上のときだけ、？があっても投稿文とみなす。
     if (!(decorated && lines >= 3 && t.length >= 60)) return false;
     // 困りごとの言葉が入っていれば、投稿文ではなくご質問として扱う。
-    if (SUPPORT_QUESTION_RE.test(t)) return false;
+    // ★かぎかっこの中は、読み手の気持ちを書いた投稿文のせりふ（「大会が近いのにどうしたらいいんだろう…」）。
+    //   ここの「どうしたら」でご質問扱いになり、ご自身で書いた投稿文に「お答えできないご質問でした」と返していた
+    //   （2026-11-13 ご質問 #75）。かぎかっこの外だけで見る。
+    if (SUPPORT_QUESTION_RE.test(t.replace(/「[^」]*」|『[^』]*』/g, ""))) return false;
   }
   // ★3つ目の条件は、短めの投稿文が「ご質問」に紛れていたため足した。
   //   例：「富山市から10代から慢性肩こりの20代👩／“こんなに軽くなったことない〜！！”／
