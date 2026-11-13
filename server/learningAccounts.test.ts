@@ -152,13 +152,15 @@ describe("改行の仕方の見分け（AIっぽい改行・2026-10-11）", () =
     expect(lineStyle("一。\n\n二。三。四。")).toBe("短い段落と長い段落が混ざる");
     expect(lineStyle("一。二。")).toBe("段落1つ");
   });
-  it("最終指示から「1文＝1行」「1〜2文ごとに空行」が消え、1文ごとに改行しない指示になっている", async () => {
+  // 2026-11-13 三上様「。のたびに改行は入れて」：改行は1文ごと、空行は話の切れ目だけ（1文ずつ空行で区切る形は引き続き避ける）
+  it("最終指示は「。のたびに改行」「空行は話が切り替わる所だけ」で、1〜2文ごとに空行の指示は無い", async () => {
     const { readFileSync } = await import("node:fs");
     const src = readFileSync(new URL("./autoPostScheduler.ts", import.meta.url), "utf8");
-    expect(src).not.toContain("1文＝1行");
+    expect(src).toContain("「。」のたびに改行する（1文＝1行）");
+    expect(src).toContain("空行は話が切り替わる所だけ");
+    expect(src).toContain("1文ごとに毎回空行を入れない");
     expect(src).not.toContain("1〜2文ごとに空行");
-    expect(src).toContain("1文ごとに毎回改行しない");
-    expect(src).toContain("段落の長さをそろえない");
+    expect(src).not.toContain("1文ごとに毎回改行しない");
   });
 });
 
