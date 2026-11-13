@@ -462,6 +462,18 @@ const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
  *   9時間ズレて深夜に投稿されていた（例: 21時指定→翌6時JST、17時指定→翌2時JST）。
  *   サーバーのTZに依存せず、必ず「その日のJSTの hour 時」を表す絶対時刻(UTC instant)を返す。
  */
+/**
+ * 投稿を書くときの考える量（2026-11-13 原価の見直し）。環境変数 POST_GENERATE_EFFORT で切り替える
+ * （low／medium／high。default または未設定はモデルの既定）。見比べの結果は docs/night-todo.md。
+ */
+export function postGenerateEffort(): "low" | "medium" | "high" | null {
+  const v = String(process.env.POST_GENERATE_EFFORT ?? POST_GENERATE_EFFORT_DEFAULT).trim().toLowerCase();
+  return v === "low" || v === "medium" || v === "high" ? v : null;
+}
+// ★既定は low（2026-11-13 見比べ：4つのお店×3本ずつ。書けた本数は既定・low とも 12本中10本、
+//   書く1回あたりの出力は約4,800 → 約1,100トークン、かかる時間は約半分）。戻すときは環境変数に default を入れる。
+const POST_GENERATE_EFFORT_DEFAULT = "low";
+
 function getNextPostingTime(index: number, customHours?: number[] | null): Date {
   const now = new Date();
   // 本人の実績で「反応が高い時間帯」が分かっていればそれを優先。
@@ -1503,6 +1515,7 @@ export async function generateAutoPost(
     const response = await invokeLLM({
       purpose: 'post_generate',
       ...(naturalStyle ? { model: NATURAL_STYLE_MODEL } : {}),
+      ...(postGenerateEffort() ? { reasoningEffort: postGenerateEffort()! } : {}),
       messages: [{
         role: 'user',
         content: applyLengthRange(promptWithMode + (naturalStyle ? naturalStyleAddendum({ allowEmoji }) : AUTO_POST_STYLE_ADDENDUM), lengthRange)

@@ -46,3 +46,17 @@ describe("1か所だけ変えた投稿の比べ", () => {
     expect(SEASON_RE.test("夕方になると腰が重い")).toBe(false);
   });
 });
+
+describe("投稿を書くときの考える量（原価の見直し 2026-11-13）", () => {
+  it("既定は low。環境変数 default で元に戻せる", async () => {
+    const { postGenerateEffort } = await import("./autoPostScheduler");
+    const keep = process.env.POST_GENERATE_EFFORT;
+    delete process.env.POST_GENERATE_EFFORT;
+    expect(postGenerateEffort()).toBe("low");
+    process.env.POST_GENERATE_EFFORT = "default";
+    expect(postGenerateEffort()).toBeNull();
+    process.env.POST_GENERATE_EFFORT = "medium";
+    expect(postGenerateEffort()).toBe("medium");
+    if (keep === undefined) delete process.env.POST_GENERATE_EFFORT; else process.env.POST_GENERATE_EFFORT = keep;
+  });
+});
