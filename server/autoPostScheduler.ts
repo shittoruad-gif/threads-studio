@@ -2877,6 +2877,37 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             let success = false;
             const rk = rejectKey(user.id, account.id, i);
             clearReject(rk);
+            // ★1か所だけ変えた投稿の比べ（2026-11-13 三上様「進めて」・shared/oneSpotVariant.ts）。
+            //   学習用の自社3アカウントだけ、その日の最後の枠（上乗せの枠）で、自分の当たり投稿を1か所だけ変えて出す。
+            //   元にできる投稿が無い・作れないときは、下の通常の作り方（当たり型）にそのまま進む。
+            try {
+              const os = await import('../shared/oneSpotVariant');
+              if (!opts.fillToday && !learningTrial && os.isOneSpotSlot(account.id, i, contractCount, postCount)) {
+                const osv = await import('./oneSpotVariant');
+                const source = await osv.pickOneSpotSource(account.id);
+                const made = source ? await osv.makeOneSpotVariant(source) : null;
+                if (source && made && !(await slotAlreadySaved())) {
+                  const postId = await db.createScheduledPostReturningId({
+                    userId: user.id,
+                    projectId: project.id,
+                    threadsAccountId: account.id,
+                    scheduledAt: slotTimeFor(i) ?? getNextPostingTime(i, acctHours),
+                    postContent: made.text,
+                    status: eff.autoPostRequireApproval ? 'awaiting_approval' : 'pending',
+                    source: 'auto',
+                    angle: 'one_spot',
+                    experimentKey: os.oneSpotExperimentKey(source.spot),
+                    postLength: eff.postLength,
+                  } as any);
+                  await osv.recordOneSpotVariant({ accountId: account.id, source, changedFrom: made.changedFrom, changedTo: made.changedTo, variantText: made.text, scheduledPostId: postId || null })
+                    .catch((e) => console.warn(`[AutoPost] 1か所変えの記録に失敗 account=${account.id}: ${(e as Error)?.message}`));
+                  console.log(`[AutoPost] 1か所だけ変えた投稿 account=${account.id} slot=${i} 場所=${source.spot} 元=${source.threadsPostId}（普段の${source.ratio}倍）`);
+                  success = true;
+                } else {
+                  console.log(`[AutoPost] 1か所変えの枠 account=${account.id} slot=${i} → ${source ? '作れず' : '元にできる投稿なし'}（通常の作り方へ）`);
+                }
+              }
+            } catch (e) { console.warn(`[AutoPost] 1か所変えをとばしました account=${account.id}: ${(e as Error)?.message}`); }
             // ★写真・動画を付ける回（2026-10-26・プロ以上・1日1本・同じものは2週間あける）。その日の1本目（21時の枠）に付ける
             let mediaItem: { id: number; kind: string; description: string | null } | null = null;
             if (i === 0 && !learningTrial && !hitPatternId && !feature) {
