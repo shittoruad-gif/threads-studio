@@ -13,7 +13,7 @@ import { getPlan } from "../shared/plans";
 import { OCCUPIED_GAP_MINUTES, parseFixedPostHours, planFixedDaySlots, fixedSlotTimes, slotTimeForIndex } from "../shared/fixedPostHours";
 import { buildCtaText } from "../shared/autoPostCta";
 import { charBudgetFor, resolveWithAlternation, POST_LENGTHS, trimToBudget } from "../shared/postLength";
-import { applyTicSentenceRepair, checkNaturalized, endsWithQuestion, findAgreementQuestion, findBannedTic, findRepeatedHookNumber, hasTicOrAgreement, findRepeatedPhraseExcept, findTicSentence, polishPunctuation } from "../shared/jpQualityGuard";
+import { applyTicSentenceRepair, checkNaturalized, endsWithQuestion, findAgreementQuestion, findBannedTic, findRepeatedHookNumber, hasTicOrAgreement, findRepeatedPhraseExcept, repeatCoversBody, findTicSentence, polishPunctuation } from "../shared/jpQualityGuard";
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
@@ -2017,6 +2017,18 @@ export async function generateAutoPost(
       if (dup && !isDryRun()) { try { await db.bumpDupReject(threadsAccountId); } catch { /* 記録できなくても続ける */ } }
       // ★保証パスでは「同じ言い回し」で落とさない（落とすと契約本数を割る）。
       //   代わりに materialGuarantee の印を付け、必ず承認カードにしてお客様が見送れるようにする。
+      // ★ただし本文のほとんどが直近の1本と同じ文なら、保証パスでも出さずに書き直す（2026-11-14 acc42 #6957・#6958：
+      //   短い「地元の会話」が1行目だけ違う同じ文で2本、同じ日の承認カードになった。shared/jpQualityGuard.ts repeatCoversBody）。
+      //   3回とも書けなければ翌朝の生成で補填する（「ほぼ一字一句同じ」の扱いと同じ・枠は消さない）。
+      const sameBody = dup && guarantee ? repeatCoversBody(naturalMain, recentPosts) : null;
+      if (sameBody) {
+        console.warn(`[AutoPost] 保証パス：本文のほとんどが直近の投稿と同じ文「${sameBody}」→ 出さずに書き直し userId=${userId} account=${threadsAccountId}`);
+        noteReject('duplicatePhrase', userId, threadsAccountId, postingTimeIndex,
+          (await import('../shared/dupRetryHint')).dupRetryHint(lastRejectReason.get(rejectKey(userId, threadsAccountId, postingTimeIndex)), sameBody)
+            + '\n- 直近の投稿と同じ問いかけ・同じ話題にしない。季節・食べ物・天気の話を続けず、まったく別の話題で書く。',
+          { detail: sameBody, gaveUp: false /* 保証パスは次の回で書き直す。枠が消えたかは「保証パスでも書けず」のログで見る */ });
+        return false;
+      }
       if (dup && guarantee) {
         console.warn(`[AutoPost] 保証パス：同じ言い回し「${dup}」が残るが、契約本数を守るためお届けする（承認カードにする） userId=${userId} projectId=${project.id}`);
       }

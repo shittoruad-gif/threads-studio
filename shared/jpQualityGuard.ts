@@ -641,6 +641,30 @@ export function findRepeatedPhraseExcept(
   return null;
 }
 
+/**
+ * 見つかった「同じ言い回し」が、本文のほとんどを占めているか（＝読む人には同じ投稿に見える）。
+ *
+ * ★きっかけ（2026-11-14 夜間整備・acc42）：保証パスは契約本数を守るため「同じ言い回し」では落とさず承認カードにするが、
+ *   短い「地元の会話」では本文のほぼ全部が前の1本と同じでも通っていた。
+ *     #6957「岡山も秋が深まってきましたね💫／この時期、ついつい食べすぎちゃう岡山名物って何ですか？」
+ *     #6958「岡山もすっかり秋ですね💫／この時期、ついつい食べすぎちゃう岡山名物って何ですか？」（同じ日の分として41秒後に作成）
+ *   「ほぼ同じ文」の点検（shared/oldPostCopy.ts）は40字未満を比べないので、ここも素通りしていた。
+ *   10/20 三上様「一字一句同じものは出さないようにする」に合わせ、保証パスでも書き直す。
+ *
+ * 判定：直近の1本との連続した一致が14文字以上（文ごと同じ）で、しかも本文（句読点・空白・絵文字を除く）の6割以上。
+ * 店名・地名は外さずに比べる（外すと一致が途切れて短く数えられる。本文の6割が同じなら店名込みでも同じ投稿に見える）。
+ * 長い投稿の中の決め台詞1つ（本文の一部）は、これまでどおり保証パスで承認カードにする。
+ * 戻り値は一致した言い回し（無ければ null）。
+ */
+export const REPEAT_COVERS_BODY = { minChars: 14, ratio: 0.6 } as const;
+export function repeatCoversBody(text: string, recentTexts: readonly string[]): string | null {
+  const body = Array.from(plain(text)).length;
+  if (body < REPEAT_COVERS_BODY.minChars) return null;
+  const dup = findRepeatedPhrase(text, recentTexts, REPEAT_COVERS_BODY.minChars);
+  if (!dup) return null;
+  return Array.from(dup).length / body >= REPEAT_COVERS_BODY.ratio ? dup : null;
+}
+
 // ── 書き出しで同じ実績の数字を繰り返していないか ──────────────────
 /**
  * 2026-09-13 実測。香取様の直近5本を findRepeatedPhrase にかけたところ、
