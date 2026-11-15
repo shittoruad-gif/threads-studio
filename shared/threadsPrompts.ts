@@ -1227,7 +1227,7 @@ export function generateThreadsPrompt(input: ThreadsPromptInput): string {
   //     かえって中身のない投稿になる。本文に出たときは公開前のガードが1文ごとに落とす。
   const scrubbed = (() => {
     const hits: string[] = [];
-    if (!isHealthBusiness(input.businessType)) return { hits, counseling: safeCounseling };
+    if (!isHealthBusiness(input.businessType, input.storeName)) return { hits, counseling: safeCounseling };
     const one = <T extends string | undefined>(v: T): T => {
       if (!v) return v;
       const r = scrubSettingText(v);

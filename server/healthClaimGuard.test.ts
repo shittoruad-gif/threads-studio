@@ -48,6 +48,42 @@ describe("健康系の断定ガード", () => {
     expect(isHealthBusiness("トレーニングを取り入れた整体院")).toBe(true);
     expect(isHealthBusiness("呉服小売店")).toBe(false);
   });
+  // ★2026-11-15：業種欄が「経営者・オーナー」（個人の発信の設定）で店名が整骨院のアカウントに検査が掛かっていなかった
+  it("業種欄が健康系でなくても、店名が整骨院・整体院なら健康系として扱う", () => {
+    expect(isHealthBusiness("経営者・オーナー", "◯◯整骨院")).toBe(true);
+    expect(isHealthBusiness("経営者・オーナー", "◯◯鍼灸整体院")).toBe(true);
+    expect(isHealthBusiness("経営者・オーナー", null)).toBe(false);
+    expect(isHealthBusiness("経営者・オーナー", "株式会社◯◯")).toBe(false);
+    // 店名では「サロン」「ジム」だけで健康系にしない（交流サロン・ビジネスサロンなど）
+    expect(isHealthBusiness("交流会の主催", "◯◯ビジネス交流サロン")).toBe(false);
+    expect(isHealthBusiness("呉服小売店", "はりま屋")).toBe(false);
+  });
+  it("公開されていた実例：かぎかっこの中の「治る？」と「根本改善」を落とし、閉じかっこを残さない", () => {
+    const t = "「腰痛は揉んで治る？」\nお客様からよく聞かれる質問です。\n\n一時的に楽になっても、治すだけだと繰り返すことが多いです。\n\n当院では、経験豊富な国家資格者が原因を究明し、根本改善を目指します😊";
+    const v = checkHealthClaims(t);
+    expect(v.ok).toBe(false);
+    expect(v.text).not.toMatch(/治|根本改善/);
+    expect(v.text).not.toMatch(/^[」』]/m);
+    // 残りは60字に満たない＝自動投稿では出さずに作り直しになる
+    expect(Array.from(v.text).length).toBeLessThan(60);
+  });
+  it("回復の体験談「〜できるようになった」「改善された事例」を落とす（✕で見送られた実例・地名は伏せ字）", () => {
+    for (const t of [
+      "◯◯市で、歩くとふくらはぎが痛くなり、いろんな所に通っても楽にならなかった60代女性の方。\n今では歩くことも走ることも出来るようになったと話してくださいます😊",
+      "当院が提供する運動療法では、歩行が困難であった方が走行可能な状態まで改善された事例もございます。",
+      "階段をらくに上がれるようになりました。",
+      "正座ができるようになったと喜ばれました。",
+    ]) {
+      const v = checkHealthClaims(t);
+      expect(v.ok, t).toBe(false);
+      expect(v.text).not.toMatch(/ようにな|改善され/);
+    }
+    // 体の回復ではない「できるようになった」は落とさない
+    for (const t of [
+      "LINEから予約できるようになりました。",
+      "朝の時間に、少しだけ体を動かすようにしています。",
+    ]) expect(checkHealthClaims(t).ok, t).toBe(true);
+  });
 });
 describe("新しいアカウントの慣らし", () => {
   it("5日未満は1件、10日未満は2件、以降は契約どおり", () => {

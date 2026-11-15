@@ -15,8 +15,18 @@
  */
 export const HEALTH_BUSINESS_RE = /(整体|整骨|接骨|鍼灸|はり|きゅう|カイロ|エステ|医院|クリニック|歯科|美容皮膚|矯正|リハビリ|ピラティス|ジム|トレーニング|ヨガ|サロン|治療院)/;
 
-export function isHealthBusiness(businessType: string | null | undefined): boolean {
-  return HEALTH_BUSINESS_RE.test(String(businessType || ""));
+/**
+ * 店名で健康系と分かる言葉（業種欄より狭くしてある。「サロン」「ジム」「はり」は店名では別の意味になりやすいので入れない）。
+ *
+ * ★2026-11-15 夜間整備：業種欄が「経営者・オーナー」（個人の発信の設定）で、店名が「◯◯整骨院」のアカウントに
+ *   健康表現の検査が掛かっておらず、「腰痛は揉んで治る？」「根本改善を目指します」がそのまま公開されていた。
+ *   業種欄だけで決めず、店名でも健康系と分かれば検査を掛ける。
+ */
+export const HEALTH_STORE_NAME_RE = /(整体|整骨|接骨|鍼灸|はり灸|はりきゅう|カイロ|治療院|施術院|医院|クリニック|歯科|ピラティス)/;
+
+export function isHealthBusiness(businessType: string | null | undefined, storeName?: string | null): boolean {
+  if (HEALTH_BUSINESS_RE.test(String(businessType || ""))) return true;
+  return HEALTH_STORE_NAME_RE.test(String(storeName || ""));
 }
 
 /** 結果の断定・治療結果の体験談として引っかかりやすい表現 */
@@ -26,7 +36,11 @@ export const OUTCOME_PATTERNS: ReadonlyArray<{ re: RegExp; label: string; fix?: 
   { re: /(ぐっすり|朝まで|よく)?(眠れ|寝られ|寝れ)[^。\n]*/g, label: "睡眠改善の体験談", fix: () => "眠りが変わったと話す方もいます" },
   { re: /\d+\s*(ヶ|か|カ|ケ)?月で[^。\n]*/g, label: "期間つきの結果", fix: () => "" },
   { re: /(不眠|頭痛|めまい|しびれ|便秘)(が|も)(改善|解消|なくな|楽にな|良くな)[^。\n]*/g, label: "症状の改善断定", fix: () => "楽に感じる方もいます" },
-  { re: /(治る|治り|治し|治せ|完治|根治|根本改善|改善します|改善する|改善した|良くなります|良くなる|効きます|効く)/g, label: "治る・改善の断定", fix: () => "ケア" },
+  // ★2026-11-15 夜間整備：接骨院の案に「歩くとふくらはぎが痛くなり…今では歩くことも走ることも出来るようになったと話してくださいます」
+  //   （その前には「歩行が困難であった方が走行可能な状態まで改善された事例」）が届いていた。「杖なしで歩ける」以外の
+  //   「〜できるようになった」という回復の体験談がどの型にも当たらず素通りしていた（どちらもご本人が✕で見送り・公開はされていない）。
+  { re: /(歩|走|階段|正座|しゃが|立ち上が|起き上が|上が|曲げ)[^。\n]{0,14}(できる|出来る|ける|れる|がる|げる)ように(なっ|なり)[^。\n]*/g, label: "回復の体験談", fix: () => "" },
+  { re: /(治る|治り|治し|治す|治せ|完治|根治|根本改善|改善します|改善する|改善した|改善され|良くなります|良くなる|効きます|効く)/g, label: "治る・改善の断定", fix: () => "ケア" },
   // ★2026-09-08 @haisaiseikotsuin の公開3件がThreads側で削除された。承認待ちだった投稿は
   //   「つらい症状から解放された！」「眠りが変わった！」「睡眠の質の向上も感じていただけた」で、
   //   上のどの型にも当てはまらず素通りしていた（「眠れ」ではなく「眠り」、「不眠が改善」ではなく
@@ -155,6 +169,8 @@ export function checkHealthClaims(text: string, opts: { allowPrice?: boolean } =
     .replace(/[、,]\s*[。．]/g, "。")
     .replace(/。{2,}/g, "。")
     .replace(/^[、。]\s*/gm, "")
+    // ★かぎかっこの中の文（「腰痛は揉んで治る？」）を落としたあとに、閉じかっこだけが行頭に残る（2026-11-15）
+    .replace(/^[」』]+[ \t　]*\n?/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return { ok: hits.length === 0, hits, text: out, priceMentions: prices.length };

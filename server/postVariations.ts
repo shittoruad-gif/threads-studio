@@ -55,7 +55,7 @@ export async function generatePostVariations(opts: {
   const parsed = parseVariations(raw, patterns, opts.source);
 
   const { isHealthBusiness, softenMedicalWords } = await import('../shared/healthClaimGuard');
-  const health = isHealthBusiness(project?.businessType);
+  const health = isHealthBusiness(project?.businessType, project?.storeName || project?.title);
   const { scrubText, buildSupportedFacts } = await import('../shared/factGuard');
   const supported = buildSupportedFacts(
     opts.source, project?.businessType, project?.area, project?.localTerms, project?.strength, project?.proof,

@@ -244,7 +244,7 @@ export async function createPinnedDraft(userId: number, accountId?: number | nul
     const { findBannedTic, checkNaturalized, polishPunctuation } = await import("../shared/jpQualityGuard");
     const { checkHealthClaims, isHealthBusiness } = await import("../shared/healthClaimGuard");
     const { findFabricatedNumbers, registeredFactsOf } = await import("../shared/fabricatedNumberGuard");
-    const healthBiz = isHealthBusiness(project.businessType);
+    const healthBiz = isHealthBusiness(project.businessType, project.storeName || project.title);
 
     const MAX_TRIES = 3;
     let main = "";

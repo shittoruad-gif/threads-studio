@@ -422,7 +422,7 @@ async function topicsByLlm(html: string): Promise<string[]> {
 export async function offerTopicsFromUrl(p: { userId: number; lineUserId: string; question: string; url: string }): Promise<unknown[] | null> {
   const projects = await usableProjects(p.userId);
   if (projects.length === 0) return null; // お店の情報がまだの方は、今までどおり（URLは「はじめの設定」の入口へ）
-  const health = projects.some((pj: any) => isHealthBusiness(pj.businessType));
+  const health = projects.some((pj: any) => isHealthBusiness(pj.businessType, pj.storeName || pj.title));
   const { fetchWebsite } = await import("./websitePrefill");
   const fetched = await fetchWebsite(p.url).catch(() => ({ ok: false as const, reason: "ページにつながりませんでした" }));
   if (!fetched.ok) {

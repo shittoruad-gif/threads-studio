@@ -752,7 +752,7 @@ export async function generateAutoPost(
     let excludeOutcomeAngles = false;
     try {
       const { isHealthBusiness } = await import('../shared/healthClaimGuard');
-      excludeOutcomeAngles = isHealthBusiness(project.businessType);
+      excludeOutcomeAngles = isHealthBusiness(project.businessType, project.storeName || project.title);
     } catch { /* 判定できなければ従来どおり */ }
     // ★はじめの設定「どんな投稿を多めに作りましょうか」を切り口の重みに反映（2026-09-08）。
     //   登録してもらっているのに、これまで切り口選びに一切使われていなかった。
@@ -1197,7 +1197,7 @@ export async function generateAutoPost(
         //   「AI姿勢分析で…根本改善を実現」が主題に選ばれ、「主題を書け」と healthClaimGuard がぶつかって
         //   「本文が短くなりすぎた」で枠が欠けていた（14日で3回・11/4 は見送りの代わりが作れず0本）。ガードは緩めない。
         const hg = await import('../shared/healthClaimGuard');
-        const healthBiz = hg.isHealthBusiness(project.businessType);
+        const healthBiz = hg.isHealthBusiness(project.businessType, project.storeName || project.title);
         const plan = ft.planFreshTopic({
           recentPosts,
           // ★自然な書き方モードの方は、強み・実績・メニューを今日の主題にしない（2026-10-15 acc21：強みの欄に「24時間」が3つあり、
@@ -1907,7 +1907,7 @@ export async function generateAutoPost(
     //   言い換え表で機械的に和らげ、価格は1文ごと落とす。空になったら公開しない。
     try {
       const { checkHealthClaims, isHealthBusiness, healthClaimRetryHint } = await import('../shared/healthClaimGuard');
-      if (isHealthBusiness(project.businessType)) {
+      if (isHealthBusiness(project.businessType, project.storeName || project.title)) {
         const v = checkHealthClaims(naturalMain, { allowPrice: false });
         if (!v.ok) {
           console.warn(`[AutoPost] healthClaimGuard: ${v.hits.join('・')} を落とした userId=${userId} projectId=${project.id}`);
@@ -1939,7 +1939,7 @@ export async function generateAutoPost(
     //   医師法・あはき法の観点で避ける言葉。旧テンプレート経路にはあった置き換えが、この経路には無かった。
     try {
       const { isHealthBusiness, softenMedicalWords } = await import('../shared/healthClaimGuard');
-      if (isHealthBusiness(project.businessType)) {
+      if (isHealthBusiness(project.businessType, project.storeName || project.title)) {
         const softened = softenMedicalWords(naturalMain);
         if (softened !== naturalMain) { console.log(`[AutoPost] 「診断」「治療」を言い換え userId=${userId}`); naturalMain = softened; }
       }
