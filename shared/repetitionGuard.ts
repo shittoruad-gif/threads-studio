@@ -13,6 +13,9 @@
 
 import { REPETITION_RULES as R, GENERIC_TOPIC_WORDS } from './repetitionRules';
 
+/** 行末の絵文字・空白（「がんばるあなたへ💫」の 💫） */
+const TRAILING_DECOR_RE = new RegExp('[\\p{Extended_Pictographic}\\uFE0F\\u200D\\s　]+$', 'u');
+
 const norm = (s: string) => String(s || '').replace(/[\s　]/g, '');
 
 /** 1行目（空行を除く最初の行）の頭12文字 */
@@ -25,15 +28,34 @@ export function openingKey(text: string): string {
  * ご本人が自分で書いた文（手直しした投稿・文体のお手本）に入っている書き出し・文は、ご本人の好みなので止めない。
  * ★10/5 比嘉様：「ハイサイ♪はいさい整骨院の比嘉です(^^)」は、ご本人が手直しで書き足していた（直した76本中16本）。
  */
-export function ownerKeys(ownerTexts: readonly string[]): { openings: Set<string>; sentences: Set<string> } {
+export function ownerKeys(ownerTexts: readonly string[]): { openings: Set<string>; sentences: Set<string>; callout: boolean } {
   const openings = new Set<string>();
   const sentences = new Set<string>();
+  let callout = false;
   for (const t of ownerTexts) {
+    if (calloutInFirstLine(t)) callout = true;
     const k = openingKey(t);
     if (k) openings.add(k);
     for (const s of sentencesOf(t, R.sentence.minLen)) sentences.add(s);
   }
-  return { openings, sentences };
+  return { openings, sentences, callout };
+}
+
+/**
+ * R5 呼びかけの書き出し：1行目が「〜へ。」「〜へ」で終わる（「…と悩む経営者さんへ。」「…と感じる方へ。」）。
+ * ★2026-11-15 夜間整備：acc42 の 11/16 分4本が、4本とも呼びかけで始まっていた
+ *   （「自分に自信がない」と悩む経営者さんへ。／…と感じる方へ。／自分に自信がない経営者さんへ。／「人脈がない」と悩むあなたへ。）。
+ *   頭12文字は違うので R2（同じ書き出し）には掛からず、並べて読むと同じ投稿に見える。
+ */
+export function calloutInFirstLine(text: string): boolean {
+  const first = String(text || '').split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0) ?? '';
+  return /へ[。．.！!]?$/.test(first.replace(TRAILING_DECOR_RE, ''));
+}
+
+/** 直近3本のうち2本以上が呼びかけで始まっているか（＝今回は呼びかけで始めない）。ご本人が呼びかけで書く方は止めない */
+export function calloutOpeningStreak(recent: readonly string[], owner?: { callout?: boolean }): boolean {
+  if (owner?.callout) return false;
+  return recent.slice(0, R.calloutFirstLine.window).filter((r) => calloutInFirstLine(r)).length >= R.calloutFirstLine.min;
 }
 
 /** 書き出しが、直近 window 本のうち min 本以上と同じか */
@@ -92,7 +114,7 @@ export function sentencesUsedTwiceIn14Days(text: string, older: readonly string[
 }
 
 /** 書き出し・同じ文・1行目の地名をまとめて、生成の指示に足す文 */
-export function buildRepetitionNote(recent: readonly string[], tokens: readonly string[], owner?: { openings: Set<string>; sentences: Set<string> }, older: readonly string[] = []): string {
+export function buildRepetitionNote(recent: readonly string[], tokens: readonly string[], owner?: { openings: Set<string>; sentences: Set<string>; callout?: boolean }, older: readonly string[] = []): string {
   const lines: string[] = [];
   const opens = Array.from(new Set(recent.slice(0, R.opening.window)
     .filter((r) => !owner?.openings.has(openingKey(r)))
@@ -111,6 +133,7 @@ export function buildRepetitionNote(recent: readonly string[], tokens: readonly 
     .sort((a, b) => b[1] - a[1]).map(([s]) => s).slice(0, 5);
   if (twice.length > 0) lines.push(`- 次の文はこの2週間ですでに2回以上使っている。今回は同じ形の文で書かない（伝えるなら別の言い方・別の場所で）：${twice.map((s) => `「${s.slice(0, 30)}」`).join('')}`);
   if (identityOpeningStreak(recent, tokens)) lines.push('- 直近の投稿が続けて地名・店名から始まっている。今回は1行目に地名・店名を入れない（入れるなら2行目以降に1回だけ）。');
+  if (calloutOpeningStreak(recent, owner)) lines.push('- 直近の投稿が続けて「〜へ。」の呼びかけで始まっている。今回は1行目を呼びかけにしない（場面・出来事・気づき・問いかけなど別の入り方にする）。');
   return lines.length > 0 ? `\n\n【同じ投稿に見せない（厳守）】\n${lines.join('\n')}` : '';
 }
 

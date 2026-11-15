@@ -12,6 +12,7 @@ describe('同じ投稿に見せないルール：台帳と数字がそろって�
     expect(doc).toContain(`${R.sentence.minLen}文字以上の文が、直近${R.sentence.window}本のうち${R.sentence.min}本以上`);
     expect(doc).toContain(`${R.sentence.keepAtLeast}字未満`);
     expect(doc).toContain(`直近${R.identityFirstLine.window}本のうち${R.identityFirstLine.min}本以上が1行目`);
+    expect(doc).toContain(`直近${R.calloutFirstLine.window}本のうち${R.calloutFirstLine.min}本以上が呼びかけで始まって`);
     expect(doc).toContain(`直近${R.monitor.days}日の自動の投稿の${Math.round(R.monitor.topicShare * 10)}割以上`);
     expect(doc).toContain(`同じ書き出しが${R.monitor.sameOpening}本以上`);
     expect(doc).toContain(`が${R.monitor.sameSentence}本以上`);

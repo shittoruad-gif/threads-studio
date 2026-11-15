@@ -920,7 +920,7 @@ export async function generateAutoPost(
     // ★名前を preferenceNote にすると、上で作った◯✕評価の好み（line 391）を隠してしまい、
     //   評価による学習がプロンプトから消える。別の名前にして両方を渡す。
     // ★ご本人が自分で書いた書き出し・文（手直しした投稿・文体のお手本）。繰り返しの判定から外す（2026-10-05）
-    let ownerKeysCache: { openings: Set<string>; sentences: Set<string> } | null = null;
+    let ownerKeysCache: { openings: Set<string>; sentences: Set<string>; callout?: boolean } | null = null;
     const ownerRepetitionKeys = async () => {
       if (ownerKeysCache) return ownerKeysCache;
       try {
@@ -2117,14 +2117,16 @@ export async function generateAutoPost(
       const op = rg.repeatedOpening(naturalMain, recentPosts, { owner });
       const rs = Array.from(new Set([...rg.repeatedSentences(naturalMain, recentPosts, { owner }), ...rg.sentencesUsedTwiceIn14Days(naturalMain, await older14Posts(), owner)]));
       const idFirst = opts.learningTrial?.key !== 'hook_local' && rg.identityOpeningStreak(recentPosts, tokens) && rg.identityInFirstLine(naturalMain, tokens); // ★学習の試し「1行目に地域名」はR4の対象外
-      if (op || rs.length > 0 || idFirst) {
+      const callout = rg.calloutOpeningStreak(recentPosts, owner) && rg.calloutInFirstLine(naturalMain); // ★R5：呼びかけ「〜へ。」の書き出しが続いている
+      if (op || rs.length > 0 || idFirst || callout) {
         const why = [
+          callout ? '- 直近の投稿が続けて「〜へ。」の呼びかけで始まっている。1行目を呼びかけにしない（場面・出来事・気づき・問いかけなど別の入り方にする）。' : '',
           op ? `- 書き出し「${op}」が直近の投稿と同じ。別の入り方（場面・問いかけ・季節・よくある質問など）にする。` : '',
           rs.length > 0 ? `- 「${rs.map((x) => x.slice(0, 24)).join('」「')}」は直近で何度も使った文。使わない。` : '',
           idFirst ? '- 直近の投稿が続けて地名・店名から始まっている。1行目に地名・店名を入れない（2行目以降に1回だけ）。' : '',
         ].filter(Boolean).join('\n');
-        console.warn(`[AutoPost] repetition: ${[op && '書き出し', rs.length && '同じ文', idFirst && '1行目の地名'].filter(Boolean).join('・')} → 作り直し userId=${userId} account=${threadsAccountId}`);
-        noteReject('repetition', userId, threadsAccountId, postingTimeIndex, why, { detail: (op || rs[0] || '1行目の地名').slice(0, 40) });
+        console.warn(`[AutoPost] repetition: ${[op && '書き出し', rs.length && '同じ文', idFirst && '1行目の地名', callout && '呼びかけの書き出し'].filter(Boolean).join('・')} → 作り直し userId=${userId} account=${threadsAccountId}`);
+        noteReject('repetition', userId, threadsAccountId, postingTimeIndex, why, { detail: (op || rs[0] || (idFirst ? '1行目の地名' : '呼びかけの書き出し')).slice(0, 40) });
         return false;
       }
     } else if (recentPosts.length > 0) {

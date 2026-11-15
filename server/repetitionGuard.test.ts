@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { openingKey, repeatedOpening, repeatedSentences, identityInFirstLine, identityOpeningStreak, buildRepetitionNote } from '../shared/repetitionGuard';
+import { calloutInFirstLine, calloutOpeningStreak, ownerKeys, openingKey, repeatedOpening, repeatedSentences, identityInFirstLine, identityOpeningStreak, buildRepetitionNote } from '../shared/repetitionGuard';
 
 // 2026-10-05 三上様「同じ投稿ばかりになっていたりするので、きちんと改善して」
 const greet = 'ハイサイ♪はいさい整骨院の比嘉です(^^)\n\n今日は肩の話です。';
@@ -63,5 +63,33 @@ describe('14日で2本使った文は作り直し・最後は外して出す（2
     expect(rs).toEqual(['プレステージは創業40年。']);
     expect(removeRepeatedSentences(draft, rs)).not.toMatch(/創業40年/);
     expect(sentencesUsedTwiceIn14Days(draft, older.slice(1))).toEqual([]);
+  });
+});
+
+// 2026-11-15 夜間整備：acc42 の 11/16 分4本（#7024〜#7027）が、4本とも「〜へ。」の呼びかけで始まっていた。頭12文字は違うので R2 には掛からない
+describe('R5 呼びかけの書き出しが続いたら、今回は呼びかけで始めない', () => {
+  const p7024 = '「自分に自信がない」と悩む経営者さんへ。\n\n元集客売上No.1ホステスが、あなたの強みを引き出します💫\n\n一歩踏み出すきっかけを掴みませんか？😊';
+  const p7025 = '岡山駅西口で「サービスに自信がない」と感じる方へ。\n\n『MIRACLE Link💫』は、ただ名刺交換するだけの場所じゃないです。\n\n新しい視点やヒント、きっと見つかりますよ😊';
+  const p7026 = '自分に自信がない経営者さんへ。\n\n「自分には強みがない」と考えるのは、もったいないです。';
+  const p7027 = '「人脈がない」と悩むあなたへ。\n『MIRACLE Link💫』では、毎回SPECIALワークとグループディスカッションを実施しています。';
+  it('実例の4本はどれも呼びかけの書き出し', () => {
+    for (const p of [p7024, p7025, p7026, p7027]) expect(calloutInFirstLine(p)).toBe(true);
+    expect(calloutInFirstLine('がんばるあなたへ💫\n本文')).toBe(true);
+  });
+  it('呼びかけでない書き出しは拾わない', () => {
+    expect(calloutInFirstLine('10年お店を経営して気づいたこと。\n悩む経営者さんへ。')).toBe(false);
+    expect(calloutInFirstLine('岡山駅西口へ向かう途中で。')).toBe(false);
+    expect(calloutInFirstLine('交流会は名刺交換だけ？')).toBe(false);
+  });
+  it('直近3本のうち2本以上が呼びかけなら続いている・1本なら続いていない', () => {
+    expect(calloutOpeningStreak([p7025, p7024, '10年お店を経営して気づいたこと。'])).toBe(true);
+    expect(calloutOpeningStreak([p7024, '交流会は名刺交換だけ？', '岡山も朝晩冷え込んできましたね。', p7025])).toBe(false);
+  });
+  it('ご本人が呼びかけで書く方は止めない', () => {
+    expect(calloutOpeningStreak([p7025, p7024], ownerKeys(['肩こりで眠れない方へ。\n今日はストレッチの話です。']))).toBe(false);
+  });
+  it('続いているときは指示文に入る・続いていなければ入らない', () => {
+    expect(buildRepetitionNote([p7025, p7024], [])).toContain('呼びかけ');
+    expect(buildRepetitionNote([p7024, '交流会は名刺交換だけ？'], [])).not.toContain('呼びかけにしない');
   });
 });
