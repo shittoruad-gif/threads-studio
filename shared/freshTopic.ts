@@ -207,7 +207,8 @@ export function planFreshTopic(params: {
   // 材料を1行ずつに分け、「使いすぎの言葉を含む数」と「直近の投稿での使われ具合」で並べる
   const items: string[] = [];
   for (const m of params.materials) {
-    for (const line of String(m ?? "").split(/\r?\n/)) {
+    for (const rawLine of String(m ?? "").split(/\r?\n/).flatMap(splitListLine)) {
+      const line = rawLine;
       const s = line.replace(/^\s*[-–—*●○◯□■・･]\s*/, "").trim();
       if (s.length < 4) continue;
       // 文の途中で改行されただけの行（「お茶をされている方に、」）は主題にできない
@@ -275,6 +276,22 @@ export function planFreshTopic(params: {
   const i = Math.abs(Math.trunc(params.index ?? 0)) % pool.length;
   const topic = pool[i].score < 2 ? pool[i].s : null; // 使いすぎの言葉を含む材料しか無ければ指定しない
   return { overused, frames, topic, sampleSize: docs.length };
+}
+
+/**
+ * 名前を読点・カンマで並べただけの1行（「整体, エステ, ヘッドセラピー, 猫背矯正, …」）は、1つずつの材料に分ける。
+ *
+ * ★2026-11-15 夜間整備 acc38：強みの欄にメニュー名が1行で10個並んでいて、その1行まるごとが「まだ使っていない材料」として
+ *   毎回「今日の主題」に選ばれていた。一覧は1本の主題にならないので下書きは別の話を書き、「今日の主題を書いていない」で
+ *   枠ごとに2回ずつ作り直しになっていた（試し生成4枠のうち2枠）。
+ *   4つ以上・どれも14字以内・文（です／ます／。）を含まないときだけ分ける。ふつうの文の読点では分けない。
+ */
+export function splitListLine(line: string): string[] {
+  const body = String(line ?? "").replace(/^\s*[-–—*●○◯□■・･]\s*/, "").trim();
+  const parts = body.split(/\s*[、,，\/／]\s*/).map((x) => x.trim()).filter(Boolean);
+  if (parts.length < 4) return [line];
+  if (parts.some((x) => Array.from(x).length > 14 || /(です|ます|ました|でした|ている|。)/.test(x))) return [line];
+  return parts;
 }
 
 /** 下書きに含まれる「使いすぎの話題の言葉」 */

@@ -8,7 +8,7 @@
 import { describe, it, expect } from "vitest";
 import {
   planFreshTopic, overusedHits, dropOverusedLines, buildFreshTopicNote, saidSameContent, topicWordsOf,
-  framesOf, dropFramedSentences, surveyAvoidWords, hitsSurveyAvoid, buildSurveyAvoidNote, hasUnfilledPlaceholder, ownerKeepsWord, dropStickyLines,
+  framesOf, dropFramedSentences, surveyAvoidWords, hitsSurveyAvoid, buildSurveyAvoidNote, hasUnfilledPlaceholder, ownerKeepsWord, dropStickyLines, splitListLine,
 } from "@shared/freshTopic";
 
 const RECENT: string[] = [
@@ -75,6 +75,21 @@ describe("話題の偏りを数える", () => {
     const base = { recentPosts: RECENT, materials: [PROJECT.strength, ...PROJECT.faq], protect: [PROJECT.storeName, PROJECT.area, PROJECT.target] };
     const topics = new Set([0, 1, 2].map((i) => planFreshTopic({ ...base, index: i }).topic));
     expect(topics.size).toBeGreaterThan(1);
+  });
+
+  // ★2026-11-15 夜間整備 acc38：メニュー名を1行に並べた材料が、まるごと今日の主題に選ばれていた
+  it("名前を並べただけの1行は、まるごと主題にしない（1つずつに分ける）", () => {
+    const list = "整体, エステ, ヘッドセラピー, 猫背矯正, ライトケアコース, 早期回復コース, 全身調整コース, スポーツ外傷";
+    expect(splitListLine(list)).toEqual(["整体", "エステ", "ヘッドセラピー", "猫背矯正", "ライトケアコース", "早期回復コース", "全身調整コース", "スポーツ外傷"]);
+    expect(splitListLine("整体、エステ、ヘッドセラピー、猫背矯正")).toHaveLength(4);
+    // ふつうの文・3つまでの並びは分けない
+    expect(splitListLine("未経験でも、先輩がついて、一から教えます。")).toHaveLength(1);
+    expect(splitListLine("駅から近く、駐車場もあり、夜まで開いています")).toHaveLength(1);
+    expect(splitListLine("ネイル、まつげ、エステ")).toHaveLength(1);
+    for (let i = 0; i < 6; i++) {
+      const p = planFreshTopic({ recentPosts: RECENT, materials: [list], protect: [PROJECT.storeName, PROJECT.area, PROJECT.target], index: i });
+      expect(p.topic ?? "", String(i)).not.toMatch(/[,、]/);
+    }
   });
 
   it("投稿が少ない（3本以下）ときは何もしない", () => {
