@@ -41,6 +41,11 @@ const WORD_RUN = /[一-龠々ァ-ヶー]{2,}/g;
 const COMMON = new Set([
   "客様", "一緒", "大切", "自分", "気持", "本当", "毎日", "今日", "場所", "仕事", "最初", "時間",
   "大丈夫", "安心", "笑顔", "理想", "一番", "当院", "当店",
+  // ★2026-11-16 夜間整備 acc38：「あなたの状態に合わせた」「つらい状態」の「状態」が「見送られた投稿の主役の言葉」に数えられ、
+  //   代わりの生成が stickyDeclined「状態」に16回当たって6枠を捨てていた。話題ではなく、どの院の投稿にも出る言葉
+  //   「ケア」も同じ（「ライトケアコース」の見送りから「ケア」1語が禁止になり、「体のケア」と書いた下書きが最後の作り直しで落ちた。
+  //   「頭皮ケア」のような話題の言葉は1語として数えるので今までどおり拾う）
+  "状態", "状況", "ケア",
   // 場所の言い方（この店らしさ＝identityGuard が地名・場所を求めるので、禁止にしない）
   "駅前", "駅近", "地元", "地域",
 ]);
@@ -207,8 +212,10 @@ export function planFreshTopic(params: {
   // 材料を1行ずつに分け、「使いすぎの言葉を含む数」と「直近の投稿での使われ具合」で並べる
   const items: string[] = [];
   for (const m of params.materials) {
-    for (const rawLine of String(m ?? "").split(/\r?\n/).flatMap(splitListLine)) {
-      const line = rawLine;
+    for (const { line, fromList } of String(m ?? "").split(/\r?\n/).flatMap((l) => {
+      const parts = splitListLine(l);
+      return parts.map((x) => ({ line: x, fromList: parts.length > 1 }));
+    })) {
       const s = line.replace(/^\s*[-–—*●○◯□■・･]\s*/, "").trim();
       if (s.length < 4) continue;
       // 文の途中で改行されただけの行（「お茶をされている方に、」）は主題にできない
@@ -219,6 +226,11 @@ export function planFreshTopic(params: {
       // ★選択肢の見本のまま埋まっていない材料（「専門特化（〇〇専門）」）は主題にしない（2026-10-07 夜間整備）。
       //   account 27 で主題に選ばれ、何を書いても自然さの点検に落ち、保証パス3回とも書けなかった。
       if (hasUnfilledPlaceholder(s)) continue;
+      // ★一覧に名前だけ並んでいる、その店だけの商品名（「ライトケアコース」「早期回復コース」）は主題にしない（2026-11-16 夜間整備 acc38）。
+      //   中身（時間・内容・誰向け）の登録が無いので、主題にすると下書きが中身を書き足す。11/16 朝の3本がこの形で3本とも見送られ、
+      //   1本は「言っていることが違う」とお聞きした。「猫背矯正」「ヘッドセラピー」のような一般の名前は今までどおり主題にする。
+      //   対象は、1行に名前を並べた一覧から分けたものだけ（1項目ずつ登録された「肩こり/頭痛専門コース」などは今までどおり）
+      if (fromList && isBareProductName(s)) continue;
       items.push(s);
     }
   }
@@ -292,6 +304,31 @@ export function splitListLine(line: string): string[] {
   if (parts.length < 4) return [line];
   if (parts.some((x) => Array.from(x).length > 14 || /(です|ます|ました|でした|ている|。)/.test(x))) return [line];
   return parts;
+}
+
+/** 説明の付いていない、その店だけの商品名（「◯◯コース」「◯◯プラン」）か。文や説明が続く行は当たらない */
+export function isBareProductName(item: string): boolean {
+  const s = String(item ?? "").replace(/^\s*[-–—*●○◯□■・･]\s*/, "").trim();
+  return Array.from(s).length <= 14 && /(コース|プラン|セット|パック|プログラム)$/.test(s);
+}
+
+/**
+ * 一覧の1行を1つずつの行に直す（主題の候補を選ぶ前に通す）。
+ *
+ * ★2026-11-16 夜間整備 acc38：メニュー10個の1行のうち「早期回復コース」が「言っていることが違う」で外す対象になり、
+ *   行ごとの判定だったので10個まるごと主題の候補から消えていた（残った候補は強みの1行と、渡さない実績だけ）。
+ *   先に1つずつに分ければ、外れるのはその1つだけになる。
+ */
+export function expandListLines(text: string | null | undefined, opts: { forTopic?: boolean } = {}): string | undefined {
+  const src = String(text ?? "");
+  if (!src.trim()) return undefined;
+  const out = src.split(/\r?\n/).flatMap((l) => {
+    if (!l.trim()) return [l];
+    const parts = splitListLine(l);
+    // 主題の候補にするときは、一覧に名前だけ並んだ「◯◯コース」を外す（分けた後は一覧だったことが分からなくなるので、ここで外す）
+    return opts.forTopic && parts.length > 1 ? parts.filter((x) => !isBareProductName(x)) : parts;
+  }).join("\n");
+  return out.trim() ? out : undefined;
 }
 
 /** 下書きに含まれる「使いすぎの話題の言葉」 */
@@ -450,7 +487,12 @@ export function buildFreshTopicNote(plan: FreshTopicPlan | null, opts: { omitTop
 export function topicAnchorWords(topic: string | null | undefined, protect: readonly (string | null | undefined)[]): string[] {
   if (!topic) return [];
   const pw = protectWordsOf(protect);
-  return topicWordsOf(topic).filter((w) => !pw.some((p) => p.includes(w) || w.includes(p)));
+  const words = topicWordsOf(topic).filter((w) => !pw.some((p) => p.includes(w) || w.includes(p)));
+  // ★「腰痛治療」「交通事故治療」は、頭の「腰痛」「交通事故」でも主題を書いたと数える（2026-11-16 夜間整備 acc38）。
+  //   健康系のお店では「治療」を「施術」に言い換える決まりなので、下書きは「腰痛施術」「交通事故の相談」になり、
+  //   「腰痛治療」の4字そのままを求めると毎回「主題を書いていない」で作り直しになっていた（試し生成4枠で5回）
+  const stems = words.map((w) => w.replace(/(治療|施術)$/, "")).filter((w, i) => w !== words[i] && w.length >= 2 && !pw.some((p) => p.includes(w) || w.includes(p)));
+  return Array.from(new Set([...words, ...stems]));
 }
 
 /** 下書きが今日の主題を書いているか（主題の言葉を1つでも含むか）。言葉が取れない主題は確かめない */

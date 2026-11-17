@@ -1204,9 +1204,12 @@ export async function generateAutoPost(
           //   12本中4本が「24時間急患」・残りも経歴や機器が主役の宣伝になっていた。ご本人の投稿は患者さんの迷いが主役）
           materials: ((await import('../shared/naturalStyle')).isNaturalStyleUser(userId)
             ? [project.n1Customer, (project as any).belief, (project as any).customerWords, ...(cr.realEpisodes ?? []), ...(cr.faq ?? [])]
-            : [project.strength, project.usp, project.proof, project.n1Customer, (project as any).belief,
-              (project as any).customerWords, ...(cr.realProofs ?? []), ...(cr.realEpisodes ?? []), ...(cr.faq ?? []), ...(cr.menu ?? [])])
-            .map((m) => dropAvoided(m as string, '主題の候補'))
+            // ★「言っていることが違う」とお聞きして信条・実績を渡さない日は、主題の候補にもしない（2026-11-16 夜間整備 acc38：
+            //   本文には渡さない実績「大分市で10年以上の実績, 12周年」が主題に選ばれ、「主題を書いていない」で2回ずつ作り直していた）
+            : [project.strength, project.usp, ...(dropBeliefProof ? [] : [project.proof, (project as any).belief]), project.n1Customer,
+              (project as any).customerWords, ...(dropBeliefProof ? [] : (cr.realProofs ?? [])), ...(cr.realEpisodes ?? []), ...(cr.faq ?? []), ...(cr.menu ?? [])])
+            // 一覧の1行は先に1つずつに分ける（外す対象が1つあるだけで一覧まるごと消さない・shared/freshTopic.ts expandListLines）
+            .map((m) => dropAvoided(ft.expandListLines(m as string, { forTopic: true }), '主題の候補'))
             .map((m) => (healthBiz && m ? hg.scrubSettingText(m).text : m)),
           // 毎回出てよい言葉（店名・地名・業種・対象のお客様・ご本人が毎回書く挨拶や締め）は数えない
           protect: freshProtect,

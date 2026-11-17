@@ -9,6 +9,7 @@ import { describe, it, expect } from "vitest";
 import {
   planFreshTopic, overusedHits, dropOverusedLines, buildFreshTopicNote, saidSameContent, topicWordsOf,
   framesOf, dropFramedSentences, surveyAvoidWords, hitsSurveyAvoid, buildSurveyAvoidNote, hasUnfilledPlaceholder, ownerKeepsWord, dropStickyLines, splitListLine,
+  expandListLines, isBareProductName, stickyDeclinedWords, topicAnchorWords, coversTopic,
 } from "@shared/freshTopic";
 
 const RECENT: string[] = [
@@ -90,6 +91,74 @@ describe("話題の偏りを数える", () => {
       const p = planFreshTopic({ recentPosts: RECENT, materials: [list], protect: [PROJECT.storeName, PROJECT.area, PROJECT.target], index: i });
       expect(p.topic ?? "", String(i)).not.toMatch(/[,、]/);
     }
+  });
+
+  // ★2026-11-16 夜間整備 acc38：朝の3本（ライトケアコース・早期回復コース・全身調整コース）が3本とも見送られ、
+  //   代わりの生成も明朝の試し生成も0本だった。原因4つをそれぞれ固定する（地名・店名は伏せてある）
+  it("名前だけの「◯◯コース」は主題にしない（中身の登録が無いので、主題にすると中身を書き足す）", () => {
+    const list = "整体, エステ, ヘッドセラピー, 猫背矯正, ライトケアコース, 早期回復コース, 全身調整コース, スポーツ外傷";
+    expect(isBareProductName("ライトケアコース")).toBe(true);
+    expect(isBareProductName("学割プラン")).toBe(true);
+    expect(isBareProductName("猫背矯正")).toBe(false);
+    expect(isBareProductName("ヘッドセラピー")).toBe(false);
+    // 説明が付いている行は、今までどおり主題にできる
+    expect(isBareProductName("ライトケアコースは20分で首と肩だけを整える短いコース")).toBe(false);
+    for (let i = 0; i < 12; i++) {
+      const p = planFreshTopic({ recentPosts: RECENT, materials: [list], protect: [PROJECT.storeName, PROJECT.area, PROJECT.target], index: i });
+      expect(p.topic ?? "", String(i)).not.toMatch(/コース$/);
+      expect(p.topic, String(i)).toBeTruthy();
+    }
+    // 1項目ずつ登録されたコース名は今までどおり主題にできる（対象は一覧から分けたものだけ）
+    const single = new Set(Array.from({ length: 6 }, (_, i) =>
+      planFreshTopic({ recentPosts: RECENT, materials: ["肩こり専門コース"], protect: [PROJECT.storeName, PROJECT.area, PROJECT.target], index: i }).topic));
+    expect(single.has("肩こり専門コース")).toBe(true);
+  });
+
+  it("一覧の1行は1つずつの行に直す（外す対象が1つあるだけで一覧まるごと消さない）", () => {
+    const out = expandListLines("整体, エステ, ヘッドセラピー, 猫背矯正, 早期回復コース") ?? "";
+    expect(out.split("\n")).toEqual(["整体", "エステ", "ヘッドセラピー", "猫背矯正", "早期回復コース"]);
+    // 「早期」を含む行だけ外しても、ほかの4つは残る
+    expect(out.split("\n").filter((l) => !l.includes("早期"))).toHaveLength(4);
+    // 主題の候補にするときは、一覧に名前だけ並んだ「◯◯コース」を外す
+    expect((expandListLines("整体, エステ, ヘッドセラピー, 猫背矯正, 早期回復コース", { forTopic: true }) ?? "").split("\n")).toEqual(["整体", "エステ", "ヘッドセラピー", "猫背矯正"]);
+    expect(expandListLines("肩こり専門コース", { forTopic: true })).toBe("肩こり専門コース");
+    // ふつうの文・複数行はそのまま
+    expect(expandListLines("未経験でも、先輩がついて、一から教えます。\n駅から近い")).toBe("未経験でも、先輩がついて、一から教えます。\n駅から近い");
+    expect(expandListLines("")).toBeUndefined();
+    expect(expandListLines(null)).toBeUndefined();
+  });
+
+  it("「状態」「ケア」は見送られた投稿の主役の言葉にしない（話題ではなく、どの院の投稿にも出る言葉）", () => {
+    const declined = [
+      "朝、起き上がる時に腰が固まって動かせない。\n当院の早期回復コースは、つらい状態から早く抜け出せるよう目指します。\nあなたの体の状態と向き合います。",
+      "多くの方の全身調整をしてきました。\n当院の全身調整コースは、あなたの状態に合わせたケアを提供します。",
+      "朝晩の冷え込みで、体が固まりやすい季節です。\n短時間で整えるライトケアコースがあります。体のケアを大切に。",
+      "ライトケアコースは、もっと気軽に使ってもらいたくて。\n体の状態を見ながら調整しています。",
+    ];
+    const recent = [
+      ...declined,
+      "首がガチガチで上を向けない時、試してほしいこと。\nあごを軽く引いてゆっくり首を回すだけ。",
+      "膝が痛い時、無理に動かすのは禁物です。\nまずは身体の状態を確認しましょう。",
+      "12周年を迎えました。\nこの地域で皆さんの健康を支えられて嬉しいです。",
+      "スポーツ外傷は、初期対応がとても重要です。\n体のケアは早めに。",
+    ];
+    const words = stickyDeclinedWords({ declined, recentPosts: recent, protect: ["サンプル整骨院", "〇〇県〇〇市"] });
+    expect(words).not.toContain("状態");
+    expect(words).not.toContain("ケア");
+    // 見送られた投稿の主役（コース名）は今までどおり拾う
+    expect(stickyDeclinedWords({ declined, recentPosts: recent, protect: [], max: 6 }).join("・")).toMatch(/コース/);
+  });
+
+  it("主題「腰痛治療」は「腰痛」でも書いたと数える（健康系では「治療」を「施術」に言い換えるため）", () => {
+    const a = topicAnchorWords("腰痛治療", ["サンプル整骨院"]);
+    expect(a).toContain("腰痛治療");
+    expect(a).toContain("腰痛");
+    expect(coversTopic("腰が重い時、寝る前にひざを抱えてみてください。\n腰痛施術をする当院の小ワザです。", a)).toBe(true);
+    expect(coversTopic("事故直後は平気だったのに、後から首が痛くなる。\n交通事故の相談を受けてきました。", topicAnchorWords("交通事故治療", []))).toBe(true);
+    // 主題と関係のない下書きは今までどおり「書いていない」
+    expect(coversTopic("朝晩の冷え込みで、体が固まりやすい季節です。", a)).toBe(false);
+    // 「治療」で終わらない主題は変わらない
+    expect(topicAnchorWords("猫背矯正", [])).toEqual(["猫背矯正"]);
   });
 
   it("投稿が少ない（3本以下）ときは何もしない", () => {
