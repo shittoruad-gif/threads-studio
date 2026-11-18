@@ -469,7 +469,20 @@ export function hasRepeatedEnding(text: string): boolean {
  * 機械が付ける句読点の癖。句点を落として絵文字を文末扱いにする。
  */
 export function polishPunctuation(text: string): string {
-  return text.replace(new RegExp('。(' + EMOJI_SRC + ')', 'g'), '$1');
+  return collapseDoubledParticle(text.replace(new RegExp('。(' + EMOJI_SRC + ')', 'g'), '$1'));
+}
+
+/**
+ * 助詞が2つ重なった誤字（「人のの指導」「これがが大切」）を1つに戻す。
+ * 2026-11-18 夜：#7170（acc10・未公開）「本気で変わりたい人のの指導経験は伊達じゃない。」が案に残っていた。
+ * 直近60日の案で同じ誤字は #2617「これがが大切だと」と合わせて2件（どちらも生成の書き損じ）。
+ * 正しい日本語を壊さないよう、次は残す：「ものの」（〜ものの、）・「ののしる」・「がががっ」（擬音）。
+ */
+export function collapseDoubledParticle(text: string): string {
+  return text
+    .replace(/をを/g, 'を')
+    .replace(/([^\sが])がが(?![がーっ])/g, '$1が')
+    .replace(/([^\sもの])のの(?![しの])/g, '$1の');
 }
 
 /**
