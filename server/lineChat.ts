@@ -283,7 +283,16 @@ export function shouldClearPendingInput(state: string | null | undefined, q: Rec
 }
 
 // ── 画面を開かせずに返す各種テキスト ──────────────────────────
-/** 「お知らせ・告知を出す」を押したときの案内（canPost＝Threads連携ずみ） */
+/**
+ * 告知の入口の合言葉（2026-11-19）。「告知」「お知らせを出したい」などの短い一言で、告知の出し方の案内を返す。
+ *   三上様「告知は全員いらない」＝みなさんのメニューにボタンは足さない。使いたい方にだけ、この一言をお伝えする。
+ */
+export function wantsAnnounce(text: string): boolean {
+  const t = String(text || "").replace(/[\s　。．！!]+/g, "");
+  return /^(?:イベント)?(?:告知|お知らせ)(?:(?:を|の)?(?:投稿)?(?:を)?(?:出したい|出す|したい|がしたい|をしたい|お願いします|お願い|する)(?:です)?)?$/.test(t);
+}
+
+/** 告知の出し方の案内（canPost＝Threads連携ずみ） */
 export function announceGuideText(base: string, canPost: boolean): string {
   return "お知らせ・告知の投稿は、2つの出し方があります。\n\n"
     + "【1】文章をそのまま出す\n"
@@ -299,9 +308,6 @@ export function announceGuideText(base: string, canPost: boolean): string {
 export const MENU_ITEMS: QuickItem[] = [
   { label: "次にやること", data: "m=next" },
   { label: "今日の投稿", data: "m=posts" },
-  // ★お知らせ・告知の入口（2026-11-19 三上様「公式LINEに告知系のやつがあるかどうか、クライアントがわかりにくい」）。
-  //   機能はあったが、告知らしい文を打った方にしか案内が出ず、メニューのどこにも名前が無かった。
-  { label: "お知らせ・告知を出す", data: "m=announce" },
   { label: "コメント", data: "m=comments" },
   { label: "設定", data: "m=settings" },
   { label: "投稿の成績", data: "m=stats" },

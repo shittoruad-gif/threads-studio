@@ -8,7 +8,7 @@
 import * as db from "./db";
 import { tryDocsBind } from "./docsBind";
 import { parseOwnerRuleMessage, parseOwnerRules, addOwnerRule, removeOwnerRule, OWNER_RULES } from "../shared/ownerRules";
-import { buildPostCards, textWithQuick, textWithChoices, parsePostback, fmtJst, REWRITE_KINDS, MENU_ITEMS, announceGuideText, HELP_TOPICS, helpQuick, settingsQuick, settingsSummary, shouldClearPendingInput, planUpgradeExitText } from "./lineChat";
+import { buildPostCards, textWithQuick, textWithChoices, parsePostback, fmtJst, REWRITE_KINDS, MENU_ITEMS, announceGuideText, wantsAnnounce, HELP_TOPICS, helpQuick, settingsQuick, settingsSummary, shouldClearPendingInput, planUpgradeExitText } from "./lineChat";
 import { COUNSELING_QUESTIONS, quickQuestions } from "../shared/counseling";
 import { buildCounselingBrief, renderBriefText } from "../shared/counselingBrief";
 import { applyIndustryOverrides } from "../shared/industryProfiles";
@@ -1464,7 +1464,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     )];
   }
   if (q.m === "posts") return repliesForPosts(user.id, q.one ? "one" : q.all ? "all" : undefined);
-  // ★お知らせ・告知の入口（2026-11-19）。押したあとに送られた文は、告知の文としてそのまま予約の確認へ進める
+  // ★お知らせ・告知の入口（2026-11-19）。「告知」の一言から入る。そのあとに送られた文は、告知の文としてそのまま予約の確認へ進める
   if (q.m === "announce") {
     const base = process.env.APP_BASE_URL || "https://threads-studio.com";
     const canPost = (await db.getThreadsAccountsByUserId(user.id)).length > 0;
@@ -3696,6 +3696,8 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     }
   }
   if (/^(メニュー|めにゅー|menu)$/i.test(t)) return [textWithQuick("どれをご覧になりますか？", MENU_HINT)];
+  // ★「告知」の一言で、告知の出し方の案内を返す（2026-11-19・みなさんのメニューにはボタンを足さない）
+  if (wantsAnnounce(t)) return handlePostback(lineUserId, "m=announce");
   if (wantsTodayPosts(t)) return handlePostback(lineUserId, "m=posts");
   if (/^(設定|せってい)$/.test(t)) return handlePostback(lineUserId, "m=settings");
   if (/^(追加|ついか)$/.test(t)) return issueStaffLinkCode(user.id);

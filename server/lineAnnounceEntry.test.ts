@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { MENU_ITEMS, announceGuideText, shouldClearPendingInput } from './lineChat';
+import { MENU_ITEMS, announceGuideText, wantsAnnounce, shouldClearPendingInput } from './lineChat';
 
-// 2026-11-19 三上様「公式LINEに告知系のやつがあるかどうか、クライアントがわかりにくい」
+// 2026-11-19 三上様「公式LINEに告知系のやつがあるかどうか、クライアントがわかりにくい」「告知は全員いらない」
 describe('公式LINE：お知らせ・告知の入口', () => {
-  it('トーク内のメニューに入口があり、LINEの決まり（13個まで・20文字まで）に収まる', () => {
-    expect(MENU_ITEMS.some((m) => m.data === 'm=announce' && m.label.includes('告知'))).toBe(true);
-    expect(MENU_ITEMS.length).toBeLessThanOrEqual(13);
-    for (const m of MENU_ITEMS) expect(Array.from(m.label).length).toBeLessThanOrEqual(20);
+  it('みなさんのメニューにはボタンを足さない（告知は全員には要らない）・「告知」の一言が入口', () => {
+    expect(MENU_ITEMS.some((m) => m.data === 'm=announce')).toBe(false);
+    for (const ok of ['告知', '告知。', 'お知らせ', '告知したい', '告知を出したい', 'お知らせを出したいです', 'イベント告知', '告知お願いします']) expect(wantsAnnounce(ok), ok).toBe(true);
+    // 告知の文そのもの・ご質問・ほかの用件は、この入口では拾わない
+    for (const ng of ['12月3日に展示会のお知らせです', '告知はどこからできますか？', 'お知らせが届きません', '今日の投稿', '告知の投稿を止めたい']) expect(wantsAnnounce(ng), ng).toBe(false);
   });
   it('案内には、そのまま出す方法と、開催日まで分けて告知する方法の両方がある', () => {
     const t = announceGuideText('https://example.test', true);
