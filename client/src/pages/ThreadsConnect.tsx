@@ -140,6 +140,8 @@ export default function ThreadsConnect() {
   const [showSameAccountGuide, setShowSameAccountGuide] = useState(false);
   // スマホで押されたときに先に出す「パソコンでお願いします」（中身は待たせている連携の種類）
   const [phoneGuideMode, setPhoneGuideMode] = useState<'reconnect' | 'switch' | null>(null);
+  // スマホで進む道を選んだときに、先に流れを見せる（2026-11-19）
+  const [phoneTips, setPhoneTips] = useState(false);
 
   // ★LINEから来た場合は、連携後に「LINEに戻る」導線を出す（?from=line）
   //
@@ -1020,41 +1022,79 @@ export default function ThreadsConnect() {
       {/* Post-OAuth fallback: same account got connected even after force-reauth.
           (Rare — only happens if the user clicks Continue with the same Threads
           account on the OAuth screen.) Show a one-screen recovery guide. */}
-      <Dialog open={phoneGuideMode !== null} onOpenChange={(o) => { if (!o) setPhoneGuideMode(null); }}>
+      <Dialog open={phoneGuideMode !== null} onOpenChange={(o) => { if (!o) { setPhoneGuideMode(null); setPhoneTips(false); } }}>
         <DialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg pr-6 text-left">
-              <Monitor className="w-5 h-5 shrink-0 text-emerald-600" />
-              {t("連携はパソコンで")}
-            </DialogTitle>
-            <DialogDescription className="pt-2 text-foreground/80 text-left">
-              {t("スマホで進めると、Threadsアプリが開くだけで「許可」の画面が出ないことがほとんどです。")}
-              <br /><br />
-              {t("パソコンのブラウザでThreads Studioにログインして、この画面の同じボタンを押してください。Threadsのログイン画面のあとに「許可」の画面が出ます。")}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
-            <Button
-              className="w-full"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(CONNECT_PAGE_URL);
-                  toast.success(t("この画面のURLをコピーしました。パソコンに送って開いてください"));
-                } catch {
-                  toast.message(CONNECT_PAGE_URL);
-                }
-              }}
-            >
-              {t("この画面のURLをコピーする")}
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => { const m = phoneGuideMode; setPhoneGuideMode(null); if (m) startOAuth(m, true, { asked: true, wanted: wantedRef.current }); }}
-            >
-              {t("このままスマホで進める")}
-            </Button>
-          </DialogFooter>
+          {!phoneTips ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-base sm:text-lg pr-6 text-left">
+                  <Monitor className="w-5 h-5 shrink-0 text-emerald-600" />
+                  {t("連携はパソコンで")}
+                </DialogTitle>
+                <DialogDescription className="pt-2 text-foreground/80 text-left">
+                  {t("スマホで進めると、Threadsアプリが開くだけで「許可」の画面が出ないことがほとんどです。")}
+                </DialogDescription>
+              </DialogHeader>
+              {/* ★2026-11-19：スマホで進めて行き止まりになった方が出たため、パソコンでの手順を番号で見せ、スマホで進む道は下に小さく置く */}
+              <ol className="list-decimal pl-5 space-y-1.5 text-sm text-foreground/90 text-left">
+                <li>{t("下のボタンで、この画面のURLをコピーする")}</li>
+                <li>{t("パソコンのブラウザで開き、ご登録のメールアドレスとパスワードでログインする")}</li>
+                <li>{t("「Threadsと連携する」を押し、Threadsのログインのあとに出る「許可」を押す")}</li>
+              </ol>
+              <DialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
+                <Button
+                  className="w-full"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(CONNECT_PAGE_URL);
+                      toast.success(t("この画面のURLをコピーしました。パソコンに送って開いてください"));
+                    } catch {
+                      toast.message(CONNECT_PAGE_URL);
+                    }
+                  }}
+                >
+                  {t("この画面のURLをコピーする")}
+                </Button>
+                <button
+                  type="button"
+                  className="w-full pt-1 text-xs text-muted-foreground underline underline-offset-2"
+                  onClick={() => setPhoneTips(true)}
+                >
+                  {t("パソコンが無いので、スマホで進める")}
+                </button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-base sm:text-lg pr-6 text-left">
+                  {t("スマホで進めるときの流れ")}
+                </DialogTitle>
+                <DialogDescription className="pt-2 text-foreground/80 text-left">
+                  {t("途中でThreadsアプリが開いてしまうことがあります。そのときは次の順で進めてください。")}
+                </DialogDescription>
+              </DialogHeader>
+              <ol className="list-decimal pl-5 space-y-1.5 text-sm text-foreground/90 text-left">
+                <li>{t("Threadsアプリが開いたら、アプリを閉じてこの画面に戻る")}</li>
+                <li>{t("「Instagramでログイン」の画面が出たら、Instagramのユーザーネームとパスワードを入れる")}</li>
+                <li>{t("「許可」の画面が出たら押して完了")}</li>
+              </ol>
+              <p className="text-xs text-muted-foreground text-left">
+                {t("進めないときは、止まった画面の写真を公式LINEに送ってください。こちらで続きをご案内します。")}
+              </p>
+              <DialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
+                <Button
+                  className="w-full"
+                  onClick={() => { const m = phoneGuideMode; setPhoneGuideMode(null); setPhoneTips(false); if (m) startOAuth(m, true, { asked: true, wanted: wantedRef.current }); }}
+                >
+                  {t("分かったので、スマホで進める")}
+                </Button>
+                <Button variant="outline" className="w-full" onClick={() => setPhoneTips(false)}>
+                  {t("パソコンでの手順に戻る")}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

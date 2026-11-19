@@ -10,7 +10,7 @@
     {
       "name": "threads-studio-qa",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "PORT=3100 pnpm dev"],
+      "runtimeArgs": ["-c", "PORT=3100 QA_SAFE_MODE=1 LINE_NOTIFY_CHANNEL_SECRET=dummy-local LINE_NOTIFY_CHANNEL_ACCESS_TOKEN=dummy-local pnpm dev"],
       "port": 3100
     }
   ]

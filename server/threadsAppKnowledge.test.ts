@@ -366,7 +366,8 @@ describe("スマホで連携するとThreadsアプリが開くだけ（10/12）"
     expect(k).toMatch(/Threadsアプリが開くだけ/);
     expect(k).toContain("連携はパソコンで");
     expect(k).toContain("この画面のURLをコピーする");
-    expect(k).toContain("このままスマホで進める");
+    expect(k).toContain("パソコンが無いので、スマホで進める"); // 2026-11-19 ボタン名を変更
+    expect(k).toContain("止まった画面の写真");
   });
 });
 
