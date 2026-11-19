@@ -215,6 +215,21 @@ export interface RecurringEdit { kind: "足す" | "消す"; text: string; count:
  * 同じ直しのくり返し（夜間整備の見張り・2026-10-08 三上様「こういうのを毎晩のメンテナンスで改善しないと意味なくない？」）。
  * 手直しの組ごとに「書き足した言葉」「消した言葉」を出し、minCount 組以上で同じ（片方がもう片方を含む）ものを数える。
  */
+/**
+ * 3回以上消している言葉の一覧に、その中に入っている「店を指す言葉」（地名・店名）を1語として足す。
+ * 2026-11-19 acc33：消した部分が「るのかもしれません。横浜の」と文をまたいで切り出され、生成への指示もその形のままだったため、
+ * 「…のかもしれません。（改行）横浜のプレステージでは」と改行を挟んだ同じ書き方が直らず5本続いた。
+ * ご本人が消しているのは「横浜」という地名なので、その語そのものを「使わない」に入れる（ガードは変えない・生成の指示側の直し）。
+ */
+export function firmRemovedWords(removed: readonly string[], identityWords: readonly string[]): string[] {
+  const out = [...removed];
+  for (const t of identityWords) {
+    if (Array.from(t).length < 2 || out.includes(t)) continue;
+    if (removed.some((r) => r !== t && r.includes(t))) out.push(t);
+  }
+  return out;
+}
+
 export function recurringEdits(pairs: readonly EditPair[], minCount = 3): RecurringEdit[] {
   const out: RecurringEdit[] = [];
   // ★全文を書き換えた手直し（直す前の文がほとんど残っていない）は「この言葉を消した／足した」ではなく「別の話を書いた」なので数えない。

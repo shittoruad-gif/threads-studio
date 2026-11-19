@@ -978,6 +978,12 @@ export async function generateAutoPost(
       const { recurringEdits } = await import('../shared/editLessons');
       ownerRemovedFirm = recurringEdits(lessons.pairs).filter((e) => e.kind === '消す').map((e) => e.text);
       if (ownerRemovedFirm.length > 0) {
+        // 消した部分に地名・店名が入っていれば、その語も1語で「使わない」に入れる（2026-11-19 acc33「横浜」）
+        const { firmRemovedWords } = await import('../shared/editLessons');
+        const { identityTokens: baseIdentityTokens } = await import('../shared/identityGuard');
+        ownerRemovedFirm = firmRemovedWords(ownerRemovedFirm, baseIdentityTokens(project));
+      }
+      if (ownerRemovedFirm.length > 0) {
         project = { ...project, __ownerRemoved: ownerRemovedFirm };
         editLessonsNote += `\n\n【★この方が3回以上消している言葉（使わない・厳守）】\n${ownerRemovedFirm.map((w) => `- 「${w}」`).join('\n')}\n- この言葉（と、この言葉を少し変えただけの言い方）は書かない。お店を指す言葉は、ほかの言葉（店名・地名のうち消されていないもの）で足りる。`;
       }
@@ -1418,7 +1424,10 @@ export async function generateAutoPost(
     //     同じ方の求人アカウント acc22 は横浜店だけの募集で、ご本人が「川崎・横須賀」を消して直している（店を回すと逆になる）
     const storeForPost = (() => {
       if (String((project as any).localTerms ?? '').trim()) return null; // 承認前の登録でも外す（acc22 は承認の有無に関わらず対象外にする）
-      const labels = multiStoreLabels(project.area, counselingStoreTexts(counselingResult));
+      // ★ご本人が3回以上消している地名の店は、順番の指定から外す（2026-11-19 acc33：ご本人が「横浜」を消すほど
+      //   直近の投稿で横浜が一番少なくなり、毎回「横浜」が指定されて、消した書き方が5本続いた）
+      const labels = multiStoreLabels(project.area, counselingStoreTexts(counselingResult))
+        .filter((label) => !ownerRemovedFirm.some((r) => r.includes(label)));
       const pick = pickStoreForPost(labels, recentPosts);
       if (pick) console.log(`[AutoPost] 店舗を順番に指定 account=${threadsAccountId} ${labels.join('/')} → ${pick}`);
       return pick;

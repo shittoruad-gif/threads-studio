@@ -124,6 +124,15 @@ describe("同じ直しのくり返し（夜間整備の見張り）", () => {
   });
 });
 
+describe("消した部分に入っている地名を1語で「使わない」に入れる（2026-11-19 acc33）", () => {
+  it("文をまたいで切り出された「るのかもしれません。横浜の」から「横浜」を足す。店を指す言葉が入っていなければ足さない", async () => {
+    const { firmRemovedWords } = await import("../shared/editLessons");
+    expect(firmRemovedWords(["るのかもしれません。横浜の"], ["プレステージ", "横浜"])).toEqual(["るのかもしれません。横浜の", "横浜"]);
+    expect(firmRemovedWords(["ご相談ください"], ["プレステージ", "横浜"])).toEqual(["ご相談ください"]);
+    expect(firmRemovedWords(["横浜"], ["横浜"])).toEqual(["横浜"]);
+  });
+});
+
 describe("店を指す言葉：ご本人が消す言葉・地域欄の「なし」", () => {
   it("ご本人が何度も消している地名は求めない。地域欄の「なし」は地名にしない", async () => {
     const { identityTokens, checkIdentity } = await import("../shared/identityGuard");
