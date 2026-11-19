@@ -8,7 +8,7 @@
 import * as db from "./db";
 import { tryDocsBind } from "./docsBind";
 import { parseOwnerRuleMessage, parseOwnerRules, addOwnerRule, removeOwnerRule, OWNER_RULES } from "../shared/ownerRules";
-import { buildPostCards, textWithQuick, textWithChoices, parsePostback, fmtJst, REWRITE_KINDS, MENU_ITEMS, HELP_TOPICS, helpQuick, settingsQuick, settingsSummary, shouldClearPendingInput, planUpgradeExitText } from "./lineChat";
+import { buildPostCards, textWithQuick, textWithChoices, parsePostback, fmtJst, REWRITE_KINDS, MENU_ITEMS, announceGuideText, HELP_TOPICS, helpQuick, settingsQuick, settingsSummary, shouldClearPendingInput, planUpgradeExitText } from "./lineChat";
 import { COUNSELING_QUESTIONS, quickQuestions } from "../shared/counseling";
 import { buildCounselingBrief, renderBriefText } from "../shared/counselingBrief";
 import { applyIndustryOverrides } from "../shared/industryProfiles";
@@ -1464,6 +1464,17 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     )];
   }
   if (q.m === "posts") return repliesForPosts(user.id, q.one ? "one" : q.all ? "all" : undefined);
+  // ★お知らせ・告知の入口（2026-11-19）。押したあとに送られた文は、告知の文としてそのまま予約の確認へ進める
+  if (q.m === "announce") {
+    const base = process.env.APP_BASE_URL || "https://threads-studio.com";
+    const canPost = (await db.getThreadsAccountsByUserId(user.id)).length > 0;
+    if (canPost) await db.setLineChatState(lineUserId, "announce_text");
+    return [textWithQuick(announceGuideText(base, canPost), [
+      { label: "担当者に聞く", data: "m=staff" },
+      { label: "今日の投稿", data: "m=posts" },
+      { label: "やめる", data: "m=menu" },
+    ])];
+  }
   if (q.m === "stats") return repliesForStats(user.id);
   if (q.m === "profile") return repliesForProfile(user.id);
   if (q.m === "connect") return repliesForConnect(user.id);
@@ -3432,6 +3443,18 @@ export async function handleFreeText(lineUserId: string, text: string): Promise<
     } catch {
       await db.clearLineChatState(lineUserId);
       return [textWithQuick("設定の途中で問題が起きました。「はじめの設定」からやり直してください。", MENU_HINT)];
+    }
+  }
+  // ★「お知らせ・告知を出す」のあとに送られた文は、告知の文として預かり、出す日を選んでいただく（2026-11-19）
+  if (st?.state === "announce_text") {
+    await db.clearLineChatState(lineUserId);
+    const t = text.trim();
+    if (/^(やめる|中止|キャンセル|戻る|もどる)$/.test(t)) return [textWithQuick("承知しました。やめました。", MENU_HINT)];
+    // ご質問を打たれた方は閉じ込めない（下のいつもの受け口へ流す）
+    const looksLikeQuestion = /[?？]$/.test(t) || /(ですか|でしょうか|教えて|わかりません|分かりません|できますか)$/.test(t);
+    if (!looksLikeQuestion && Array.from(t).length >= 10) {
+      const offered = await offerPostFromText(lineUserId, user.id, t.slice(0, 1000));
+      if (offered) return offered;
     }
   }
   if (st?.state === "staff_message") {

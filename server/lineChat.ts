@@ -249,6 +249,8 @@ const PENDING_TEXT_INPUT: Record<string, (q: Record<string, string>) => boolean>
   comment_self_edit: (q) => q.cr === "self",
   rewrite_free: (q) => q.a === "rw",
   staff_message: (q) => q.m === "staff",
+  // お知らせ・告知の文の入力待ち（2026-11-19）。もう一度「お知らせ・告知を出す」を押されたときは消さない
+  announce_text: (q) => q.m === "announce",
   // URLだけ送ってこられたときの預かり。種類を選ぶボタン以外を押されたら捨てる
   // （別の操作に移られたのに、古いURLが残っていると取り違えるため）
   pending_url: (q) => q.c === "urlk",
@@ -281,9 +283,25 @@ export function shouldClearPendingInput(state: string | null | undefined, q: Rec
 }
 
 // ── 画面を開かせずに返す各種テキスト ──────────────────────────
+/** 「お知らせ・告知を出す」を押したときの案内（canPost＝Threads連携ずみ） */
+export function announceGuideText(base: string, canPost: boolean): string {
+  return "お知らせ・告知の投稿は、2つの出し方があります。\n\n"
+    + "【1】文章をそのまま出す\n"
+    + (canPost
+      ? "出したい文章を、このあとそのまま送ってください。出す日と時間を選べます。\n（例：12月3日〜5日、冬の展示会を開きます。10時〜17時、ご予約は不要です。）\n\n"
+      : "Threadsの連携が済むと、送っていただいた文章をそのまま予約できます。\n\n")
+    + "【2】開催日まで何回かに分けて告知する\n"
+    + "展示会・キャンペーン・休業日など、日にちの決まったものは「イベント」に登録すると、14日前・7日前・3日前・前日・当日に告知の投稿を作ります（残っている回だけ）。\n"
+    + `${base}/events?openExternalBrowser=1\n\n`
+    + "登録をこちらに任せたいときは、「担当者に聞く」を押して、内容（何を・いつ・どこで）を送ってください。";
+}
+
 export const MENU_ITEMS: QuickItem[] = [
   { label: "次にやること", data: "m=next" },
   { label: "今日の投稿", data: "m=posts" },
+  // ★お知らせ・告知の入口（2026-11-19 三上様「公式LINEに告知系のやつがあるかどうか、クライアントがわかりにくい」）。
+  //   機能はあったが、告知らしい文を打った方にしか案内が出ず、メニューのどこにも名前が無かった。
+  { label: "お知らせ・告知を出す", data: "m=announce" },
   { label: "コメント", data: "m=comments" },
   { label: "設定", data: "m=settings" },
   { label: "投稿の成績", data: "m=stats" },
