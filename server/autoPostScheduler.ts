@@ -3353,6 +3353,23 @@ export async function replacementAvoidAngles(userId: number, post: any): Promise
   return Array.from(out);
 }
 
+/** 代わりの投稿の保証で渡す指示（見送った下書きを避けつつ、まだ使っていない材料を1つ主役にする） */
+export function replacementGuaranteeHint(declinedHint: string, unused: string[]): string {
+  return [
+    declinedHint,
+    unused.length > 0
+      ? `- まだ投稿に使っていない材料がある。次のどれか1つだけを主役にして書く：\n${unused.map((u) => `  ・${u}`).join('\n')}`
+        + '\n- ★一般論・豆知識・「〜のコツ」にしない。上の材料に書かれていることを、そのまま短く書く。材料に無い効果や結果は足さない。'
+      : '- これまでと違う入り方（季節・お客様との会話・よくある質問）から書く。',
+    '- 直近の投稿に出てきた言葉・決め台詞・実績の数字は使わない。信条（主張）もそのまま書かない。',
+  ].filter(Boolean).join('\n');
+}
+export const REPLACEMENT_SAFE_LAST_HINT = [
+  '- ★最後の1本。登録されているお店の情報（店名・地域・営業時間・どんな方が来ているか・お店の考え）だけで、60〜120字の短い投稿を書く。',
+  '- 効果・改善・体の変化・お客様の体験談・数字・価格・無料の申し出・登録に無い出来事は、1つも書かない。',
+  '- お客様が見送った下書きと同じ話題・同じ書き出しにしない。',
+].join('\n');
+
 export async function generateReplacementPost(userId: number, canceledPostId: number): Promise<boolean> {
   const post: any = await db.getScheduledPostById(canceledPostId);
   if (!post || Number(post.userId) !== Number(userId)) return false;
@@ -3402,6 +3419,26 @@ async function generateReplacementPostNow(userId: number, post: any): Promise<bo
     const h = attempt === 1 ? hint : `${hint}。${lastRejectReason.get(rk) ?? ''}`;
     ok = await generateAutoPost(userId, project, typeIdx, purposeIdx, accountId, 99, true, null, eff.postLength, at, h, attempt === 3,
       false, { avoidAngleIds });
+  }
+  // ★代わりの投稿にも保証の書き直しを入れる（2026-11-19 岩根様「見送って代わりを頼むと『出来ませんでした』で1個減る事が多い」）。
+  //   通常の枠には 9/18 から保証があるのに、代わりは3回で諦めて枠が消えていた。
+  //   まだ使っていない材料を名指しで渡して最大3回。最後の1回は登録内容だけで書く短い1本（検査は緩めない）。
+  if (!ok) {
+    try {
+      const { unusedMaterials } = await import('../shared/materialDepth');
+      const recent = await db.getRecentPostContents(accountId, 10).catch(() => [] as string[]);
+      const unused = unusedMaterials(project, recent, 4);
+      const guaranteeHint = replacementGuaranteeHint(hint, unused);
+      const TRIES = 3;
+      for (let g = 1; g <= TRIES && !ok; g++) {
+        const hintNow = [g === 1 ? '' : (lastRejectReason.get(rk) ?? ''), g === TRIES ? REPLACEMENT_SAFE_LAST_HINT : guaranteeHint].filter(Boolean).join('\n');
+        console.log(`[AutoPost] 代わりの投稿 保証 ${g}/${TRIES} user=${userId} account=${accountId}（未使用の材料 ${unused.length}件）`);
+        ok = await generateAutoPost(userId, project, typeIdx, purposeIdx, accountId, 99, true, null, eff.postLength, at, hintNow, true, true, { avoidAngleIds });
+      }
+      if (!ok) console.warn(`[AutoPost] 代わりの投稿を保証でも書けず user=${userId} account=${accountId} 元=${canceledPostId}`);
+    } catch (e) {
+      console.warn(`[AutoPost] 代わりの投稿の保証に失敗 account=${accountId}: ${(e as Error)?.message}`);
+    }
   }
   clearReject(rk);
   if (ok) console.log(`[AutoPost] 代わりの投稿を作成 user=${userId} account=${accountId} 元=${canceledPostId}`);
