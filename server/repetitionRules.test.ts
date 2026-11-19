@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { REPETITION_RULES as R } from '../shared/repetitionRules';
 import { removeRepeatedSentences, measureRepetition } from '../shared/repetitionGuard';
+import { HARVEST } from '../shared/materialHarvest';
 
 // 2026-10-05 三上様「きちんと厳格にルール化しといて」：ルールの数字は shared/repetitionRules.ts が唯一の正。台帳と食い違ったら落ちる
 describe('同じ投稿に見せないルール：台帳と数字がそろっている', () => {
@@ -17,6 +18,14 @@ describe('同じ投稿に見せないルール：台帳と数字がそろって�
     expect(doc).toContain(`同じ書き出しが${R.monitor.sameOpening}本以上`);
     expect(doc).toContain(`が${R.monitor.sameSentence}本以上`);
     expect(doc).toContain(`自動の投稿が${R.monitor.minPosts}本以上`);
+    // R6・M4・ネタの補充（2026-11-19）
+    expect(doc).toContain(`直近${R.similar.window}本のうち、ほかの投稿と似ている度${R.similar.score}以上の投稿が${Math.round(R.similar.share * 100)}%以上`);
+    expect(doc).toContain(`${R.similar.phraseLen}文字以上・直近の${Math.round(R.similar.phraseShare * 10)}割以上・最低${R.similar.phraseMin}本`);
+    expect(doc).toContain(`直近${R.monitor.days}日で、ほかの投稿と似ている度${R.similar.score}以上の投稿が${Math.round(R.similar.share * 100)}%以上`);
+    expect(doc).toContain(`今日使えるネタが${HARVEST.lowUsable}件以下`);
+    expect(doc).toContain(`${HARVEST.sourceDays}日・${HARVEST.maxSources}本まで`);
+    expect(doc).toContain(`1回${HARVEST.maxAdd}件まで・同じお店は${HARVEST.everyDays}日に1回`);
+    expect(doc).toContain(`文字2つ組の${Math.round(HARVEST.grounded * 10)}割以上が元の投稿にある`);
   });
 });
 

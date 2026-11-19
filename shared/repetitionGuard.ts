@@ -12,6 +12,7 @@
  */
 
 import { REPETITION_RULES as R, GENERIC_TOPIC_WORDS } from './repetitionRules';
+import { measureSameness } from './sameness';
 
 /** 行末の絵文字・空白（「がんばるあなたへ💫」の 💫） */
 const TRAILING_DECOR_RE = new RegExp('[\\p{Extended_Pictographic}\\uFE0F\\u200D\\s　]+$', 'u');
@@ -157,6 +158,9 @@ export interface RepetitionMetrics {
   sameOpenings: Array<{ opening: string; count: number }>;
   /** 同じ文が sameSentence 本以上 */
   sameSentences: Array<{ sentence: string; count: number }>;
+  /** M4：ほかの投稿のどれかと似ている投稿の割合（0〜1・ご本人の文も数える） */
+  similarShare: number;
+  similarFlagged: boolean;
   flagged: boolean;
 }
 
@@ -167,7 +171,7 @@ export function measureRepetition(posts: readonly string[], protect: readonly (s
   const M = R.monitor;
   const owner = ownerKeys(ownerTexts);
   const docs = posts.map((p) => String(p || '')).filter((p) => norm(p).length >= 10);
-  const empty: RepetitionMetrics = { posts: docs.length, topicWords: [], sameOpenings: [], sameSentences: [], flagged: false };
+  const empty: RepetitionMetrics = { posts: docs.length, topicWords: [], sameOpenings: [], sameSentences: [], similarShare: 0, similarFlagged: false, flagged: false };
   if (docs.length < M.minPosts) return empty;
   const prot = protect.map((p) => norm(String(p || ''))).filter((p) => p.length >= 2);
   const isProtected = (w: string) => prot.some((p) => p.includes(w) || w.includes(p))
@@ -188,5 +192,7 @@ export function measureRepetition(posts: readonly string[], protect: readonly (s
   const sc = new Map<string, number>();
   for (const d of docs) for (const s of sentencesOf(d, R.sentence.minLen)) if (!owner.sentences.has(s)) sc.set(s, (sc.get(s) ?? 0) + 1);
   const sameSentences = Array.from(sc.entries()).filter(([, n]) => n >= M.sameSentence).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([sentence, count]) => ({ sentence, count }));
-  return { posts: docs.length, topicWords, sameOpenings, sameSentences, flagged: topicWords.length > 0 || sameOpenings.length > 0 || sameSentences.length > 0 };
+  // M4：形が似た投稿の割合（shared/sameness.ts）
+  const same = measureSameness(docs);
+  return { posts: docs.length, topicWords, sameOpenings, sameSentences, similarShare: same.similarShare, similarFlagged: same.flagged, flagged: topicWords.length > 0 || sameOpenings.length > 0 || sameSentences.length > 0 || same.flagged };
 }

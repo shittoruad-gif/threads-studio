@@ -8,7 +8,7 @@ import { sql } from 'drizzle-orm';
 import { REPETITION_RULES } from '../shared/repetitionRules';
 import type { RepetitionMetrics } from '../shared/repetitionGuard';
 
-export interface AccountRepetition { accountId: number; username: string; metrics: RepetitionMetrics }
+export interface AccountRepetition { accountId: number; userId: number; projectId: string | null; username: string; metrics: RepetitionMetrics }
 
 export async function measureAllAccounts(): Promise<AccountRepetition[]> {
   const d = await db.getDb();
@@ -41,7 +41,7 @@ export async function measureAllAccounts(): Promise<AccountRepetition[]> {
         : [];
       const edits = await db.getUserEditedPosts(Number(a.userId), 20).catch(() => []);
       const ownerTexts = [...edits.map((e) => String(e.postContent ?? '')), ...splitStyleSamples(project?.styleSamples || null)];
-      out.push({ accountId: Number(a.id), username: String(a.threadsUsername ?? ''), metrics: measureRepetition(rows.map((r) => String(r.postContent)), protect, ownerTexts) });
+      out.push({ accountId: Number(a.id), userId: Number(a.userId), projectId: project?.id ? String(project.id) : null, username: String(a.threadsUsername ?? ''), metrics: measureRepetition(rows.map((r) => String(r.postContent)), protect, ownerTexts) });
     } catch (e) {
       console.warn(`[RepetitionMonitor] account ${a.id} を数えられませんでした: ${(e as Error)?.message}`);
     }
@@ -59,10 +59,11 @@ export function repetitionReportText(list: readonly AccountRepetition[]): string
       m.topicWords.length > 0 ? `話題の言葉 ${m.topicWords.map((w) => `「${w.word}」${Math.round(w.share * 100)}%`).join('')}` : '',
       m.sameOpenings.length > 0 ? `同じ書き出し ${m.sameOpenings.map((o) => `「${o.opening}」${o.count}本`).join('')}` : '',
       m.sameSentences.length > 0 ? `同じ文 ${m.sameSentences.map((s) => `「${s.sentence.slice(0, 20)}」${s.count}本`).join('')}` : '',
+      m.similarFlagged ? `似た投稿 ${Math.round(m.similarShare * 100)}%（材料の不足・毎朝のネタの補充の対象）` : '',
     ].filter(Boolean).join(' ／ ');
     return `・account ${x.accountId}（@${x.username}・${m.posts}本）${parts}`;
   });
-  return `${head}\n${lines.join('\n')}\n\n基準：shared/repetitionRules.ts（M1 話題の言葉${Math.round(REPETITION_RULES.monitor.topicShare * 100)}%以上／M2 同じ書き出し${REPETITION_RULES.monitor.sameOpening}本以上／M3 同じ文${REPETITION_RULES.monitor.sameSentence}本以上）。毎回出てよい店名・地名と、ご本人が書いた書き出し・文は数えない。`;
+  return `${head}\n${lines.join('\n')}\n\n基準：shared/repetitionRules.ts（M1 話題の言葉${Math.round(REPETITION_RULES.monitor.topicShare * 100)}%以上／M2 同じ書き出し${REPETITION_RULES.monitor.sameOpening}本以上／M3 同じ文${REPETITION_RULES.monitor.sameSentence}本以上／M4 似た投稿${Math.round(REPETITION_RULES.similar.share * 100)}%以上）。毎回出てよい店名・地名と、ご本人が書いた書き出し・文は数えない（M4 はご本人の文も数える）。`;
 }
 
 export async function runRepetitionMonitorJob(): Promise<void> {

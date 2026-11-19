@@ -1543,6 +1543,20 @@ export async function generateAutoPost(
               return buildRepetitionNote(recentPosts, identityTokens(project), await ownerRepetitionKeys(), await older14Posts());
             } catch { return ''; }
           })()
+          // ★R6 形が似た投稿が続いているときだけ、何度も使った言い回しを今日は使わないよう足す（shared/sameness.ts・2026-11-19）。
+          //   作り直しの条件にはしない（材料が薄い方は作り直しても同じ所に戻り、枠が減るだけだった）。材料の補充は server/materialHarvest.ts
+          + await (async () => {
+            try {
+              const { buildSamenessNote } = await import('../shared/sameness');
+              const { identityTokens } = await import('../shared/identityGuard');
+              const { splitStyleSamples } = await import('../shared/styleTraits');
+              const { getAccountEditPairs } = await import('./editLessons');
+              const edits = (await getAccountEditPairs(userId, threadsAccountId, 20).catch(() => ({ pairs: [] as Array<{ after: string }> }))).pairs.map((e) => e.after);
+              const note = buildSamenessNote(recentPosts, identityTokens(project), [...edits, ...splitStyleSamples((project as any).styleSamples || null)]);
+              if (note) console.log(`[AutoPost] 直近の投稿どうしが似ているため、言い回しを変える指示を足す userId=${userId} account=${threadsAccountId}`);
+              return note;
+            } catch { return ''; }
+          })()
           // ★同じ枠の前の案（3案の2案目以降）。末尾に近いほど守られるので、話題の指定のあとに置く（2026-10-04）
           + (opts.siblingTexts?.length ? (await import('../shared/threeChoice')).choiceSiblingNote(opts.siblingTexts) : '')
           // ★ネタ帳の今日のネタ（2026-09-30）。話題を変える指示より後ろ＝より優先

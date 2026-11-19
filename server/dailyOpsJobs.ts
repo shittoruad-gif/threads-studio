@@ -457,6 +457,13 @@ export function initDailyOpsSchedulers(): void {
     const { runRepetitionMonitorJob } = await import("./repetitionMonitor");
     await runTrackedJob("repetition_monitor", runRepetitionMonitorJob);
   });
+  // 毎朝 5:20 JST = 20:20 UTC — ネタの補充（2026-11-19 三上様「ネタ切れで同じような投稿ばかり…ならない仕組みを早急に」・server/materialHarvest.ts）。
+  //   似た投稿が続く／ネタ帳が残り少ないアカウントだけ、ご本人の手直し投稿からお店の事実を拾ってネタ帳に足す。運営にだけ知らせる。
+  cron.schedule("20 20 * * *", async () => {
+    const { runTrackedJob } = await import("./jobRunner");
+    const { runMaterialHarvestJob } = await import("./materialHarvest");
+    await runTrackedJob("material_harvest", runMaterialHarvestJob);
+  });
   // 月曜 4:40 JST = 日曜 19:40 UTC — 当たり型の週次の取り込み（2026-11-11・server/hitPatterns.ts）。よく読まれた・コメントが多い投稿から型だけを足す
   cron.schedule("40 19 * * 0", async () => {
     const { runTrackedJob } = await import("./jobRunner");
