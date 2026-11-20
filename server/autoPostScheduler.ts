@@ -26,7 +26,7 @@ import { earlierRejectedNote } from "../shared/naturalnessRetryHint";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
 import { trialRules, inLearning, isUncappedAccount } from "../shared/learningAccounts";
 import { bannedRuleFor, scrubProjectForAccount, findAccountBannedWord, accountBannedNote } from "../shared/accountBannedWords";
-import { LOCAL_TALK_ANGLE_ID, localTalkNote, localTalkPlaces, localTalkOptedOut, localTalkOptedOutByRules } from "../shared/localTalk";
+import { LOCAL_TALK_ANGLE_ID, localTalkNote, localTalkPlaces, localTalkOptedOut, localTalkOptedOutByRules, recentSeasonFoodTalk } from "../shared/localTalk";
 
 /**
  * 試し生成（scripts/ops/autopost-dryrun.mts・AUTOPOST_DRY_RUN=1）のときだけ、書き方の決まりを差し替えて試す。
@@ -1581,7 +1581,7 @@ export async function generateAutoPost(
           + (personal ? personalModePromptOverride() : '')
           // ★地元の会話の回（2026-10-18・shared/localTalk.ts）。長さ・絵文字・締めの共通指示より後ろ＝より優先。
           //   ご本人の手直しの決まり（editLessonsNote）はこれより後ろ（ご本人の直しを優先する）
-          + (localTalkTurn ? localTalkNote({ places: localTalkPlaces(project.area, approvedLocalTerms(project)), allowEmoji }) : '')
+          + (localTalkTurn ? localTalkNote({ places: localTalkPlaces(project.area, approvedLocalTerms(project)), allowEmoji, recentSeasonFood: recentSeasonFoodTalk(recentPosts) }) : '')
           // ★毎回直しているところ（2026-10-08）。長さ・改行の最終指示より後ろ＝より優先
           + editLessonsNote
           // ★お客様が自分で決めた書き方（2026-10-18）。手直しの決まりの後ろ
@@ -1970,6 +1970,20 @@ export async function generateAutoPost(
         if (softened !== naturalMain) { console.log(`[AutoPost] 「診断」「治療」を言い換え userId=${userId}`); naturalMain = softened; }
       }
     } catch { /* 置き換えに失敗してもそのまま */ }
+
+    // ★埋めていない伏せ字（「私はやっぱり〇〇かな」）が残っていたら公開しない（2026-11-20 夜間整備）。
+    //   直近30日で5本が伏せ字のまま公開されていた（#7288・#7168・#7107・#6968・#5902。どれも地元の会話）。
+    //   何が入るかは分からないので直さず、理由を渡して作り直す。
+    try {
+      const { findUnfilledPlaceholder, unfilledPlaceholderRetryHint } = await import('../shared/jpQualityGuard');
+      const ph = findUnfilledPlaceholder(naturalMain);
+      if (ph) {
+        console.warn(`[AutoPost] placeholderGuard: 伏せ字「${ph}」が残っているため公開しない userId=${userId} projectId=${project.id}`);
+        noteReject('placeholderGuard', userId, threadsAccountId, postingTimeIndex,
+          unfilledPlaceholderRetryHint(ph), { detail: `伏せ字：${ph}`, gaveUp: lastAttempt });
+        return false;
+      }
+    } catch { /* ガード失敗時はそのまま */ }
 
     // ★登録情報に無い数字（割合・順位・人数など）が入っていたら公開しない。
     //   2026-09-08 比嘉先生の当日補充で「3人に1人が知らないこと」が出た。実績は

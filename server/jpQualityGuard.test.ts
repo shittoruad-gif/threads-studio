@@ -342,3 +342,59 @@ describe("決まり文句の1文だけを差し替える（2026-10-15 週次リ�
     expect(hasTicOrAgreement(step2)).toBe(false);
   });
 });
+
+// 2026-11-20 夜間整備：伏せ字のまま公開された投稿（その文をそのまま）
+describe('埋めていない伏せ字を見つける（findUnfilledPlaceholder）', () => {
+  it('公開されてしまった4本は、どれも見つかる', async () => {
+    const { findUnfilledPlaceholder } = await import('../shared/jpQualityGuard');
+    for (const t of [
+      '神崎本宿で秋の味覚といえば、何を思い浮かべますか？\n私はやっぱり〇〇かな…笑😊',
+      '金沢の秋といえば、やっぱり加賀野菜の〇〇！\n\n煮物も天ぷらも美味しいですよね😊',
+      '金沢もすっかり秋ですね。\n\nこの時期の楽しみといえば、やっぱり〇〇！\n\nみなさんは何が好きですか？',
+      '玉島中央町で秋の味覚といえば、何を思い浮かべますか？\n\n私はやっぱり、○○かなぁ😊',
+    ]) expect(findUnfilledPlaceholder(t), t).not.toBeNull();
+  });
+  it('ふつうの文・丸1つ・◯✕の話は拾わない', async () => {
+    const { findUnfilledPlaceholder } = await import('../shared/jpQualityGuard');
+    for (const t of [
+      '岐阜の秋といえば、やっぱり富有柿ですよね。',
+      '◯か✕かで答えてください',
+      '〇 予約はLINEから',
+      '10時〜19時（水曜定休）',
+      '二〇二六年の秋',
+    ]) expect(findUnfilledPlaceholder(t), t).toBeNull();
+  });
+  it('地元の会話の指示文に、伏せ字の見本を置かない（見本があると真似る）', async () => {
+    const { localTalkNote } = await import('../shared/localTalk');
+    const note = localTalkNote({ places: ['金沢'], allowEmoji: true });
+    expect(note).not.toContain('今日は〇〇がある');
+    expect(note).toContain('伏せ字・空欄は一切書かない');
+  });
+});
+
+// 2026-11-20 夜間整備：同じ日に「〜の秋といえば」が2本並んだ（acc34 #7319・#7321／acc33 #7295・#7297）
+describe('地元の会話：直近で季節の食べ物を聞いていたら、今回は別の話題を指定する', () => {
+  it('並んでしまった投稿は「季節の食べ物」と数える', async () => {
+    const { recentSeasonFoodTalk } = await import('../shared/localTalk');
+    for (const t of [
+      '岐阜の秋といえば、やっぱり美味しいものがたくさんありますよね。\n\nこの時期、一番食べたくなるものって何ですか？',
+      '川崎の秋といえば、\nやっぱり梨や柿ですよね。\n\n皆さんはどんな秋の味覚が好きですか？😊',
+      '神崎本宿もすっかり秋の景色になりましたね。\n\nこの季節、ついつい食べすぎちゃうものってありますか？',
+      '岡山もすっかり秋ですね。\nこの季節になると、ついつい食べたくなるものがあります。\n皆さんは何を食べたくなりますか？',
+    ]) expect(recentSeasonFoodTalk(['川崎駅からすぐの場所にあるプレステージ。施術の後は、温かいアフターティーでゆっくり過ごしてくださいね', t]), t).toBe(t.replace(/\s+/g, ' ').trim());
+  });
+  it('ほかの話題の投稿・長い投稿の中の一言は数えない', async () => {
+    const { recentSeasonFoodTalk } = await import('../shared/localTalk');
+    expect(recentSeasonFoodTalk(['岡山も朝晩冷え込んできましたね。\nそろそろコタツ出す時期ですか？', '玉島の人に聞きたいんですけど、「えらい」って疲れたの意味で使います？'])).toBeNull();
+    expect(recentSeasonFoodTalk(['秋といえば食欲の秋ですが、' + '当院では姿勢の検査を丁寧に行い、一人ひとりに合わせた計画をお伝えしています。'.repeat(3)])).toBeNull();
+    expect(recentSeasonFoodTalk([])).toBeNull();
+  });
+  it('数えた日は、指示文に「食べ物・季節の話にしない」が入る。数えない日は入らない', async () => {
+    const { localTalkNote } = await import('../shared/localTalk');
+    expect(localTalkNote({ places: ['岐阜'], allowEmoji: true, recentSeasonFood: '岐阜の秋といえば、やっぱり富有柿ですよね。' })).toContain('今回は食べ物・味覚・季節の話にしない');
+    expect(localTalkNote({ places: ['岐阜'], allowEmoji: true })).not.toContain('今回は食べ物・味覚・季節の話にしない');
+    // 引用する直近の投稿に伏せ字が残っていても、指示文には伏せ字を持ち込まない（見本になるため）
+    expect(localTalkNote({ places: ['神崎本宿'], allowEmoji: true, recentSeasonFood: '神崎本宿で秋の味覚といえば、何を思い浮かべますか？ 私はやっぱり〇〇かな…笑' })).not.toMatch(/私はやっぱり〇〇かな…笑/);
+  });
+});
+
