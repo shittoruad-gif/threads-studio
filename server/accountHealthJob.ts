@@ -1,7 +1,8 @@
 /**
  * アカウント健全性の日次点検（毎朝6:40 JST・自動投稿の前）。2026-09-06 梅原様の停止を受けて。
  *  1. 各アカウントのトークンで /me を叩き、制限・停止のエラーなら自動投稿を止めて本人と運営に通知
- *  2. 直近3日に公開した投稿がThreads上から消えていないか（スパム判定で消される兆候）を見る。2件以上消えていたら運営と本人に通知
+ *  2. 直近3日に公開した投稿がThreads上から消えていないかを見る。お客様のアカウントは記録して運営にだけ通知（本数は変えない・2026-11-20）。
+ *     自社アカウントだけ、今までどおり7日間の冷却に入れる
  *  3. 表示回数が以前の2割を切っていないか（公開できているのに表示されない状態）を見る。運営に通知する（本数は変えない・2026-11-11）
  */
 import * as db from "./db";
@@ -61,65 +62,35 @@ export async function runAccountHealthJob(): Promise<void> {
       //   （2026-09-09 比嘉様に3日連続で「投稿が消えています」が届いた）
       if (goneIds.length > 0) {
         const { COOLDOWN_DAYS, jstDateString } = await import("../shared/accountRamp");
-        const { deletedPostsNotice, singleDeleteAskNotice, dateJstLabel } = await import("../shared/dailyCap");
+        const { dateJstLabel } = await import("../shared/dailyCap");
         const until = jstDateString(COOLDOWN_DAYS);
         // 自社アカウント（しっとる公式・Moveact＝user 78）は補填しない（2026-09-13 R6）
         const isOwnAccount = Number(a.userId) === 78;
 
-        // ★1件だけ消えていたときは、まずご本人に伺ってから決める（2026-09-19 三上様ご判断）。
-        //   健全性点検は「投稿が見つからない」ことしか分からず、ご本人が消したのか Meta が消したのかを
-        //   区別できない。9/12以降の冷却5回のうち3回が「1件だけ」で、そのあと実際に制限を受けた例は0件だった。
-        //   7日以内に2件目が消えたとき（＝すでに伺っている）と、同時に2件以上消えたときは、今までどおり即冷却。
-        const asked = acct.singleDeleteAskedAt ? new Date(acct.singleDeleteAskedAt).getTime() : 0;
-        const askedRecently = asked > 0 && Date.now() - asked < COOLDOWN_DAYS * 86400000;
-        if (goneIds.length === 1 && !askedRecently && !isOwnAccount) {
-          const targets = await db.getLineUserIdsForUser(Number(a.userId));
-          if (targets.length > 0) {
-            // ★お答えを待つあいだも冷却に入れる（2026-10-16 三上様「それで進めて」）。
-            //   10/15 acc22 の #3595 で「ご本人に確認中」のまま冷却が入らず、1日5件のまま走って翌日もう1件消えた。
-            //   すでに冷却中なら期限は変えない（長い方を縮めない）。「自分で消しました」のお答えで、ここで入れた冷却だけ外す。
-            const { inCooldown } = await import("../shared/accountRamp");
-            const alreadyCooling = inCooldown(acct);
-            const { dateColToJst } = await import("../shared/accountRamp");
-            const holdUntil = alreadyCooling ? dateColToJst(acct.cooldownUntil) : until;
-            await db.updateThreadsAccount(Number(a.id), { singleDeleteAskedAt: new Date(), singleDeletePostId: goneIds[0], ...(alreadyCooling ? {} : { cooldownUntil: until }) } as any);
-            let deferredAsk = 0;
-            try { deferredAsk = await db.deferTodaysAutoPostsBeyond(Number(a.id), 1); } catch (e) { console.warn(`[AccountHealth] defer (asking) failed:`, (e as Error)?.message); }
-            // 消えた1件は記録だけ残す（補填には積まない。お返事が「消していません」のときに積む）
-            try { await d.execute(sql`UPDATE scheduledPosts SET status = 'failed', errorMessage = 'Threads上で見つからない（ご本人に確認中）' WHERE threadsAccountId = ${Number(a.id)} AND status = 'posted' AND publishedThreadsPostId = ${goneIds[0]}`); } catch (e) { console.warn(`[AccountHealth] mark asking failed:`, (e as Error)?.message); }
-            for (const to of targets) {
-              await pushMessages(to, [
-                { type: "text", text: singleDeleteAskNotice(String(a.threadsUsername)),
-                  quickReply: { items: [
-                    { type: "action", action: { type: "postback", label: "自分で消しました", data: `sd=mine&a=${a.id}`, displayText: "自分で消しました" } },
-                    { type: "action", action: { type: "postback", label: "消していません", data: `sd=notmine&a=${a.id}`, displayText: "消していません" } },
-                  ] } },
-              ]);
-            }
-            await notifyOwner({ title: "公開した投稿が1件消えています（ご本人に確認中・お答えまで1日1件）", content: `@${a.threadsUsername}（user ${a.userId}）直近3日の公開 ${ids.length}件のうち 1件が見つかりません。LINEで「ご自身で消されましたか？」と伺いました。お答えを待つあいだも${dateJstLabel(holdUntil)}まで1日1件に抑え、今日の残り${deferredAsk}件を翌日へ送りました（2026-10-16）。「自分で消しました」なら抑えを外し、「消していません」なら冷却のまま消えた1件を補填に積みます。` });
-            console.warn(`[AccountHealth] @${a.threadsUsername}: 1件消えたためご本人に確認（お答えまで冷却〜${holdUntil}・翌日へ${deferredAsk}件）`);
-            continue;
-          }
-          // LINE未連携の方には伺えないので、今までどおり冷却に入れる
+        // ★お客様のアカウントでは、投稿が見つからなくなっても本数を変えない（2026-11-20 三上様
+        //   「クライアントが自分で投稿が微妙だと思って削除したときに、勝手に消されたと思って投稿数を勝手に減らす仕組みをやめて」）。
+        //   点検は「見つからない」ことしか分からず、ご本人が消したのか Meta が消したのかを区別できない。
+        //   これまでは1件でも7日間1日1件に抑え、その日の残りも翌日へ送っていた（ご本人が消しただけの方の本数が減っていた）。
+        //   いまは記録して運営にだけ知らせる。冷却・翌日送り・補填・お客様へのお知らせは、どれも自動では行わない。
+        //   制限・停止の兆候（上の /me のエラー）で自動投稿を止める守りは変えていない。
+        if (!isOwnAccount) {
+          try { await d.execute(sql`UPDATE scheduledPosts SET status = 'failed', errorMessage = 'Threads上で見つからない（ご本人が消した可能性・本数は変えていない）' WHERE threadsAccountId = ${Number(a.id)} AND status = 'posted' AND publishedThreadsPostId IN (${sql.join(goneIds.map((g) => sql`${g}`), sql`, `)})`); } catch (e) { console.warn(`[AccountHealth] mark missing failed:`, (e as Error)?.message); }
+          missing++;
+          await notifyOwner({ title: `公開した投稿が${gone}件見つかりません（本数は変えていません）`, content: `@${a.threadsUsername}（user ${a.userId}）直近3日の公開 ${ids.length}件のうち ${gone}件が Threads 上で見つかりません。ご本人が消された可能性があるため、本数は変えず、お客様へのお知らせもしていません（2026-11-20）。${gone >= 2 ? "一度に2件以上です。" : ""}短い間に続くとき・ご本人に心当たりが無いときは Meta 側の削除の可能性があるので、本数を抑えるかどうかを手で判断してください。` });
+          console.warn(`[AccountHealth] @${a.threadsUsername}: ${gone}/${ids.length} posts missing（本数は変えない・運営にだけ通知）`);
+          continue;
         }
+        // ── ここから下は自社アカウントだけ（1日の本数が多い学習用を守るため、今までどおり冷却に入れる） ──
         try {
           await db.updateThreadsAccount(Number(a.id), { cooldownUntil: until } as any);
           console.warn(`[AccountHealth] @${a.threadsUsername} を冷却期間に（${COOLDOWN_DAYS}日・1日1件）`);
         } catch { /* 記録できなくても点検は続ける */ }
         try { await d.execute(sql`UPDATE scheduledPosts SET status = 'failed', errorMessage = 'Threads側で削除された（健全性点検で検知・スパム判定の可能性）' WHERE threadsAccountId = ${Number(a.id)} AND status = 'posted' AND publishedThreadsPostId IN (${sql.join(goneIds.map((g) => sql`${g}`), sql`, `)})`); } catch (e) { console.warn(`[AccountHealth] mark removed failed:`, (e as Error)?.message); }
-        // ★R6：消えた分を補填に積む（冷却明けから1日＋1件で返す）
-        if (!isOwnAccount) { try { await db.addDeletedShortfall(Number(a.id), gone); } catch (e) { console.warn(`[AccountHealth] deletedShortfall failed:`, (e as Error)?.message); } }
         // ★R5：冷却に入った日は、その日すでに作ってある予定も1件に絞る（残りは翌日の同じ時刻へ）
         let deferred = 0;
         try { deferred = await db.deferTodaysAutoPostsBeyond(Number(a.id), 1); } catch (e) { console.warn(`[AccountHealth] defer failed:`, (e as Error)?.message); }
         missing++;
-        try { const { notifyAgencyOfClientIssue } = await import("./agencyReportJob"); await notifyAgencyOfClientIssue(Number(a.userId), `@${a.threadsUsername} で最近公開した投稿のうち${gone}件がThreads上から消えています（スパム判定の可能性）。${dateJstLabel(until)}まで自動投稿を1日1件に抑え、減った分と消えた分はその後に1日1件ずつ補填します。`); } catch { /* 代理店なし */ }
-        await notifyOwner({ title: "公開した投稿がThreads上から消えています（スパム判定の可能性）", content: `@${a.threadsUsername}（user ${a.userId}）直近3日の公開 ${ids.length}件のうち ${gone}件が見つかりません。${dateJstLabel(until)}まで1日1件に抑え、今日の残り${deferred}件を翌日へ送りました。${isOwnAccount ? "自社アカウントのため補填なし。" : `消えた${gone}件は冷却明けから1日1件ずつ補填します。`}お客様へは定型文でお知らせ済み（R5）。` });
-        // ★R5：検知した当日に、承諾済みの定型文でお客様へ（2026-09-13 三上様決定。文面は shared/dailyCap.ts deletedPostsNotice）
-        if (!isOwnAccount) {
-          const targets = await db.getLineUserIdsForUser(Number(a.userId));
-          for (const to of targets) await pushMessages(to, [{ type: "text", text: deletedPostsNotice(String(a.threadsUsername), gone, dateJstLabel(until)) }]);
-        }
+        await notifyOwner({ title: "自社アカウントで公開した投稿がThreads上から消えています（冷却に入れました）", content: `@${a.threadsUsername}（user ${a.userId}）直近3日の公開 ${ids.length}件のうち ${gone}件が見つかりません。${dateJstLabel(until)}まで1日1件に抑え、今日の残り${deferred}件を翌日へ送りました。自社アカウントのため補填なし。` });
         console.warn(`[AccountHealth] @${a.threadsUsername}: ${gone}/${ids.length} posts missing（冷却〜${until}・翌日へ${deferred}件）`);
       }
     } catch (e) {

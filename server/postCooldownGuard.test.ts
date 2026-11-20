@@ -46,33 +46,43 @@ function mockFetch(goneIds: string[]) {
   })));
 }
 
-describe("1件消えてご本人に確認中のあいだも冷却に入れる（2026-10-16）", () => {
+// 2026-11-20 三上様「クライアントが自分で投稿が微妙だと思って削除したときに、勝手に消されたと思って投稿数を勝手に減らす仕組みをやめて」
+describe("お客様のアカウントでは、投稿が見つからなくなっても本数を変えない（2026-11-20）", () => {
   beforeEach(() => {
     calls.update = []; calls.defer = []; calls.shortfall = []; calls.pushed = [];
   });
 
-  it("お伺いと同時に7日間の冷却を入れ、今日の残りを1件に絞る。補填にはまだ積まない", async () => {
+  it("1件消えても、冷却に入れない・今日の残りを翌日へ送らない・補填に積まない・お客様に何も送らない", async () => {
     executeRows = [[{ id: 22, userId: 500, threadsUsername: "esthe_prestige_r" }], [{ publishedThreadsPostId: "p1" }, { publishedThreadsPostId: "p2" }]];
     accountRow = { id: 22, userId: 500, accessToken: "tok", cooldownUntil: null, singleDeleteAskedAt: null };
     mockFetch(["p2"]);
     await runAccountHealthJob();
-    const u = calls.update.find((x) => "singleDeleteAskedAt" in x);
-    expect(u).toBeTruthy();
-    expect(u.cooldownUntil).toBe(jstDateString(COOLDOWN_DAYS));
-    expect(calls.defer).toEqual([{ id: 22, n: 1 }]);
-    expect(calls.shortfall).toEqual([]); // 「消していません」のお答えで積む
-    expect(calls.pushed.length).toBe(1); // お伺いの1通だけ
+    expect(calls.update.some((x) => "cooldownUntil" in x || "singleDeleteAskedAt" in x)).toBe(false);
+    expect(calls.defer).toEqual([]);
+    expect(calls.shortfall).toEqual([]);
+    expect(calls.pushed).toEqual([]);
   });
 
-  it("すでに冷却中なら、期限を縮めない（変えない）", async () => {
-    const longer = jstDateString(COOLDOWN_DAYS + 5);
-    executeRows = [[{ id: 22, userId: 500, threadsUsername: "esthe_prestige_r" }], [{ publishedThreadsPostId: "p1" }]];
-    accountRow = { id: 22, userId: 500, accessToken: "tok", cooldownUntil: longer, singleDeleteAskedAt: null };
+  it("一度に2件以上消えても同じ（本数は変えない）", async () => {
+    executeRows = [[{ id: 22, userId: 500, threadsUsername: "esthe_prestige_r" }], [{ publishedThreadsPostId: "p1" }, { publishedThreadsPostId: "p2" }, { publishedThreadsPostId: "p3" }]];
+    accountRow = { id: 22, userId: 500, accessToken: "tok", cooldownUntil: null, singleDeleteAskedAt: null };
+    mockFetch(["p1", "p3"]);
+    await runAccountHealthJob();
+    expect(calls.update.some((x) => "cooldownUntil" in x)).toBe(false);
+    expect(calls.defer).toEqual([]);
+    expect(calls.shortfall).toEqual([]);
+    expect(calls.pushed).toEqual([]);
+  });
+
+  it("自社アカウント（1日の本数が多い学習用）だけは、今までどおり冷却に入れる", async () => {
+    executeRows = [[{ id: 10, userId: 78, threadsUsername: "own_account" }], [{ publishedThreadsPostId: "p1" }]];
+    accountRow = { id: 10, userId: 78, accessToken: "tok", cooldownUntil: null, singleDeleteAskedAt: null };
     mockFetch(["p1"]);
     await runAccountHealthJob();
-    const u = calls.update.find((x) => "singleDeleteAskedAt" in x);
-    expect(u).toBeTruthy();
-    expect("cooldownUntil" in u).toBe(false);
+    expect(calls.update.find((x) => "cooldownUntil" in x)?.cooldownUntil).toBe(jstDateString(COOLDOWN_DAYS));
+    expect(calls.defer).toEqual([{ id: 10, n: 1 }]);
+    expect(calls.shortfall).toEqual([]);
+    expect(calls.pushed).toEqual([]);
   });
 });
 

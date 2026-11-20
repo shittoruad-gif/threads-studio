@@ -2130,7 +2130,7 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
     const acct: any = await db.getThreadsAccountById(Number(q.a));
     if (!acct || acct.userId !== user.id) return [textWithQuick("そのアカウントが見つかりませんでした。", MENU_HINT)];
     const { COOLDOWN_DAYS, jstDateString } = await import("../shared/accountRamp");
-    const { singleDeleteByOwnerNotice, singleDeleteConfirmedNotice, dateJstLabel } = await import("../shared/dailyCap");
+    const { singleDeleteByOwnerNotice, singleDeleteConfirmedNotice } = await import("../shared/dailyCap");
     if (q.sd === "mine") {
       // ★お伺いのときに入れた仮の冷却だけ外す（2026-10-16）。ほかの理由の冷却（期限が違う）はそのまま残す
       const { dateColToJst } = await import("../shared/accountRamp");
@@ -2139,14 +2139,17 @@ export async function handlePostback(lineUserId: string, data: string): Promise<
       await db.updateThreadsAccount(Number(q.a), { singleDeleteAskedAt: null, singleDeletePostId: null, ...(setByAsk ? { cooldownUntil: null } : {}) } as any);
       return [textWithQuick(singleDeleteByOwnerNotice(String(acct.threadsUsername)), MENU_HINT)];
     }
-    const until = jstDateString(COOLDOWN_DAYS);
-    await db.updateThreadsAccount(Number(q.a), { cooldownUntil: until, singleDeleteAskedAt: null, singleDeletePostId: null } as any);
-    await db.addDeletedShortfall(Number(q.a), 1).catch(() => undefined);
-    let deferred = 0;
-    try { deferred = await db.deferTodaysAutoPostsBeyond(Number(q.a), 1); } catch { /* 絞れなくてもお知らせは返す */ }
-    const { notifyOwner } = await import("./_core/notification");
-    await notifyOwner({ title: "「自分では消していない」とのお答え（冷却に入りました）", content: `@${acct.threadsUsername}（user ${acct.userId}）${dateJstLabel(until)}まで1日1件。今日の残り${deferred}件を翌日へ送りました。` }).catch(() => undefined);
-    return [textWithQuick(singleDeleteConfirmedNotice(String(acct.threadsUsername), dateJstLabel(until)), MENU_HINT)];
+    // ★「消していません」でも本数は変えない（2026-11-20 三上様「投稿数を勝手に減らす仕組みをやめて」）。
+    //   以前のお伺いで入っていた仮の冷却は、こちらのお答えでも外す。運営にだけ知らせ、抑えるかどうかは人が決める。
+    {
+      const { dateColToJst } = await import("../shared/accountRamp");
+      const askedAt = acct.singleDeleteAskedAt ? new Date(acct.singleDeleteAskedAt).getTime() : 0;
+      const setByAsk = askedAt > 0 && dateColToJst(acct.cooldownUntil) === jstDateString(COOLDOWN_DAYS, askedAt);
+      await db.updateThreadsAccount(Number(q.a), { singleDeleteAskedAt: null, singleDeletePostId: null, ...(setByAsk ? { cooldownUntil: null } : {}) } as any);
+      const { notifyOwner } = await import("./_core/notification");
+      await notifyOwner({ title: "「自分では消していない」とのお答え（本数は変えていません）", content: `@${acct.threadsUsername}（user ${acct.userId}）Threads 側で消された可能性があります。本数は変えていません。続くようなら、抑えるかどうかを手で判断してください。` });
+      return [textWithQuick(singleDeleteConfirmedNotice(String(acct.threadsUsername)), MENU_HINT)];
+    }
   }
   // ── コメント返信の1タップ（2026-09-07）──
   // ★「返信しない」。これが無かったため、返さないと決めた方が文章で状況を書いて送るしかなく、

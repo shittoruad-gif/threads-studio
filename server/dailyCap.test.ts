@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeDailyCap, nextDaySameTime, cooldownCapNotice, rampCapNotice, deletedPostsNotice, dateJstLabel } from "../shared/dailyCap";
+import { computeDailyCap, nextDaySameTime, cooldownCapNotice, rampCapNotice, dateJstLabel } from "../shared/dailyCap";
 
 describe("1日の公開上限（2026-09-13 R1）", () => {
   it("歴の長いアカウントも契約本数で頭打ち（9/12 滝本様 8件・Moveact 10件の再発防止）", () => {
@@ -56,12 +56,6 @@ describe("文言（R8：冷却中を「慣らし運転1日目」と言わない�
     expect(t).toContain("7日目");
     expect(t).toContain("翌日に回しました");
   });
-  it("消失検知の定型文（髙木様 9/13 承諾文の型）", () => {
-    const t = deletedPostsNotice("miraiseitai.diet", 3, "9月20日");
-    expect(t).toContain("3件が、Threads側で削除");
-    expect(t).toContain("9月20日まで1日1件");
-    expect(t).toContain("1日1件ずつ足してお届け");
-  });
 });
 
 /**
@@ -71,18 +65,12 @@ describe("文言（R8：冷却中を「慣らし運転1日目」と言わない�
  *    健全性点検はご本人が消したのか Meta が消したのかを区別できないため、伺ってから決める。
  */
 describe("1件だけ消えたときのお伺い（2026-09-19）", () => {
-  it("お伺いの文に、冷却やスパム判定の話を書かない（ご自身で消しただけの方に不安を与えない）", async () => {
-    const { singleDeleteAskNotice } = await import("../shared/dailyCap");
-    const s = singleDeleteAskNotice("test_user");
-    expect(s).toContain("ご自身で削除されましたか");
-    expect(s).not.toContain("スパム");
-    expect(s).not.toContain("1日1件");
-  });
-  it("「消していません」のお答えには、冷却の期間と補填を伝える", async () => {
+  it("「消していません」のお答えでも、本数は変えないと伝える（2026-11-20）", async () => {
     const { singleDeleteConfirmedNotice } = await import("../shared/dailyCap");
-    const s = singleDeleteConfirmedNotice("test_user", "9/26");
-    expect(s).toContain("9/26まで1日1件");
-    expect(s).toContain("足してお届け");
+    const s = singleDeleteConfirmedNotice("test_user");
+    expect(s).toContain("本数を変えずに");
+    expect(s).not.toContain("1日1件");
+    expect(s).not.toContain("スパム");
   });
   it("「自分で消しました」のお答えには、本数を減らさないと伝える", async () => {
     const { singleDeleteByOwnerNotice } = await import("../shared/dailyCap");

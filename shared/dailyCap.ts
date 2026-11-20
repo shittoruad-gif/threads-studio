@@ -75,28 +75,15 @@ export function rampCapNotice(username: string, days: number, todayCount: number
 }
 
 /**
- * 1件だけ消えていたときに伺う文（2026-09-19 三上様ご判断）。
- *
- * 健全性点検は「投稿が見つからない」ことしか分からず、ご本人が消したのか Meta が消したのかを区別できない。
- * ご本人が消しただけで7日間1日1件にするのは行き過ぎなので、まず伺ってから決める。
- * ★冷却の話はここでは書かない（ご自身で消されただけの方に「スパム判定の可能性」と伝えないため）。
+ * 「消していません」とお答えいただいたときに送る文。
+ * 2026-11-20 三上様「投稿数を勝手に減らす仕組みをやめて」：本数は変えない。お伺い（1件消えたときにLINEで伺う）も、
+ * 消えたときの定型のお知らせも、いまは送らない。以前に届いたお伺いのボタンを押された方への返事だけ残す。
  */
-export function singleDeleteAskNotice(username: string): string {
+export function singleDeleteConfirmedNotice(username: string): string {
   return (
-    `@${username} で公開した投稿が1件、Threads上で見つからなくなっていました。\n\n` +
-    `この投稿は、ご自身で削除されましたか？\n` +
-    `下のボタンでお答えください。お答えによって、こちらの対応が変わります。\n\n` +
-    `・「自分で消しました」…… 何もしません。投稿はこれまでどおりお届けします。\n` +
-    `・「消していません」…… Threads側で消された可能性があるため、アカウントを守るしくみ（しばらく本数を抑える）を入れます。`
-  );
-}
-
-/** 「消していません」とお答えいただいたときに送る文（2026-09-19） */
-export function singleDeleteConfirmedNotice(username: string, untilLabel: string): string {
-  return (
-    `お答えありがとうございます。Threads側で消された可能性があるため、アカウントを守る対応を入れます。\n\n` +
-    `@${username} の自動投稿を${untilLabel}まで1日1件に抑えます。消えた1件は、その翌日以降に足してお届けします。\n` +
-    `この期間、ご自身の手動投稿も1日1〜2件に留めていただけると安心です。`
+    `お答えありがとうございます。\n` +
+    `@${username} の投稿は、本数を変えずにこれまでどおりお届けします。\n` +
+    `Threads側で消された可能性があるため、担当者が状況を確認します。`
   );
 }
 
@@ -105,14 +92,5 @@ export function singleDeleteByOwnerNotice(username: string): string {
   return (
     `承知しました。ご自身で消された分ですので、こちらは何もしません。\n` +
     `@${username} の投稿は、これまでどおりの本数でお届けします。`
-  );
-}
-
-/** 投稿が消されたことを検知した当日に送る定型文（R5・2026-09-13 三上様承諾の文を型にした） */
-export function deletedPostsNotice(username: string, gone: number, untilLabel: string): string {
-  return (
-    `@${username} で公開した投稿のうち${gone}件が、Threads側で削除されていました。新しいアカウントで投稿が続くと、Threadsが機械的に「大量のアクション」と判定することがあり、その可能性が高いです。\n\n` +
-    `アカウントを守るため、@${username} の自動投稿を${untilLabel}まで1日1件に抑えます。減った分と消えた${gone}件は、その翌日以降に1日1件ずつ足してお届けします。\n` +
-    `この期間、ご自身の手動投稿も1日1〜2件に留めていただけると安心です。`
   );
 }
