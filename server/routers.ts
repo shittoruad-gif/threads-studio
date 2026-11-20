@@ -814,6 +814,40 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // 解約の前の提案を選ばれたとき（解約はしない。1行足して、運営へ知らせる・shared/retentionOffer.ts・2026-11-20）
+    acceptRetentionOffer: protectedProcedure
+      .input(z.object({
+        reason: z.enum(['price', 'no_effect', 'hard_to_use', 'pause', 'other']),
+        offer: z.enum(['review', 'downgrade', 'auto', 'consult']),
+        detail: z.string().max(1000).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { retentionDetail, RETENTION_OFFER_LABEL } = await import('../shared/retentionOffer');
+        const subscription = await db.getSubscriptionByUserId(ctx.user.id);
+        await db.createCancellationFeedback({
+          userId: ctx.user.id,
+          planId: subscription?.planId ?? null,
+          reason: input.reason,
+          detail: retentionDetail(input.offer, input.detail),
+        });
+        const reasonLabel: Record<string, string> = { price: '料金が高い', no_effect: '効果を感じられなかった', hard_to_use: '使い方が難しい', pause: '一時的に休止したい', other: 'その他' };
+        const needsContact = input.offer === 'review' || input.offer === 'consult';
+        try {
+          const { notifyOwner } = await import('./_core/notification');
+          await notifyOwner({
+            title: `解約を押しかけた方が「${RETENTION_OFFER_LABEL[input.offer]}」を選ばれました${needsContact ? '（ご連絡が必要です）' : ''}`,
+            content:
+              `お客様: user ${ctx.user.id}\n` +
+              `プラン: ${subscription?.planId ?? '不明'}\n` +
+              `解約の理由: ${reasonLabel[input.reason] ?? input.reason}\n` +
+              (input.detail?.trim() ? `詳細: ${input.detail.trim()}\n` : '') +
+              `\n解約はされていません。` +
+              (needsContact ? `画面で「公式LINEでご連絡します」とお伝えしています。早めのご連絡をお願いします。` : ''),
+          });
+        } catch (e) { console.error('[retentionOffer] 通知失敗:', e); }
+        return { success: true };
+      }),
+
     // Create checkout session for subscription
     createCheckout: protectedProcedure
       .input(z.object({ planId: z.string() }))

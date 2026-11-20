@@ -31,6 +31,7 @@ import {
   Sliders
 } from 'lucide-react';
 import { useLocation } from 'wouter';
+import { retentionOfferFor, type CancelReason } from '@shared/retentionOffer';
 import { toast } from 'sonner';
 import { getLoginUrl } from '@/const';
 import { lazy, Suspense, useEffect, useState } from 'react';
@@ -89,6 +90,9 @@ export default function Dashboard() {
   const [cancelReason, setCancelReason] = useState<string>('');
   const [cancelDetail, setCancelDetail] = useState('');
   const submitCancelFeedback = trpc.subscription.submitCancellationFeedback.useMutation();
+  // 理由のあと、解約の実行の前に、理由に合う提案を1画面だけ出す（shared/retentionOffer.ts・2026-11-20）
+  const [cancelStep, setCancelStep] = useState<'reason' | 'offer'>('reason');
+  const acceptRetentionOffer = trpc.subscription.acceptRetentionOffer.useMutation();
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [setupWizardOpen, setSetupWizardOpen] = useState(false);
   const utils = trpc.useUtils();
@@ -1152,6 +1156,7 @@ export default function Dashboard() {
                   onClick={() => {
                     setCancelReason('');
                     setCancelDetail('');
+                    setCancelStep('reason');
                     setCancelDialogOpen(true);
                   }}
                   disabled={cancelSubscription.isPending}
@@ -1579,67 +1584,114 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* 解約アンケートダイアログ（理由を聞いてから解約を実行） */}
+      {/* 解約アンケートダイアログ（理由を聞く → 理由に合う提案を1画面 → 断れば1タップで解約） */}
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("解約の前に、1つだけ教えてください")}</DialogTitle>
-            <DialogDescription>
-              {t("今後のサービス改善のため、解約の理由をお聞かせください。")}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            {[
-              { value: 'price', label: t('💰 料金が高い') },
-              { value: 'no_effect', label: t('📉 効果を感じられなかった') },
-              { value: 'hard_to_use', label: t('🤔 使い方が難しい') },
-              { value: 'pause', label: t('⏸ 一時的に休止したい') },
-              { value: 'other', label: t('📝 その他') },
-            ].map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setCancelReason(opt.value)}
-                className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm transition-colors ${
-                  cancelReason === opt.value
-                    ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-medium'
-                    : 'border-border hover:bg-muted/50'
-                }`}
-              >
-                {cancelReason === opt.value ? '✓ ' : ''}{opt.label}
-              </button>
-            ))}
-            <Textarea
-              placeholder={t("よろしければ詳細をお聞かせください（任意）")}
-              value={cancelDetail}
-              onChange={(e) => setCancelDetail(e.target.value)}
-              className="text-sm min-h-[70px]"
-              maxLength={1000}
-            />
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
-              {t("解約をやめる")}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={!cancelReason || submitCancelFeedback.isPending || cancelSubscription.isPending}
-              onClick={async () => {
-                try {
-                  await submitCancelFeedback.mutateAsync({
-                    reason: cancelReason as any,
-                    detail: cancelDetail || undefined,
-                  });
-                } catch {
-                  // アンケート送信失敗でも解約は妨げない
-                }
-                cancelSubscription.mutate();
-                setCancelDialogOpen(false);
-              }}
-            >
-              {t("回答して解約する")}
-            </Button>
-          </DialogFooter>
+          {cancelStep === 'reason' ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>{t("解約の前に、1つだけ教えてください")}</DialogTitle>
+                <DialogDescription>
+                  {t("今後のサービス改善のため、解約の理由をお聞かせください。")}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2">
+                {[
+                  { value: 'price', label: t('💰 料金が高い') },
+                  { value: 'no_effect', label: t('📉 効果を感じられなかった') },
+                  { value: 'hard_to_use', label: t('🤔 使い方が難しい') },
+                  { value: 'pause', label: t('⏸ 一時的に休止したい') },
+                  { value: 'other', label: t('📝 その他') },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setCancelReason(opt.value)}
+                    className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm transition-colors ${
+                      cancelReason === opt.value
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-medium'
+                        : 'border-border hover:bg-muted/50'
+                    }`}
+                  >
+                    {cancelReason === opt.value ? '✓ ' : ''}{opt.label}
+                  </button>
+                ))}
+                <Textarea
+                  placeholder={t("よろしければ詳細をお聞かせください（任意）")}
+                  value={cancelDetail}
+                  onChange={(e) => setCancelDetail(e.target.value)}
+                  className="text-sm min-h-[70px]"
+                  maxLength={1000}
+                />
+              </div>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
+                  {t("解約をやめる")}
+                </Button>
+                <Button
+                  disabled={!cancelReason}
+                  onClick={() => setCancelStep('offer')}
+                >
+                  {t("次へ")}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              {(() => {
+                const offer = retentionOfferFor(cancelReason as CancelReason, {
+                  planId: subscription?.planId,
+                  requireApproval: Boolean((autoPostSettings as any)?.autoPostRequireApproval),
+                });
+                const busy = submitCancelFeedback.isPending || cancelSubscription.isPending || acceptRetentionOffer.isPending;
+                return (
+                  <>
+                    <DialogHeader>
+                      <DialogTitle>{t(offer.title)}</DialogTitle>
+                      <DialogDescription>{t(offer.body)}</DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        disabled={busy}
+                        onClick={async () => {
+                          try {
+                            await acceptRetentionOffer.mutateAsync({ reason: cancelReason as any, offer: offer.key, detail: cancelDetail || undefined });
+                          } catch {
+                            // 記録に失敗しても、選ばれた提案は進める
+                          }
+                          setCancelDialogOpen(false);
+                          if (offer.key === 'downgrade') setLocation('/pricing');
+                          else if (offer.key === 'auto') updateAutoPost.mutate({ autoPostRequireApproval: false } as any);
+                          else toast.success(t("承りました。担当者から公式LINEでご連絡します。解約はしていません。"));
+                        }}
+                      >
+                        {t(offer.actionLabel)}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="text-red-600 hover:text-red-700"
+                        disabled={busy}
+                        onClick={async () => {
+                          try {
+                            await submitCancelFeedback.mutateAsync({ reason: cancelReason as any, detail: cancelDetail || undefined });
+                          } catch {
+                            // アンケート送信失敗でも解約は妨げない
+                          }
+                          cancelSubscription.mutate();
+                          setCancelDialogOpen(false);
+                        }}
+                      >
+                        {t("提案は不要です。解約する")}
+                      </Button>
+                      <Button variant="ghost" disabled={busy} onClick={() => setCancelStep('reason')}>
+                        {t("戻る")}
+                      </Button>
+                    </div>
+                  </>
+                );
+              })()}
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
