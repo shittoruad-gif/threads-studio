@@ -23,11 +23,12 @@ const QA = [
   "まずは今夜、寝る前に背伸びを1回だけ。",
 ].join("\n");
 const REASON = [
-  "初めての方に、あえて最初にお聞きすることが1つあります。",
-  "それは「どんな日に、いちばん体を動かしたくないか」です。",
-  "仕事の帰りに「今日は行きたくないな」と思う日は、だれにでもあります。",
-  "そんな日でも足が向く場所なら、体を動かす時間が生活の中に残ります。",
-  "続く形を一緒に探したいと思っています。",
+  "仕事帰りに「今日は動きたくないな」と思う日。",
+  "そんな日のために、初めての方に最初にお聞きするのは、",
+  "「いちばん体を動かしたくないのは、どんな日か」です。",
+  "続かなくなるのは、たいてい気合いが足りない日ではなく、疲れている日だと考えています。",
+  "その日でも足が向く時間と内容を、先に一緒に決めておきます。",
+  "続く形は、人によって違います。",
 ].join("\n");
 
 describe("ツリーの利点を生かした投稿の試し", () => {
@@ -58,31 +59,38 @@ describe("ツリーの利点を生かした投稿の試し", () => {
     const combos = [7000, 7001, 7002, 7003].map((id) => `${treeDesignArm(id)}:${treeDesignOffer(id)}`);
     expect(new Set(combos).size).toBe(4);
   });
-  it("BEST3：1本目は題名だけ、続きは 第3位／第2位／第1位 を1本ずつ。元の文は変えない・予告を足さない", () => {
+  it("BEST3：題名／第3位／第2位／第1位 を1本ずつ。各投稿の最後に次の順位の言いかけを1行だけ足す", () => {
     const parts = treeDesignSplit("tree_rank", RANK)!;
     expect(parts).toHaveLength(4);
-    expect(parts[0]).toBe("デスクワークの合間にできる肩まわりの動き、手軽な順BEST3");
-    expect(parts[1]).toBe("第3位　肩をすくめてストンと落とす\n座ったまま3回でできます。");
+    expect(parts[0]).toBe("デスクワークの合間にできる肩まわりの動き、手軽な順BEST3\n\n第3位は、");
+    expect(parts[1]).toBe("第3位　肩をすくめてストンと落とす\n座ったまま3回でできます。\n\n第2位は、");
     expect(parts[2].startsWith("第2位　両手を")).toBe(true);
+    expect(parts[2].endsWith("第1位は、")).toBe(true);
     expect(parts[3].startsWith("第1位　深く息を吐く")).toBe(true);
-    expect(parts[3].endsWith("まずはここからで十分です。")).toBe(true); // 結びは第1位の投稿に付く
-    expect(parts.join("\n")).toBe(RANK);
-    expect(parts.join("")).not.toMatch(/第2位は、|第1位は、/);
+    expect(parts[3].endsWith("まずはここからで十分です。")).toBe(true); // 結びは第1位の投稿に付く・言いかけは付かない
+    // 足した言いかけを除けば、元の文と1字も違わない
+    expect(parts.map((x) => x.replace(/\n\n第[123]位は、$/, "")).join("\n")).toBe(RANK);
     // 案内ありの回は、最後に案内が1本つく（5本）
     const seg = treeDesignSegments({ experimentKey: "tree_rank", threadsAccountId: 12, id: 7003, text: RANK })!;
     expect(seg.segments).toHaveLength(5);
     expect(seg.segments[4]).toBe(TREE_DESIGN.offers[12]);
     expect(treeDesignSegments({ experimentKey: "tree_rank", threadsAccountId: 12, id: 7001, text: RANK })!.segments).toHaveLength(4);
+    // 1本のままの側には言いかけを足さない
+    expect(treeDesignSegments({ experimentKey: "tree_rank", threadsAccountId: 12, id: 7000, text: RANK })!.segments).toEqual([RANK]);
     // 順位の中身が1行だけで短すぎるものは分けない
     expect(treeDesignSplit("tree_rank", RANK.replace("第2位　両手を後ろで組んで胸をひらく\n画面を見続けたあとに向いています。", "第2位　胸をひらく"))).toBeNull();
   });
-  it("Q&A：1行目の問い／答え。言い切り：1行目／理由。1本目は中身より短い（短→長）", () => {
+  it("Q&A：1行目の問い／答え。言いかけ→答え：「、」で止めた行まで／答え。1本目は続きより短い（短→長）", () => {
     const qa = treeDesignSplit("tree_qa", QA)!;
     expect(qa[0]).toBe("運動は朝と夜、どちらが続けやすい？");
-    expect(`${qa[0]}\n${qa[1]}`).toBe(QA);
+    expect(qa.join("\n")).toBe(QA);
     const rs = treeDesignSplit("tree_reason", REASON)!;
-    expect(rs[0]).toBe("初めての方に、あえて最初にお聞きすることが1つあります。");
+    expect(rs[0]).toBe("仕事帰りに「今日は動きたくないな」と思う日。\nそんな日のために、初めての方に最初にお聞きするのは、");
+    expect(rs[1].startsWith("「いちばん体を動かしたくないのは")).toBe(true);
+    expect(rs.join("\n")).toBe(REASON);
     for (const x of [qa, rs]) { expect(x).toHaveLength(2); expect(Array.from(x[0]).length).toBeLessThan(Array.from(x[1]).length); }
+    // 言いかけの行が無い・5行目より後にしか無いものは分けない
+    expect(treeDesignSplit("tree_reason", REASON.replace("お聞きするのは、", "お聞きすることがあります。"))).toBeNull();
   });
   it("分けられない本文は null（1本のまま出す）", () => {
     expect(treeDesignSplit("tree_rank", "ふつうの投稿です。\n順位はありません。")).toBeNull();
@@ -90,8 +98,8 @@ describe("ツリーの利点を生かした投稿の試し", () => {
     expect(treeDesignSplit("tree_rank", RANK + "\n第1位　もう1つ")).toBeNull();
     expect(treeDesignSplit("tree_qa", QA.replace("続けやすい？", "続けやすいかという話。"))).toBeNull(); // 問いで始まっていない
     expect(treeDesignSplit("tree_qa", "短い？\n短い答え。")).toBeNull(); // 中身が短い
-    expect(treeDesignSplit("tree_reason", "慢性的な肩こり。\n" + REASON)).toBeNull(); // 1本目が短すぎる
-    expect(treeDesignSplit("tree_reason", "続きは下で紹介します。\n" + REASON)).toBeNull(); // 続きの予告
+    expect(treeDesignSplit("tree_reason", "肩こりは、\n" + REASON)).toBeNull(); // 1本目が短すぎる
+    expect(treeDesignSplit("tree_reason", "続きは下で紹介します、\n" + REASON)).toBeNull(); // 続きの場所の案内
     expect(treeDesignSplit("ranking3", RANK)).toBeNull();
     expect(treeDesignSplit(null, RANK)).toBeNull();
     expect(rankingLines("本文の途中に第3位と書いても行の先頭でなければ数えない")).toBeNull();
@@ -129,8 +137,8 @@ describe("ツリーの利点を生かした投稿の試し", () => {
     for (const k of TREE_DESIGN_KEYS) {
       const n = TREE_DESIGN_TRIALS[k].note;
       expect(TREE_DESIGN_TRIALS[k].key).toBe(k);
-      expect(n).toContain("思わずコメント欄（続き）を開く1文");
-      expect(n).toContain("1行目では答え・結論・理由を言わない");
+      expect(n).toContain("思わずコメント欄（続き）を開く");
+      expect(n).toContain("書き出しでは答え・結論・理由を言わない");
       expect(n).toContain("続きの場所を案内する言葉は書かない");
       expect(n).toContain("うそを書かない");
       expect(n).toContain("案内は別に付ける");
@@ -138,7 +146,7 @@ describe("ツリーの利点を生かした投稿の試し", () => {
     }
     expect(TREE_DESIGN_TRIALS.tree_rank.note).toContain("数えた結果に見える基準にしない");
     expect(TREE_DESIGN_TRIALS.tree_qa.note).toContain("登録情報にその質問が書かれているときだけ");
-    expect(TREE_DESIGN_TRIALS.tree_reason.note).toContain("下げる一言にしない");
+    expect(TREE_DESIGN_TRIALS.tree_reason.note).toContain("言いかけたまま「、」で止める");
   });
   it("数字の検査から外すのは順位の表記だけ。人数・割合・途中の順位は残る", () => {
     const m = maskRankLabels(RANK + "\n3人に1人が知りません。\n人気3位のメニューです。");
@@ -164,23 +172,26 @@ describe("ツリーの利点を生かした投稿の試し", () => {
     const bad = "夕方になると肩が重くなるあなたへ。\n肩こりケアのよくある落とし穴BEST3\n第3位　温めすぎ\n一時的に楽になりますが、根本ではありません。\n第2位　強すぎるマッサージ\n揉み返しでかえって悪くなることも。\n第1位　姿勢を気にしない\n姿勢を見直して楽になったという方が多いです。";
     const p = treeDesignProblems("tree_rank", bad).join("|");
     for (const w of ["根本", "湿布・温める", "やってはいけない", "お客様の結果", "呼びかけ"]) expect(p).toContain(w);
-    expect(treeDesignProblems("tree_reason", "無理して予約を急がなくても大丈夫です。\n完全予約制です。\nゆったり受けたい方はぜひ。").join("|")).toMatch(/案内・宣伝.*形が合っていない|形が合っていない/);
+    expect(treeDesignProblems("tree_reason", "無理して予約を急がなくても大丈夫です。\n完全予約制です。\nゆったり受けたい方はぜひ。").join("|")).toContain("形が合っていない");
     expect(treeDesignProblems("tree_qa", QA + "\nご予約はプロフィールから。").join("|")).toContain("本文の中の案内");
     expect(treeDesignProblems("hook_local", bad)).toEqual([]); // ほかの試し・ふつうの投稿には当てない
+    // ふつうの文は止めない
+    expect(treeDesignProblems("tree_qa", QA + "\nお風呂で体を温めるのも続けやすい方法です。\n同じ姿勢が続くと、姿勢が悪くなりやすいです。")).toEqual([]);
+    expect(treeDesignProblems("tree_qa", QA + "\nマッサージだけでは足りません。").join("|")).toContain("ほかのやり方の良し悪し");
     expect(treeDesignProblems(null, bad)).toEqual([]);
   });
-  it("1本目で答えを言ってしまった下書きは作り直し（理由型に理由・BEST3 の題名に中身）", () => {
-    expect(treeDesignProblems("tree_reason", REASON.replace("あえて最初にお聞きすることが1つあります。", "続けてほしいから、最初に1つお聞きします。")).join("|")).toContain("1行目に理由");
+  it("1本目で答えを言ってしまった下書きは作り直し（言いかけが理由で終わる・BEST3 の題名に中身）", () => {
+    expect(treeDesignProblems("tree_reason", REASON.replace("最初にお聞きするのは、", "続けてほしいから、")).join("|")).toContain("言いかけの行が理由");
     const leaked = RANK.replace("手軽な順BEST3", "手軽な順BEST3\n1位は深く息を吐くことです。");
     expect(treeDesignProblems("tree_rank", leaked).join("|")).toContain("題名のところに順位の中身");
     const teased = RANK.replace("手軽な順BEST3", "手軽な順BEST3\n1位は、道具がいらないものです。");
     expect(treeDesignProblems("tree_rank", teased)).toEqual([]);
-    expect(treeDesignSplit("tree_rank", teased)![0]).toBe("デスクワークの合間にできる肩まわりの動き、手軽な順BEST3\n1位は、道具がいらないものです。");
   });
   it("1本目で原因を言ってしまった下書き・「ラクになります」は作り直し", () => {
-    const leak = "夕方になると肩が重くなる。それ、実は腕の使い方が原因かもしれません。\n" + REASON.split("\n").slice(1).join("\n");
+    const leak = REASON.replace("そんな日のために、初めての方に最初にお聞きするのは、", "それ、実は疲れが原因かもしれません。\nそこで最初にお聞きするのは、");
     expect(treeDesignProblems("tree_reason", leak).join("|")).toContain("1本目で答え");
-    expect(treeDesignProblems("tree_qa", QA + "\n長時間のデスクワークがラクになりますよ。").join("|")).toContain("効果の話");
+    expect(treeDesignProblems("tree_qa", QA + "\n姿勢を見直して楽になったという方が多いです。").join("|")).toContain("お客様の結果");
+    expect(maskRankLabels("題名BEST3\n1位は、道具がいらないものです。\n人気1位は別です。")).toBe("題名BEST\n道具がいらないものです。\n人気1位は別です。");
     expect(treeDesignProblems("tree_qa", "夕方、肩がガチガチになるのはなぜ？\n" + QA.split("\n").slice(1).join("\n"))).toEqual([]);
   });
 });

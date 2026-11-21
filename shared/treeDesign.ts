@@ -45,7 +45,7 @@ export const TREE_DESIGN_KEYS: readonly TreeDesignKey[] = ["tree_rank", "tree_qa
 export const isTreeDesignKey = (k: unknown): k is TreeDesignKey => TREE_DESIGN_KEYS.includes(k as TreeDesignKey);
 
 const COMMON = [
-  "いちばん大事なのは1行目。読んだ人が「え、なぜ？」「それって何？」と続きを知りたくなり、思わずコメント欄（続き）を開く1文にする（30字以内）。そのために、1行目では答え・結論・理由を言わない。問いで止める、意外な事実の入口だけを見せる、「〜には理由があります」「〜は1つだけです」のように中身を伏せる、のどれかにする。大げさにあおらない・うそを書かない（続きを読めば、1行目の答えが必ず書いてあること）。",
+  "いちばん大事なのは1行目。読んだ人が「え、なぜ？」「それって何？」と続きを知りたくなり、思わずコメント欄（続き）を開く書き出しにする（短く）。そのために、書き出しでは答え・結論・理由を言わない。問いで止める、答えの直前で言いかけて止める、のどちらかにする（外部のよく読まれているアカウントの実測：言い切った1本目は続きが約1割しか開かれず、言いかけで止めた1本目は2〜3割、順位の途中で止めた1本目は3〜4割開かれていた）。大げさにあおらない・うそを書かない（続きを読めば、1行目の答えが必ず書いてあること）。",
   "ただし「続きは」「コメント欄へ」「理由は下で」「このあと紹介」のように、続きの場所を案内する言葉は書かない（内容で気にならせる）。",
   "2行目の最初で、1行目の答えをすぐ書く（じらさない）。",
   "2行目以降が中身。全体で150〜220字。",
@@ -73,9 +73,9 @@ export const TREE_DESIGN_TRIALS: Readonly<Record<TreeDesignKey, LearningTrial>> 
   },
   tree_reason: {
     key: "tree_reason",
-    label: "ツリー設計：気になる一言→理由",
-    note: "この投稿は「気になる一言→その理由」の形で書く。1行目は、お店の考え・こだわり（登録された信条にあること）や、読む人の身近な場面について、理由を伏せた一言にする（例の形：「〇〇を、あえて△△にしています。」「〇〇のとき、最初に見るのは1か所だけです。」）。1行目に「から」「ので」「ため」などの理由は書かない。だれか・ほかのお店・ほかのやり方を下げる一言にしない。"
-      + "2行目以降で、その理由を、読む人のふだんの場面を1つ挙げて説明する。書き手自身の体験談・お客様の話は作らない。"
+    label: "ツリー設計：言いかけ→答え",
+    note: "この投稿は「言いかけて止める→答え」の形で書く。最初の1〜3行で、読む人の身近な場面や、お店の考え・こだわり（登録された信条にあること）を短く述べ、その最後の行を、答えの直前で言いかけたまま「、」で止める（例の形：「初めての方に、最初にお聞きするのは、」「夕方に肩が重くなる日に、まず見直したいのは、」「〇〇を続けやすくするコツは、」）。「、」で終わる行は1つだけにし、そこまでに答えは書かない。"
+      + "次の行は、答えを「」でくくった短い言葉で始め、そのあとに理由を、読む人のふだんの場面を1つ挙げて2〜4文で説明する。だれか・ほかのお店・ほかのやり方を下げない。書き手自身の体験談・お客様の話は作らない。"
       + COMMON,
   },
 };
@@ -122,17 +122,18 @@ export function rankingLines(text: string | null | undefined): { l3: number; l2:
 }
 
 /**
- * 順位の表記だけを消した本文（数字の検査用）。行の先頭の「第N位」と「BEST3」「ベスト3」以外の数字には触らない。
+ * 順位の表記だけを消した本文（数字の検査用）。行の先頭の「第N位」「1位は、」（題名の下の一言）と「BEST3」「ベスト3」以外の数字には触らない。
  * 本文の途中の「3位」や、人数・割合・回数はそのまま残る（＝検査で止まる）。
  */
 export function maskRankLabels(text: string | null | undefined): string {
   return String(text || "")
     .replace(/^([ \t　]*)第\s*[1-3１-３一二三]\s*位/gm, "$1")
+    .replace(/^([ \t　]*)[1１]位は、/gm, "$1")
     .replace(/(BEST|ＢＥＳＴ|ベスト)\s*[3３]/gi, "$1");
 }
 
 export const HOOK_MIN = 12;
-export const HOOK_MAX = 80;
+export const HOOK_MAX = 110;
 export const BODY_MIN = 60;
 export const BODY_MAX = 420;
 const len = (s: string) => Array.from(s).length;
@@ -140,13 +141,16 @@ const len = (s: string) => Array.from(s).length;
 export const TEASER_RE = /続きは|つづきは|このあと|この後で|下で(紹介|解説|説明)|ツリーで|スレッドで|以下で/;
 
 export const RANK_PART_MIN = 12;
+/** 言いかけ型：「、」で終わる行を探す範囲（最初の行から何行目までか） */
+export const DANGLE_WITHIN = 4;
 
 /**
  * 本文を「1本目（フック）／続き」に分ける。分けられなければ null（1本のまま出す）。
  *   BEST3：題名（第3位の行より前）／第3位／第2位／第1位（＋結び）の4本
  *          （2026-11-21 三上様「2本目に1〜3位を書くのではなく、2本目に3位、3本目に2位、その次に1位みたいな形で分けて」）
  *   Q&A・気になる一言：1行目／2行目以降 の2本（Q&A は1行目が「？」で終わること）
- * 1本目は短く（12〜80字）、続きの合計より短いこと（短→長の階段）。元の文は1字も変えない。
+ *   言いかけ→答え：「、」で終わる行まで／その次の行以降 の2本
+ * 1本目は短く（12〜110字）、続きの合計より短いこと（短→長の階段）。元の文は変えない（BEST3 だけ、次の順位の言いかけを1行足す）。
  */
 export function treeDesignSplit(key: string | null | undefined, text: string | null | undefined): string[] | null {
   if (!isTreeDesignKey(key)) return null;
@@ -160,6 +164,13 @@ export function treeDesignSplit(key: string | null | undefined, text: string | n
     cut = r.l3;
     rest = [join(r.l3, r.l2), join(r.l2, r.l1), join(r.l1, lines.length)];
     if (rest.some((p) => len(p) < RANK_PART_MIN)) return null;
+  } else if (key === "tree_reason") {
+    // 言いかけ型：最初の4行までにある「、」で終わる行までが1本目
+    const first = lines.findIndex((l) => l.trim());
+    const dangle = lines.findIndex((l, i) => i >= first && i < first + DANGLE_WITHIN && /[、，]$/.test(l.trim()));
+    if (first < 0 || dangle < 0) return null;
+    cut = dangle + 1;
+    rest = [join(cut, lines.length)];
   } else {
     cut = lines.findIndex((l) => l.trim()) + 1;
     rest = [join(cut, lines.length)];
@@ -171,6 +182,9 @@ export function treeDesignSplit(key: string | null | undefined, text: string | n
   if (TEASER_RE.test(hook)) return null;
   const hl = len(hook), bl = rest.reduce((n, p) => n + len(p), 0);
   if (hl < HOOK_MIN || hl > HOOK_MAX || bl < BODY_MIN || bl > BODY_MAX || hl >= bl) return null;
+  // BEST3 は、各投稿の最後に次の順位の言いかけを1行足す（「第3位は、」→ 次の投稿が「第3位　〇〇」で始まる）。
+  //   足すのはこの1行だけで、元の文は変えない。外部の実測で、順位の途中で止めた1本目は続きが3〜4割開かれていた。
+  if (key === "tree_rank") return [`${hook}\n\n第3位は、`, `${rest[0]}\n\n第2位は、`, `${rest[1]}\n\n第1位は、`, rest[2]];
   return [hook, ...rest];
 }
 
@@ -196,10 +210,14 @@ export function treeDesignSegments(p: { experimentKey?: string | null; threadsAc
  */
 const BANNED: ReadonlyArray<[RegExp, string]> = [
   [/根本|原因に届/, "効果をにおわせる言葉（根本・原因に届く）"],
-  [/湿布|温め|冷や|マッサージ|揉[みむ]|もみほぐ|ストレッチのしすぎ/, "ほかのやり方の良し悪し（湿布・温める・冷やす・マッサージ）"],
-  [/落とし穴|やってはいけない|やりがち|まちがい|間違い|NG|逆効果|悪化|悪くな/, "「やってはいけないこと・まちがい」の話"],
-  [/楽にな|ラクにな|良くなった|変わったという|という方が多い|喜ばれ/, "お客様の結果・効果の話（楽になる等）"],
-  [/体は変わ|変わっていきま|整えていきま|整えます|お任せ/, "効果を約束する言い方（体は変わる・整えていきます）"],
+  // ★「体を温める」「姿勢が悪くなる」のようなふつうの文まで止めない（11/21 試し書き：広く止めたら整体のアカウントで1本も書けなかった）。
+  //   止めるのは、ほかのやり方を下げる言い方と、「やってはいけない」型の話だけ。
+  [/(湿布|マッサージ|揉[みむ]|もみほぐ|温め|冷や)[^。\n]{0,24}(だけでは|では足り|ではありません|逆効果|かえって|ごまか|意味がな|その場しのぎ|一時的)/, "ほかのやり方の良し悪し（湿布・温める・冷やす・マッサージを下げる言い方）"],
+  [/(温めすぎ|冷やしすぎ|揉みすぎ|強すぎるマッサージ)/, "ほかのやり方の良し悪し（湿布・温める・冷やす・マッサージを下げる言い方）"],
+  [/落とし穴|やってはいけない|まちがい|間違い|NG|逆効果|かえって悪/, "「やってはいけないこと・まちがい」の話"],
+  // 「楽になります」などの効果の言い切りは、既存の健康表現の検査（healthClaimGuard）が見る。ここで重ねて止めると、整体のアカウントでは3回とも書けなかった（11/21 試し書き）
+  [/楽になった|良くなった|変わったという|という方が多い|喜ばれ/, "お客様の結果の話"],
+  [/体は変わ|変わっていきま/, "効果を約束する言い方（体は変わる）"],
   [/プロフィール|公式LINE|ご予約|予約は|ご相談は|お問い合わせ|ぜひ[。！\n]|お越し|お待ちして/, "本文の中の案内・宣伝"],
 ];
 
@@ -213,7 +231,7 @@ export function treeDesignProblems(key: string | null | undefined, text: string 
   // 1本目で答えを言ってしまうと、続きを開く理由が無くなる（11/21 試し書き：「それ、実は腕の使い方が原因かもしれません。」）
   const hookPart = treeDesignSplit(key, s)?.[0] ?? first;
   if (key !== "tree_rank" && /が(原因|理由)(です|でした|かも|なんです)|が関係してい|のせいです/.test(hookPart)) out.push("1本目で答え（原因・理由の中身）を言ってしまっている。1本目は答えを伏せ、2行目で書く");
-  if (key === "tree_reason" && /(から|ので|ため)[、。]/.test(first)) out.push("1行目に理由（〜から・〜ので・〜ため）を書いてしまっている。1行目は理由を伏せ、2行目以降で書く");
+  if (key === "tree_reason" && /(から|ので|ため)[、。]$/.test((treeDesignSplit(key, s)?.[0] ?? "").trim())) out.push("言いかけの行が理由（〜から・〜ので・〜ため）で終わっている。答えの直前（「〜のは、」「〜コツは、」）で止める");
   if (key === "tree_rank") {
     const r = rankingLines(s);
     const head = r ? r.lines.slice(0, r.l3).join("\n") : "";
@@ -222,10 +240,10 @@ export function treeDesignProblems(key: string | null | undefined, text: string 
   }
   if (!treeDesignSplit(key, s)) {
     out.push(key === "tree_rank"
-      ? "形が合っていない。1行目に題名と一言（合わせて80字以内）、続けて行の先頭に「第3位」「第2位」「第1位」をこの順で1回ずつ書く"
+      ? "形が合っていない。1行目に題名と一言（合わせて110字以内）、続けて行の先頭に「第3位」「第2位」「第1位」をこの順で1回ずつ書く"
       : key === "tree_qa"
-        ? "形が合っていない。1行目は「？」で終わる短い問い（80字以内）だけにし、2行目以降に答えと理由を60字以上書く"
-        : "形が合っていない。1行目は理由を伏せた短い一言（80字以内）だけにし、2行目以降に理由を60字以上書く（1行目より長く）");
+        ? "形が合っていない。1行目は「？」で終わる短い問い（110字以内）だけにし、2行目以降に答えと理由を60字以上書く"
+        : "形が合っていない。最初の1〜3行のうち最後の行を「、」で言いかけて止め（そこまで110字以内）、次の行から答えと理由を60字以上書く");
   }
   return out;
 }
