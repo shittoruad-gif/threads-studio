@@ -337,6 +337,19 @@ export async function executePendingPosts() {
               }
             }
           }
+          // ★ランキング型の試し（2026-11-21 三上様「試して」・shared/rankingTree.ts）：学習用の3アカウントだけ、
+          //   ランキング型で書いた投稿（experimentKey=ranking3）を、id の偶奇で「順位の切れ目で3本／1本のまま」を交互に出す。
+          if (segments.length === 1 && canReply && post.source === 'auto' && !(post as any).mediaItemId && !(post as any).pollOptions && !(post as any).quotePostId) {
+            const { RANKING_TRIAL_KEY, RANKING_TREE, rankingArm, rankingSplit } = await import('../shared/rankingTree');
+            if ((post as any).experimentKey === RANKING_TRIAL_KEY && RANKING_TREE.accountIds.includes(Number(post.threadsAccountId))
+              && rankingArm(Number(post.id)) === 'tree') {
+              const split = rankingSplit(segments[0]);
+              if (split) {
+                segments = split;
+                console.log(`[Scheduled Post] post ${post.id}: ランキング型の試し→3本に分けて公開`);
+              }
+            }
+          }
           // トピックタグ：お客様には付けない。学習用アカウントだけ期間中に「本文に合う言葉を付ける／付けない」を交互に
           //   （2026-10-18 三上様・shared/topicTagTrial.ts。7/5〜は店舗の悩みワードを全投稿に同じく付けていた）
           const topicTag = (await import('../shared/topicTagTrial')).scheduledPostTopicTag({
