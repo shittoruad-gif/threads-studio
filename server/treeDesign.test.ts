@@ -58,12 +58,23 @@ describe("ツリーの利点を生かした投稿の試し", () => {
     const combos = [7000, 7001, 7002, 7003].map((id) => `${treeDesignArm(id)}:${treeDesignOffer(id)}`);
     expect(new Set(combos).size).toBe(4);
   });
-  it("BEST3：1本目は題名だけ、2本目に順位の中身。元の文は変えない・続きの予告を足さない", () => {
-    const [hook, body] = treeDesignSplit("tree_rank", RANK)!;
-    expect(hook).toBe("デスクワークの合間にできる肩まわりの動き、手軽な順BEST3");
-    expect(body.startsWith("第3位　肩をすくめて")).toBe(true);
-    expect(`${hook}\n${body}`).toBe(RANK);
-    expect(hook + body).not.toMatch(/第2位は、|第1位は、/);
+  it("BEST3：1本目は題名だけ、続きは 第3位／第2位／第1位 を1本ずつ。元の文は変えない・予告を足さない", () => {
+    const parts = treeDesignSplit("tree_rank", RANK)!;
+    expect(parts).toHaveLength(4);
+    expect(parts[0]).toBe("デスクワークの合間にできる肩まわりの動き、手軽な順BEST3");
+    expect(parts[1]).toBe("第3位　肩をすくめてストンと落とす\n座ったまま3回でできます。");
+    expect(parts[2].startsWith("第2位　両手を")).toBe(true);
+    expect(parts[3].startsWith("第1位　深く息を吐く")).toBe(true);
+    expect(parts[3].endsWith("まずはここからで十分です。")).toBe(true); // 結びは第1位の投稿に付く
+    expect(parts.join("\n")).toBe(RANK);
+    expect(parts.join("")).not.toMatch(/第2位は、|第1位は、/);
+    // 案内ありの回は、最後に案内が1本つく（5本）
+    const seg = treeDesignSegments({ experimentKey: "tree_rank", threadsAccountId: 12, id: 7003, text: RANK })!;
+    expect(seg.segments).toHaveLength(5);
+    expect(seg.segments[4]).toBe(TREE_DESIGN.offers[12]);
+    expect(treeDesignSegments({ experimentKey: "tree_rank", threadsAccountId: 12, id: 7001, text: RANK })!.segments).toHaveLength(4);
+    // 順位の中身が1行だけで短すぎるものは分けない
+    expect(treeDesignSplit("tree_rank", RANK.replace("第2位　両手を後ろで組んで胸をひらく\n画面を見続けたあとに向いています。", "第2位　胸をひらく"))).toBeNull();
   });
   it("Q&A：1行目の問い／答え。言い切り：1行目／理由。1本目は中身より短い（短→長）", () => {
     const qa = treeDesignSplit("tree_qa", QA)!;
@@ -71,7 +82,7 @@ describe("ツリーの利点を生かした投稿の試し", () => {
     expect(`${qa[0]}\n${qa[1]}`).toBe(QA);
     const rs = treeDesignSplit("tree_reason", REASON)!;
     expect(rs[0]).toBe("初めての方に、あえて最初にお聞きすることが1つあります。");
-    for (const [h, b] of [qa, rs]) expect(Array.from(h).length).toBeLessThan(Array.from(b).length);
+    for (const x of [qa, rs]) { expect(x).toHaveLength(2); expect(Array.from(x[0]).length).toBeLessThan(Array.from(x[1]).length); }
   });
   it("分けられない本文は null（1本のまま出す）", () => {
     expect(treeDesignSplit("tree_rank", "ふつうの投稿です。\n順位はありません。")).toBeNull();

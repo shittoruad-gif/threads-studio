@@ -59,7 +59,7 @@ export const TREE_DESIGN_TRIALS: Readonly<Record<TreeDesignKey, LearningTrial>> 
     key: "tree_rank",
     label: "ツリー設計：BEST3",
     note: "この投稿は「BEST3」の形で書く。1行目は題名：「（読む人の身近な場面や悩み）＋（順位の基準）BEST3」。順位の基準は、書き手の考えだと分かるもの（手軽な順・続けやすい順・気づきにくい順 など）にし、人数・割合・調査・人気の順位のように数えた結果に見える基準にしない。"
-      + "題名には順位の中身（3つの名前）を書かない。題名のすぐ下に、第1位について名前を言わずに一言だけ添える（例の形：「1位は、道具がいらないものです。」。うそ・大げさは書かない）。そのあとに「第3位　〇〇」「第2位　〇〇」「第1位　〇〇」の順に書く（必ずこの表記・この順・行の先頭）。それぞれ、名前のあとに改行して理由を1〜2文で添える。"
+      + "題名には順位の中身（3つの名前）を書かない。題名のすぐ下に、第1位について名前を言わずに一言だけ添える（例の形：「1位は、道具がいらないものです。」。うそ・大げさは書かない）。そのあとに「第3位　〇〇」「第2位　〇〇」「第1位　〇〇」の順に書く（必ずこの表記・この順・行の先頭）。順位ごとに1本ずつの投稿に分かれるので、それぞれ、名前のあとに改行して理由や場面を2文（合わせて40〜70字）で書き、その順位だけ読んでも分かるようにする。この型は全体で180〜260字でよい。"
       + "順位にするのは、読む人が今日できる身近なこと、または日常のよくある場面。「やってはいけないこと」「効かないこと」「まちがい」の順位にしない。商品名・研究や成分の話・数字のデータは書かない。順位の行に絵文字や記号は付けない。"
       + COMMON,
   },
@@ -139,37 +139,44 @@ const len = (s: string) => Array.from(s).length;
 /** 続きがあることを知らせる言葉（1本目に入っていたらツリーにしない） */
 export const TEASER_RE = /続きは|つづきは|このあと|この後で|下で(紹介|解説|説明)|ツリーで|スレッドで|以下で/;
 
+export const RANK_PART_MIN = 12;
+
 /**
- * 本文を「1本目（フック）／2本目（中身）」に分ける。分けられなければ null（1本のまま出す）。
- *   BEST3：題名（第3位の行より前）／第3位〜最後
- *   Q&A・言い切り：1行目／2行目以降（Q&A は1行目が「？」で終わること）
- * 1本目は短く（8〜80字）、中身より短いこと（短→長の階段）。元の文は1字も変えない。
+ * 本文を「1本目（フック）／続き」に分ける。分けられなければ null（1本のまま出す）。
+ *   BEST3：題名（第3位の行より前）／第3位／第2位／第1位（＋結び）の4本
+ *          （2026-11-21 三上様「2本目に1〜3位を書くのではなく、2本目に3位、3本目に2位、その次に1位みたいな形で分けて」）
+ *   Q&A・気になる一言：1行目／2行目以降 の2本（Q&A は1行目が「？」で終わること）
+ * 1本目は短く（12〜80字）、続きの合計より短いこと（短→長の階段）。元の文は1字も変えない。
  */
-export function treeDesignSplit(key: string | null | undefined, text: string | null | undefined): [string, string] | null {
+export function treeDesignSplit(key: string | null | undefined, text: string | null | undefined): string[] | null {
   if (!isTreeDesignKey(key)) return null;
   const lines = String(text || "").replace(/\r/g, "").split("\n");
+  const join = (from: number, to: number) => lines.slice(from, to).join("\n").trim();
   let cut: number;
+  let rest: string[];
   if (key === "tree_rank") {
     const r = rankingLines(text);
     if (!r) return null;
     cut = r.l3;
+    rest = [join(r.l3, r.l2), join(r.l2, r.l1), join(r.l1, lines.length)];
+    if (rest.some((p) => len(p) < RANK_PART_MIN)) return null;
   } else {
     cut = lines.findIndex((l) => l.trim()) + 1;
+    rest = [join(cut, lines.length)];
   }
   if (cut <= 0) return null;
-  const hook = lines.slice(0, cut).join("\n").trim();
-  const body = lines.slice(cut).join("\n").trim();
-  if (!hook || !body) return null;
+  const hook = join(0, cut);
+  if (!hook || rest.some((p) => !p)) return null;
   if (key === "tree_qa" && !/[？?]$/.test(hook)) return null;
   if (TEASER_RE.test(hook)) return null;
-  const hl = len(hook), bl = len(body);
+  const hl = len(hook), bl = rest.reduce((n, p) => n + len(p), 0);
   if (hl < HOOK_MIN || hl > HOOK_MAX || bl < BODY_MIN || bl > BODY_MAX || hl >= bl) return null;
-  return [hook, body];
+  return [hook, ...rest];
 }
 
 /**
  * 公開するときの形。試しの対象でなければ null（呼び出し側は何も変えない）。
- *   ツリー：分けられれば [フック, 中身, （案内）]。分けられなければ1本のまま
+ *   ツリー：分けられれば [フック, 続き…, （案内）]（BEST3 は フック／第3位／第2位／第1位）。分けられなければ1本のまま
  *   1本のまま：[本文（＋案内）]
  */
 export function treeDesignSegments(p: { experimentKey?: string | null; threadsAccountId: number; id: number; text: string }): { segments: string[]; arm: "tree" | "single"; offer: boolean } | null {
