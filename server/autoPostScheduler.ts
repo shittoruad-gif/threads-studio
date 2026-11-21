@@ -26,7 +26,7 @@ import { earlierRejectedNote } from "../shared/naturalnessRetryHint";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
 import { trialRules, inLearning, isUncappedAccount } from "../shared/learningAccounts";
 import { bannedRuleFor, scrubProjectForAccount, findAccountBannedWord, accountBannedNote } from "../shared/accountBannedWords";
-import { LOCAL_TALK_ANGLE_ID, localTalkNote, localTalkPlaces, localTalkOptedOut, localTalkOptedOutByRules, recentSeasonFoodTalk } from "../shared/localTalk";
+import { LOCAL_TALK_ANGLE_ID, localTalkNote, localTalkPlaces, localTalkOptedOut, localTalkOptedOutByRules, recentSeasonFoodTalk, recentLocalTalks } from "../shared/localTalk";
 
 /**
  * 試し生成（scripts/ops/autopost-dryrun.mts・AUTOPOST_DRY_RUN=1）のときだけ、書き方の決まりを差し替えて試す。
@@ -1230,8 +1230,17 @@ export async function generateAutoPost(
           rejectedPhrases: await db.getRecentDupRejectPhrases(threadsAccountId, 48).catch(() => [] as string[]),
         });
         if (plan.overused.length > 0 || (plan.frames?.length ?? 0) > 0) {
+          // ★地元の会話の回は、お店の材料を「今日の主題」にしない（2026-11-21 夜間整備 acc35 #7395）。
+          //   地元の会話は「お店の名前・メニュー・効果の話は書かない」回なのに、同じ回に主題「コアレ導入」が必須で指定され、
+          //   「主題を書いていない」で2回作り直したあと、3回目に「岐阜市でコアレって知ってますか？…ウエスト引き締め効果も期待できます」
+          //   が地元の会話として公開された。11/21 朝の生成では地元の会話35回のうち13回（5アカウント）で主題がぶつかっていた。
+          //   使いすぎの言葉を避ける指示はそのまま残す（主題の指定と「主題を書いたか」の検査だけ外す）。
+          if (localTalkTurn && plan.topic) {
+            console.log(`[AutoPost] 地元の会話の回のため今日の主題「${plan.topic.slice(0, 30)}」は指定しない account=${threadsAccountId}`);
+            plan.topic = null;
+          }
           freshPlan = plan;
-          freshNote = ft.buildFreshTopicNote(plan);
+          freshNote = ft.buildFreshTopicNote(plan, { omitTopic: localTalkTurn });
           topicAnchors = ft.topicAnchorWords(plan.topic, freshProtect);
           console.log(`[AutoPost] 話題を変える account=${threadsAccountId} 使いすぎ=${plan.overused.join('・') || 'なし'} 型=${(plan.frames ?? []).join('・') || 'なし'} 今日の主題=${plan.topic ?? '指定なし'}`);
         }
@@ -1272,7 +1281,10 @@ export async function generateAutoPost(
     let ledgerHasStories = false;
     let ledgerNote = '';
     let ledgerAnchors: string[] = [];
-    if (!opts.collect) {
+    // ★地元の会話の回ではネタ帳を使わない（2026-11-21 夜間整備）。お店の話を書かない回にネタを渡すと、
+    //   「今日のネタを書いていない」の作り直しとぶつかり、通ってもネタが地元の会話で1件使われて休みに入る
+    //   （11/21 朝：acc25 で4回重なっていた）。
+    if (!opts.collect && !localTalkTurn) {
       try {
         const { pickLedgerItem } = await import('./materialLedger');
         const r = await pickLedgerItem(String(project.id), [...ngWords, ...stickyWords]);
@@ -1581,7 +1593,7 @@ export async function generateAutoPost(
           + (personal ? personalModePromptOverride() : '')
           // ★地元の会話の回（2026-10-18・shared/localTalk.ts）。長さ・絵文字・締めの共通指示より後ろ＝より優先。
           //   ご本人の手直しの決まり（editLessonsNote）はこれより後ろ（ご本人の直しを優先する）
-          + (localTalkTurn ? localTalkNote({ places: localTalkPlaces(project.area, approvedLocalTerms(project)), allowEmoji, recentSeasonFood: recentSeasonFoodTalk(recentPosts) }) : '')
+          + (localTalkTurn ? localTalkNote({ places: localTalkPlaces(project.area, approvedLocalTerms(project)), allowEmoji, recentSeasonFood: recentSeasonFoodTalk(recentPosts), recentTalks: recentLocalTalks(recentPosts) }) : '')
           // ★毎回直しているところ（2026-10-08）。長さ・改行の最終指示より後ろ＝より優先
           + editLessonsNote
           // ★お客様が自分で決めた書き方（2026-10-18）。手直しの決まりの後ろ

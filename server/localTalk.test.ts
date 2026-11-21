@@ -209,3 +209,45 @@ describe("Moveact 玉島（acc10）は「マシン」を書かない", () => {
     expect(exec).toContain("findAccountBannedWord(account.id, post.postContent)");
   });
 });
+
+// ── 2026-11-21 夜間整備：地元の会話の回に「今日の主題」がぶつかる／同じ日に同じ話が2本 ──
+describe("地元の会話：お店の主題とぶつけない・同じ話を続けない（2026-11-21）", () => {
+  it("acc35 #7395 の文は「効果・結果の言い切り」として止まる（最後の作り直しでも公開しない側）", async () => {
+    const { checkAngle } = await import("../shared/angleGuard");
+    const r = checkAngle("local_talk", "岐阜市でコアレって知ってますか？\n寝てるだけでインナーマッスルに刺激が入るんですよ。\nウエスト引き締め効果も期待できます😊");
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain("効果・結果の言い切り");
+    // ふつうの地元の会話は通る
+    expect(checkAngle("local_talk", "金沢の冬といえば、コタツはもう出しましたか？").ok).toBe(true);
+  });
+  it("地元の会話の回は、今日の主題とネタ帳を渡さない（生成側の配線）", () => {
+    const src = fs.readFileSync(path.resolve(__dirname, "autoPostScheduler.ts"), "utf8");
+    expect(src).toContain("if (localTalkTurn && plan.topic) {");
+    expect(src).toContain("ft.buildFreshTopicNote(plan, { omitTopic: localTalkTurn })");
+    expect(src).toContain("if (!opts.collect && !localTalkTurn) {");
+    expect(src).toContain("recentTalks: recentLocalTalks(recentPosts)");
+  });
+  it("直近の地元の会話（短い・問いかけ）だけを拾う。お店の短い投稿は拾わない", async () => {
+    const { recentLocalTalks } = await import("../shared/localTalk");
+    const kotatsu = "岡山で「寒くなってきたね」って言うと「そろそろコタツ出す？」って返ってくるのは、あるあるだと思う。";
+    const got = recentLocalTalks([
+      kotatsu,
+      "車検は、車検満了日の2か月前から受けられます。\n早く受けても次の満了日は短くなりません😊",
+      "矢掛町にお住まいの方に聞きたいです。\n運転中、つい口ずさんでしまう曲ってありますか？",
+      "当院では姿勢の検査を丁寧に行い、一人ひとりに合わせた計画をお伝えしています。".repeat(4) + "どう思いますか？",
+    ]);
+    expect(got).toEqual([kotatsu, "矢掛町にお住まいの方に聞きたいです。 運転中、つい口ずさんでしまう曲ってありますか？"]);
+    expect(recentLocalTalks(null)).toEqual([]);
+    // 問いかけの印が無い「〜よね」の形も拾う（acc34 #7381）
+    expect(recentLocalTalks(["岐阜の冬、朝の車の窓が凍っています。\nお湯かけちゃダメって分かってても、急いでるとやっちゃいますよね😅"])).toHaveLength(1);
+  });
+  it("指示文に、直近の地元の会話と「名前を伏せた自分の答えを書かない」が入る", async () => {
+    const { localTalkNote } = await import("../shared/localTalk");
+    const note = localTalkNote({ places: ["岡山"], allowEmoji: true, recentTalks: ["岡山も朝晩は冷えるね。 コタツはもう出した？"] });
+    expect(note).toContain("コタツはもう出した？");
+    expect(note).toContain("同じ話をもう一度書かない");
+    expect(note).toContain("私はあの角を曲がる時ですね");
+    // 直近に無ければ足さない
+    expect(localTalkNote({ places: ["岡山"], allowEmoji: true })).not.toContain("直近の「地元の会話」はこれ");
+  });
+});

@@ -221,7 +221,10 @@ export function checkAngle(angleId: string | null | undefined, text: string): An
 
   if (req.ban && req.ban.test(t)) {
     const m = t.match(req.ban)?.[0] ?? "";
-    const kind = /逆効果|意味|無駄|繰り返|変わ|必ず|治|根本|完治|改善|ごまか|その場しのぎ/.test(m) ? "効果・結果の言い切り" : "売り込み";
+    // ★「効果」も言い切りに数える（2026-11-21 夜間整備）。地元の会話の ban は「治る・改善・効果は最後の作り直しでも公開しない」
+    //   つもりで書かれていたが、ここは「逆効果」しか見ておらず、「効果」は売り込み扱い＝最後の作り直しで公開されていた
+    //   （acc35 #7395「ウエスト引き締め効果も期待できます」）。「効果」を ban に持つ切り口は地元の会話だけ。
+    const kind = /効果|意味|無駄|繰り返|変わ|必ず|治|根本|完治|改善|ごまか|その場しのぎ/.test(m) ? "効果・結果の言い切り" : "売り込み";
     return { ok: false, reason: `${angleId}: ${kind}「${m}」が入っている`, hint: req.hint, defaultTemplate: template };
   }
   if (req.maxChars && Array.from(t.replace(/\s+/g, "")).length > req.maxChars) {
