@@ -337,17 +337,15 @@ export async function executePendingPosts() {
               }
             }
           }
-          // ★ランキング型の試し（2026-11-21 三上様「試して」・shared/rankingTree.ts）：学習用の3アカウントだけ、
-          //   ランキング型で書いた投稿（experimentKey=ranking3）を、id の偶奇で「順位の切れ目で3本／1本のまま」を交互に出す。
-          if (segments.length === 1 && canReply && post.source === 'auto' && !(post as any).mediaItemId && !(post as any).pollOptions && !(post as any).quotePostId) {
-            const { RANKING_TRIAL_KEY, RANKING_TREE, rankingArm, rankingSplit } = await import('../shared/rankingTree');
-            if ((post as any).experimentKey === RANKING_TRIAL_KEY && RANKING_TREE.accountIds.includes(Number(post.threadsAccountId))
-              && rankingArm(Number(post.id)) === 'tree') {
-              const split = rankingSplit(segments[0]);
-              if (split) {
-                segments = split;
-                console.log(`[Scheduled Post] post ${post.id}: ランキング型の試し→3本に分けて公開`);
-              }
+          // ★ツリーの利点を生かした投稿の試し（2026-11-21 三上様・shared/treeDesign.ts）：学習用の3アカウントだけ、
+          //   ツリー向けの型で書いた投稿（experimentKey=tree_*）を、id で「フック／中身／（案内）に分ける・1本のまま」を交互に出す。
+          //   お客様のアカウントは対象外（treeDesignSegments がアカウントの番号と目印の両方を見て null を返す）。
+          if (segments.length === 1 && post.source === 'auto' && !(post as any).mediaItemId && !(post as any).pollOptions && !(post as any).quotePostId) {
+            const { treeDesignSegments } = await import('../shared/treeDesign');
+            const td = treeDesignSegments({ experimentKey: (post as any).experimentKey, threadsAccountId: Number(post.threadsAccountId), id: Number(post.id), text: segments[0] });
+            if (td && (td.segments.length === 1 || canReply)) {
+              segments = td.segments;
+              console.log(`[Scheduled Post] post ${post.id}: ツリー設計の試し→${td.arm === 'tree' ? `${td.segments.length}本に分けて公開` : '1本のまま'}${td.offer ? '（案内あり）' : ''}`);
             }
           }
           // トピックタグ：お客様には付けない。学習用アカウントだけ期間中に「本文に合う言葉を付ける／付けない」を交互に

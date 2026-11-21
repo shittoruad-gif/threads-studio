@@ -25,7 +25,7 @@ import { stripRawUrls } from "../shared/sanitize";
 import { earlierRejectedNote } from "../shared/naturalnessRetryHint";
 import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
 import { trialRules, inLearning, isUncappedAccount } from "../shared/learningAccounts";
-import { RANKING_TRIAL_KEY } from "../shared/rankingTree";
+import { isTreeDesignKey } from "../shared/treeDesign";
 import { bannedRuleFor, scrubProjectForAccount, findAccountBannedWord, accountBannedNote } from "../shared/accountBannedWords";
 import { LOCAL_TALK_ANGLE_ID, localTalkNote, localTalkPlaces, localTalkOptedOut, localTalkOptedOutByRules, recentSeasonFoodTalk, recentLocalTalks } from "../shared/localTalk";
 
@@ -857,14 +857,15 @@ export async function generateAutoPost(
   // ★地元の会話の回（切り口 local_talk か、学習の試し local_talk）。短い・問いかけで終える・宣伝なし（shared/localTalk.ts）
   const localTalkTurn = angle?.id === LOCAL_TALK_ANGLE_ID || trialKey === LOCAL_TALK_ANGLE_ID;
   if (localTalkTurn) console.log(`[AutoPost] 地元の会話の回 account=${threadsAccountId}${trialKey === LOCAL_TALK_ANGLE_ID ? '（学習の試し）' : ''}`);
-  // ★ランキング型の試し（shared/rankingTree.ts）は題名＋3つの順位で120〜200字になるので、長めの予算で書く
-  const rankingTurn = trialKey === RANKING_TRIAL_KEY;
-  const effectiveLength = trialKey === 'len_long' || rankingTurn ? 'long' : (trialKey === 'len_oneliner' || localTalkTurn) ? 'short' : resolveWithAlternation(postLength, postingTimeIndex);
+  // ★ツリーの利点を生かした投稿の試し（shared/treeDesign.ts）は150〜220字（2スクロール分）なので、長めの予算で書く
+  const treeDesignTurn = isTreeDesignKey(trialKey);
+  const rankingTurn = trialKey === 'tree_rank';
+  const effectiveLength = trialKey === 'len_long' || treeDesignTurn ? 'long' : (trialKey === 'len_oneliner' || localTalkTurn) ? 'short' : resolveWithAlternation(postLength, postingTimeIndex);
   // ★お客様ごとの長さ（2026-10-03 三上様「相手の平均的な文字数に合わせて」）。
   //   文体のお手本が3本以上あれば、その平均字数に合わせる。「長め」を選んだ方・反応改善の試験中の方は従来どおり。
   const { sampleLengthRange, applyLengthRange, budgetForRange } = await import('../shared/sampleLength');
   // ★長さの試し（len_*）では、お手本の平均字数に合わせない（合わせると「長め」が50〜60字に縮められ、10/7 の試しで1本も書けなかった）
-  const lengthRange = effectiveLength === 'short' && !lowReaction && !localTalkTurn && !(trialKey ?? '').startsWith('len_') && !rankingTurn
+  const lengthRange = effectiveLength === 'short' && !lowReaction && !localTalkTurn && !(trialKey ?? '').startsWith('len_') && !treeDesignTurn
     ? sampleLengthRange((project as any).styleSamples || null)
     : null;
   if (lengthRange) console.log(`[AutoPost] 長さをお手本に合わせる account=${threadsAccountId} 平均${lengthRange.avg}字（${lengthRange.n}本）→ ${lengthRange.lo}〜${lengthRange.hi}字`);
@@ -1232,9 +1233,9 @@ export async function generateAutoPost(
           // 落ちた言い回しは公開まで残らないので、型の判定に足す（2026-10-18 acc36「よく聞く悩みです」）
           rejectedPhrases: await db.getRecentDupRejectPhrases(threadsAccountId, 48).catch(() => [] as string[]),
         });
-        // ★ランキング型の試しは、題材を3つ並べる形なので「今日の主題（1つの材料を主役に）」は指定しない。
-        //   使いすぎの言葉を避ける指示はそのまま（11/21 試し書き：主題「完全予約制でゆったり」を書いていないで2回とも落ちた）
-        if (rankingTurn) (plan as any).topic = null;
+        // ★ツリー設計の試し（shared/treeDesign.ts）は型が決まっているので「今日の主題（1つの材料を主役に）」は指定しない。
+        //   使いすぎの言葉を避ける指示はそのまま（11/21 試し書き：BEST3・Q&A・言い切りのどれも、主題を書いていないで落ち続けた）
+        if (treeDesignTurn) (plan as any).topic = null;
         if (plan.overused.length > 0 || (plan.frames?.length ?? 0) > 0) {
           // ★地元の会話の回は、お店の材料を「今日の主題」にしない（2026-11-21 夜間整備 acc35 #7395）。
           //   地元の会話は「お店の名前・メニュー・効果の話は書かない」回なのに、同じ回に主題「コアレ導入」が必須で指定され、
@@ -2003,15 +2004,26 @@ export async function generateAutoPost(
       }
     } catch { /* ガード失敗時はそのまま */ }
 
+    // ★ツリーの利点を生かした投稿の試し（shared/treeDesign.ts）：型どおりに分けられない・禁じた話が入った下書きは作り直す。
+    //   学習用の自社アカウントの試しの枠だけ。3回とも通らなければ、呼び出し側が通常の作り方に戻す。
+    if (treeDesignTurn) {
+      const tdp = (await import('../shared/treeDesign')).treeDesignProblems(trialKey, naturalMain);
+      if (tdp.length > 0) {
+        console.warn(`[AutoPost] treeDesign: ${tdp.join(' / ')} → 作り直し userId=${userId} account=${threadsAccountId}`);
+        noteReject('treeDesign', userId, threadsAccountId, postingTimeIndex, tdp.map((t) => `- 前回は、${t}。`).join('\n'), { detail: tdp.join('・').slice(0, 200) });
+        return false;
+      }
+    }
+
     // ★登録情報に無い数字（割合・順位・人数など）が入っていたら公開しない。
     //   2026-09-08 比嘉先生の当日補充で「3人に1人が知らないこと」が出た。実績は
     //   「開業11年・業界歴20年・のべ20万人以上」だけで、根拠の無い数字だった。
     //   「書いていない数字をAIが作らない」はお客様へのお約束なので、機械的に止める。
     try {
       const { findFabricatedNumbers, registeredFactsOf, fabricatedNumberRetryHint } = await import('../shared/fabricatedNumberGuard');
-      // ★ランキング型の試しでは、順位の表記（行の先頭の「第3位」「第2位」「第1位」と題名の「BEST3」）だけを数字の検査から外す。
+      // ★BEST3 の型（shared/treeDesign.ts）では、順位の表記（行の先頭の「第3位」「第2位」「第1位」と題名の「BEST3」）だけを数字の検査から外す。
       //   それ以外の数字（人数・割合・回数など）は今までどおり止める（11/21 試し書き：「3位・2位・1位」で2回とも落ちた）
-      const numberCheckText = rankingTurn ? (await import('../shared/rankingTree')).maskRankLabels(naturalMain) : naturalMain;
+      const numberCheckText = rankingTurn ? (await import('../shared/treeDesign')).maskRankLabels(naturalMain) : naturalMain;
       const fab = findFabricatedNumbers(numberCheckText, registeredFactsOf(project));
       if (fab.length > 0) {
         console.warn(`[AutoPost] fabricatedNumberGuard: 登録に無い数字 ${fab.map((x) => x.text).join('・')} のため公開しない userId=${userId} projectId=${project.id}`);
@@ -3019,23 +3031,25 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
                 }
               }
             } catch (e) { console.warn(`[AutoPost] 1か所変えをとばしました account=${account.id}: ${(e as Error)?.message}`); }
-            // ★ランキング型の試し（2026-11-21 三上様「試して」・shared/rankingTree.ts）。
-            //   学習用の自社3アカウントだけ、期間中は上乗せの1本目の枠を「BEST3」の形で書く（試しの仕組み＝検査は通常どおり）。
-            //   3回書けなければ、下の通常の作り方（当たり型）にそのまま進む（11/21 試し書き：金光は2回では通らなかった）。公開のときの分け方は scheduledPostExecutor 側。
+            // ★ツリーの利点を生かした投稿の試し（2026-11-21 三上様・shared/treeDesign.ts）。
+            //   学習用の自社3アカウントだけ、期間中は上乗せの1本目の枠を、ツリー向けの3つの型（BEST3／Q&A／言い切り→理由）で日替わりに書く
+            //   （試しの仕組み＝検査は通常どおり）。3回書けなければ、下の通常の作り方（当たり型）にそのまま進む
+            //   （11/21 試し書き：金光は2回では通らなかった）。公開のときの分け方は scheduledPostExecutor 側。
             try {
-              const rt = await import('../shared/rankingTree');
-              if (!success && !opts.fillToday && !learningTrial && rt.isRankingSlot(account.id, i, contractCount, postCount)) {
+              const td = await import('../shared/treeDesign');
+              if (!success && !opts.fillToday && !learningTrial && td.isTreeDesignSlot(account.id, i, contractCount, postCount)) {
+                const design = td.treeDesignFor(account.id);
                 for (let attempt = 1; attempt <= 3 && !success; attempt++) {
                   if (await slotAlreadySaved()) { success = true; break; }
                   success = await generateAutoPost(
                     user.id, project, typeIdx, purposeIdx, account.id, i, eff.autoPostRequireApproval, acctHours, eff.postLength,
-                    slotTimeFor(i), lastRejectReason.get(rk) ?? null, false, false, { learningTrial: rt.RANKING_TRIAL },
+                    slotTimeFor(i), lastRejectReason.get(rk) ?? null, false, false, { learningTrial: design },
                   );
                 }
-                console.log(`[AutoPost] ランキング型の枠 account=${account.id} slot=${i} → ${success ? '作成' : '書けず（通常の作り方へ）'}`);
+                console.log(`[AutoPost] ツリー設計の枠 account=${account.id} slot=${i} 型=${design.key} → ${success ? '作成' : '書けず（通常の作り方へ）'}`);
                 if (!success) clearReject(rk);
               }
-            } catch (e) { console.warn(`[AutoPost] ランキング型をとばしました account=${account.id}: ${(e as Error)?.message}`); }
+            } catch (e) { console.warn(`[AutoPost] ツリー設計の枠をとばしました account=${account.id}: ${(e as Error)?.message}`); }
             // ★写真・動画を付ける回（2026-10-26・プロ以上・1日1本・同じものは2週間あける）。その日の1本目（21時の枠）に付ける
             let mediaItem: { id: number; kind: string; description: string | null } | null = null;
             if (i === 0 && !learningTrial && !hitPatternId && !feature) {
