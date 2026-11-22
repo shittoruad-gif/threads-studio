@@ -17,7 +17,7 @@ import { applyTicSentenceRepair, checkNaturalized, endsWithQuestion, findAgreeme
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
-import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM, hasRecruitingMarker } from "../shared/recruitingPost";
+import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM, hasRecruitingMarker, recruitingLocalFor, recruitingOfferTurn, recruitingLocalNote } from "../shared/recruitingPost";
 import { touchesDeclined, filterStyleSamples, normalizeForPatterns, filterCounseling } from "../shared/declinedPatterns";
 import { overusedHits, dropOverusedLines, dropFramedSentences, framesOf, hitsSurveyAvoid, lineHitsFrames, stickyHits, coversTopic, dropStickyLines } from "../shared/freshTopic";
 import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
@@ -783,7 +783,8 @@ export async function generateAutoPost(
       if (localTalkOptedOut(userId)) return true;
       if (localTalkOptedOutByRules(rulesForLocalTalk)) return true;
       if (localTalkPlaces(project.area, approvedLocalTerms(project)).length === 0) return true;
-      if (looksLikeRecruiting(project)) return true;
+      // 求人のアカウントは外す。ただし「地元の人に届ける求人」のお客様だけは使う（shared/recruitingPost.ts RECRUITING_LOCAL・2026-11-22）
+      if (looksLikeRecruiting(project) && !recruitingLocalFor(userId)) return true;
       try { if (JSON.parse(project.counselingResult || 'null')?.closingStyle === 'statement') return true; } catch { /* 読めなければ外さない */ }
       return false;
     })();
@@ -1595,7 +1596,11 @@ export async function generateAutoPost(
           + (noQuestionEnding ? (await import('../shared/freshTopic')).QUESTION_ENDING_NOTE : '')
           // ★求人（採用）の投稿を、集客と同じ型で書かせない（shared/recruitingPost.ts・2026-09-23）。
           //   プレステージ様は2晩続けて naturalnessReview で3回落ち、枠を捨てていた。
-          + (looksLikeRecruiting(project) ? RECRUITING_POST_ADDENDUM : '')
+          //   地元の会話の回は求人の言葉を入れない（地元の人に届ける求人のお客様だけに出る回・2026-11-22）
+          + (looksLikeRecruiting(project) && !localTalkTurn ? RECRUITING_POST_ADDENDUM : '')
+          + (looksLikeRecruiting(project) && !localTalkTurn && recruitingLocalFor(userId)
+            ? recruitingLocalNote(localTalkPlaces(project.area, approvedLocalTerms(project)), recruitingOfferTurn(postingTimeIndex))
+            : '')
           // ★個人モードの上書きは最末尾（末尾の指示が最も遵守されやすい）
           + (personal ? personalModePromptOverride() : '')
           // ★地元の会話の回（2026-10-18・shared/localTalk.ts）。長さ・絵文字・締めの共通指示より後ろ＝より優先。
@@ -1913,7 +1918,7 @@ export async function generateAutoPost(
 
     // ★求人のアカウントで、求人だと読めない下書きは作り直す（2026-09-26 三上様指示「今後は求人向けに書いてください」）。
     //   最後の作り直しでは止めない（枠を捨てない）。
-    if (looksLikeRecruiting(project) && !lastAttempt && !hasRecruitingMarker(naturalMain)) {
+    if (looksLikeRecruiting(project) && !localTalkTurn && !lastAttempt && !hasRecruitingMarker(naturalMain)) {
       console.warn(`[AutoPost] recruitingMarker: 求人だと読めない → 作り直し userId=${userId} account=${threadsAccountId}`);
       noteReject('recruitingMarker', userId, threadsAccountId, postingTimeIndex,
         '- この投稿は求人（働く人に向けた投稿）。お客様向けの宣伝に読める。働く・職場・募集・入社・スタッフとして などの言葉で、働く人に向けた投稿だと分かるように書く。',

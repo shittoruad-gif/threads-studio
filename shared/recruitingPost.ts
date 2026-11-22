@@ -75,3 +75,42 @@ const RECRUITING_MARKER = /働|職場|募集|入社|応募|仲間|採用|転職|
 export function hasRecruitingMarker(text: string): boolean {
   return RECRUITING_MARKER.test(String(text ?? ""));
 }
+
+/**
+ * 求人のアカウントで「地元の人に届ける」形をとるお客様（2026-11-22 三上様「倉敷周辺の方にリーチを広げる目的も含めて」→
+ * お客様にお伺いして「お任せします」→「これで全て進めて」）。
+ *
+ *  - 地元の会話（shared/localTalk.ts）は、求人のアカウントでは今まで使っていなかった（looksLikeRecruiting で外す）。
+ *    ここに入っている方だけ使う。地元の会話の回は求人の言葉を入れない（読んだ人がプロフィールから募集を知る流れ）。
+ *  - それ以外の回は、1行目に地域名を入れるよう指示する（直近で地域名の書き出しが続いたら、R4 が2行目以降へ回す）。
+ *  - offerEvery 回に1回だけ「はっきりした募集」（条件2〜3つ→一緒に働きたい理由→質問だけでもDMで）。ほかの回は募集の呼びかけで締めない。
+ *  - ほかの求人のお客様（プレステージ様など）は変えない。広げるときは三上様の承諾で userIds に足す（夜間に反映）。
+ */
+export const RECRUITING_LOCAL = {
+  userIds: [32089] as readonly number[],
+  offerEvery: 5,
+} as const;
+
+export function recruitingLocalFor(userId: number | null | undefined): boolean {
+  return RECRUITING_LOCAL.userIds.includes(Number(userId));
+}
+
+/** はっきりした募集の回か（日付と枠で決める。1日3本なら5本に1本ほど） */
+export function recruitingOfferTurn(postingTimeIndex: number, now: number = Date.now()): boolean {
+  const day = Math.floor((now + 9 * 3600_000) / 86400_000);
+  return (((day * 3 + Math.max(0, Math.floor(postingTimeIndex))) % RECRUITING_LOCAL.offerEvery) + RECRUITING_LOCAL.offerEvery) % RECRUITING_LOCAL.offerEvery === 0;
+}
+
+/** 地元の人に届ける求人の回の指示（地元の会話の回には付けない） */
+export function recruitingLocalNote(places: readonly string[], offerTurn: boolean): string {
+  const where = places.filter(Boolean).slice(0, 3);
+  const head = where.length > 0
+    ? `- 読む人は「${where.join("・")}」まわりに住む・働く人。1行目に「${where.join("」「")}」のどれかを自然に入れる（登録に駅の名前があれば「〇〇駅の近く」でもよい）。ただし直近の投稿が続けて地名から始まっているときは、2行目以降に1回だけ入れる。\n`
+    : "";
+  const body = offerTurn
+    ? "- ★今回は、はっきりした募集の回。①働く人への呼びかけ（地域名を入れる）②登録された条件を2〜3つ（週の日数・時給・服装など、登録にあるものだけ）③一緒に働きたい理由を1文 ④「質問だけでも大丈夫なので、DMで声をかけてください」のような気軽な一言、の順で書く。\n"
+    : "- 今回は、登録された条件・お店の雰囲気・働く人の不安への答えのうち、1つだけを伝える。「募集しています」「DMください」のような募集の呼びかけで締めない（はっきりした募集は数本に1本だけにする）。\n";
+  const facts = "- 「よく聞かれます」「〜と言われます」のように、実際にあった質問・会話として書かない（登録に無い）。働く人の不安は、読む人の側の気持ちとして書く。\n"
+    + "- 「〜でも大丈夫」「〜でも働けます」と言ってよいのは、登録された条件にあることだけ（週1日から・2週間に1回・平日のみ／週末のみ・Wワーク・服装・ノルマなし・お酒が苦手でも相談・送迎相談・体験入店・お友達と応募 など）。登録に無いこと（カラオケが苦手でも 等）は約束しない。\n";
+  return `\n\n【地元の人に届ける求人の投稿・最優先】\n${head}${body}${facts}`;
+}
