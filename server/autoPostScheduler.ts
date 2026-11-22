@@ -2022,6 +2022,29 @@ export async function generateAutoPost(
     // ★学習の試しの「地元の会話」は切り口なしで作るので、同じ検査を試しのキーで当てる（2026-10-18）
     const angleForCheck: { id: string; label: string } | null = angle
       ?? (trialKey === LOCAL_TALK_ANGLE_ID ? { id: LOCAL_TALK_ANGLE_ID, label: '地元の会話' } : null);
+    // ★地元の会話：名前を伏せた言い方（2026-11-22 夜間整備・shared/localTalk.ts）。
+    //   質問のあとに付けた「私はあの川沿いの道が好きです。」は、その一文だけ落とす（作り直さない）。
+    //   「あの、雪が降る前にやるアレ、もう済ませましたか？」のように文の中心が伏せてあるものは作り直す。
+    //   最後の作り直しではそのまま公開する（枠は減らさない）。
+    if (angleForCheck?.id === LOCAL_TALK_ANGLE_ID) {
+      try {
+        const { stripVagueSelfAnswer, findVagueName, vagueNameRetryHint } = await import('../shared/localTalk');
+        const stripped = stripVagueSelfAnswer(naturalMain);
+        if (stripped !== naturalMain) {
+          console.log(`[AutoPost] localTalk: 名前を伏せた自分の答えの一文を落とした userId=${userId}`);
+          naturalMain = stripped;
+        }
+        const vague = findVagueName(naturalMain);
+        if (vague && !lastAttempt) {
+          console.warn(`[AutoPost] vagueName: 名前を伏せた言い方「${vague}」→ 作り直し userId=${userId} projectId=${project.id}`);
+          noteReject('vagueName', userId, threadsAccountId, postingTimeIndex,
+            vagueNameRetryHint(vague), { detail: `名前を伏せた言い方：${vague}` });
+          return false;
+        } else if (vague) {
+          console.log(`[AutoPost] vagueName: 「${vague}」だが最後の作り直しのため公開へ userId=${userId}`);
+        }
+      } catch (e) { console.warn(`[AutoPost] vagueName skipped: ${(e as Error)?.message}`); }
+    }
     if (angleForCheck) {
       const angle = angleForCheck;
       try {

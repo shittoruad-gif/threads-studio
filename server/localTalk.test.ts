@@ -251,3 +251,52 @@ describe("地元の会話：お店の主題とぶつけない・同じ話を続�
     expect(localTalkNote({ places: ["岡山"], allowEmoji: true })).not.toContain("直近の「地元の会話」はこれ");
   });
 });
+
+describe('地元の会話：名前を伏せた言い方（2026-11-22 夜間整備）', () => {
+  it('質問のあとの「私はあの〜です」の一文だけ落とす（公開された実例）', async () => {
+    const { stripVagueSelfAnswer } = await import('../shared/localTalk');
+    expect(stripVagueSelfAnswer('最近、夜が長くなりましたね。\n\nこの辺りだと、夜の散歩が気持ちいい場所ってどこでしょう？\n\n私はあの川沿いの道が好きです。'))
+      .toBe('最近、夜が長くなりましたね。\n\nこの辺りだと、夜の散歩が気持ちいい場所ってどこでしょう？'); // #7438
+    expect(stripVagueSelfAnswer('岡山って、冬支度何から始めますか？\n\n私はまず、あの温かい飲み物からですね。')).toBe('岡山って、冬支度何から始めますか？'); // #7444
+    expect(stripVagueSelfAnswer('小田郡矢掛町で運転していると、思わず目を奪われる景色ってありますか？\n私はあの、夕焼けに染まる川沿いの道が好きです。'))
+      .toBe('小田郡矢掛町で運転していると、思わず目を奪われる景色ってありますか？'); // #7447
+    expect(stripVagueSelfAnswer('矢掛町にお住まいの方に聞きたいです。\n運転中、つい口ずさんでしまう曲ってありますか？\n私はやっぱり、あの懐かしいメロディですね。'))
+      .toBe('矢掛町にお住まいの方に聞きたいです。\n運転中、つい口ずさんでしまう曲ってありますか？'); // #7387
+    expect(stripVagueSelfAnswer('矢掛の道って、運転中につい「あるある」って思う瞬間ありませんか？\n私はあの角を曲がる時ですね。'))
+      .toBe('矢掛の道って、運転中につい「あるある」って思う瞬間ありませんか？'); // #7389
+  });
+  it('「私はやっぱり、アレですね。」も落とす（11/22 の試し生成で出た形）', async () => {
+    const { stripVagueSelfAnswer } = await import('../shared/localTalk');
+    expect(stripVagueSelfAnswer('金沢の冬の運転で、これは欠かせない！ってものありますか？\n\n私はやっぱり、アレですね。'))
+      .toBe('金沢の冬の運転で、これは欠かせない！ってものありますか？');
+  });
+  it('名前を言っている文・前の文を指す「あの」は変えない', async () => {
+    const { stripVagueSelfAnswer, findVagueName } = await import('../shared/localTalk');
+    for (const t of [
+      '鴨方のそうめん、冬でも食べる派ですか？笑\n私はにゅうめん派です。',
+      '神崎本宿で、最近よく見かけるのが金木犀の香り。\nあの香りがすると、秋だなぁって感じますよねー！\n皆さんはどんな秋の匂いが好きですか？😊', // #4478
+      '下総神崎駅前のイチョウ並木、見頃になってきましたね。\nあの黄色を見ると、今年もあと少しって感じがします🍂\n\n皆さんはどんな時に秋の終わりを感じますか？', // #6492
+      '金沢の冬といえば、やっぱりアレですよね。\n\nおでんの具に「バイ貝」は欠かせない派ですか？', // #7415 後で名前を言う
+      '金沢の秋といえば、やっぱりアレですよね。\n\n香箱ガニ、もう食べましたか？\n\n今年はいつ頃行きますか？', // #7114
+      '岐阜市でコアレって知ってますか？', // 「コアレ」の中の「アレ」は数えない
+      '花粉のアレルギー、春と秋どっちがつらい派ですか？',
+      '岐阜の秋といえば、やっぱり栗きんとんが食べたくなります。\nみなさんは、どこのお店の栗きんとんが好きですか？', // #7455
+    ]) {
+      expect(stripVagueSelfAnswer(t), t).toBe(t);
+      expect(findVagueName(t), t).toBeNull();
+    }
+  });
+  it('落とすと問いかけが残らないときは触らない', async () => {
+    const { stripVagueSelfAnswer } = await import('../shared/localTalk');
+    const t = '私はあの川沿いの道が好きです。';
+    expect(stripVagueSelfAnswer(t)).toBe(t);
+  });
+  it('文の中心が伏せてあるものは作り直しの理由にする（公開された実例）', async () => {
+    const { findVagueName, vagueNameRetryHint } = await import('../shared/localTalk');
+    expect(findVagueName('金沢はもうすぐ冬の足音。\nあの、雪が降る前にやるアレ、もう済ませましたか？')).not.toBeNull(); // #7412
+    expect(findVagueName('廿日市で運転してると、ついあの道の横道に吸い込まれそうになりません？\n\n私だけかな。')).not.toBeNull(); // #7425
+    expect(findVagueName('あの橋からの眺め、昼と夜どっちが好きですか？私、迷っちゃいますね。')).not.toBeNull(); // #6411
+    expect(findVagueName('秋の夕暮れ、あの川沿いを歩くのが好きです。風が冷たいけど、空の色が綺麗で！\n皆さんは、秋の散歩、どこがお気に入りですか？')).not.toBeNull(); // #6624
+    expect(vagueNameRetryHint('あの道')).toContain('あの道');
+  });
+});
