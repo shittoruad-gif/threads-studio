@@ -25,3 +25,23 @@ describe("閲覧の回復期間", () => {
     expect(inOneSpot(12, d)).toBe(true);
   });
 });
+
+import { stepUpPerDay } from "../shared/accountRecovery";
+import { computeDailyCap } from "../shared/dailyCap";
+
+describe("本数を段階的に戻す（金光）", () => {
+  it("11/24から8本・12/01から10本・開始前とほかのアカウントは null", () => {
+    expect(stepUpPerDay(12, "2026-10-26", at("2026-11-23"))).toBeNull();
+    expect(stepUpPerDay(12, "2026-10-26", at("2026-11-24"))).toBe(8);
+    expect(stepUpPerDay(12, "2026-10-26", at("2026-11-30"))).toBe(8);
+    expect(stepUpPerDay(12, "2026-10-26", at("2026-12-01"))).toBe(10);
+    expect(stepUpPerDay(12, null, at("2026-12-20"))).toBe(10);
+    expect(stepUpPerDay(10, null, at("2026-12-01"))).toBeNull();
+  });
+  it("段階の途中で冷却に入ったら、冷却明けも元へ戻す", () => {
+    expect(stepUpPerDay(12, "2026-11-27", at("2026-12-05"))).toBeNull();
+  });
+  it("天井も一緒に上がる（翌日へ回されない）", () => {
+    expect(computeDailyCap({ contract: 3, rampCount: 8, rampCapped: false, carry: 0, maxExtra: Math.max(2, 8 - 3) } as any)).toBe(8);
+  });
+});

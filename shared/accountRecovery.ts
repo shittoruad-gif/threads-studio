@@ -49,3 +49,30 @@ export const RECOVERY_NOTE = `
 - 朝晩の冷え込み・季節の変わり目・秋の夜長の書き出しは使わない（何度も使っています）
 - 地域名は本文に1回まで
 - 地元の人に話しかける話題1つ（食べ物・お店・場所・暮らし）か、体の使い方の具体的なコツ1つを、ふつうの言葉で短く書く。登録に無い出来事・お客様の声・数字は作らない`;
+
+/**
+ * 本数を段階的に戻す（自社の学習用アカウントだけ・お客様のアカウントには入れない）。
+ * 2026-11-23 三上様「金光は8本から増やして進めて」：acc12 は配信が絞られていない（1本あたり100〜250）ので、
+ * 1日5本→8本（11/24〜）→10本（12/01〜）と1週間ずつ上げる。
+ * ★一度でも冷却に入ったら（Threads側で投稿が消されたら）段階はやめて元の本数へ戻す（冷却明けも戻さない）。
+ *   続けるかどうかは三上様に決めていただく。
+ */
+export interface StepUpPlan {
+  steps: ReadonlyArray<{ from: string; perDay: number }>;
+}
+
+export const ACCOUNT_STEP_UP: Readonly<Record<number, StepUpPlan>> = {
+  12: { steps: [{ from: "2026-11-24", perDay: 8 }, { from: "2026-12-01", perDay: 10 }] },
+};
+
+/** 今日の目標本数（段階の対象外・開始前・冷却が入ったあとは null） */
+export function stepUpPerDay(accountId: number, cooldownUntilJst: string | null | undefined, now: number = Date.now()): number | null {
+  const plan = ACCOUNT_STEP_UP[Number(accountId)];
+  if (!plan || plan.steps.length === 0) return null;
+  const first = plan.steps[0]!.from;
+  if (cooldownUntilJst && cooldownUntilJst >= first) return null;
+  const ymd = jstYmd(now);
+  let n: number | null = null;
+  for (const s of plan.steps) if (ymd >= s.from) n = s.perDay;
+  return n;
+}

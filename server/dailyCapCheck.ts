@@ -42,7 +42,7 @@ export async function dailyCapDecision(account: any, userId: number): Promise<Da
   const today = jstDateString(0);
   const carry = dateColToJst(account?.carryDate) === today ? Number(account?.carryCount ?? 0) : 0;
   // ★学習用アカウントの上乗せ分は、上限の天井にも足す（shared/learningAccounts.ts・自社2店だけ）
-  const cap = computeDailyCap({ contract, rampCount: rc.count, rampCapped: rc.capped, carry, maxExtra: maxExtraPerDayFor(account) + Number(rc.learning ?? 0) });
+  const cap = computeDailyCap({ contract, rampCount: rc.count, rampCapped: rc.capped, carry, maxExtra: Math.max(maxExtraPerDayFor(account), Number(rc.ceilingExtra ?? 0)) + Number(rc.learning ?? 0) });
   const reason: DailyCapDecision["reason"] = inCooldown(account) ? "cooldown" : rc.capped ? "ramp" : "contract";
   return { cap, contract, reason, strict: rc.capped, days: rc.days, untilJst: dateColToJst(account?.cooldownUntil), note: rc.note };
 }

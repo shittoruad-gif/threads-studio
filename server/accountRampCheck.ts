@@ -51,6 +51,8 @@ export interface RampDecision {
   learning?: number;
   /** 本数を変えた理由（R8：冷却を「慣らし運転」と言わないために区別する） */
   reason?: "cooldown" | "ramp" | "compensation" | "deleted" | "manual" | "apology";
+  /** 本数を段階的に戻している日の、契約より上に足してよい数（shared/accountRecovery.ts ACCOUNT_STEP_UP） */
+  ceilingExtra?: number;
 }
 
 /**
@@ -88,6 +90,15 @@ async function rampForAccountBase(
     }
   }
   const base0 = await rampDecision(account, contract);
+  // ★本数を段階的に戻す（自社の学習用アカウントだけ・shared/accountRecovery.ts・2026-11-23）。
+  //   ふつうの上乗せの天井（契約＋2）を超えるので、天井も ceilingExtra で一緒に上げる（dailyCapCheck）
+  if (!base0.capped) {
+    const { stepUpPerDay } = await import("../shared/accountRecovery");
+    const n = stepUpPerDay(Number(account.id), dateColToJst((account as any).cooldownUntil));
+    if (n != null && n > base0.count) {
+      return { ...base0, count: n, extra: true, reason: "manual", ceilingExtra: n - contract, note: [base0.note, `本数を段階的に戻しています（1日${n}件）`].filter(Boolean).join("／") };
+    }
+  }
   // ★運営が決めた補填（期間限定で1日＋n件。2026-09-10 プレステージ様）。慣らし中は掛けない（安全側）。
   const m = manualExtraPosts(account);
   if (m.extra > 0 && !base0.capped) {
