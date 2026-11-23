@@ -256,3 +256,47 @@ export function recurringEdits(pairs: readonly EditPair[], minCount = 3): Recurr
   }
   return out.sort((a, b) => b.count - a.count).slice(0, 8);
 }
+
+/**
+ * ご本人が手直しで毎回直している数字（「大分市で10年以上」→「12年以上」）。2026-11-23 夜間整備 acc38 首藤様。
+ * 登録は「大分市で10年以上の実績, 12周年」。AIが「10年以上」と書くたびにご本人が「12年以上」へ直していた（#5688・#6087・#7017・#7520 の4回）。
+ * 数字1文字の直しは recurringEdits（3文字以上の言葉）では拾えず、決まりの文でも直りきらなかった。
+ * minCount 組以上で同じ「A→B」に直していて、逆（B→A）に直したことが無いものだけを返す。単位は「年」「周年」だけ（経歴の年数）。
+ */
+export interface NumberFix { from: string; to: string; count: number }
+const toHalfDigits = (s: string) => String(s || "").replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+// 「10年前」「10年ぶり」「10年後」は経歴の年数ではないので数えない・置き換えない
+const YEAR_RE = /(?<![0-9])([0-9]{1,3})(周年|年)(?!前|後|ぶり|振り|ほど前|越し|ごし|生|代|度|目)/g;
+function yearPhrases(text: string): string[] {
+  const out: string[] = [];
+  Array.from(toHalfDigits(text).matchAll(YEAR_RE)).forEach((m) => out.push(`${m[1]}${m[2]}`));
+  return out;
+}
+export function ownerNumberFixes(pairs: readonly EditPair[], minCount = 2): NumberFix[] {
+  const count = new Map<string, number>();
+  for (const p of pairs) {
+    const before = yearPhrases(p.before);
+    const after = yearPhrases(p.after);
+    const removed = Array.from(new Set(before.filter((x) => !after.includes(x))));
+    const added = Array.from(new Set(after.filter((x) => !before.includes(x))));
+    if (removed.length !== 1 || added.length !== 1) continue;
+    const unit = (s: string) => s.replace(/[0-9]+/, "");
+    if (unit(removed[0]) !== unit(added[0])) continue;
+    const key = `${removed[0]}→${added[0]}`;
+    count.set(key, (count.get(key) ?? 0) + 1);
+  }
+  const out: NumberFix[] = [];
+  count.forEach((n, key) => {
+    const [from, to] = key.split("→");
+    if (n >= minCount && !count.has(`${to}→${from}`)) out.push({ from, to, count: n });
+  });
+  return out.sort((a, b) => b.count - a.count);
+}
+/** ownerNumberFixes の直しを本文に当てる（「10年以上」→「12年以上」。「10年前」には当てない） */
+export function applyNumberFixes(text: string, fixes: readonly NumberFix[]): string {
+  if (!fixes.length) return text;
+  return String(text || "").replace(/(?<![0-9０-９])([0-9０-９]{1,3})(周年|年)(?!前|後|ぶり|振り|ほど前|越し|ごし|生|代|度|目)/g, (all, num: string, unit: string) => {
+    const hit = fixes.find((f) => f.from === `${toHalfDigits(num)}${unit}`);
+    return hit ? hit.to : all;
+  });
+}

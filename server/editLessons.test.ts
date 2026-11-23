@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildEditLessonsPrompt, parseEditLessons, buildEditLessonsNote, EDIT_LESSONS, ownerAddedRuns, recurringEdits, keptRatio, ownerFixedLines, exemplarPairs } from "../shared/editLessons";
+import { buildEditLessonsPrompt, parseEditLessons, buildEditLessonsNote, EDIT_LESSONS, ownerAddedRuns, recurringEdits, keptRatio, ownerFixedLines, exemplarPairs, ownerNumberFixes, applyNumberFixes } from "../shared/editLessons";
 
 // 2026-10-08 クレーム「ほんまにAI学習しとる？訂正しても毎回同じ所を訂正しとる感じがする」
 const pairs = [
@@ -182,5 +182,30 @@ describe("直した後に見送った投稿はお手本にしない", () => {
   });
   it("見送りの印が無い手直し（これまでの形）はそのまま残す", () => {
     expect(exemplarPairs(pairs)).toHaveLength(pairs.length);
+  });
+});
+
+describe("ご本人が毎回直している数字（2026-11-23 acc38）", () => {
+  // 実際の手直し（#7017・#7520）
+  const real = [
+    { before: "大分市で10年以上、腰の痛みに悩む方と向き合ってきました。\n\n冷え込む季節は、特に腰が固まりやすいと感じます。", after: "大分市で12年以上、腰の痛みに悩む方と向き合ってきました。\n\n冷え込む季節は、特に腰が固まりやすいと感じます。" },
+    { before: "大分市で10年以上、多くの方の体を見てきました。\n朝起きたときの腰の重さ、ありませんか？", after: "大分市で12年以上、多くの方の体を見てきました。\n朝起きたときの腰の重さ、ありませんか？" },
+  ];
+  it("2回同じ直しなら拾い、本文の「10年以上」を「12年以上」にする", () => {
+    const fixes = ownerNumberFixes(real);
+    expect(fixes).toEqual([{ from: "10年", to: "12年", count: 2 }]);
+    expect(applyNumberFixes("大分市で10年以上、腰の痛みに悩む方と向き合ってきました。", fixes)).toBe("大分市で12年以上、腰の痛みに悩む方と向き合ってきました。");
+    expect(applyNumberFixes("開業して１０年、いろいろありました。", fixes)).toBe("開業して12年、いろいろありました。");
+  });
+  it("1回だけ・逆にも直している・「10年前」は当てない", () => {
+    expect(ownerNumberFixes(real.slice(0, 1))).toEqual([]);
+    expect(ownerNumberFixes([...real, { before: "大分市で12年以上の経験。今日も元気です。", after: "大分市で10年以上の経験。今日も元気です。" }])).toEqual([]);
+    const fixes = ownerNumberFixes(real);
+    expect(applyNumberFixes("10年前に痛めた腰が、今も気になる方へ。", fixes)).toBe("10年前に痛めた腰が、今も気になる方へ。");
+    expect(applyNumberFixes("2010年に開業しました。", fixes)).toBe("2010年に開業しました。");
+  });
+  it("全文を書き換えた手直し（数字が2つ以上入れ替わる）は数えない", () => {
+    const rewrite = { before: "八千代市で11年、施術してきました。", after: "千葉に来て20年、整骨院を始めて15年になります。" };
+    expect(ownerNumberFixes([rewrite, rewrite])).toEqual([]);
   });
 });

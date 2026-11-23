@@ -960,6 +960,8 @@ export async function generateAutoPost(
     // ご本人が毎回そのまま書く行（決まった挨拶・締め）。この行の言葉は「使いすぎの話題」に数えない（2026-10-29 #26）
     let ownerFixed: string[] = [];
     let ownerRemovedFirm: string[] = [];
+    // ご本人が毎回直している数字（「10年以上」→「12年以上」・2026-11-23 acc38）
+    let ownerNumberFixList: Array<{ from: string; to: string; count: number }> = [];
     let ownerLikesQuestion = false;
     let ownerAfterTexts: string[] = [];
     let ownerEditPairs: Array<{ before: string; after: string }> = [];
@@ -991,6 +993,11 @@ export async function generateAutoPost(
       if (ownerRemovedFirm.length > 0) {
         project = { ...project, __ownerRemoved: ownerRemovedFirm };
         editLessonsNote += `\n\n【★この方が3回以上消している言葉（使わない・厳守）】\n${ownerRemovedFirm.map((w) => `- 「${w}」`).join('\n')}\n- この言葉（と、この言葉を少し変えただけの言い方）は書かない。お店を指す言葉は、ほかの言葉（店名・地名のうち消されていないもの）で足りる。`;
+      }
+      // ★ご本人が2回以上同じように直している数字（経歴の年数）。数字1文字の直しは上の「消している言葉」に入らないので別に拾う
+      ownerNumberFixList = (await import('../shared/editLessons')).ownerNumberFixes(lessons.pairs);
+      if (ownerNumberFixList.length > 0) {
+        editLessonsNote += `\n\n【★この方が毎回直している数字（厳守）】\n${ownerNumberFixList.map((f) => `- 「${f.from}」とは書かず「${f.to}」と書く（ご本人が${f.count}回直している）`).join('\n')}`;
       }
       // ★直した文の半分以上を問いかけで締めている方は、問いかけの締めを止めない（10/8 ゲームのアカウント：毎回「一緒にどう？」で締めていた）
       ownerLikesQuestion = lessons.pairs.length >= 3 && lessons.pairs.filter((p) => /[？?]$/.test(p.after.trim().replace(/[\s\uFE0F\u200D]+$/g, '').replace(/(?:[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF])+$/g, '').trim())).length * 2 >= lessons.pairs.length;
@@ -2020,6 +2027,23 @@ export async function generateAutoPost(
         noteReject('treeDesign', userId, threadsAccountId, postingTimeIndex, tdp.map((t) => `- 前回は、${t}。`).join('\n'), { detail: tdp.join('・').slice(0, 200) });
         return false;
       }
+    }
+
+    // ★ご本人が毎回直している数字（2026-11-23 acc38：AIの「大分市で10年以上」をご本人が4回「12年以上」へ直していた）。
+    //   指示に書いても戻ることがあるので、本文に当てる。当てた結果が登録に無い数字になるなら当てない（数字の検査は緩めない）。
+    if (ownerNumberFixList.length > 0) {
+      try {
+        const { applyNumberFixes } = await import('../shared/editLessons');
+        const { findFabricatedNumbers, registeredFactsOf } = await import('../shared/fabricatedNumberGuard');
+        const fixed = applyNumberFixes(naturalMain, ownerNumberFixList);
+        if (fixed !== naturalMain) {
+          const facts = registeredFactsOf(project);
+          if (findFabricatedNumbers(fixed, facts).length <= findFabricatedNumbers(naturalMain, facts).length) {
+            console.log(`[AutoPost] ownerNumberFix: ご本人が毎回直している数字を当てた ${ownerNumberFixList.map((f) => `${f.from}→${f.to}`).join('・')} userId=${userId} account=${threadsAccountId}`);
+            naturalMain = fixed;
+          }
+        }
+      } catch (e) { console.warn(`[AutoPost] ownerNumberFix skipped: ${(e as Error)?.message}`); }
     }
 
     // ★登録情報に無い数字（割合・順位・人数など）が入っていたら公開しない。
