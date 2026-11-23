@@ -84,7 +84,7 @@ async function rampForAccountBase(
   {
     const { recoveryPlanFor } = await import("../shared/accountRecovery");
     const rp = recoveryPlanFor(Number(account.id));
-    if (rp) {
+    if (rp && rp.perDay != null) {
       const until = rp.until.replace(/^\d{4}-/, "").replace("-", "/");
       return { count: Math.min(contract, rp.perDay), capped: true, extra: false, days: 0, note: `閲覧の回復のため${until}まで1日${rp.perDay}件に抑えています`, established: true, shortfall: 0, reason: "ramp" };
     }

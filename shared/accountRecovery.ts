@@ -18,11 +18,13 @@
 export interface RecoveryPlan {
   from: string; // JST の日付（含む）
   until: string; // JST の日付（含む）
-  perDay: number;
+  /** 1日の本数の上限。null＝本数は抑えない（試しから外す・書き方を変えるだけ） */
+  perDay: number | null;
 }
 
 export const ACCOUNT_RECOVERY: Readonly<Record<number, RecoveryPlan>> = {
-  10: { from: "2026-11-23", until: "2026-12-07", perDay: 2 },
+  // 11/23 三上様「一旦玉島店も増やしてみて、そこから考えて」→本数は抑えず、下の ACCOUNT_STEP_UP で増やす。試しから外す・書き方の指示は残す
+  10: { from: "2026-11-23", until: "2026-12-07", perDay: null },
 };
 
 const JST = 9 * 3600_000;
@@ -63,6 +65,8 @@ export interface StepUpPlan {
 
 export const ACCOUNT_STEP_UP: Readonly<Record<number, StepUpPlan>> = {
   12: { steps: [{ from: "2026-11-24", perDay: 8 }, { from: "2026-12-01", perDay: 10 }] },
+  // 玉島：冷却（投稿が消された・〜11/25 は1日1件）が明けてから。冷却明けにいきなり大きく増やすと消されやすい（acc22 10/16）ので3段で
+  10: { steps: [{ from: "2026-11-26", perDay: 5 }, { from: "2026-11-29", perDay: 8 }, { from: "2026-12-06", perDay: 10 }] },
 };
 
 /** 今日の目標本数（段階の対象外・開始前・冷却が入ったあとは null） */
