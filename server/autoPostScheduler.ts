@@ -1601,6 +1601,8 @@ export async function generateAutoPost(
           + (looksLikeRecruiting(project) && !localTalkTurn && recruitingLocalFor(userId)
             ? recruitingLocalNote(localTalkPlaces(project.area, approvedLocalTerms(project)), recruitingOfferTurn(postingTimeIndex))
             : '')
+          // ★閲覧の回復期間（自社の学習用アカウントだけ・shared/accountRecovery.ts・2026-11-23）
+          + ((await import('../shared/accountRecovery')).inRecovery(threadsAccountId) ? (await import('../shared/accountRecovery')).RECOVERY_NOTE : '')
           // ★個人モードの上書きは最末尾（末尾の指示が最も遵守されやすい）
           + (personal ? personalModePromptOverride() : '')
           // ★地元の会話の回（2026-10-18・shared/localTalk.ts）。長さ・絵文字・締めの共通指示より後ろ＝より優先。

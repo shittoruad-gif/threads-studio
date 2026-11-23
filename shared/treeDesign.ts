@@ -22,6 +22,7 @@
  *  - 集計 scripts/ops/tree-design-report.mts。
  */
 import type { LearningTrial } from "./learningAccounts";
+import { inRecovery } from "./accountRecovery";
 
 export const TREE_DESIGN = {
   accountIds: [10, 12, 36] as readonly number[],
@@ -85,7 +86,7 @@ const jstYmd = (now: number) => new Date(now + JST).toISOString().slice(0, 10);
 
 export function inTreeDesign(threadsAccountId: number, now = Date.now()): boolean {
   const ymd = jstYmd(now);
-  return TREE_DESIGN.accountIds.includes(Number(threadsAccountId)) && ymd >= TREE_DESIGN.start && ymd <= TREE_DESIGN.until;
+  return TREE_DESIGN.accountIds.includes(Number(threadsAccountId)) && !inRecovery(Number(threadsAccountId), now) && ymd >= TREE_DESIGN.start && ymd <= TREE_DESIGN.until;
 }
 
 /** この試しで書く枠：契約の本数のすぐ後ろ（上乗せの1本目）だけ。上乗せが無い日は対象なし */

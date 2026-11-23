@@ -10,6 +10,7 @@
  *  - 同じ元の投稿から作るのは2本まで（1行目・2行目以降で1本ずつ）。同じ元の投稿は7日あける
  *  - 「同じ投稿に見せない決まり」の例外になるので、お客様のアカウントには広げない（広げるときは三上様の承諾）
  */
+import { inRecovery } from "./accountRecovery";
 export const ONE_SPOT = {
   accountIds: [10, 12, 36] as readonly number[],
   from: "2026-11-14",
@@ -25,7 +26,7 @@ export const ONE_SPOT_LABEL: Record<OneSpot, string> = { first_line: "1行目の
 export const oneSpotExperimentKey = (spot: OneSpot): string => `onespot_${spot}`;
 
 export function inOneSpot(accountId: number, now: number = Date.now()): boolean {
-  if (!ONE_SPOT.accountIds.includes(accountId)) return false;
+  if (!ONE_SPOT.accountIds.includes(accountId) || inRecovery(accountId, now)) return false;
   const from = Date.parse(ONE_SPOT.from + "T00:00:00+09:00");
   return Number.isFinite(from) && now >= from;
 }

@@ -78,6 +78,15 @@ async function rampForAccountBase(
     const until = dateColToJst((account as any).cooldownUntil).replace(/^\d{4}-/, "").replace("-", "/");
     return { count: 1, capped: true, extra: false, days: 0, note: `投稿が消されたため${until}まで1日1件に抑えています（アカウントを守るため）`, established: false, shortfall: 0, reason: "cooldown" };
   }
+  // ★閲覧の回復期間（自社の学習用アカウントだけ・shared/accountRecovery.ts・2026-11-23）。上乗せ・補填は乗せない
+  {
+    const { recoveryPlanFor } = await import("../shared/accountRecovery");
+    const rp = recoveryPlanFor(Number(account.id));
+    if (rp) {
+      const until = rp.until.replace(/^\d{4}-/, "").replace("-", "/");
+      return { count: Math.min(contract, rp.perDay), capped: true, extra: false, days: 0, note: `閲覧の回復のため${until}まで1日${rp.perDay}件に抑えています`, established: true, shortfall: 0, reason: "ramp" };
+    }
+  }
   const base0 = await rampDecision(account, contract);
   // ★運営が決めた補填（期間限定で1日＋n件。2026-09-10 プレステージ様）。慣らし中は掛けない（安全側）。
   const m = manualExtraPosts(account);

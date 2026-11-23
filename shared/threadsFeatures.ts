@@ -16,6 +16,7 @@
  *   （2026-09-28 三上様「これは毎日投稿してみて」。最初は火=アンケート・金=クイズの週2本だった）。
  * ★効果は scripts/ops/threads-features-report.mts で、同じアカウントの普段の投稿と比べる。
  */
+import { inRecovery } from "./accountRecovery";
 
 export const FEATURE_TRIAL = {
   /** Moveact 玉島・Moveact 金光・そら先生・しっとる公式（投稿時間の試験と同じ4つ） */
@@ -48,7 +49,7 @@ function jstWeekday(d: Date): number {
 }
 
 export function inFeatureTrial(accountId: number, day: Date): boolean {
-  if (!FEATURE_TRIAL.accountIds.includes(accountId)) return false;
+  if (!FEATURE_TRIAL.accountIds.includes(accountId) || inRecovery(accountId, day.getTime())) return false;
   const ds = jstDateOf(day);
   return ds >= FEATURE_TRIAL.start && ds <= FEATURE_TRIAL.end;
 }

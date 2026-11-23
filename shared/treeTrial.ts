@@ -12,6 +12,7 @@
  *  - お客様のアカウントは比べ終わるまで変えない。広げるかは結果を見て三上様が決める。
  *  - 集計 scripts/ops/tree-trial-report.mts（1本目の表示で比べる）。
  */
+import { inRecovery } from "./accountRecovery";
 export const TREE_TRIAL = {
   accountIds: [10, 12, 36] as readonly number[],
   /** JSTの日付。この日から until の日まで（両端を含む） */
@@ -24,7 +25,7 @@ const jstYmd = (now: number) => new Date(now + JST).toISOString().slice(0, 10);
 
 export function inTreeTrial(threadsAccountId: number, now = Date.now()): boolean {
   const ymd = jstYmd(now);
-  return TREE_TRIAL.accountIds.includes(Number(threadsAccountId)) && ymd >= TREE_TRIAL.start && ymd <= TREE_TRIAL.until;
+  return TREE_TRIAL.accountIds.includes(Number(threadsAccountId)) && !inRecovery(Number(threadsAccountId), now) && ymd >= TREE_TRIAL.start && ymd <= TREE_TRIAL.until;
 }
 
 /** 交互の割り当て：予約の投稿の id が奇数＝ツリー／偶数＝ふつう */

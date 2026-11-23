@@ -14,6 +14,7 @@
  *  - 集計 scripts/ops/topic-tag-trial-report.mts：本文に合う言葉がある投稿だけで「付けた／付けなかった」を比べる。
  *  - 期間が過ぎたら学習用アカウントにも付けない（続けるかは結果を見て三上様が決める）。
  */
+import { inRecovery } from "./accountRecovery";
 
 export const TOPIC_TAG_TRIAL = {
   accountIds: [10, 12, 36] as readonly number[],
@@ -67,6 +68,7 @@ export function inTopicTagTrial(threadsAccountId: number, now = Date.now()): boo
   const ymd = jstYmd(now);
   return (
     TOPIC_TAG_TRIAL.accountIds.includes(Number(threadsAccountId)) &&
+    !inRecovery(Number(threadsAccountId), now) &&
     ymd >= TOPIC_TAG_TRIAL.start &&
     ymd <= TOPIC_TAG_TRIAL.until
   );
