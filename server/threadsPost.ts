@@ -99,23 +99,40 @@ export async function createMediaContainer(
     body.children = children.join(",");
   }
 
-  const response = await fetch(
-    `${THREADS_GRAPH_URL}/${threadsUserId}/threads`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    }
-  );
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to create media container: ${error}`);
+  // ★下書き（コンテナ）を作る段階でも、Threads 側の一時的なエラーならやり直す（2026-11-24）。
+  //   acc36 の予約が「An unexpected error has occurred. Please retry your request later.（code 2・is_transient:true）」で
+  //   1回で失敗扱いになっていた。公開の段階（publish）は待ってやり直していたが、作る段階には無かった。
+  //   作るだけでは公開されない（使われなかった下書きは Threads 側で消える）ので、やり直しても二重投稿にならない。
+  let lastError = "";
+  for (let attempt = 0; attempt <= CREATE_RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, CREATE_RETRY_DELAYS_MS[attempt - 1]));
+    const response = await fetch(
+      `${THREADS_GRAPH_URL}/${threadsUserId}/threads`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }
+    );
+    if (response.ok) return response.json();
+    lastError = await response.text();
+    if (!isTransientCreateError(response.status, lastError)) break;
+    console.warn(`[ThreadsPost] 下書きの作成が一時的なエラー（${attempt + 1}回目）${attempt < CREATE_RETRY_DELAYS_MS.length ? "→ やり直す" : "→ あきらめる"}: ${lastError.slice(0, 160)}`);
   }
+  throw new Error(`Failed to create media container: ${lastError}`);
+}
 
-  return response.json();
+/** 下書きを作る段階のやり直しの待ち時間（2回まで）。テストで 0 にする */
+export const CREATE_RETRY_DELAYS_MS: number[] = [3000, 8000];
+
+/** Threads 側の一時的なエラーか（トークン切れ・権限・文字数などの恒久的なエラーはやり直さない） */
+export function isTransientCreateError(status: number, errorText: string): boolean {
+  if (/is_transient\D*true/i.test(errorText)) return true;
+  if (/OAuth|access token|permission|Invalid parameter|code\D*(10|100|190|200)\b/i.test(errorText) && !/unexpected error/i.test(errorText)) return false;
+  if (/unexpected error|Please retry|temporarily|timeout|"code"\s*:\s*(1|2)\b/i.test(errorText)) return true;
+  return status >= 500;
 }
 
 /**
