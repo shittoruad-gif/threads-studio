@@ -48,12 +48,18 @@ describe("ツリーの利点を生かした投稿の試し", () => {
     expect(isTreeDesignSlot(10, 3, 3, 3, now)).toBe(false);
     expect(isTreeDesignSlot(33, 3, 3, 5, now)).toBe(false);
   });
-  it("3つの型を日替わりで回し、同じ日の3アカウントで型がずれる", () => {
+  it("型を日替わりで回す（36 は3つ、Moveact 2店は BEST3 を外した2つ・2026-11-24）", () => {
     const now = at("2026-11-25");
-    expect(new Set([10, 12, 36].map((a) => treeDesignFor(a, now).key)).size).toBe(3);
-    const three = [0, 1, 2].map((d) => treeDesignFor(10, now + d * 86400_000).key);
+    const three = [0, 1, 2].map((d) => treeDesignFor(36, now + d * 86400_000).key);
     expect(new Set(three).size).toBe(3);
     for (const k of three) expect(TREE_DESIGN_KEYS).toContain(k);
+    for (const a of [10, 12]) {
+      const two = [0, 1].map((d) => treeDesignFor(a, now + d * 86400_000).key);
+      expect(new Set(two).size).toBe(2);
+      expect(two).not.toContain("tree_rank");
+    }
+    // 同じ日の Moveact 2店は型がずれる
+    expect(treeDesignFor(10, now).key).not.toBe(treeDesignFor(12, now).key);
   });
   it("ツリー／1本のまま と 案内あり／なし が、4本でひと回りして同じ数ずつ当たる", () => {
     const combos = [7000, 7001, 7002, 7003].map((id) => `${treeDesignArm(id)}:${treeDesignOffer(id)}`);

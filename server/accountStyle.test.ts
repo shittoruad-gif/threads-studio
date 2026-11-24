@@ -24,7 +24,11 @@ describe("金光の書き方の決まり（2026-11-24）", () => {
     for (const t of ok) expect(findAccountBannedWord(12, t)).toBeNull();
     // ほかのアカウントは変わらない
     expect(findAccountBannedWord(36, hits[1])).toBeNull();
-    expect(findAccountBannedWord(10, hits[1])).toBeNull();
+    // 玉島も同じ（マシンの決まりはそのまま）
+    for (const t of hits) expect(findAccountBannedWord(10, t)).not.toBeNull();
+    expect(findAccountBannedWord(10, "倉敷市でも、肩こりの方がよくいらっしゃいます。")).not.toBeNull();
+    expect(findAccountBannedWord(10, "マシンピラティス")).toBe("マシン");
+    for (const t of ok) expect(findAccountBannedWord(10, t)).toBeNull();
   });
 
   it("登録の決めゼリフは生成に渡す前に外す（DBは変えない）", () => {
@@ -38,6 +42,8 @@ describe("金光の書き方の決まり（2026-11-24）", () => {
     expect(accountBannedNote(12)).not.toMatch(/機械/);
     expect(accountBannedNote(12)).toMatch(/この辺りでも/);
     expect(accountStyleNote(12)).toMatch(/絵文字を付けない/);
+    expect(accountStyleNote(10)).toBe(accountStyleNote(12));
+    expect(accountBannedNote(10)).toMatch(/ココロ/);
     expect(accountStyleNote(36)).toBe("");
   });
 
@@ -48,7 +54,7 @@ describe("金光の書き方の決まり（2026-11-24）", () => {
     expect(topicLine("😅 猫背、つらいですよね…。")).toBe("猫背つらいですよね");
   });
 
-  it("金光のツリーの試しは BEST3 を使わない（ほかの型は日替わりのまま）", () => {
+  it("Moveact 2店のツリーの試しは BEST3 を使わない（しっとるは日替わりのまま）", () => {
     const seen12 = new Set<string>(), seen10 = new Set<string>();
     for (let d = 0; d < 9; d++) {
       const day = at("2026-11-26") + d * 86400_000;
@@ -57,6 +63,10 @@ describe("金光の書き方の決まり（2026-11-24）", () => {
     }
     expect(seen12.has("tree_rank")).toBe(false);
     expect(seen12.size).toBe(2);
-    expect(seen10.has("tree_rank")).toBe(true);
+    expect(seen10.has("tree_rank")).toBe(false);
+    expect(seen10.size).toBe(2);
+    const seen36 = new Set<string>();
+    for (let d = 0; d < 9; d++) seen36.add(treeDesignFor(36, at("2026-11-26") + d * 86400_000).key);
+    expect(seen36.has("tree_rank")).toBe(true);
   });
 });
