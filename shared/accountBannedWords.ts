@@ -21,6 +21,8 @@ export interface AccountBannedRule {
   words: readonly string[];
   /** なぜ書かないか（ログ・作り直しの指示用） */
   reason: string;
+  /** 言い換えも止めるときの一言（プロンプト・作り直しの指示に付ける） */
+  paraphrase?: string;
 }
 
 export const ACCOUNT_BANNED_WORDS: Readonly<Record<number, AccountBannedRule>> = {
@@ -28,6 +30,18 @@ export const ACCOUNT_BANNED_WORDS: Readonly<Record<number, AccountBannedRule>> =
     pattern: /マシン|ﾏｼﾝ|machine|リフォーマー|reformer|キャデラック|cadillac/i,
     words: ['マシン', 'マシンピラティス', 'machine', 'リフォーマー'],
     reason: 'Moveact 玉島ではマシンを使わない（運営の方針）',
+    paraphrase: '言い換え（機械・器具で支える 等）も書かない',
+  },
+  // ★Moveact 金光（account 12・2026-11-24 三上様「直して」）：
+  //   - 登録の決めゼリフ「カラダが動くと、ココロも弾みます。」が、BEST3 のツリーの第1位の後ろや体の話の最後に、中身と関係なく付いていた
+  //   - 「浅口市でも、この姿勢で悩む方がよくいらっしゃいますよ」「浅口市でも、同じお悩みの方が多くいらっしゃいます」
+  //     「浅口市でも、この感覚を抱える方からよく聞きます」が 11/21〜23 の3日で4本＝決まり文句。根拠のない「よく・多く」で作り話に近い
+  //   実測（11/21〜23）：この形の投稿は表示 12〜45、地元への問いかけは 495〜1,103。
+  12: {
+    pattern: /ココロも弾|こころも弾|心も弾|(市|町|あたり|周辺|地域)(で|に)?も、?[^。\n！？!?]{0,30}(方|人)(が|は|も|から)[^。\n！？!?]{0,8}(よく|多く|多い|いらっしゃ|聞きます|聞く)/,
+    words: ['カラダが動くと、ココロも弾みます', '〇〇市でも、〜な方がよくいらっしゃいます／多いです／よく聞きます'],
+    reason: '中身と関係のない決めゼリフと、根拠のない「よく・多く」の決まり文句は読まれていない（運営の方針）',
+    paraphrase: '「この辺りでも同じ悩みの方が多い」のような言い換えも書かない',
   },
 };
 
@@ -88,5 +102,5 @@ export function scrubProjectForAccount<T extends Record<string, any>>(accountId:
 export function accountBannedNote(accountId: number | null | undefined): string {
   const rule = bannedRuleFor(accountId);
   if (!rule) return '';
-  return `\n\n【このアカウントで絶対に書かない言葉（運営の方針・すべての指示より優先）】\n${rule.words.map((w) => `- 「${w}」`).join('\n')}\n- この言葉と、言い換え（機械・器具で支える 等）も書かない。理由：${rule.reason}。`;
+  return `\n\n【このアカウントで絶対に書かない言葉（運営の方針・すべての指示より優先）】\n${rule.words.map((w) => `- 「${w}」`).join('\n')}\n- この言葉${rule.paraphrase ? `と、${rule.paraphrase}` : 'は書かない'}。理由：${rule.reason}。`;
 }

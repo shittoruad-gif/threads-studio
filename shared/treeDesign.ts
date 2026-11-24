@@ -23,6 +23,7 @@
  */
 import type { LearningTrial } from "./learningAccounts";
 import { inRecovery } from "./accountRecovery";
+import { accountStyleFor } from "./accountStyle";
 
 export const TREE_DESIGN = {
   accountIds: [10, 12, 36] as readonly number[],
@@ -98,7 +99,11 @@ export function isTreeDesignSlot(threadsAccountId: number, slotIndex: number, co
 export function treeDesignFor(threadsAccountId: number, now = Date.now()): LearningTrial {
   const day = Math.floor((now + JST) / 86400_000);
   const pos = Math.max(0, TREE_DESIGN.accountIds.indexOf(Number(threadsAccountId)));
-  return TREE_DESIGN_TRIALS[TREE_DESIGN_KEYS[(day + pos) % TREE_DESIGN_KEYS.length]];
+  // ★アカウントごとに外す型（shared/accountStyle.ts・2026-11-24 acc12 は BEST3 を外す）。外した残りで日替わり
+  const skip = accountStyleFor(threadsAccountId)?.skipTreeKeys ?? [];
+  const keys = TREE_DESIGN_KEYS.filter((k) => !skip.includes(k));
+  const list = keys.length > 0 ? keys : TREE_DESIGN_KEYS;
+  return TREE_DESIGN_TRIALS[list[(day + pos) % list.length]];
 }
 
 /** 交互の割り当て：id が奇数＝ツリー／偶数＝1本のまま */

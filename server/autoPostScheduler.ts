@@ -1610,6 +1610,8 @@ export async function generateAutoPost(
             : '')
           // ★閲覧の回復期間（自社の学習用アカウントだけ・shared/accountRecovery.ts・2026-11-23）
           + ((await import('../shared/accountRecovery')).inRecovery(threadsAccountId) ? (await import('../shared/accountRecovery')).RECOVERY_NOTE : '')
+          // ★アカウントごとの書き方の決まり（自社の学習用アカウントだけ・shared/accountStyle.ts・2026-11-24）
+          + (await import('../shared/accountStyle')).accountStyleNote(threadsAccountId)
           // ★個人モードの上書きは最末尾（末尾の指示が最も遵守されやすい）
           + (personal ? personalModePromptOverride() : '')
           // ★地元の会話の回（2026-10-18・shared/localTalk.ts）。長さ・絵文字・締めの共通指示より後ろ＝より優先。
@@ -2425,9 +2427,28 @@ export async function generateAutoPost(
       if (banned) {
         console.warn(`[AutoPost] accountBannedWord:「${banned}」が残っている → ${lastAttempt ? '公開しない（枠は空ける）' : '作り直し'} userId=${userId} account=${threadsAccountId}`);
         noteReject('accountBannedWord', userId, threadsAccountId, postingTimeIndex,
-          `- 「${banned}」は、このアカウントでは書かない言葉（${bannedRule?.reason ?? '運営の方針'}）。言い換え（機械・器具で支える 等）も書かない。別の話にする。`,
+          `- 「${banned}」は、このアカウントでは書かない言葉（${bannedRule?.reason ?? '運営の方針'}）。${bannedRule?.paraphrase ? `${bannedRule.paraphrase}。` : ''}別の話にする。`,
           { detail: banned, gaveUp: lastAttempt });
         return false;
+      }
+    }
+
+    // ★1行目が直近の投稿と重なっていたら作り直す（自社の学習用アカウントだけ・shared/accountStyle.ts・2026-11-24）。
+    //   最後の1回は通す（枠は空けない）。acc12：11/23「猫背を悪化させる習慣、…」が 9/2・9/4 とほぼ同じ題だった
+    if (!lastAttempt) {
+      const { accountStyleFor, repeatedTopic } = await import('../shared/accountStyle');
+      const st = accountStyleFor(threadsAccountId);
+      if (st) {
+        let past: string[] = [];
+        try { past = await db.getPostContentsSince(threadsAccountId, st.repeatDays); } catch { past = []; }
+        const hit = repeatedTopic(fullContent, past);
+        if (hit) {
+          console.warn(`[AutoPost] repeatedTopic: 1行目が直近${st.repeatDays}日の投稿と重なる → 作り直し account=${threadsAccountId}`);
+          noteReject('repeatedTopic', userId, threadsAccountId, postingTimeIndex,
+            `- 1行目が、前に出した投稿「${hit.slice(0, 40)}」とほぼ同じ。題も話題も変える（同じ題を言い換えるのも不可）。`,
+            { detail: hit.slice(0, 80), rejectedLines: [hit] });
+          return false;
+        }
       }
     }
 

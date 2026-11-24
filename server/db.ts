@@ -4359,6 +4359,23 @@ export async function getRecentPostContents(accountId: number, limit: number = 1
   }
 }
 
+/** 直近 days 日に公開した（または公開待ちの）自動・手動の投稿の本文（1行目の重なりの検査用・shared/accountStyle.ts） */
+export async function getPostContentsSince(accountId: number, days: number): Promise<string[]> {
+  const database = await getDb();
+  if (!database) return [];
+  try {
+    const rows: any = await database.execute(sql`
+      SELECT postContent FROM scheduledPosts
+      WHERE threadsAccountId = ${accountId} AND postContent IS NOT NULL AND postContent <> ''
+        AND status IN ('posted','pending','awaiting_approval','processing')
+        AND scheduledAt >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+      ORDER BY scheduledAt DESC LIMIT 3000`);
+    return (((rows as any)[0] ?? []) as any[]).map((r) => String(r.postContent || "")).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * お客様がご自分で直した投稿（直す前・直した後）を新しい順に取る。
  * 翌日以降の投稿を、その方の好みに寄せるための材料（shared/postPreference.ts）。

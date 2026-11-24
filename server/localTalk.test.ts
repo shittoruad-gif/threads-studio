@@ -183,11 +183,12 @@ describe("Moveact 玉島（acc10）は「マシン」を書かない", () => {
     // 元の値は変えない
     expect(tamashima.businessType).toContain("マシン");
     // ほかのアカウントはそのまま
-    expect(scrubProjectForAccount(12, tamashima)).toBe(tamashima);
+    expect(scrubProjectForAccount(36, tamashima)).toBe(tamashima);
   });
-  it("プロンプトに禁止の指示が入る（acc10 だけ）", () => {
+  it("プロンプトに禁止の指示が入る（決まりのあるアカウントだけ・acc12 は 2026-11-24 から別の決まり）", () => {
     expect(accountBannedNote(10)).toContain("マシン");
-    expect(accountBannedNote(12)).toBe("");
+    expect(accountBannedNote(12)).not.toContain("マシン");
+    expect(accountBannedNote(36)).toBe("");
   });
   it("Meta AI 呼びかけ投稿も、外した業種で作るので「マシン」が入らない", () => {
     const p = scrubProjectForAccount(10, tamashima);
