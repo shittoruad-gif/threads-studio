@@ -25,6 +25,7 @@
 import { REPETITION_RULES } from './repetitionRules';
 
 import { looksLikeFragment } from "./topicRotation";
+import { POST_ANGLES, PERSONAL_EXTRA_ANGLES, STUDY_EXPERIMENT_ANGLES } from "./postAngles";
 
 /** 選択肢の見本の伏せ字（〇〇・○○・◯◯・●●・××・XX）が埋まらないまま残っているか */
 export function hasUnfilledPlaceholder(s: string): boolean {
@@ -389,6 +390,14 @@ export interface SurveyAvoid {
  *   ✕は「避ける書き方の例」として渡していただけで、題材としては外していなかった。
  *   ◯の案にも出る言葉（エステティシャン・先輩など、お店の主題）は外さない。
  */
+const ANGLE_LABELS = new Set(
+  [...POST_ANGLES, ...PERSONAL_EXTRA_ANGLES, ...STUDY_EXPERIMENT_ANGLES].map((a) => a.label.trim()),
+);
+/** アンケートの題名が切り口の名前（「人柄・日常」など）か */
+export function isAngleLabel(label: string | null | undefined): boolean {
+  return ANGLE_LABELS.has(String(label ?? "").trim());
+}
+
 export function surveyAvoidWords(
   bad: ReadonlyArray<{ label?: string | null; content?: string | null }>,
   goodContents: readonly string[],
@@ -401,7 +410,10 @@ export function surveyAvoidWords(
   const labelWords = new Set<string>();
   const contentWords = new Set<string>();
   for (const b of bad) {
-    for (const w of topicWordsOf(String(b.label ?? ""))) if (keep(w)) labelWords.add(w);
+    // ★2026-11-24 夜間整備 acc25：週1回のアンケートの題名は「人柄・日常」「季節ネタ」のような切り口の名前。
+    //   その言葉（「日常」）を題材の言葉にすると、1語で当たって作り直し・保証パスとも落ち、1日0本になった。
+    //   切り口の名前は題材ではないので題名の言葉には数えない（本文の言葉は今までどおり2つで当てる）。
+    if (!isAngleLabel(b.label)) for (const w of topicWordsOf(String(b.label ?? ""))) if (keep(w)) labelWords.add(w);
     for (const w of topicWordsOf(String(b.content ?? ""))) if (keep(w) && !labelWords.has(w)) contentWords.add(w);
   }
   return {

@@ -8,7 +8,7 @@
 import { describe, it, expect } from "vitest";
 import {
   planFreshTopic, overusedHits, dropOverusedLines, buildFreshTopicNote, saidSameContent, topicWordsOf,
-  framesOf, dropFramedSentences, surveyAvoidWords, hitsSurveyAvoid, buildSurveyAvoidNote, hasUnfilledPlaceholder, ownerKeepsWord, dropStickyLines, splitListLine,
+  framesOf, dropFramedSentences, surveyAvoidWords, hitsSurveyAvoid, buildSurveyAvoidNote, isAngleLabel, hasUnfilledPlaceholder, ownerKeepsWord, dropStickyLines, splitListLine,
   expandListLines, isBareProductName, stickyDeclinedWords, topicAnchorWords, coversTopic,
 } from "@shared/freshTopic";
 
@@ -337,6 +337,26 @@ describe("◯✕アンケートで✕が付いた題材", () => {
   it("プロンプトに題名が入る", () => {
     expect(buildSurveyAvoidNote(av)).toContain("「子育てと両立する働き方」");
     expect(buildSurveyAvoidNote(null)).toBe("");
+  });
+});
+
+describe("アンケートの題名が切り口の名前なら、題名の言葉は✕の題材にしない（11/24 acc25）", () => {
+  // 11/24 acc25：「人柄・日常」に✕が1つ付き、「日常」1語で作り直し・保証パスとも落ちて1日0本になった
+  const bad = [{ label: "人柄・日常", content: "毎朝、お店の前を掃除しています。\n反物を眺める時間が好きです。" }];
+  const av = surveyAvoidWords(bad, [], ["サンプル呉服店"]);
+
+  it("「日常」「人柄」は題名の言葉に入らない", () => {
+    expect(isAngleLabel("人柄・日常")).toBe(true);
+    expect(av.labelWords).toEqual([]);
+    expect(hitsSurveyAvoid("着物のある日常を、もっと気軽に。", av)).toEqual([]);
+  });
+
+  it("✕の本文の言葉は今までどおり2つで当たる", () => {
+    expect(hitsSurveyAvoid("毎朝の掃除のあと、反物を眺めます。", av).length).toBeGreaterThan(0);
+  });
+
+  it("切り口の名前でない題名（9/25 の形）は今までどおり", () => {
+    expect(isAngleLabel("子育てと両立する働き方")).toBe(false);
   });
 });
 
