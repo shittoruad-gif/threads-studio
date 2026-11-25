@@ -9,11 +9,11 @@ describe("地元の人に届ける求人（RECRUITING_LOCAL）", () => {
     expect(recruitingLocalFor(null)).toBe(false);
     expect(RECRUITING_LOCAL.userIds).toEqual([32089]);
   });
-  it("はっきりした募集の回は、およそ5本に1本", () => {
+  it("はっきりした募集の回は、2本に1本（2026-11-25 に5本に1本から変更）", () => {
     const base = Date.parse("2026-11-23T00:00:00+09:00");
     let n = 0, total = 0;
     for (let d = 0; d < 20; d++) for (let i = 0; i < 3; i++) { total++; if (recruitingOfferTurn(i, base + d * 86400_000)) n++; }
-    expect(n).toBe(total / 5);
+    expect(n).toBe(total / 2);
   });
   it("地域名は登録の住所から取り、募集の回とそれ以外で指示が変わる", () => {
     const places = localTalkPlaces("岡山県倉敷市阿知", null);
@@ -23,7 +23,7 @@ describe("地元の人に届ける求人（RECRUITING_LOCAL）", () => {
     expect(offer).toContain("はっきりした募集の回");
     expect(offer).toContain("登録にあるものだけ");
     const usual = recruitingLocalNote(places, false);
-    expect(usual).toContain("募集の呼びかけで締めない");
+    expect(usual).toContain("毎回この3つを必ず入れる");
     expect(usual).not.toContain("はっきりした募集の回");
     expect(recruitingLocalNote([], false)).not.toContain("1行目に");
     expect(usual).toContain("実際にあった質問・会話として書かない");

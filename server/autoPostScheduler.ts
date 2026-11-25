@@ -17,7 +17,7 @@ import { applyTicSentenceRepair, checkNaturalized, endsWithQuestion, findAgreeme
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
-import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM, hasRecruitingMarker, recruitingLocalFor, recruitingOfferTurn, recruitingLocalNote } from "../shared/recruitingPost";
+import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM, hasRecruitingMarker, recruitingLocalFor, recruitingOfferTurn, recruitingLocalNote, recruitingLocalMissing, recruitingLocalTalkAllowed } from "../shared/recruitingPost";
 import { touchesDeclined, filterStyleSamples, normalizeForPatterns, filterCounseling } from "../shared/declinedPatterns";
 import { overusedHits, dropOverusedLines, dropFramedSentences, framesOf, hitsSurveyAvoid, lineHitsFrames, stickyHits, coversTopic, dropStickyLines } from "../shared/freshTopic";
 import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
@@ -774,9 +774,11 @@ export async function generateAutoPost(
     //   自然な書き方モードの方は NATURAL_STYLE_SKIP_ANGLES で外す。
     //   お客様が書き方の決まりで「地元の投稿はいらない」と決めたアカウントも外す（2026-10-21）。
     let rulesForLocalTalk: string[] = [];
+    let rulesForLocalTalkAccount: any = null;
     try {
       const { parseOwnerRules } = await import('../shared/ownerRules');
       const a: any = threadsAccountId ? await db.getThreadsAccountById(threadsAccountId) : null;
+      rulesForLocalTalkAccount = a;
       rulesForLocalTalk = parseOwnerRules(dryRunOwnerRules() ?? a?.ownerRules);
     } catch { rulesForLocalTalk = []; }
     const excludeLocalTalk = (() => {
@@ -785,6 +787,12 @@ export async function generateAutoPost(
       if (localTalkPlaces(project.area, approvedLocalTerms(project)).length === 0) return true;
       // 求人のアカウントは外す。ただし「地元の人に届ける求人」のお客様だけは使う（shared/recruitingPost.ts RECRUITING_LOCAL・2026-11-22）
       if (looksLikeRecruiting(project) && !recruitingLocalFor(userId)) return true;
+      // ★地元の人に届ける求人のお客様も、連携から14日は出さない・その後も直近2本にあれば出さない（2026-11-25「求人っぽくない」）
+      if (looksLikeRecruiting(project) && recruitingLocalFor(userId)) {
+        const acc: any = (rulesForLocalTalkAccount as any);
+        const days = acc?.createdAt ? Math.floor((Date.now() - new Date(acc.createdAt).getTime()) / 86400000) : 0;
+        if (!recruitingLocalTalkAllowed(days, recentAngles)) return true;
+      }
       try { if (JSON.parse(project.counselingResult || 'null')?.closingStyle === 'statement') return true; } catch { /* 読めなければ外さない */ }
       return false;
     })();
@@ -1935,6 +1943,18 @@ export async function generateAutoPost(
         '- この投稿は求人（働く人に向けた投稿）。お客様向けの宣伝に読める。働く・職場・募集・入社・スタッフとして などの言葉で、働く人に向けた投稿だと分かるように書く。',
         { detail: 'no-marker' });
       return false;
+    }
+
+    // ★地元の人に届ける求人のお客様：募集の一文・条件・入口の3つがそろっていなければ作り直す（2026-11-25）。最後の1回は通す
+    if (looksLikeRecruiting(project) && recruitingLocalFor(userId) && !localTalkTurn && !lastAttempt) {
+      const miss = recruitingLocalMissing(naturalMain);
+      if (miss.length > 0) {
+        console.warn(`[AutoPost] recruitingLocalMissing: ${miss.length}点足りない → 作り直し userId=${userId} account=${threadsAccountId}`);
+        noteReject('recruitingLocalMissing', userId, threadsAccountId, postingTimeIndex,
+          `- 求人だとひと目で分からない。次を入れる：\n${miss.map((m) => `  ・${m}`).join('\n')}`,
+          { detail: miss.join('／').slice(0, 120) });
+        return false;
+      }
     }
 
     // ★◯✕アンケートで✕が付いた題材が残っていたら作り直す（2026-09-26）。最後の作り直しでも公開しない。
