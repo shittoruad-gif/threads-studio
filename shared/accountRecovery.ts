@@ -66,7 +66,9 @@ export interface StepUpPlan {
 export const ACCOUNT_STEP_UP: Readonly<Record<number, StepUpPlan>> = {
   12: { steps: [{ from: "2026-11-24", perDay: 8 }, { from: "2026-12-01", perDay: 10 }] },
   // 玉島：冷却（投稿が消された・〜11/25 は1日1件）が明けてから。冷却明けにいきなり大きく増やすと消されやすい（acc22 10/16）ので3段で
-  10: { steps: [{ from: "2026-11-26", perDay: 5 }, { from: "2026-11-29", perDay: 8 }, { from: "2026-12-06", perDay: 10 }] },
+  // 11/26 三上様「それで進めて」：5本に戻した日（11/26）も1本あたり10前後のまま＝絞りが解けていないので、8本・10本へは上げず5本で止める。
+  //   増やすかは 12/08 の報告で決める
+  10: { steps: [{ from: "2026-11-26", perDay: 5 }] },
 };
 
 /** 今日の目標本数（段階の対象外・開始前・冷却が入ったあとは null） */
@@ -79,4 +81,28 @@ export function stepUpPerDay(accountId: number, cooldownUntilJst: string | null 
   let n: number | null = null;
   for (const s of plan.steps) if (ymd >= s.from) n = s.perDay;
   return n;
+}
+
+/**
+ * 回復期間中に使わない切り口（2026-11-26 三上様「それで進めて」）。
+ * 11/26 の acc10 は6本中4本が「国家資格者が」「指導実績」の宣伝の文だった。RECOVERY_NOTE は指示だけなので、
+ * 宣伝になりやすい切り口（数字・実績／予約への誘導）と他店の当たり型の枠は回復期間中は使わない。
+ */
+export const RECOVERY_SKIP_ANGLES: readonly string[] = ["number_result", "reservation_funnel"];
+
+/** 回復期間中、宣伝の文として作り直す言葉（このアカウントでいちばん読まれなかった形） */
+const RECOVERY_PROMO = /国家資格|指導実績|指導経験|実績があります|甲子園|プロ野球選手|日本代表|一人ひとりに合わせ|ご案内しています|お気軽に|ご予約|向き合います|(店|Moveact|ムーブアクト)[^。\n]{0,6}では、/;
+/** 回復期間中、使い古した書き出し（1行目だけ見る） */
+const RECOVERY_STALE_OPENER = /冷え込|季節の変わり目|秋の夜長/;
+
+/** 回復期間中に作り直す理由（なければ null）。最後の1回は呼び出し側で通す（枠は空けない） */
+export function recoveryReject(accountId: number, text: string, now: number = Date.now()): { kind: "promo" | "opener"; word: string } | null {
+  if (!inRecovery(accountId, now)) return null;
+  const t = String(text ?? "");
+  const first = t.replace(/\r/g, "").split("\n").map((l) => l.trim()).find((l) => l.length > 0) ?? "";
+  const o = first.match(RECOVERY_STALE_OPENER);
+  if (o) return { kind: "opener", word: o[0] };
+  const m = t.match(RECOVERY_PROMO);
+  if (m) return { kind: "promo", word: m[0] };
+  return null;
 }

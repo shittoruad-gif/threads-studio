@@ -796,8 +796,14 @@ export async function generateAutoPost(
       try { if (JSON.parse(project.counselingResult || 'null')?.closingStyle === 'statement') return true; } catch { /* 読めなければ外さない */ }
       return false;
     })();
+    // ★閲覧の回復期間中は宣伝になりやすい切り口を使わない（shared/accountRecovery.ts RECOVERY_SKIP_ANGLES・2026-11-26）
+    let avoidAngleIdsHere: string[] | undefined = opts.avoidAngleIds;
+    if (threadsAccountId) {
+      const { inRecovery, RECOVERY_SKIP_ANGLES } = await import('../shared/accountRecovery');
+      if (inRecovery(threadsAccountId)) avoidAngleIdsHere = [...(opts.avoidAngleIds ?? []), ...RECOVERY_SKIP_ANGLES];
+    }
     angle = forced
-      ?? pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment, excludeLocalTalk, excludeAngleIds: opts.avoidAngleIds });
+      ?? pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment, excludeLocalTalk, excludeAngleIds: avoidAngleIdsHere });
     // ★他店の当たり型の枠（2026-09-28 三上様指示・shared/hitPatterns.ts）。型が読めなければ通常の切り口のまま
     if (!forced && opts.hitPatternId) {
       try {
@@ -824,7 +830,7 @@ export async function generateAutoPost(
       const { isNaturalStyleUser } = await import('../shared/naturalStyle');
       if (isNaturalStyleUser(userId)) {
         for (let k = 0; k < 6 && skipNatural(angle); k++) {
-          angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment, excludeLocalTalk, excludeAngleIds: opts.avoidAngleIds });
+          angle = pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment, excludeLocalTalk, excludeAngleIds: avoidAngleIdsHere });
         }
         if (skipNatural(angle)) angle = null;
         console.log(`[AutoPost] 自然な書き方モード：宣伝調の切り口を外した account=${threadsAccountId} → ${angle?.id ?? 'なし'}`);
@@ -2453,6 +2459,21 @@ export async function generateAutoPost(
       }
     }
 
+    // ★閲覧の回復期間中は、宣伝の文・使い古した書き出しを作り直す（shared/accountRecovery.ts・2026-11-26）。最後の1回は通す
+    if (!lastAttempt && threadsAccountId) {
+      const { recoveryReject } = await import('../shared/accountRecovery');
+      const rr = recoveryReject(threadsAccountId, fullContent);
+      if (rr) {
+        console.warn(`[AutoPost] recoveryReject: ${rr.kind}「${rr.word}」→ 作り直し account=${threadsAccountId}`);
+        noteReject('recoveryReject', userId, threadsAccountId, postingTimeIndex,
+          rr.kind === 'opener'
+            ? `- 書き出しの「${rr.word}」は何度も使っている。季節の書き出しをやめ、別の入り方にする。`
+            : `- 「${rr.word}」は店の宣伝の文。このアカウントでいちばん読まれなかった形なので入れない。地元の人への問いかけか、体の使い方のコツ1つにする。`,
+          { detail: rr.word });
+        return false;
+      }
+    }
+
     // ★1行目が直近の投稿と重なっていたら作り直す（自社の学習用アカウントだけ・shared/accountStyle.ts・2026-11-24）。
     //   最後の1回は通す（枠は空けない）。acc12：11/23「猫背を悪化させる習慣、…」が 9/2・9/4 とほぼ同じ題だった
     if (!lastAttempt) {
@@ -3049,7 +3070,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             let hitPatternId: number | null = null;
             try {
               const { isHitPatternSlot, businessGroupOf } = await import('../shared/hitPatterns');
-              if (!opts.fillToday && !learningTrial && isHitPatternSlot(account.id, i, contractCount)) {
+              if (!opts.fillToday && !learningTrial && isHitPatternSlot(account.id, i, contractCount) && !(await import('../shared/accountRecovery')).inRecovery(account.id)) {
                 const { looksLikeRecruiting } = await import('../shared/recruitingPost');
                 const { pickHitPatternId } = await import('./hitPatterns');
                 hitPatternId = await pickHitPatternId(account.id, businessGroupOf((project as any).businessType, { recruiting: looksLikeRecruiting(project as any) }));
