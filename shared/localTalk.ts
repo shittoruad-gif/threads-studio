@@ -74,13 +74,34 @@ export function localTalkPlaces(area: string | null | undefined, localTerms?: st
   };
   const a = String(area || '').replace(/\s+/g, '');
   const parts = a.split(/(?<=[都道府県市区町村郡])/).filter(Boolean);
+  // ★2026-11-24 夜間整備（acc40）：「岡山県小田郡矢掛町…」から「小田」「矢掛」を渡すと、AIが「小田郡矢掛」とつなげて書き、
+  //   ご本人が2回「小田郡矢掛町」へ直していた。郡は地元の人が自分の町を呼ぶ名前ではないので渡さず、
+  //   郡の中の町村は「矢掛町」の形で渡す（市の中の地名「玉島」などは今までどおり）。
+  const hasDistrict = parts.some((p) => /郡$/.test(p));
   for (const p of parts) {
     if (/[都道府県]$/.test(p) && parts.length > 1) continue;
+    if (/郡$/.test(p)) continue;
+    if (hasDistrict && /[町村]$/.test(p)) { add(p); continue; }
     const bare = p.replace(/[市区町村郡]$/, '');
     add(Array.from(bare).length >= 2 ? bare : p);
   }
   for (const t of String(localTerms || '').split(/[、,\/／\s　\n・]+/)) add(t.replace(/駅$/, ''));
   return out.slice(0, 6);
+}
+
+/**
+ * 「〇〇郡△△」と町村の「町・村」を落として書いた地名を、登録どおり「〇〇郡△△町」に直す。
+ * 2026-11-24 夜間整備：acc40（登録「岡山県小田郡矢掛町矢掛81-1」）で AI が「小田郡矢掛」と書き、
+ *   ご本人が #7578・#7583 の2回「小田郡矢掛町」へ直していた。郡を付けて町を落とす書き方は地元では使わない。
+ * 郡の付かない「矢掛の道」はそのまま（ご本人も直していない）。登録に郡が無ければ何もしない。
+ */
+export function fixDistrictTownName(text: string, area: string | null | undefined): string {
+  const a = String(area || '').replace(/\s+/g, '');
+  const m = a.match(/([^都道府県市区町村郡\d０-９]{1,5}郡)([^都道府県市区町村郡\d０-９]{1,5}?)([町村])/);
+  if (!m) return text;
+  const [, gun, town, suffix] = m;
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.replace(new RegExp(`${esc(gun)}${esc(town)}(?![町村])`, 'g'), `${gun}${town}${suffix}`);
 }
 
 /**

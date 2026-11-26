@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { pickAngle, activeAngles, getAngle, POST_ANGLES } from "../shared/postAngles";
 import { checkAngle, ANGLE_REQUIREMENTS } from "../shared/angleGuard";
-import { LOCAL_TALK, LOCAL_TALK_ANGLE_ID, localTalkNote, localTalkPlaces, localTalkOptedOut } from "../shared/localTalk";
+import { LOCAL_TALK, LOCAL_TALK_ANGLE_ID, localTalkNote, localTalkPlaces, localTalkOptedOut, fixDistrictTownName } from "../shared/localTalk";
 import { trialFor, LEARNING_ACCOUNTS, LOCAL_TALK_TRIAL } from "../shared/learningAccounts";
 import { endsWithQuestion, findAgreementQuestion, findBannedTic, findDeadEndTeaser, checkNaturalized } from "../shared/jpQualityGuard";
 import { NATURAL_STYLE_SKIP_ANGLES } from "../shared/naturalStyle";
@@ -144,6 +144,23 @@ describe("地元の会話：プロンプト", () => {
     expect(localTalkPlaces("なし", null)).toEqual([]);
     expect(localTalkPlaces("", "")).toEqual([]);
   });
+  it("郡は渡さず、郡の中の町は「矢掛町」の形で渡す（2026-11-24 acc40：AIの「小田郡矢掛」をご本人が2回直した）", () => {
+    expect(localTalkPlaces("岡山県小田郡矢掛町矢掛81-1", null)).toEqual(["矢掛町"]);
+    expect(localTalkPlaces("岡山県浅口市金光町占見新田", null)).toEqual(["浅口", "金光", "占見新田"]); // 郡の無い住所は今までどおり
+  });
+  it("「小田郡矢掛」を登録どおり「小田郡矢掛町」に直す（#7578・#7583 の原文）", () => {
+    const area = "岡山県小田郡矢掛町矢掛81-1";
+    expect(fixDistrictTownName("小田郡矢掛で過ごす秋の夜長は、どんな過ごし方が好きですか？", area)).toBe("小田郡矢掛町で過ごす秋の夜長は、どんな過ごし方が好きですか？");
+    expect(fixDistrictTownName("秋の夕暮れ時、小田郡矢掛を車で走っていると、懐かしい香りがすることってありませんか？", area)).toBe("秋の夕暮れ時、小田郡矢掛町を車で走っていると、懐かしい香りがすることってありませんか？");
+    expect(fixDistrictTownName("小田郡矢掛町では、3月は車検が混み合います。", area)).toBe("小田郡矢掛町では、3月は車検が混み合います。");
+    expect(fixDistrictTownName("矢掛の道、年度末が近づくと", area)).toBe("矢掛の道、年度末が近づくと"); // 郡なしは直さない（ご本人も直していない）
+    expect(fixDistrictTownName("小田郡矢掛で", "岡山県倉敷市玉島")).toBe("小田郡矢掛で");
+  });
+  it("✕を付けた地元の会話（acc25 #7241）は「季節の食べ物はもう聞いた」に入る（#7588 で同じ問いかけにまた✕）", async () => {
+    const { recentSeasonFoodTalk } = await import("../shared/localTalk");
+    expect(recentSeasonFoodTalk(["岡山もすっかり秋ですね。\nこの季節になると、ついつい食べたくなるものがあります。\n皆さんは何を食べたくなりますか？"])).not.toBeNull();
+    expect(recentSeasonFoodTalk(["岡山もすっかり秋ですね。肌寒くなると、温かいものが恋しくなります。\n皆様はどんな秋の味覚を楽しんでいますか？"])).not.toBeNull();
+  });
   it("決まり（短い・地名1回・小さな質問で終える・宣伝なし・その日の出来事を言い切らない・絵文字はときどき）が入る", () => {
     const n = localTalkNote({ places: ["倉敷", "玉島"], allowEmoji: true });
     expect(n).toContain("自分が最近したことの報告"); // 2026-11-10 acc42 #6695「ついにコタツ出しちゃいました」
@@ -226,7 +243,7 @@ describe("地元の会話：お店の主題とぶつけない・同じ話を続�
     expect(src).toContain("if (localTalkTurn && plan.topic) {");
     expect(src).toContain("ft.buildFreshTopicNote(plan, { omitTopic: localTalkTurn })");
     expect(src).toContain("if (!opts.collect && !localTalkTurn) {");
-    expect(src).toContain("recentTalks: recentLocalTalks(recentPosts)");
+    expect(src).toContain("recentTalks: recentLocalTalks([...dislikedLocalTalks, ...recentPosts])");
   });
   it("直近の地元の会話（短い・問いかけ）だけを拾う。お店の短い投稿は拾わない", async () => {
     const { recentLocalTalks } = await import("../shared/localTalk");

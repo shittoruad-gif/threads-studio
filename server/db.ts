@@ -4339,6 +4339,28 @@ export async function getOlderPostContents(accountId: number, days: number = 45,
   }
 }
 
+/**
+ * ご本人が✕を付けた「地元の会話」（直近 days 日・新しい順）。
+ * 2026-11-24 夜間整備：acc25 が「岡山もすっかり秋ですね…食べたくなるもの」（11/19 #7241）に✕を付けたのに、
+ *   5日後に「岡山もすっかり秋ですね…秋の味覚」（#7588）が作られ、また✕。直近の投稿（10本＝3日ほど）からは外れていて、
+ *   「季節の食べ物はもう聞いた」の判定（recentSeasonFoodTalk）に入っていなかった。
+ */
+export async function getDislikedLocalTalks(accountId: number, days: number = 30, limit: number = 4): Promise<string[]> {
+  const database = await getDb();
+  if (!database) return [];
+  try {
+    const rows: any = await database.execute(sql`
+      SELECT postContent FROM scheduledPosts
+      WHERE threadsAccountId = ${accountId} AND clientRating = 'bad' AND angle = 'local_talk'
+        AND postContent IS NOT NULL AND postContent <> ''
+        AND scheduledAt >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+      ORDER BY scheduledAt DESC LIMIT ${limit}`);
+    return (((rows as any)[0] ?? []) as any[]).map((r) => String(r.postContent || "")).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 export async function getRecentPostContents(accountId: number, limit: number = 10): Promise<string[]> {
   const database = await getDb();
   if (!database) return [];

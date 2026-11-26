@@ -296,6 +296,7 @@ async function repairOneTicSentence(text: string, bad: string): Promise<string |
 
 - 悩みや思い込みは、そのまま描く（例：「朝、腰が固まって起き上がれない。」「体重計の数字だけを見てしまう。」）。
 - 誘いの疑問（「〜しませんか」）にもしない。
+- 悩んでいる人を書き手に入れ替えない。「〜に悩んでいませんか？」を「〜に悩んでいます。」「〜と諦めています。」にすると、お店自身が悩んでいるように読める（禁止）。「〜に悩んでいる方へ。」か、悩みの中身をそのまま描く一文（「何をしても脂肪が落ちない。」）にする。
 - 事実・数字・地名・店名を足さない、変えない。前後の文に合わせて、です・ます調か常体かを元の文に合わせる。
 - 絵文字は元の文にあるものだけ残す。
 
@@ -1057,6 +1058,12 @@ export async function generateAutoPost(
       const own = await recentOwnThreadsPosts(threadsAccountId);
       for (const t of own) if (!recentPosts.includes(t)) recentPosts.push(t);
     } catch { /* 取れなくてもこちらの下書きだけで続ける */ }
+    // ★ご本人が✕を付けた地元の会話（直近30日）も「もう使った話」として渡す（2026-11-24 acc25：同じ「秋の食べ物」の問いかけに2回✕）。
+    //   地元の会話の回の決まりにだけ使う（recentPosts には混ぜない＝ほかの検査は変えない）
+    let dislikedLocalTalks: string[] = [];
+    if (localTalkTurn) {
+      try { dislikedLocalTalks = await db.getDislikedLocalTalks(threadsAccountId); } catch { dislikedLocalTalks = []; }
+    }
 
     // ★信条と実績が、毎回そのまま投稿に出てしまうのを止める（2026-09-21）。
     //
@@ -1632,7 +1639,7 @@ export async function generateAutoPost(
           + (personal ? personalModePromptOverride() : '')
           // ★地元の会話の回（2026-10-18・shared/localTalk.ts）。長さ・絵文字・締めの共通指示より後ろ＝より優先。
           //   ご本人の手直しの決まり（editLessonsNote）はこれより後ろ（ご本人の直しを優先する）
-          + (localTalkTurn ? localTalkNote({ places: localTalkPlaces(project.area, approvedLocalTerms(project)), allowEmoji, recentSeasonFood: recentSeasonFoodTalk(recentPosts), recentTalks: recentLocalTalks(recentPosts) }) : '')
+          + (localTalkTurn ? localTalkNote({ places: localTalkPlaces(project.area, approvedLocalTerms(project)), allowEmoji, recentSeasonFood: recentSeasonFoodTalk([...recentPosts, ...dislikedLocalTalks]), recentTalks: recentLocalTalks([...dislikedLocalTalks, ...recentPosts]) }) : '')
           // ★毎回直しているところ（2026-10-08）。長さ・改行の最終指示より後ろ＝より優先
           + editLessonsNote
           // ★お客様が自分で決めた書き方（2026-10-18）。手直しの決まりの後ろ
@@ -2075,6 +2082,30 @@ export async function generateAutoPost(
           }
         }
       } catch (e) { console.warn(`[AutoPost] ownerNumberFix skipped: ${(e as Error)?.message}`); }
+    }
+
+    // ★「小田郡矢掛」のように郡を付けて町を落とした地名を登録どおりに直す（2026-11-24 acc40：ご本人が2回直していた）
+    try {
+      const { fixDistrictTownName } = await import('../shared/localTalk');
+      const fixedName = fixDistrictTownName(naturalMain, project.area);
+      if (fixedName !== naturalMain) {
+        console.log(`[AutoPost] districtTownName: 郡の中の町名を登録どおりに直した userId=${userId} account=${threadsAccountId}`);
+        naturalMain = fixedName;
+      }
+    } catch (e) { console.warn(`[AutoPost] districtTownName skipped: ${(e as Error)?.message}`); }
+
+    // ★書き出しの「〜に悩んでいます。」（お店が自分の悩みを打ち明けているように読める）を「〜に悩んでいる方へ。」に直す
+    //   （2026-11-25・11-26 夜間整備：11/20〜11/26 に7本。原因は下の repairOneTicSentence の差し替え。問いかけには戻さない）。
+    //   個人の発信（ご本人の日記）は、ご本人の本当の悩みのことがあるので当てない。地元の会話も当てない
+    if (!personal && !localTalkTurn) {
+      try {
+        const { worryToReaderCallout } = await import('../shared/jpQualityGuard');
+        const fixedWorry = worryToReaderCallout(naturalMain);
+        if (fixedWorry !== naturalMain) {
+          console.log(`[AutoPost] innerVoiceOpener: 書き出しの「〜います。」を「〜いる方へ。」に直した userId=${userId} account=${threadsAccountId}`);
+          naturalMain = fixedWorry;
+        }
+      } catch (e) { console.warn(`[AutoPost] innerVoiceOpener skipped: ${(e as Error)?.message}`); }
     }
 
     // ★登録情報に無い数字（割合・順位・人数など）が入っていたら公開しない。
