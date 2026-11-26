@@ -2460,7 +2460,20 @@ export async function generateAutoPost(
     }
 
     // ★閲覧の回復期間中は、宣伝の文・使い古した書き出しを作り直す（shared/accountRecovery.ts・2026-11-26）。最後の1回は通す
-    if (!lastAttempt && threadsAccountId) {
+    // ★自社アカウント（strictAccount）は最後の1回でも通さない（2026-11-26「過去のNGが出てくる」）
+    const strictHere = threadsAccountId ? (await import('../shared/accountStyle')).strictAccount(threadsAccountId) : false;
+    if (threadsAccountId) {
+      const { bannedTopicHit } = await import('../shared/accountStyle');
+      const bt = bannedTopicHit(threadsAccountId, fullContent);
+      if (bt) {
+        console.warn(`[AutoPost] bannedTopic:「${bt}」→ ${lastAttempt ? '公開しない' : '作り直し'} account=${threadsAccountId}`);
+        noteReject('bannedTopic', userId, threadsAccountId, postingTimeIndex,
+          `- 「${bt}」の題は何十回も出しているので、このアカウントでは当分使わない。別の題にする。`,
+          { detail: bt, gaveUp: lastAttempt });
+        return false;
+      }
+    }
+    if ((!lastAttempt || strictHere) && threadsAccountId) {
       const { recoveryReject } = await import('../shared/accountRecovery');
       const rr = recoveryReject(threadsAccountId, fullContent);
       if (rr) {
@@ -2469,14 +2482,15 @@ export async function generateAutoPost(
           rr.kind === 'opener'
             ? `- 書き出しの「${rr.word}」は何度も使っている。季節の書き出しをやめ、別の入り方にする。`
             : `- 「${rr.word}」は店の宣伝の文。このアカウントでいちばん読まれなかった形なので入れない。地元の人への問いかけか、体の使い方のコツ1つにする。`,
-          { detail: rr.word });
+          { detail: rr.word, gaveUp: lastAttempt });
         return false;
       }
     }
 
     // ★1行目が直近の投稿と重なっていたら作り直す（自社の学習用アカウントだけ・shared/accountStyle.ts・2026-11-24）。
     //   最後の1回は通す（枠は空けない）。acc12：11/23「猫背を悪化させる習慣、…」が 9/2・9/4 とほぼ同じ題だった
-    if (!lastAttempt) {
+    //   ★11/26：自社アカウントは最後の1回でも通さない（このチェックは自社アカウントにしか掛からない）
+    {
       const { accountStyleFor, repeatedTopic } = await import('../shared/accountStyle');
       const st = accountStyleFor(threadsAccountId);
       if (st) {
@@ -2487,7 +2501,7 @@ export async function generateAutoPost(
           console.warn(`[AutoPost] repeatedTopic: 1行目が直近${st.repeatDays}日の投稿と重なる → 作り直し account=${threadsAccountId}`);
           noteReject('repeatedTopic', userId, threadsAccountId, postingTimeIndex,
             `- 1行目が、前に出した投稿「${hit.slice(0, 40)}」とほぼ同じ。題も話題も変える（同じ題を言い換えるのも不可）。`,
-            { detail: hit.slice(0, 80), rejectedLines: [hit] });
+            { detail: hit.slice(0, 80), rejectedLines: [hit], gaveUp: lastAttempt });
           return false;
         }
       }
@@ -3186,6 +3200,28 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
             if (!success && await slotAlreadySaved()) {
               console.warn(`[AutoPost] slot=${i} は保存済みのため保証パスに進まない account=${account.id}`);
               success = true;
+            }
+            // ★自社アカウント（shared/accountStyle.ts strictAccount・2026-11-26）は、3回で書けなければ
+            //   地元への問いかけで2回まで作り直す。それでも書けなければその枠は出さない（保証パス＝承認カードにも回さない）
+            if (!success && !learningTrial && (await import('../shared/accountStyle')).strictAccount(account.id)) {
+              const LOCAL_HINT = '- 店の宣伝・実績・体の悩みの話にしない。地元（食べ物・お店・場所・暮らし）について、地元の人に1つだけ問いかける短い投稿にする。';
+              for (let k = 1; k <= 2 && !success; k++) {
+                if (await slotAlreadySaved()) { success = true; break; }
+                console.log(`[AutoPost] 自社アカウント：地元への問いかけで作り直し ${k}/2 account=${account.id} slot=${i}`);
+                success = await generateAutoPost(
+                  user.id, project, typeIdx, purposeIdx, account.id, i,
+                  eff.autoPostRequireApproval, acctHours, eff.postLength,
+                  learningAt ?? slotTimeFor(i),
+                  [lastRejectReason.get(rk) ?? '', LOCAL_HINT].filter(Boolean).join('\n'),
+                  true, false,
+                  { forcedAngleId: 'local_talk' },
+                );
+              }
+              if (!success) {
+                console.warn(`[AutoPost] 自社アカウント：NGの形しか書けず、この枠は出さない account=${account.id} slot=${i}`);
+                clearReject(rk);
+                continue;
+              }
             }
             // ★学習の枠は契約の外なので、書けなければそのまま見送る（保証パス・翌日の補填に回さない）
             if (!success && learningTrial) {

@@ -124,6 +124,9 @@ export async function pickHitPatternId(accountId: number, group: BusinessGroup):
       (SELECT COUNT(*) FROM scheduledPosts s WHERE s.hitPatternId = h.id AND s.threadsAccountId = ${accountId} AND s.createdAt >= NOW() - INTERVAL 30 DAY) usedHere
     FROM hitPatterns h
     WHERE h.status = 'active' AND h.businessGroup = ${group}`)) as any)[0] ?? [];
+  // ★自社アカウントでは NG の形を呼び戻す型を使わない（shared/accountStyle.ts・2026-11-26）
+  const { strictAccount, STRICT_BLOCKED_HIT_PATTERNS } = await import('../shared/accountStyle');
+  if (strictAccount(accountId)) rows.splice(0, rows.length, ...rows.filter((r) => !STRICT_BLOCKED_HIT_PATTERNS.includes(Number(r.id))));
   if (rows.length === 0) return null;
   rows.sort((a, b) =>
     Number(a.usedHere) - Number(b.usedHere)

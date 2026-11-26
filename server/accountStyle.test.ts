@@ -70,3 +70,19 @@ describe("金光の書き方の決まり（2026-11-24）", () => {
     expect(seen36.has("tree_rank")).toBe(true);
   });
 });
+
+describe("自社アカウントは過去のNGを呼び戻さない（2026-11-26）", () => {
+  it("玉島は「体が硬いからピラティスは無理」の題を当分使わない（ほかのアカウントは変わらない）", async () => {
+    const { bannedTopicHit, strictAccount, STRICT_BLOCKED_HIT_PATTERNS } = await import("../shared/accountStyle");
+    expect(bannedTopicHit(10, "「体が硬いからピラティスは無理」\nそう思われがちです。")).not.toBeNull();
+    expect(bannedTopicHit(10, "体が硬いから、ピラティスなんて無理。")).not.toBeNull();
+    expect(bannedTopicHit(10, "玉島で好きな冬の味覚、何ですか？")).toBeNull();
+    expect(bannedTopicHit(12, "体が硬いからピラティスは無理")).toBeNull();
+    expect(bannedTopicHit(36, "体が硬いからピラティスは無理")).toBeNull();
+    expect(strictAccount(10)).toBe(true);
+    expect(strictAccount(12)).toBe(true);
+    expect(strictAccount(36)).toBe(false);
+    expect(strictAccount(43)).toBe(false);
+    expect([...STRICT_BLOCKED_HIT_PATTERNS].sort((a, b) => a - b)).toEqual([21, 59, 105]);
+  });
+});

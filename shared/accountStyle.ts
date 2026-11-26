@@ -91,3 +91,33 @@ export function repeatedTopic(text: string, pastTexts: readonly string[]): strin
   }
   return null;
 }
+
+/**
+ * 2026-11-26 三上様「なんで勝手に過去のngにしたやつとか出てくるの？」→「進めて」。
+ * 自社の学習用アカウント（ACCOUNT_STYLE にあるもの）は、枠より中身を優先する：
+ *  - 書かない題・回復期間の宣伝の文・1行目の重なりは、最後の作り直しでも通さない
+ *  - 3回で書けなければ、地元への問いかけ（local_talk）で作り直す。それでも書けなければその枠は出さない
+ *    （保証パス＝承認カードにも回さない）
+ */
+export function strictAccount(accountId: number | null | undefined): boolean {
+  return accountStyleFor(accountId) !== null;
+}
+
+/**
+ * 自社アカウントで使わない当たり型（hitPatterns.id）。11/26 玉島で NG の形をそのまま呼び戻していた：
+ *  21＝季節の不調で書き出す（→「朝晩の冷え込み」）、59＝自分の店の良さで締める（→宣伝の文）、
+ *  105＝よくある質問を「」で出す（→「体が硬いからピラティスは無理」）
+ */
+export const STRICT_BLOCKED_HIT_PATTERNS: readonly number[] = [21, 59, 105];
+
+/** アカウントごとに当分使わない題（本文のどこにあっても作り直し） */
+const ACCOUNT_BANNED_TOPICS: Readonly<Record<number, ReadonlyArray<{ re: RegExp; label: string }>>> = {
+  // 玉島：7月から30回以上出ている題（11/26 三上様）
+  10: [{ re: /体が硬い[^。\n]{0,8}ピラティス[^。\n]{0,4}無理/, label: "体が硬いからピラティスは無理" }],
+};
+
+export function bannedTopicHit(accountId: number | null | undefined, text: string): string | null {
+  if (accountId == null) return null;
+  for (const t of ACCOUNT_BANNED_TOPICS[Number(accountId)] ?? []) if (t.re.test(String(text ?? ""))) return t.label;
+  return null;
+}
