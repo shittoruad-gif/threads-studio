@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyOneSpot, isOneSpotSlot, nextSpot, ONE_SPOT, oneSpotExperimentKey, SEASON_RE, stripSignature } from "../shared/oneSpotVariant";
+import { applyOneSpot, isOneSpotSlot, oneSpotIntroducedTic, nextSpot, ONE_SPOT, oneSpotExperimentKey, SEASON_RE, stripSignature } from "../shared/oneSpotVariant";
 
 const NOW = Date.parse("2026-11-20T10:00:00+09:00");
 const SRC = "夕方になると腰が重い人の共通点。\n座りっぱなしで股関節が固まっています。\n1時間に1回、立つだけで変わります。";
@@ -58,5 +58,17 @@ describe("投稿を書くときの考える量（原価の見直し 2026-11-13�
     process.env.POST_GENERATE_EFFORT = "medium";
     expect(postGenerateEffort()).toBe("medium");
     if (keep === undefined) delete process.env.POST_GENERATE_EFFORT; else process.env.POST_GENERATE_EFFORT = keep;
+  });
+});
+
+describe("変えた所が同意を求める問いかけを持ち込んだら作り直す（2026-11-26）", () => {
+  it("元に無い「〜ていませんか？」を持ち込んだら当たる", () => {
+    const src = "岡山県、朝晩の冷え込みが続きますね。\n暖房、いつから使いますか？";
+    expect(oneSpotIntroducedTic(src, "岡山県、朝晩の冷え込みが続きますね。\n暖房、体が冷えていませんか？")).toBeTruthy();
+    expect(oneSpotIntroducedTic(src, "岡山県、朝晩の冷え込みが続きますね。\n暖房、もう出しましたか？")).toBeNull();
+  });
+  it("元の投稿にもともとある形は止めない", () => {
+    const src = "肩、こっていませんか？\n座りっぱなしが原因です。";
+    expect(oneSpotIntroducedTic(src, "肩、こっていませんか？\n立ちっぱなしが原因です。")).toBeNull();
   });
 });

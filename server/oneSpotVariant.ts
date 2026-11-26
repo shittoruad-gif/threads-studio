@@ -8,7 +8,7 @@
 import { sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { selectHitCandidates } from "../shared/hitPatterns";
-import { ONE_SPOT, ONE_SPOT_LABEL, SEASON_RE, applyOneSpot, nextSpot, stripSignature, type OneSpot } from "../shared/oneSpotVariant";
+import { ONE_SPOT, ONE_SPOT_LABEL, SEASON_RE, applyOneSpot, nextSpot, oneSpotIntroducedTic, stripSignature, type OneSpot } from "../shared/oneSpotVariant";
 
 export type OneSpotSource = { threadsPostId: string; text: string; impressions: number; ratio: number; spot: OneSpot };
 
@@ -85,6 +85,8 @@ ${source.text}
       const applied = applyOneSpot(source.text, source.spot, String(p.changedFrom ?? ""), String(p.changedTo ?? ""));
       if (!applied.ok) { hint = `- 前回は「${applied.reason}」で使えなかった。決まりどおりに選び直す。`; continue; }
       if (/\d/.test(String(p.changedTo)) && !/\d/.test(String(p.changedFrom))) { hint = "- 前回は数字を足していた。数字は足さない。"; continue; }
+      const tic = oneSpotIntroducedTic(source.text, applied.text);
+      if (tic) { hint = `- 前回は「${tic}」のような、読み手に同意を求める問いかけになった。疑問にするなら答えが分かれる本当の質問にするか、言い切りにする。`; continue; }
       const claims = checkHealthClaims(applied.text);
       if (!claims.ok) { hint = `- 前回は効果を約束する言葉（${claims.hits.slice(0, 2).join("・")}）が入った。使わない。`; continue; }
       return { text: applied.text, changedFrom: String(p.changedFrom).trim(), changedTo: String(p.changedTo).trim() };

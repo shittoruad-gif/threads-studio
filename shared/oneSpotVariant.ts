@@ -11,6 +11,7 @@
  *  - 「同じ投稿に見せない決まり」の例外になるので、お客様のアカウントには広げない（広げるときは三上様の承諾）
  */
 import { inRecovery } from "./accountRecovery";
+import { findAgreementQuestion, findBannedTic } from "./jpQualityGuard";
 export const ONE_SPOT = {
   accountIds: [10, 12, 36] as readonly number[],
   from: "2026-11-14",
@@ -81,4 +82,16 @@ export function stripSignature(text: string): string {
   const lines = String(text ?? "").replace(/\s+$/, "").split("\n");
   while (lines.length > 1 && (!lines[lines.length - 1].trim() || /^.{1,24}より[。.]?$/.test(lines[lines.length - 1].trim()))) lines.pop();
   return lines.join("\n");
+}
+
+/**
+ * 変えた後の言葉が、元の投稿に無かった決まり文句・同意を求める問いかけ（〜ていませんか？ など）を持ち込んだかを返す（無ければ null）。
+ * 2026-11-26 週次リサーチ：この作り方は通常の生成の検査（決まり文句の作り直し）を通らないため、
+ * 11/23 の自社アカウントで「いつから使いますか？」→「体が冷えていませんか？」に変えた投稿がそのまま公開された。
+ * 元の投稿にもともとある形は比べの対象なので止めない（変えた所が持ち込んだときだけ）。
+ */
+export function oneSpotIntroducedTic(sourceText: string, variantText: string): string | null {
+  const hit = findBannedTic(variantText) || findAgreementQuestion(variantText);
+  if (!hit) return null;
+  return String(sourceText ?? "").includes(hit) ? null : hit;
 }
