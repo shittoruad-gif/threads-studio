@@ -43,9 +43,9 @@ describe("地元の会話：ふだんの生成での割合", () => {
     expect(getAngle(LOCAL_TALK_ANGLE_ID)?.label).toBe("地元の会話");
     expect(activeAngles(Date.now(), "store").map((a) => a.id)).toContain(LOCAL_TALK_ANGLE_ID);
   });
-  it("割合は1つの定数（LOCAL_TALK.share）で、約3本に1本（10/25 0.22→0.33）", () => {
-    expect(LOCAL_TALK.share).toBeGreaterThanOrEqual(0.3);
-    expect(LOCAL_TALK.share).toBeLessThanOrEqual(0.36);
+  it("割合は1つの定数（LOCAL_TALK.share）で、約5本に2本（10/25 0.22→0.33・11/26 0.4）", () => {
+    expect(LOCAL_TALK.share).toBeGreaterThanOrEqual(0.37);
+    expect(LOCAL_TALK.share).toBeLessThanOrEqual(0.43);
     const s = shareOf(4000);
     expect(s).toBeGreaterThan(LOCAL_TALK.share - 0.03);
     expect(s).toBeLessThan(LOCAL_TALK.share + 0.03);

@@ -799,8 +799,10 @@ export async function generateAutoPost(
     // ★閲覧の回復期間中は宣伝になりやすい切り口を使わない（shared/accountRecovery.ts RECOVERY_SKIP_ANGLES・2026-11-26）
     let avoidAngleIdsHere: string[] | undefined = opts.avoidAngleIds;
     if (threadsAccountId) {
-      const { inRecovery, RECOVERY_SKIP_ANGLES } = await import('../shared/accountRecovery');
-      if (inRecovery(threadsAccountId)) avoidAngleIdsHere = [...(opts.avoidAngleIds ?? []), ...RECOVERY_SKIP_ANGLES];
+      const { recoveryPlanFor, RECOVERY_SKIP_ANGLES } = await import('../shared/accountRecovery');
+      // 自動で見つけたお客様の落ち込み（auto）では外さない（数字・実績は伸びる切り口・予約の案内は集客の入口）
+      const rp = recoveryPlanFor(threadsAccountId);
+      if (rp && !rp.auto) avoidAngleIdsHere = [...(opts.avoidAngleIds ?? []), ...RECOVERY_SKIP_ANGLES];
     }
     angle = forced
       ?? pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment, excludeLocalTalk, excludeAngleIds: avoidAngleIdsHere });
@@ -1623,7 +1625,7 @@ export async function generateAutoPost(
             ? recruitingLocalNote(localTalkPlaces(project.area, approvedLocalTerms(project)), recruitingOfferTurn(postingTimeIndex))
             : '')
           // ★閲覧の回復期間（自社の学習用アカウントだけ・shared/accountRecovery.ts・2026-11-23）
-          + ((await import('../shared/accountRecovery')).inRecovery(threadsAccountId) ? (await import('../shared/accountRecovery')).RECOVERY_NOTE : '')
+          + (await import('../shared/accountRecovery')).recoveryNoteFor(threadsAccountId)
           // ★アカウントごとの書き方の決まり（自社の学習用アカウントだけ・shared/accountStyle.ts・2026-11-24）
           + (await import('../shared/accountStyle')).accountStyleNote(threadsAccountId)
           // ★個人モードの上書きは最末尾（末尾の指示が最も遵守されやすい）
@@ -1859,21 +1861,22 @@ export async function generateAutoPost(
 
     // ★オーナーが何度も見送った言い回しが下書きに残っていたら作り直す（2026-09-24）。
     //   最後の作り直しでは止めない（枠をゼロにしない。承認カードでご本人が判断できる）。
-    if (declinedPatterns && declinedPatterns.top.length > 0 && !lastAttempt) {
+    //   ★2026-11-26：3回目でも止める（見送った言い回しが自動で公開されていた）。保証パス（承認カード）だけ通す
+    if (declinedPatterns && declinedPatterns.top.length > 0 && !guarantee) {
       const norm = normalizeForPatterns(naturalMain);
       const hit = declinedPatterns.top.find((p) => norm.includes(p));
       if (hit) {
         console.warn(`[AutoPost] declinedPhrase:「${hit}」が残っている → 作り直し userId=${userId} account=${threadsAccountId}`);
         noteReject('declinedPhrase', userId, threadsAccountId, postingTimeIndex,
           `- 「${hit}」は、オーナーが何度も見送った投稿に出ている言い回し。使わない。言い換えて同じ主張をするのも不可。直近で使っていない材料（メニュー・よくある質問・季節・お店ごとの違い）から書く。`,
-          { detail: hit });
+          { detail: hit, gaveUp: lastAttempt });
         return false;
       }
     }
 
     // ★「同じような内容ばかり」と言われた方で、使いすぎの話題の言葉が2つ以上残っていたら作り直す（2026-09-25）。
     //   1つだけなら通す（「先輩」1語で落とすと、書ける話が無くなる）。最後の作り直しでは止めない。
-    if (freshPlan && !lastAttempt) {
+    if (freshPlan && !guarantee) { // ★2026-11-26：3回目でも止める（保証パス＝承認カードだけ通す）
       const hits = overusedHits(naturalMain, freshPlan);
       if (hits.length >= 2) {
         console.warn(`[AutoPost] sameTopic:「${hits.join('・')}」の話が続いている → 作り直し userId=${userId} account=${threadsAccountId}`);
@@ -2473,7 +2476,7 @@ export async function generateAutoPost(
         return false;
       }
     }
-    if ((!lastAttempt || strictHere) && threadsAccountId) {
+    if ((!guarantee || strictHere) && threadsAccountId) {
       const { recoveryReject } = await import('../shared/accountRecovery');
       const rr = recoveryReject(threadsAccountId, fullContent);
       if (rr) {
@@ -2492,8 +2495,9 @@ export async function generateAutoPost(
     //   ★11/26：自社アカウントは最後の1回でも通さない（このチェックは自社アカウントにしか掛からない）
     {
       const { accountStyleFor, repeatedTopic } = await import('../shared/accountStyle');
-      const st = accountStyleFor(threadsAccountId);
-      if (st) {
+      // ★2026-11-26：お客様のアカウントにも（60日）。お客様は保証パス（承認カード）だけ通す
+      const st = accountStyleFor(threadsAccountId) ?? (!guarantee ? { repeatDays: 60 } : null);
+      if (st && threadsAccountId) {
         let past: string[] = [];
         try { past = await db.getPostContentsSince(threadsAccountId, st.repeatDays); } catch { past = []; }
         const hit = repeatedTopic(fullContent, past);
@@ -2675,6 +2679,8 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
   let failed = 0;
 
   try {
+    // ★閲覧の落ち込みを数え直す（server/autoRecovery.ts・2026-11-26）
+    try { await (await import('./autoRecovery')).refreshAutoRecovery(); } catch (e) { console.warn(`[AutoRecovery] 数え直しに失敗: ${(e as Error)?.message}`); }
     // Get all users eligible for auto-posting
     const users = await db.getAutoPostEligibleUsers(opts.onlyUserId);
 

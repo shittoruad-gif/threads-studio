@@ -20,6 +20,8 @@ export interface RecoveryPlan {
   until: string; // JST の日付（含む）
   /** 1日の本数の上限。null＝本数は抑えない（試しから外す・書き方を変えるだけ） */
   perDay: number | null;
+  /** 自動で見つけた落ち込み（お客様のアカウントを含む）。宣伝の文は止めない（集客の案内まで消さない）・指示は AUTO_RECOVERY_NOTE */
+  auto?: boolean;
 }
 
 export const ACCOUNT_RECOVERY: Readonly<Record<number, RecoveryPlan>> = {
@@ -30,8 +32,22 @@ export const ACCOUNT_RECOVERY: Readonly<Record<number, RecoveryPlan>> = {
 const JST = 9 * 3600_000;
 const jstYmd = (now: number) => new Date(now + JST).toISOString().slice(0, 10);
 
+/**
+ * ★閲覧の落ち込みを自動で見つけたアカウント（2026-11-26 三上様「解約が続出します。責任もってリーチを伸ばして」）。
+ * 玉島（acc10）と同じ急落が、お客様のアカウントでも起きていた（例：acc16 39→7・acc38 15→5、1本あたり中央値）。
+ * server/autoRecovery.ts が生成の前に毎回数え直して入れる（落ち込みが戻れば外れる）。本数は変えない（契約の本数）。
+ */
+const AUTO_RECOVERY = new Map<number, RecoveryPlan>();
+export function setAutoRecovery(plans: ReadonlyMap<number, RecoveryPlan>): void {
+  AUTO_RECOVERY.clear();
+  plans.forEach((v, k) => AUTO_RECOVERY.set(Number(k), v));
+}
+export function autoRecoveryIds(): number[] {
+  return Array.from(AUTO_RECOVERY.keys());
+}
+
 export function recoveryPlanFor(accountId: number, now: number = Date.now()): RecoveryPlan | null {
-  const p = ACCOUNT_RECOVERY[Number(accountId)];
+  const p = ACCOUNT_RECOVERY[Number(accountId)] ?? AUTO_RECOVERY.get(Number(accountId));
   if (!p) return null;
   const ymd = jstYmd(now);
   return ymd >= p.from && ymd <= p.until ? p : null;
@@ -51,6 +67,23 @@ export const RECOVERY_NOTE = `
 - 朝晩の冷え込み・季節の変わり目・秋の夜長の書き出しは使わない（何度も使っています）
 - 地域名は本文に1回まで
 - 地元の人に話しかける話題1つ（食べ物・お店・場所・暮らし）か、体の使い方の具体的なコツ1つを、ふつうの言葉で短く書く。登録に無い出来事・お客様の声・数字は作らない`;
+
+/** 自動で見つけた落ち込みの指示（お客様のアカウントにも入る）。直近45日・お客様2,129本の実測：60字以内 1.46倍・101字以上 0.76倍 */
+export const AUTO_RECOVERY_NOTE = `
+
+【このアカウントは今、閲覧が落ちています。次を守ってください】
+- 最近の投稿と「書き出し・締め・話題」が重ならないようにする
+- 60字前後で短く書く（長い投稿ほど読まれていません）
+- 朝晩の冷え込み・季節の変わり目・秋の夜長の書き出しは使わない
+- 絵文字は1つまで
+- 地域名は本文に1回まで`;
+
+/** 生成の指示に足す回復期間の指示（自社の手動の回復期間＝RECOVERY_NOTE、自動で見つけた落ち込み＝AUTO_RECOVERY_NOTE） */
+export function recoveryNoteFor(accountId: number, now: number = Date.now()): string {
+  const plan = recoveryPlanFor(accountId, now);
+  if (!plan) return "";
+  return plan.auto ? AUTO_RECOVERY_NOTE : RECOVERY_NOTE;
+}
 
 /**
  * 本数を段階的に戻す（自社の学習用アカウントだけ・お客様のアカウントには入れない）。
@@ -91,18 +124,44 @@ export function stepUpPerDay(accountId: number, cooldownUntilJst: string | null 
 export const RECOVERY_SKIP_ANGLES: readonly string[] = ["number_result", "reservation_funnel"];
 
 /** 回復期間中、宣伝の文として作り直す言葉（このアカウントでいちばん読まれなかった形） */
-const RECOVERY_PROMO = /国家資格|指導実績|指導経験|実績があります|甲子園|プロ野球選手|日本代表|一人ひとりに合わせ|ご案内しています|お気軽に|ご予約|向き合います|(店|Moveact|ムーブアクト)[^。\n]{0,6}では、/;
+const RECOVERY_PROMO = /国家資格|指導実績|指導経験|実績があります|甲子園|プロ野球選手|日本代表|一人ひとりに合わせ|ご案内しています|お気軽に|ご予約|向き合います|(店|当店|当院|Moveact|ムーブアクト)[^。\n]{0,6}では、/;
 /** 回復期間中、使い古した書き出し（1行目だけ見る） */
 const RECOVERY_STALE_OPENER = /冷え込|季節の変わり目|秋の夜長/;
 
 /** 回復期間中に作り直す理由（なければ null）。最後の1回は呼び出し側で通す（枠は空けない） */
 export function recoveryReject(accountId: number, text: string, now: number = Date.now()): { kind: "promo" | "opener"; word: string } | null {
-  if (!inRecovery(accountId, now)) return null;
+  const plan = recoveryPlanFor(accountId, now);
+  if (!plan) return null;
   const t = String(text ?? "");
   const first = t.replace(/\r/g, "").split("\n").map((l) => l.trim()).find((l) => l.length > 0) ?? "";
   const o = first.match(RECOVERY_STALE_OPENER);
   if (o) return { kind: "opener", word: o[0] };
+  if (plan.auto) return null; // お客様の予約の案内まで消さない
   const m = t.match(RECOVERY_PROMO);
   if (m) return { kind: "promo", word: m[0] };
   return null;
+}
+
+/**
+ * 落ち込みの判定（純関数・テスト用に分ける）。
+ * 直近7日の1本あたり表示の中央値が、その前8週のうち「いちばん良かった週の中央値」（5本以上ある週だけ）の35%未満なら落ち込み。
+ * 前の週と比べるだけだと、落ちたまま戻らないアカウント（玉島・ほか2件）を拾えないため、良かった頃と比べる。
+ * もともと小さい（良かった週でも20未満）ときは判定しない（ゆらぎで誤判定しない）。
+ */
+export const AUTO_RECOVERY_RULE = { recentDays: 7, baseWeeks: 8, ratio: 0.35, minRecent: 5, minWeekPosts: 5, minPeak: 20, holdDays: 14 } as const;
+export function median(xs: readonly number[]): number {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length ? s[Math.floor(s.length / 2)]! : 0;
+}
+export function peakWeekMedian(baseWeeks: ReadonlyArray<readonly number[]>): number {
+  let best = 0;
+  for (const w of baseWeeks) if (w.length >= AUTO_RECOVERY_RULE.minWeekPosts) best = Math.max(best, median(w));
+  return best;
+}
+export function isSlumping(recent: readonly number[], baseWeeks: ReadonlyArray<readonly number[]>): boolean {
+  const R = AUTO_RECOVERY_RULE;
+  if (recent.length < R.minRecent) return false;
+  const peak = peakWeekMedian(baseWeeks);
+  if (peak < R.minPeak) return false;
+  return median(recent) < peak * R.ratio;
 }

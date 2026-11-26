@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {POST_ANGLES, pickAngle, type AnglePerformance, ANGLE_FOCUS, activeAngles, getAngle, LINK_PUSH_ANGLES} from "../shared/postAngles";
+import { ANGLE_PRIOR,POST_ANGLES, pickAngle, type AnglePerformance, ANGLE_FOCUS, activeAngles, getAngle, LINK_PUSH_ANGLES} from "../shared/postAngles";
 
 /** 指定の乱数列を順に返す（重み付き抽選の検証用） */
 function seq(values: number[]): () => number {
@@ -29,7 +29,8 @@ describe("切り口の重み付け", () => {
     const counts = sample({}, undefined);
     // 予約導線（リンク先へ促す型）は通常のローテーションから外れている（2026-09-11）
     // ★地元の会話（local_talk・2026-10-18）は割合を LOCAL_TALK.share に合わせる別枠なので、均等の比べから外す（server/localTalk.test.ts で見る）
-    const values = POST_ANGLES.filter((a) => !LINK_PUSH_ANGLES.includes(a.id) && a.id !== "local_talk").map((a) => counts[a.id] ?? 0);
+    // ★実測の下地の重み（ANGLE_PRIOR・2026-11-26）を持つ切り口も均等の比べから外す（下のテストで見る）
+    const values = POST_ANGLES.filter((a) => !LINK_PUSH_ANGLES.includes(a.id) && a.id !== "local_talk" && !(a.id in ANGLE_PRIOR)).map((a) => counts[a.id] ?? 0);
     const min = Math.min(...values);
     const max = Math.max(...values);
     expect(min).toBeGreaterThan(0);
@@ -132,7 +133,7 @@ describe("同じ切り口に偏らない（直近の切り口を渡す）", () =
 
   it("直近の切り口が無ければ、これまでどおり均等", () => {
     const counts = drawMany([]);
-    const values = Object.entries(counts).filter(([id]) => id !== "local_talk").map(([, v]) => v);
+    const values = Object.entries(counts).filter(([id]) => id !== "local_talk" && !(id in ANGLE_PRIOR)).map(([, v]) => v);
     expect(Math.max(...values) - Math.min(...values)).toBeLessThanOrEqual(2);
   });
 
@@ -142,3 +143,16 @@ describe("同じ切り口に偏らない（直近の切り口を渡す）", () =
     expect(counts[liked]).toBeGreaterThan(0);
   });
 });
+
+describe("全お客様の実測の下地の重み（2026-11-26）", () => {
+  it("伸びた切り口は出やすく、伸びなかった切り口は出にくい（消えはしない）", () => {
+    const counts = sample({}, undefined);
+    const plain = POST_ANGLES.find((a) => !(a.id in ANGLE_PRIOR) && !LINK_PUSH_ANGLES.includes(a.id) && a.id !== "local_talk")!.id;
+    expect(ANGLE_PRIOR.number_result).toBeGreaterThan(1);
+    expect(ANGLE_PRIOR.pro_tip).toBeLessThan(1);
+    expect(counts.number_result ?? 0).toBeGreaterThan(counts[plain] ?? 0);
+    expect(counts.pro_tip ?? 0).toBeLessThan(counts[plain] ?? 0);
+    expect(counts.pro_tip ?? 0).toBeGreaterThan(0);
+  });
+});
+

@@ -381,6 +381,25 @@ export function activeAngles(now: number = Date.now(), mode: string = 'store'): 
  */
 export const OUTCOME_RISK_ANGLES: readonly string[] = ['change_story', 'customer_voice'];
 
+/**
+ * 全お客様の実測から決めた切り口の下地の重み（2026-11-26 三上様「解約が続出します。責任もってリーチを伸ばして」）。
+ * 直近45日・お客様のアカウントの公開2,129本を、各アカウントの普段（中央値）との比で比べた：
+ *   地元の会話 1.48・数字と実績 1.27・お客様の声 1.21 ／ アンケート 0.44・持論 0.60・失敗談 0.66・悩みの深掘り 0.66・
+ *   プロの小ワザ 0.67・あるある 0.67・不安をほどく 0.73。
+ * 落とす切り口も消さない（◯✕と各アカウントの実績の学習はそのまま掛かる）。地元の会話は下の LOCAL_TALK.share で別に合わせる。
+ */
+export const ANGLE_PRIOR: Readonly<Record<string, number>> = {
+  number_result: 1.25,
+  customer_voice: 1.15,
+  poll: 0.45,
+  opinion: 0.6,
+  failure_story: 0.65,
+  deep_worry: 0.65,
+  pro_tip: 0.7,
+  aruaru: 0.7,
+  reassurance: 0.75,
+};
+
 export function pickAngle(
   stats: Record<string, { good: number; bad: number }>,
   random: () => number = Math.random,
@@ -459,7 +478,7 @@ export function pickAngle(
     const s = stats[a.id] ?? { good: 0, bad: 0 };
     // 好み（◯✕）× 結果（実測インプレッション）× 偏り防止 の掛け合わせ
     const preference = Math.max(0.1, 1 + 0.6 * s.good - 0.5 * s.bad);
-    return Math.max(0.05, preference * performanceAndReactionMultiplier(a.id, perf) * exploration(a.id));
+    return Math.max(0.05, preference * performanceAndReactionMultiplier(a.id, perf) * exploration(a.id) * (ANGLE_PRIOR[a.id] ?? 1));
   });
   const prefSum = pool.reduce((sum, a, i) => sum + (preferred.has(a.id) ? base[i] : 0), 0);
   const otherSum = pool.reduce((sum, a, i) => sum + (preferred.has(a.id) ? 0 : base[i]), 0);

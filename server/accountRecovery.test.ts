@@ -69,3 +69,30 @@ describe("玉島の回復期間：宣伝の文と使い古した書き出しを�
   });
 });
 
+
+describe("閲覧の落ち込みを自動で見つける（2026-11-26）", () => {
+  it("直近7日の中央値が、前8週でいちばん良かった週の35%未満なら落ち込み。数が少ない・もともと小さいときは判定しない", async () => {
+    const { isSlumping, setAutoRecovery, inRecovery, recoveryReject } = await import("../shared/accountRecovery");
+    const wk = (v: number, n = 7) => Array.from({ length: n }, () => v);
+    // 落ちたまま戻らない（前の週も低い）でも、良かった週と比べて拾う
+    expect(isSlumping(wk(6, 18), [wk(7), wk(15), wk(29), wk(64), wk(112), wk(218)])).toBe(true);
+    expect(isSlumping(wk(60), [wk(100), wk(90)])).toBe(false);
+    expect(isSlumping(wk(5, 3), [wk(100)])).toBe(false);
+    expect(isSlumping(wk(1), [wk(10), wk(12)])).toBe(false);
+    // 2本しかない週の当たりは、良かった週に数えない
+    expect(isSlumping(wk(10), [wk(5000, 2), wk(20)])).toBe(false);
+    const d = at("2026-11-27");
+    setAutoRecovery(new Map([[16, { from: "2026-11-27", until: "2026-12-11", perDay: null, auto: true }]]));
+    expect(inRecovery(16, d)).toBe(true);
+    // お客様の予約の案内は消さない。使い古した書き出しだけ作り直す
+    expect(recoveryReject(16, "当院では、国家資格者がお待ちしています。ご予約はプロフィールから。", d)).toBeNull();
+    expect(recoveryReject(16, "朝晩の冷え込みで肩がこる季節です。", d)?.kind).toBe("opener");
+    const { recoveryNoteFor } = await import("../shared/accountRecovery");
+    expect(recoveryNoteFor(16, d)).toMatch(/60字前後/);
+    expect(recoveryNoteFor(10, d)).toMatch(/宣伝の文/);
+    expect(recoveryNoteFor(36, d)).toBe("");
+    expect(inRecovery(16, at("2026-12-12"))).toBe(false);
+    setAutoRecovery(new Map());
+    expect(inRecovery(16, d)).toBe(false);
+  });
+});
