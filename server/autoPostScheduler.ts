@@ -2459,7 +2459,11 @@ export async function generateAutoPost(
 
     // 「。」の直後に絵文字が続く形（「〜しますね。✨」）は人間の投稿に無い機械の癖。
     // 誤爆しない決定的な整形なので、どちらの経路（リライト採用/差し戻し）にも適用する。
-    const mainText = polishPunctuation(naturalMain);
+    let mainText = polishPunctuation(naturalMain);
+    // ★自社アカウントは、地元の会話の回以外で絵文字を使わない（shared/accountStyle.ts の決まり。指示だけでは守られなかった・11/27 金光）
+    if (threadsAccountId && !localTalkTurn && (await import('../shared/accountStyle')).strictAccount(threadsAccountId)) {
+      mainText = mainText.replace(/[\uD83C-\uD83E][\uDC00-\uDFFF]|[\u2600-\u27BF]|\uFE0F|\u200D/g, '').replace(/[ \t]+$/gm, '');
+    }
     // CTAはLLM出力を使わず、**登録済みリンクから機械的に**決める（shared/autoPostCta.ts）。
     // 固定文にしていた頃、公式LINEを持たない店舗が「LINEへどうぞ」と
     // 案内してしまう事故が起きた（2026-08-22 検出）。
@@ -2527,6 +2531,16 @@ export async function generateAutoPost(
 
     // ★自社アカウント（strictAccount）は最後の1回でも通さない（2026-11-26「過去のNGが出てくる」）
     const strictHere = threadsAccountId ? (await import('../shared/accountStyle')).strictAccount(threadsAccountId) : false;
+    // ★自社アカウント：「〜な方へ」で始める形を作り直す（11/27 金光「浅口市で肩が重いと感じる方へ。」）
+    if (strictHere && !localTalkTurn) {
+      const first = naturalMain.replace(/\r/g, '').split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+      if (/(方|人|あなた)へ[。！!]?$/.test(first)) {
+        noteReject('strictOpener', userId, threadsAccountId, postingTimeIndex,
+          `- 1行目「${first.slice(0, 30)}」のように「〜な方へ」で始めない（読まれない形）。場面か、体の使い方のコツから入る。`,
+          { detail: first.slice(0, 60), gaveUp: lastAttempt });
+        return false;
+      }
+    }
     if (threadsAccountId) {
       const { bannedTopicHit } = await import('../shared/accountStyle');
       const bt = bannedTopicHit(threadsAccountId, fullContent);

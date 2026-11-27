@@ -13,6 +13,17 @@
  */
 const OBSERVATION = /増えて(き|い)|増えました|増加して|見かけるようにな|飾(られ|り)|イルミネーション|ツリーが|咲(い|き)(て|始)|色づ|紅葉が|始まりました|オープンし|新しくでき|できましたね|賑わ|にぎわ|行列|見頃|渋滞|工事中|混んで(い|ま)|匂いがし|香りがし/;
 
+/**
+ * 11/27 金光で追加：天気・季節の言い切り（「金光の夜はもうすっかり冷えますね」）と、
+ * 確かでない名物の言い切り（「金光の秋といえば、やっぱり柿ですよね」）。
+ */
+const WEATHER_OR_FAMOUS = /すっかり冷え|冷えますね|冷えてきました|寒くなりました|寒くなってきました|暑くなってきました|気持ちいい季節ですね|といえば、?やっぱり/;
+/**
+ * お店の設備・できることの言い切り（「金光駅から近いので、着替えを持ってきても大丈夫ですよ」）。
+ * 店頭で何ができるかは、登録に書かれているときだけ書く（三上様の決まり）。
+ */
+const STORE_FACT = /駅から(近|すぐ|徒歩)|駐車場(あり|が|も|は)|着替え|更衣室|キッズスペース|キッズルーム|個室|シャワー|ベビーカー/;
+
 /** 文に分ける（。！!？?・改行） */
 function sentences(text: string): string[] {
   return String(text ?? "").replace(/\r/g, "").split(/(?<=[。！!？?])|\n/).map((s) => s.trim()).filter(Boolean);
@@ -26,10 +37,14 @@ export function unverifiedObservation(text: string, registered: string): string 
   const reg = String(registered ?? "");
   for (const s of sentences(text)) {
     if (/[？?]\s*$/.test(s)) continue; // 問いかけは聞いているだけ
-    const m = s.match(OBSERVATION);
-    if (!m) continue;
-    if (reg.includes(m[0])) continue; // 登録に書かれている事実
-    return s;
+    for (const re of [OBSERVATION, WEATHER_OR_FAMOUS, STORE_FACT]) {
+      const m = s.match(re);
+      if (!m) continue;
+      // 登録に書かれている事実は止めない（「駐車場あり」「キッズルーム完備」など）
+      const key = m[0].replace(/^駅から.*/, "駅").replace(/^駐車場.*/, "駐車場");
+      if (reg.includes(m[0]) || (key !== m[0] && reg.includes(key) && re === STORE_FACT)) continue;
+      return s;
+    }
   }
   return null;
 }
