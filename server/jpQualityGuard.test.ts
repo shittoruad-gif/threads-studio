@@ -324,6 +324,17 @@ describe("決まり文句の1文だけを差し替える（2026-10-15 週次リ�
     expect(applyTicSentenceRepair(text, bad, "")).toBeNull();
   });
 
+  it("読む人の気持ちを「〜だろう。」と決めつける差し替えは採らない（2026-11-27 acc37 #7525・acc36 #4683 で公開）", () => {
+    const post = "「運動指導って、厳しいトレーニングばかり…」\nそう思っていませんか？\n\n八潮市のどい接骨院では、なぜその運動が必要なのかを明確にします。";
+    const s = findTicSentence(post)!.trim();
+    expect(s).toBe("そう思っていませんか？");
+    expect(applyTicSentenceRepair(post, s, "そう思っているだろう。")).toBeNull();
+    expect(applyTicSentenceRepair(post, s, "そう思っていることだろう。")).toBeNull();
+    expect(applyTicSentenceRepair(post, s, "そう思っているでしょう。")).toBeNull();
+    expect(applyTicSentenceRepair(post, s, "そう思われがちです。")).toContain("\nそう思われがちです。\n");
+    expect(applyTicSentenceRepair(post, s, "そう感じる方もいます。")).not.toBeNull();
+  });
+
   it("かぎかっこで始まる文はかっこを残す", () => {
     const q = "「赤ちゃんの頭の形、自然に整うって思っていませんか？」\n早めに見てあげることが大切です。";
     const s = findTicSentence(q)!;

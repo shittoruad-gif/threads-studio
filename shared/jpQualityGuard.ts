@@ -374,6 +374,12 @@ export function applyTicSentenceRepair(
   if (repl && bullet && !repl.startsWith(bullet[1])) repl = bullet[0] + repl;
   if (!repl || !text.includes(oldSentence)) return null;
   if (hasTicOrAgreement(repl) || /[？?]$/.test(repl)) return null;
+  // ★読む人の気持ちを「〜だろう。」「〜でしょう。」と決めつける形にしない（2026-11-27 夜間整備）。
+  //   「そう思っていませんか？」が「そう思っているだろう。」「そう思っていることだろう。」に差し替わり、
+  //   です・ます調の投稿に常体の決めつけが1文だけ混ざって公開された（acc37 #7525・acc36 #4683）。
+  //   元の文に無い推量で終わる差し替えは採らない（null＝従来どおり作り直しへ）。
+  const GUESS_END = /(だろう|であろう|でしょう)[。．…！!]*$/;
+  if (GUESS_END.test(repl) && !GUESS_END.test(oldSentence.trim())) return null;
   const oldLen = Array.from(oldSentence.trim()).length;
   const newLen = Array.from(repl).length;
   if (newLen < oldLen * 0.5 || newLen > oldLen * 1.6) return null;

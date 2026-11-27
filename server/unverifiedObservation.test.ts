@@ -6,6 +6,8 @@ describe("登録に無い様子の言い切りを止める（2026-11-27）", () 
     expect(unverifiedObservation("玉島中央町を歩くと、お店の軒先に飾られたクリスマスの飾りが増えてきました。\n\nこの時期の玉島で好きな風景はありますか？", "倉敷市玉島")).toMatch(/クリスマス/);
     expect(unverifiedObservation("本格的な寒さで、腰の痛みが気になる方が増えています。", "大分市")).toMatch(/増えています/);
     expect(unverifiedObservation("倉敷駅近くにオープンしたお店です。", "倉敷駅")).toMatch(/オープン/);
+    // 2026-11-27 夜間整備：敬語の同じ形（acc37 #7380 で公開済み）
+    expect(unverifiedObservation("冬の寒さで体が固まり、肩や腰、膝がつらいと感じる方が増えております。", "八潮市")).toMatch(/増えております/);
   });
   it("問いかけ・登録に書かれた事実・ふつうの文は止めない", () => {
     expect(unverifiedObservation("金光町で、最近見かけるようになったものありますか？", "")).toBeNull();
