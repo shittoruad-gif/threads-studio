@@ -1701,8 +1701,19 @@ export async function generateAutoPost(
     try {
       const { rampForAccount } = await import('./accountRampCheck');
       const acc: any = await db.getThreadsAccountById(threadsAccountId);
+      // ★2026-11-27 三上様「進めて」：10本に1本だけ、プロフィールのリンクへ軽く誘う（shared/profileCta.ts）。
+      //   慣らし運転中は付けない（下の capped で外す）
+      if (threadsAccountId && !opts.feature && !opts.choiceGroupId && !opts.learningTrial && !localTalkTurn && !looksLikeRecruiting(project)) {
+        const { wantsProfileCta } = await import('../shared/profileCta');
+        const { recoveryPlanFor } = await import('../shared/accountRecovery');
+        const rp = recoveryPlanFor(threadsAccountId);
+        if (!(rp && !rp.auto)) {
+          const recentForCta = await db.getRecentPostContents(threadsAccountId, 9).catch(() => null);
+          if (recentForCta && wantsProfileCta(threadsAccountId, recentForCta)) includeCta = true;
+        }
+      }
       if (acc && (await rampForAccount(acc, 99)).capped) includeCta = false;
-    } catch { /* 取れなければ従来どおり */ }
+    } catch { includeCta = false; }
 
     // ★人間化リライト（2パス目）：factGuard通過後の本文を口語に書き直す。
     //   事実の追加は禁止プロンプトで担保（削るのみ可）。CTAは定型で良いので対象外。
@@ -2455,7 +2466,10 @@ export async function generateAutoPost(
     // 案内先が1つも登録されていなければ null が返り、CTAを付けない。
     // アンケート・クイズは最後の行（質問／答え）で終える必要があるので、案内の一文は付けない
     if (opts.feature) includeCta = false;
-    const ctaText = includeCta ? (buildCtaText(project as any) ?? '') : '';
+    let ctaText = includeCta ? (buildCtaText(project as any) ?? '') : '';
+    // 自社アカウント（体の話に絵文字を付けない決まり）では案内の一文の絵文字も外す
+    if (ctaText && (await import('../shared/accountStyle')).strictAccount(threadsAccountId)) ctaText = ctaText.replace(/[\uD83C-\uD83E][\uDC00-\uDFFF]|[\u2600-\u27BF]|\uFE0F/g, '');
+    const ctaAdded = Boolean(ctaText);
 
     // ★読みやすさ予算（300字）を機械的に強制する。
     //   プロンプト指示をAIが超過した場合、文の途中でぶつ切りにせず
@@ -2615,7 +2629,7 @@ export async function generateAutoPost(
       angle: angle?.id ?? null,
       hitPatternId: angle?.id === 'hit_pattern' && opts.hitPatternId ? opts.hitPatternId : null,
       // 学習の試しの条件（集計 scripts/ops/learning-report.mts）
-      experimentKey: opts.learningTrial?.key ?? null,
+      experimentKey: opts.learningTrial?.key ?? (ctaAdded ? 'profile_cta' : null),
       // 使った長さ条件を記録（A/Bテストの集計に使う。設定は後から変わるため投稿側に残す）
       postLength: effectiveLength,
       metaAiAskText,
