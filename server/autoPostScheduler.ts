@@ -2508,6 +2508,23 @@ export async function generateAutoPost(
     }
 
     // ★閲覧の回復期間中は、宣伝の文・使い古した書き出しを作り直す（shared/accountRecovery.ts・2026-11-26）。最後の1回は通す
+    // ★登録に無い「見てきたような様子」の言い切りを作り直す（shared/unverifiedObservation.ts・2026-11-27）。
+    //   お客様は保証パス（承認カード＝ご本人が読んで決める）だけ通す。自社アカウントは保証パスに回らない
+    if (!guarantee) {
+      const { unverifiedObservation } = await import('../shared/unverifiedObservation');
+      const reg = [project.area, project.strength, project.proof, (project as any).usp, (project as any).catchphrase,
+        project.target, (project as any).storeName, (project as any).localTerms, (project as any).counselingResult,
+        ledgerItem ? JSON.stringify(ledgerItem) : ''].filter(Boolean).join('\n');
+      const ob = unverifiedObservation(naturalMain, reg);
+      if (ob) {
+        console.warn(`[AutoPost] unverifiedObservation:「${ob.slice(0, 40)}」→ 作り直し account=${threadsAccountId}`);
+        noteReject('unverifiedObservation', userId, threadsAccountId, postingTimeIndex,
+          `- 「${ob.slice(0, 50)}」は、登録に無い町や世の中の様子の言い切り。本当にそうか分からないので書かない。様子は言い切らず、相手に聞く形にする（例：「最近〜を見かけますか？」）。`,
+          { detail: ob.slice(0, 80), gaveUp: lastAttempt });
+        return false;
+      }
+    }
+
     // ★自社アカウント（strictAccount）は最後の1回でも通さない（2026-11-26「過去のNGが出てくる」）
     const strictHere = threadsAccountId ? (await import('../shared/accountStyle')).strictAccount(threadsAccountId) : false;
     if (threadsAccountId) {
