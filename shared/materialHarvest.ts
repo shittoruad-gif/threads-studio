@@ -154,6 +154,13 @@ export const HARVEST_SCHEMA = {
 
 /** 手直し投稿からの補充を、ネタ帳がまだ無いアカウントにも行う（false にすると 11/19 の条件に戻る） */
 export const HARVEST_ALL_ACCOUNTS = true;
+/**
+ * 手直し投稿からネタ帳を新しく作らないアカウント（threadsAccounts.id）。
+ *   acc40：手直し投稿が1つの話題（車検）に寄っていて、ご本人から「その話ばかり出る。別の商品を知ってもらいたい」と
+ *   お聞きしている（11/27）。拾うと寄りが強まるので、ご本人の材料をネタ帳に入れてから外す。
+ *   返信・ホームページの候補は今までどおり読む。
+ */
+export const HARVEST_SKIP_NEW_LEDGER_ACCOUNT_IDS: readonly number[] = [40];
 
 // ---------- ② ホームページ ----------
 

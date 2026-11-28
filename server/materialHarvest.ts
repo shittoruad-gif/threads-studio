@@ -15,7 +15,7 @@
 import { sql } from "drizzle-orm";
 import * as db from "./db";
 import {
-  HARVEST, HARVEST_SCHEMA, HARVEST_ALL_ACCOUNTS, SITE_HARVEST, REPLY_HARVEST, REPLY_PICK_SCHEMA,
+  HARVEST, HARVEST_SCHEMA, HARVEST_ALL_ACCOUNTS, HARVEST_SKIP_NEW_LEDGER_ACCOUNT_IDS, SITE_HARVEST, REPLY_HARVEST, REPLY_PICK_SCHEMA,
   filterHarvested, harvestPrompt, filterSiteHarvested, siteHarvestPrompt, isOwnSiteUrl,
   eligibleReplies, replyPickPrompt, buildReplyItems, type HarvestCandidate, type ReplyCandidate,
 } from "../shared/materialHarvest";
@@ -203,7 +203,7 @@ export async function runMaterialHarvest(opts: { dry?: boolean; /** 返信を読
       let noLedger = false;
       if (!reason && HARVEST_ALL_ACCOUNTS) {
         const items = await listActiveItems(a.projectId);
-        if (items.length === 0) { reason = "ネタ帳がまだ無い"; noLedger = true; }
+        if (items.length === 0 && !HARVEST_SKIP_NEW_LEDGER_ACCOUNT_IDS.includes(a.accountId)) { reason = "ネタ帳がまだ無い"; noLedger = true; }
       }
       // ③ 返信は、材料が足りているアカウントでも読む（地元の方の声は新しい話題になる）。週2回だけ。
       const jstDay = new Date(Date.now() + 9 * 3600e3).getUTCDay();
