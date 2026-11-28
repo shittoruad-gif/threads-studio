@@ -2745,6 +2745,11 @@ export type AutoPostRunOptions = {
    * 作った投稿には forDate＝明日 を付け、日をまたいでも見送りにならないようにする。
    */
   forTomorrow?: boolean;
+  /**
+   * 承認カード・承認メールをこの回では送らない（2026-11-28 三上様「3つまとめて送るようにして」）。
+   * 朝6時の回の中で足りない分を作り直すときに使い、カードは朝の回の最後に1通へまとめる。
+   */
+  skipApprovalNotify?: boolean;
 };
 
 /** アカウントごとに、いま動いている枠づくりの数（同時に動いているかを見分ける） */
@@ -2822,6 +2827,8 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         // ★この回で作った分だけを承認カードにする目印（2026-09-12）。
         //   当日補充を続けて実行した日に、直前の回の分まで混ざって同じカードが何度も届いた。
         const postIdBefore = await db.getMaxScheduledPostId().catch(() => 0);
+        // ★この回で届かなかった枠の合計（朝の回の中で作り直すかの判定に使う）
+        let userFailed = 0;
 
         // ★本人の実績から「反応が高い時間帯」を取得（データ8件未満はnull＝デフォルト時刻）。
         //   使うほど、その先生の当たり時間に自動で寄っていく。
@@ -3409,6 +3416,7 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
               await db.updateThreadsAccount(account.id, { shortfallDate: today, shortfallCount: sameDayShortfall(fillTarget, have) } as any);
             }
             void dateColToJst;
+            userFailed += accFailed;
             if (accFailed > 0) console.log(`[AutoPost] account ${account.id} 届かなかった枠 ${accFailed}件 → 明日の生成で自動補填`);
             if (guaranteedHere > 0) console.log(`[AutoPost] account ${account.id} 保証パスでお届け ${guaranteedHere}件（承認カード・お店の情報の追記をお願いする対象）`);
           } catch (e) { console.warn(`[AutoPost] 不足分の記録に失敗 account=${account.id}: ${(e as Error)?.message}`); }
@@ -3430,10 +3438,23 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         // Update rotation indices
         await db.updateUserAutoPostIndices(user.id, typeIdx, purposeIdx);
 
+        // ★朝6時の回で枠が足りなかったら、カードを送る前にこの場で1度だけ作り直す
+        //   （2026-11-28 三上様「3つまとめて送るようにして」）。
+        //   以前は朝の点検（scripts/ops/fill-shortfall.mts）が後から足し、そのたびに承認カードが別に届いた。
+        //   岩根様 acc25 11/28：6:07に1件、6:33に1件と分かれて届き「いつもは3件まとめてなのに」とお問い合わせ。
+        //   作り直した分も postIdBefore より後の番号なので、下の案内に1通でまとめて入る。
+        if (!opts.fillToday && !opts.forTomorrow && userFailed > 0) {
+          try {
+            console.log(`[AutoPost] user ${user.id} 届かなかった枠 ${userFailed}件 → カードを送る前にこの場で作り直す`);
+            const r = await processAutoPostGeneration({ onlyUserId: user.id, fillToday: true, skipApprovalNotify: true });
+            if (r.generated > 0) generated += r.generated;
+          } catch (e) { console.warn(`[AutoPost] 朝の回の作り直しに失敗 user=${user.id}: ${(e as Error)?.message}`); }
+        }
+
         // ★承認モードONのユーザーには、作成した直後に1通だけまとめて案内する。
         //   予定時刻を過ぎるまで気づけず投稿がゼロになる、という事故を防ぐため。
         //   メール内で本文を読み、そのまま承認できる（ログイン不要）。
-        if (anyApproval) {
+        if (anyApproval && !opts.skipApprovalNotify) {
           try {
             const fresh = await db.getRecentAwaitingApprovalPosts(user.id, 30, postIdBefore);
             const owner = fresh.length > 0 ? await db.getUserById(user.id) : null;

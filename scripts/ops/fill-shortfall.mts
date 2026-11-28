@@ -6,14 +6,22 @@
  * 必要なenv: DATABASE_URL（トンネル）, BUILT_IN_FORGE_API_KEY/URL, TOKEN_ENCRYPTION_KEY, JWT_SECRET, APP_BASE_URL,
  *            LINE_NOTIFY_CHANNEL_ACCESS_TOKEN, LINE_NOTIFY_CHANNEL_SECRET, RESEND_API_KEY, RESEND_FROM_DOMAIN, SUPPORT_REPLY_TO, EMAIL_FROM
  * 手順書: docs/runbook-quality-shortfall.md
+ *
+ * ★公開前に確認されるお客様（承認カードで確認）は、既定では補充しない（2026-11-28 三上様「3つまとめて送るようにして」）。
+ *   朝6時の回の中で1度作り直してからカードを1通にまとめて送るようにしたので、ここで後から足すと
+ *   カードが別に届き「いつもは3件まとめてなのに」となる（岩根様 11/28）。足りない分は翌朝の回にまとめて足される。
+ *   どうしても今日足すときだけ --include-approval を付ける。
  */
-const args = process.argv.slice(2);
+const rawArgs = process.argv.slice(2);
+const includeApproval = rawArgs.includes("--include-approval");
+const args = rawArgs.filter((a) => a !== "--include-approval");
 const mode = args[0] === "--fill" ? "fill" : "dry";
 const only = args.slice(1).map(Number).filter((n) => Number.isFinite(n) && n > 0);
 const db = await import("../../server/db"); const d = await db.getDb(); const { sql } = await import("drizzle-orm");
 // 今朝の生成で「届かなかった枠」を記録した（shortfallDate=今日・shortfallCount>0）アカウント
 const rows: any = ((await d!.execute(sql`
   SELECT ta.id accountId, ta.userId, ta.threadsUsername, u.storeName, ta.shortfallCount,
+         COALESCE(ta.autoPostRequireApproval, u.autoPostRequireApproval, 0) approval,
          (SELECT COUNT(*) FROM scheduledPosts sp WHERE sp.threadsAccountId = ta.id AND sp.source = 'auto'
             AND sp.status IN ('awaiting_approval','pending','posted','processing')
             AND DATE(CONVERT_TZ(sp.scheduledAt,'+00:00','+09:00')) = DATE(CONVERT_TZ(NOW(),'+00:00','+09:00'))) todayPosts
@@ -22,9 +30,12 @@ const rows: any = ((await d!.execute(sql`
   ORDER BY ta.userId`)) as any)[0];
 if (rows.length === 0) { console.log("今朝の生成で消えた枠はありません。"); process.exit(0); }
 console.log("今朝の生成で消えた枠:");
-for (const r of rows) console.log(`  user=${r.userId} ${r.storeName ?? ""} @${r.threadsUsername} 不足${r.shortfallCount}件（今日の投稿 ${r.todayPosts}件）`);
+for (const r of rows) console.log(`  user=${r.userId} ${r.storeName ?? ""} @${r.threadsUsername} 不足${r.shortfallCount}件（今日の投稿 ${r.todayPosts}件）${Number(r.approval) ? "［承認カードの方：既定では補充しない・翌朝にまとめて足す］" : ""}`);
 if (mode === "dry") process.exit(0);
-const users = Array.from(new Set(rows.map((r: any) => Number(r.userId)))).filter((u) => only.length === 0 || only.includes(u));
+const approvalUsers = new Set(rows.filter((r: any) => Number(r.approval)).map((r: any) => Number(r.userId)));
+const users = Array.from(new Set(rows.map((r: any) => Number(r.userId))))
+  .filter((u) => only.length === 0 || only.includes(u))
+  .filter((u) => includeApproval || !approvalUsers.has(u));
 const { processAutoPostGeneration } = await import("../../server/autoPostScheduler");
 for (const u of users) {
   const r = await processAutoPostGeneration({ onlyUserId: u, fillToday: true } as any);
