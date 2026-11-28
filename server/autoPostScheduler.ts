@@ -3443,12 +3443,25 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
         //   以前は朝の点検（scripts/ops/fill-shortfall.mts）が後から足し、そのたびに承認カードが別に届いた。
         //   岩根様 acc25 11/28：6:07に1件、6:33に1件と分かれて届き「いつもは3件まとめてなのに」とお問い合わせ。
         //   作り直した分も postIdBefore より後の番号なので、下の案内に1通でまとめて入る。
+        //   ★契約の本数にそろうまで最大3回くり返す（2026-11-28 三上様「ちゃんと数は合わせて」）。
+        //   1回ごとに当日補充が「今日まだ足りない数」を shortfallCount に書き直すので、それが0になったら止める。
         if (!opts.fillToday && !opts.forTomorrow && userFailed > 0) {
-          try {
-            console.log(`[AutoPost] user ${user.id} 届かなかった枠 ${userFailed}件 → カードを送る前にこの場で作り直す`);
-            const r = await processAutoPostGeneration({ onlyUserId: user.id, fillToday: true, skipApprovalNotify: true });
-            if (r.generated > 0) generated += r.generated;
-          } catch (e) { console.warn(`[AutoPost] 朝の回の作り直しに失敗 user=${user.id}: ${(e as Error)?.message}`); }
+          const { jstDateString, dateColToJst } = await import('../shared/accountRamp');
+          const remaining = async (): Promise<number> => {
+            const accts = await db.getActiveThreadsAccounts(user.id).catch(() => [] as any[]);
+            const today = jstDateString(0);
+            return (accts as any[]).reduce((sum, a) => sum + (dateColToJst(a.shortfallDate) === today ? Number(a.shortfallCount ?? 0) : 0), 0);
+          };
+          let left = userFailed;
+          for (let round = 1; round <= 3 && left > 0; round++) {
+            try {
+              console.log(`[AutoPost] user ${user.id} 届かなかった枠 ${left}件 → カードを送る前にこの場で作り直す（${round}回目）`);
+              const r = await processAutoPostGeneration({ onlyUserId: user.id, fillToday: true, skipApprovalNotify: true });
+              if (r.generated > 0) generated += r.generated;
+              left = await remaining();
+            } catch (e) { console.warn(`[AutoPost] 朝の回の作り直しに失敗 user=${user.id}: ${(e as Error)?.message}`); break; }
+          }
+          if (left > 0) console.warn(`[AutoPost] user ${user.id} 3回作り直してもまだ ${left}件足りない（朝の点検で理由を見る）`);
         }
 
         // ★承認モードONのユーザーには、作成した直後に1通だけまとめて案内する。
