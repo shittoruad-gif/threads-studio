@@ -99,18 +99,69 @@ export const RECRUITING_LOCAL = {
  *   募集の一文・具体の条件・応募の入口が無く、お店の紹介にも読めた。ご本人のお手本の文は毎回この3つが入っている。
  *   地元の会話の回以外は、3つとも入っていなければ作り直す（最後の1回は通す＝枠は空けない）。
  */
-const RECRUIT_CALL_RE = /探して|募集|スタッフさん|一緒に働|働いてくれる|働きませんか|仲間/;
+// ★2026-11-28 お客様「『求人募集してます！』というワードがあると分かりやすい」→「募集」という言葉そのものを必須にする
+//   （それまでは「一緒に働きませんか」「スタッフさん」でも通していた）
+const RECRUIT_CALL_RE = /募集/;
 const RECRUIT_CONDITION_RE = /時給|週\s*[1１一]\s*日|2週間に|２週間に|平日のみ|週末のみ|Wワーク|Ｗワーク|ダブルワーク|掛け持ち|かけもち|Tシャツ|Ｔシャツ|パーカー|ノルマ|無理な営業|お酒が苦手|お酒、?そんなに|お酒が弱|送迎|予定を優先|未経験/;
 const RECRUIT_ENTRY_RE = /体験入店|DM|ＤＭ|メッセージ|質問だけ|お問い合わせ|気軽に|気軽な|声をかけて/;
+
+/**
+ * 「募集」の一文は毎回入れてもらうので、「直近の投稿と同じ言い回し」の比べからは外す言葉
+ * （外さないと、必ず入れる一文そのものが重なりと数えられて枠が見送られる。2026-11-28 下見で確認）。
+ */
+export const RECRUIT_CALL_STRIP_WORDS: readonly string[] = [
+  "スタッフさんを募集しています", "スタッフを募集しています", "スタッフさん募集中です", "スタッフ募集中です",
+  "求人募集しています", "求人募集してます", "求人募集中です", "募集しています", "募集してます", "募集中です", "求人募集", "スタッフさん",
+];
 
 /** 求人の投稿に足りないもの（足りていれば空） */
 export function recruitingLocalMissing(text: string | null | undefined): string[] {
   const t = String(text ?? "");
   const out: string[] = [];
-  if (!RECRUIT_CALL_RE.test(t)) out.push("募集していることが分かる一文（「一緒に働いてくれるスタッフさんを探しています」など）");
+  if (!RECRUIT_CALL_RE.test(t)) out.push("「募集」という言葉が入った一文（「求人募集しています」「スタッフさん募集中です」など）");
   if (!RECRUIT_CONDITION_RE.test(t)) out.push("登録された働く条件を1〜2つ（時給・週の日数・服装・ノルマなし・送迎相談 など、登録にあるものだけ）");
   if (!RECRUIT_ENTRY_RE.test(t)) out.push("気軽な入口を1つ（「体験入店だけでも」「質問だけでもDMで」など）");
   return out;
+}
+
+/**
+ * ★2026-11-28：登録で「OK」としている条件を、打ち消して書いた投稿が公開された
+ *   （登録「お友達同士の応募もOK」→ 投稿「友達と一緒の応募は受け付けておりません。」）。
+ *   求人の投稿で「受け付けていない・できない・お断り」と言い切る行は、登録に根拠が無いので行ごと落とす
+ *   （「ノルマはありません」「無理な営業はありません」は条件そのものなので残す）。
+ */
+const RECRUIT_DENIAL_RE = /受け付けて(おりません|いません|ません|ない)|受付して(おりません|いません)|お断り|ご遠慮|できません|出来ません|不可です|NGです|ＮＧです|対象外/;
+export function dropRecruitDenials(text: string | null | undefined): { text: string; dropped: string[] } {
+  const lines = String(text ?? "").split("\n");
+  const dropped: string[] = [];
+  const kept = lines.filter((l) => {
+    if (RECRUIT_DENIAL_RE.test(l)) { dropped.push(l.trim()); return false; }
+    return true;
+  });
+  if (dropped.length === 0) return { text: String(text ?? ""), dropped };
+  return { text: kept.join("\n").replace(/\n{3,}/g, "\n\n").trim(), dropped };
+}
+
+/**
+ * 最後の作り直しでも「気軽な入口」が無いとき、登録された案内の一言（ご本人の登録の言葉）を末尾に足す（2026-11-28）。
+ * 文は作らない。登録に入口の一言が無ければ何もしない。
+ */
+export function appendRecruitEntry(text: string | null | undefined, ctaAssets: readonly unknown[] | null | undefined): string {
+  const t = String(text ?? "").trim();
+  if (!t || RECRUIT_ENTRY_RE.test(t)) return t;
+  const line = (ctaAssets ?? []).map((x) => String(x ?? "").trim()).find((x) => x.length >= 6 && x.length <= 40 && RECRUIT_ENTRY_RE.test(x) && !/https?:/.test(x));
+  if (!line) return t;
+  return `${t}\n${/[。！!♪♡]$/.test(line) ? line : line + "。"}`;
+}
+
+/**
+ * 最後の作り直しでも「募集」の言葉が無いとき、1行目に足す一言（2026-11-28 お客様の言葉「求人募集してます！」のまま）。
+ */
+export const RECRUIT_CALL_LINE = "求人募集してます！";
+export function prependRecruitCall(text: string | null | undefined): string {
+  const t = String(text ?? "").trim();
+  if (!t || RECRUIT_CALL_RE.test(t)) return t;
+  return `${RECRUIT_CALL_LINE}\n${t}`;
 }
 
 /** 地元の会話を出してよいか：連携から noLocalTalkDays 日までは出さない。それ以降も直近2本に地元の会話があれば出さない（3本に1本まで・2日続けない） */
@@ -135,11 +186,13 @@ export function recruitingLocalNote(places: readonly string[], offerTurn: boolea
   const head = where.length > 0
     ? `- 読む人は「${where.join("・")}」まわりに住む・働く人。1行目に「${where.join("」「")}」のどれかを自然に入れる（登録に駅の名前があれば「〇〇駅の近く」でもよい）。ただし直近の投稿が続けて地名から始まっているときは、2行目以降に1回だけ入れる。\n`
     : "";
-  const must = "- ★求人だとひと目で分かるように、毎回この3つを必ず入れる（どれかが欠けたら不合格）：①募集していることが分かる一文（「一緒に働いてくれるスタッフさんを探しています」など。言い方は毎回変える）②登録された働く条件を1〜2つ（時給・週の日数・服装・ノルマなし・送迎相談 など、登録にあるものだけ。前の投稿と同じ組み合わせにしない）③気軽な入口を1つ（「体験入店だけでも」「質問だけでもDMで」など）。雰囲気や気持ちの話だけで終わらせない。\n";
+  const must = "- ★求人だとひと目で分かるように、毎回この3つを必ず入れる（どれかが欠けたら不合格）：①「募集」という言葉が入った一文（「求人募集しています」「スタッフさん募集中です」「一緒に働いてくれるスタッフさんを募集しています」など。言い方は毎回変える。できるだけ1〜2行目に置く）②登録された働く条件を1〜2つ（時給・週の日数・服装・ノルマなし・送迎相談 など、登録にあるものだけ。前の投稿と同じ組み合わせにしない）③気軽な入口を1つ（「体験入店だけでも」「質問だけでもDMで」など）。雰囲気や気持ちの話だけで終わらせない。\n";
   const body = must + (offerTurn
     ? "- ★今回は、はっきりした募集の回。①働く人への呼びかけ（地域名を入れる）②登録された条件を2〜3つ ③一緒に働きたい理由を1文 ④「質問だけでも大丈夫なので、DMで声をかけてください」のような気軽な一言、の順で書く。\n"
+      + "- ★登録に「オープンしたばかり」のように新しいお店だと分かる事実があれば、今回はそれを必ず1回入れる（「オープンして間もないお店です」「まだ始まったばかりのお店です」など。登録に無ければ書かない）。\n"
     : "- 今回は、登録された条件・お店の雰囲気・働く人の不安への答えのうち1つを中心に書き、上の3つを短く添える。\n");
-  const facts = "- 「よく聞かれます」「〜と言われます」のように、実際にあった質問・会話として書かない（登録に無い）。働く人の不安は、読む人の側の気持ちとして書く。\n"
+  const deny = "- 登録された条件を打ち消す文（「〜は受け付けておりません」「〜はできません」「〜はお断り」）は書かない。登録にあるのは「OK」「相談できる」ことだけ。\n";
+  const facts = deny + "- 「よく聞かれます」「〜と言われます」のように、実際にあった質問・会話として書かない（登録に無い）。働く人の不安は、読む人の側の気持ちとして書く。\n"
     + "- 「〜でも大丈夫」「〜でも働けます」と言ってよいのは、登録された条件にあることだけ（週1日から・2週間に1回・平日のみ／週末のみ・Wワーク・服装・ノルマなし・お酒が苦手でも相談・送迎相談・体験入店・お友達と応募 など）。登録に無いこと（カラオケが苦手でも 等）は約束しない。\n";
   return `\n\n【地元の人に届ける求人の投稿・最優先】\n${head}${body}${facts}`;
 }

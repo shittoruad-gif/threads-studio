@@ -17,7 +17,7 @@ import { applyTicSentenceRepair, checkNaturalized, endsWithQuestion, findAgreeme
 import { generateThreadsPrompt } from "../shared/threadsPrompts";
 import { SEASONAL_TOPICS } from "../shared/seasonalTopics";
 import { pickAngle, getAngle } from "../shared/postAngles";
-import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM, hasRecruitingMarker, recruitingLocalFor, recruitingOfferTurn, recruitingLocalNote, recruitingLocalMissing, recruitingLocalTalkAllowed } from "../shared/recruitingPost";
+import { looksLikeRecruiting, RECRUITING_POST_ADDENDUM, hasRecruitingMarker, recruitingLocalFor, recruitingOfferTurn, recruitingLocalNote, recruitingLocalMissing, recruitingLocalTalkAllowed, dropRecruitDenials, RECRUIT_CALL_STRIP_WORDS, appendRecruitEntry, prependRecruitCall } from "../shared/recruitingPost";
 import { touchesDeclined, filterStyleSamples, normalizeForPatterns, filterCounseling } from "../shared/declinedPatterns";
 import { overusedHits, dropOverusedLines, dropFramedSentences, framesOf, hitsSurveyAvoid, lineHitsFrames, stickyHits, coversTopic, dropStickyLines } from "../shared/freshTopic";
 import { isPersonalMode, personalModePromptOverride } from "../shared/personalBrand";
@@ -1987,6 +1987,14 @@ export async function generateAutoPost(
       return false;
     }
 
+    // ★地元の人に届ける求人のお客様：登録の条件を打ち消す行（「〜は受け付けておりません」）は行ごと落とす（2026-11-28・最後の1回でも落とす）
+    if (looksLikeRecruiting(project) && recruitingLocalFor(userId) && !localTalkTurn) {
+      const d = dropRecruitDenials(naturalMain);
+      if (d.dropped.length > 0) {
+        console.warn(`[AutoPost] recruitDenial: 登録の条件を打ち消す行を落とした userId=${userId} account=${threadsAccountId}: ${d.dropped.join(' / ').slice(0, 120)}`);
+        naturalMain = d.text;
+      }
+    }
     // ★地元の人に届ける求人のお客様：募集の一文・条件・入口の3つがそろっていなければ作り直す（2026-11-25）。最後の1回は通す
     if (looksLikeRecruiting(project) && recruitingLocalFor(userId) && !localTalkTurn && !lastAttempt) {
       const miss = recruitingLocalMissing(naturalMain);
@@ -1997,6 +2005,14 @@ export async function generateAutoPost(
           { detail: miss.join('／').slice(0, 120) });
         return false;
       }
+    }
+
+    // ★最後の作り直しでも入口の一言が無ければ、登録された案内の一言を末尾に足す（2026-11-28・文は作らない）
+    if (looksLikeRecruiting(project) && recruitingLocalFor(userId) && !localTalkTurn && lastAttempt) {
+      const withCall = prependRecruitCall(naturalMain);
+      if (withCall !== naturalMain) { console.log(`[AutoPost] recruitCall: 「募集」の一言を1行目に足した userId=${userId} account=${threadsAccountId}`); naturalMain = withCall; }
+      const withEntry = appendRecruitEntry(naturalMain, (counselingResult as any)?.ctaAssets);
+      if (withEntry !== naturalMain) { console.log(`[AutoPost] recruitEntry: 登録の案内の一言を足した userId=${userId} account=${threadsAccountId}`); naturalMain = withEntry; }
     }
 
     // ★◯✕アンケートで✕が付いた題材が残っていたら作り直す（2026-09-26）。最後の作り直しでも公開しない。
@@ -2224,7 +2240,7 @@ export async function generateAutoPost(
       // ★ご本人が手直しで書き足した言葉も外す（2026-10-08：教えた言い回しが使い回し扱いで作り直しになっていた）
       // ★ご本人が直した後の文に2本以上入っている言い回し（決まった挨拶・署名）も外す（2026-10-14 acc26「ハイサイ♪はいさい整骨院の比嘉です」）
       const dup = findRepeatedPhraseExcept(naturalMain, recentPosts, {
-        stripWords: [...idWords, ...ownerAdded],
+        stripWords: [...idWords, ...ownerAdded, ...(looksLikeRecruiting(project) && recruitingLocalFor(userId) ? RECRUIT_CALL_STRIP_WORDS : [])],
         ownerPairs: ownerEditPairs,
       });
       // ★書き直した回数を残す（2026-09-18）。お客様に追記をお願いするとき、
