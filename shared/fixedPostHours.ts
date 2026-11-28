@@ -171,3 +171,25 @@ export function slotTimeForIndex(
   if (o.sameDaySlots) return o.sameDaySlots[i];
   return o.plannedTimes?.[i] ?? (o.forTomorrow ? o.tomorrowAt(i) : null);
 }
+
+/**
+ * その日すでに置かれている投稿から gapMinutes 以上離れた時刻にずらす（5分きざみで後ろへ・その日の23:50まで。
+ * 後ろに空きが無ければ前へ・7:00まで。どこにも無ければ元のまま）。離れていれば元のまま返す。
+ *
+ * 2026-11-28 acc25：前の晩に上限で翌日へ送られた1本（21:26）があるのに、朝の回が新しい1本を 21:15 に置き、11分差で並んだ。
+ *   当日補充（buildSameDaySlots）・決めてある時刻（planFixedDaySlots）は既存の投稿から離していたが、朝の回のふつうの置き方だけ見ていなかった。
+ */
+export function nudgeAwayFromOccupied(t: Date, occupied: readonly Date[], gapMinutes: number): Date {
+  const gap = gapMinutes * 60_000;
+  const taken = occupied.map((d) => d.getTime());
+  const base = t.getTime();
+  if (isFree(base, taken, gap)) return t;
+  const ymd = new Date(base + JST_MS).toISOString().slice(0, 10);
+  const dayStart = Date.parse(`${ymd}T00:00:00Z`) - JST_MS;
+  const latest = dayStart + (23 * 60 + 50) * 60_000;
+  const earliest = dayStart + 7 * 3600_000;
+  const step = 5 * 60_000;
+  for (let x = base + step; x <= latest; x += step) if (isFree(x, taken, gap)) return new Date(x);
+  for (let x = base - step; x >= earliest; x -= step) if (isFree(x, taken, gap)) return new Date(x);
+  return t;
+}

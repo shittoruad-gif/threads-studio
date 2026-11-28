@@ -153,7 +153,7 @@ export function recentLocalTalks(recentPosts: readonly string[] | null | undefin
   return out;
 }
 
-export function localTalkNote(opts: { places: readonly string[]; allowEmoji: boolean; recentSeasonFood?: string | null; recentTalks?: readonly string[] | null }): string {
+export function localTalkNote(opts: { places: readonly string[]; allowEmoji: boolean; recentSeasonFood?: string | null; recentTalks?: readonly string[] | null; focus?: string | null }): string {
   const places = opts.places.length ? opts.places.map((p) => `「${p}」`).join('') : '登録の地域';
   const emoji = opts.allowEmoji
     ? '絵文字は「ときどき」。入れない回のほうが多くてよい。入れるなら1〜2個まで（上の「絵文字を1〜3個、毎回」の指示よりこちらを優先）。'
@@ -171,7 +171,7 @@ export function localTalkNote(opts: { places: readonly string[]; allowEmoji: boo
 お店の宣伝ではなく、地元に住む人に話しかける、ふだんのつぶやきを1つだけ書く。店主が自分のスマホで、ふと打ったような文にする。
 （実測：このアプリのお店で、店主が手で書いた「地元の人への小さな問いかけ」はAIの投稿より桁違いに見られ、返信も多く付いた。）
 - 話題は次のどれか1つ：地元の食べ物・名物／地元の身近な場所や景色（川・海・駅・通り・公園など）／この季節の地元のこと／方言・言い方の違い／暮らしのあるある（家事・仕事・寝るとき・運転など、だれにでもあるちょっとした場面）。
-${avoidFood}${avoidSame}- 地名（${places}のどれか）は、話の中身として自然なときだけ1回入れる。「（県名）、秋の夜長に何してます？」のように地名を頭に付け足すだけの形はしない。地元の食べ物・場所の名前そのものが地名になっていればそれで十分（10/26 三上様「地域名を無理やり入れて不自然」）。
+${avoidFood}${avoidSame}${opts.focus ? `- ★このお店の「地元の会話」の寄せ方（上の話題の種類より優先）：${opts.focus}\n` : ''}- 地名（${places}のどれか）は、話の中身として自然なときだけ1回入れる。「（県名）、秋の夜長に何してます？」のように地名を頭に付け足すだけの形はしない。地元の食べ物・場所の名前そのものが地名になっていればそれで十分（10/26 三上様「地域名を無理やり入れて不自然」）。
 - 最後は、地元の人が一言で答えられる具体的な小さな質問で終える（形の例：「〜派ですか？」「〜って言います？」「〜ですかね？」「〜教えてください」）。
 - 長さは${LOCAL_TALK.targetMin}〜${LOCAL_TALK.targetMax}字（長くても80字）。1〜3行。説明・理由・オチ・締めの挨拶は足さない。
 - 話し言葉で、きれいに整えすぎない。「…」「笑」「ー！」のような、人が打つ崩しを1つ入れてよい。
@@ -246,4 +246,40 @@ export function localTalkOptedOut(userId: number | null | undefined): boolean {
  */
 export function localTalkOptedOutByRules(rules: readonly string[] | null | undefined): boolean {
   return (rules ?? []).some((r) => /(地元|地域)/.test(r) && /(いらない|要らない|不要|作らない|つくらない|止め|やめ|出さない|書かない|なし|無し)/.test(r));
+}
+
+/**
+ * アカウントごとの「地元の会話」の入れ方（運営が足す・夜間に反映）。
+ *
+ * 2026-11-28 acc25：よく見られるのは地元の会話だけ（17本で平均729表示。お店の話は54本で平均136）なのに、
+ *   ご本人の✕が4つ付いて割合が 40%→4% まで下がり、11/13 以降はほぼお店の話だけ・1本100表示前後になっていた。
+ *   ✕が付いたのは天気・気温・季節の食べ物・景色の感想（「岡山もすっかり秋ですね。…何を食べたくなりますか？」など）で、
+ *   そのまま公開されてよく見られたのは、土地の文化や受け継ぐものを聞く形
+ *   （「岡山に代々受け継がれてきたものって、何かありますか？」1,993表示／「岡山で紅葉を見に行く時、着物でお出かけするのも素敵ですよね。どこかおすすめの場所はありますか？」1,063表示）。
+ *   → ✕の付いた話題は外したまま、見られた形に寄せて everyN 本に1本は入れる（三上様「岩根さんのフォローを進めて」）。
+ *
+ *  - everyN：直近 everyN-1 本（見送り・取り消しも数える）に地元の会話が無ければ、次の1本を地元の会話にする（3 ＝ 1日3本の方で1日1本）。
+ *    ご本人が見送った直後は「直近にある」と数えるので、続けては出さない。「代わりを作る」で外された回も出さない。
+ *  - focus：その回の指示に足す寄せ方（localTalkNote）。
+ *  止めるときはこの表から消す（地元の会話そのものを止めるのは optOutUserIds・ご本人の決まり「地元の投稿はいらない」）。
+ */
+export const LOCAL_TALK_ACCOUNT_PLAN: Readonly<Record<number, { everyN: number; focus: string }>> = {
+  25: {
+    everyN: 3,
+    focus:
+      '地元の人に「和の文化・代々受け継ぐもの・着物でのお出かけ・お茶やお稽古ごと・晴れの日の思い出」のどれかを聞く。'
+      + '天気・気温・朝晩の冷え込み・季節のあいさつ・季節の食べ物や飲み物・景色の感想は書かない（ご本人が見送っている）。'
+      + 'お店の品ぞろえ・お手入れ・仕立て・相談の話にはつなげず、聞くだけで終える。必ず質問で終える。'
+      + '形の参考（言い回しはそのまま使わない）：「（地名）で着物を着て出かけるなら、どこに行きたいですか？」／「おばあちゃんから受け継いだもの、何かありますか？」／「成人式や七五三の着物、今もしまってありますか？」',
+  },
+};
+
+export function localTalkPlanFor(accountId: number | null | undefined): { everyN: number; focus: string } | null {
+  return accountId != null ? LOCAL_TALK_ACCOUNT_PLAN[Number(accountId)] ?? null : null;
+}
+
+/** 入れ方を決めてあるアカウントで、次の1本を地元の会話にするか（recentAngles は新しい順） */
+export function localTalkDue(plan: { everyN: number } | null | undefined, recentAngles: readonly string[] | null | undefined): boolean {
+  if (!plan || !(plan.everyN >= 1)) return false;
+  return !(recentAngles ?? []).slice(0, plan.everyN - 1).includes(LOCAL_TALK_ANGLE_ID);
 }

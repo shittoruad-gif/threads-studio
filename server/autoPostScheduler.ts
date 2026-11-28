@@ -10,7 +10,7 @@ import { mediaPostNote } from '../shared/mediaPosts';
 import cron from "node-cron";
 import * as db from "./db";
 import { getPlan } from "../shared/plans";
-import { OCCUPIED_GAP_MINUTES, parseFixedPostHours, planFixedDaySlots, fixedSlotTimes, slotTimeForIndex } from "../shared/fixedPostHours";
+import { OCCUPIED_GAP_MINUTES, parseFixedPostHours, planFixedDaySlots, fixedSlotTimes, slotTimeForIndex, nudgeAwayFromOccupied } from "../shared/fixedPostHours";
 import { buildCtaText } from "../shared/autoPostCta";
 import { charBudgetFor, resolveWithAlternation, POST_LENGTHS, trimToBudget } from "../shared/postLength";
 import { applyTicSentenceRepair, checkNaturalized, endsWithQuestion, findAgreementQuestion, findBannedTic, findRepeatedHookNumber, hasTicOrAgreement, findRepeatedPhraseExcept, repeatCoversBody, findTicSentence, polishPunctuation } from "../shared/jpQualityGuard";
@@ -27,7 +27,7 @@ import { pickRotatingTopic, usedInRecentPosts } from "../shared/topicRotation";
 import { trialRules, inLearning, isUncappedAccount } from "../shared/learningAccounts";
 import { isTreeDesignKey } from "../shared/treeDesign";
 import { bannedRuleFor, scrubProjectForAccount, findAccountBannedWord, accountBannedNote } from "../shared/accountBannedWords";
-import { LOCAL_TALK_ANGLE_ID, localTalkNote, localTalkPlaces, localTalkOptedOut, localTalkOptedOutByRules, recentSeasonFoodTalk, recentLocalTalks } from "../shared/localTalk";
+import { LOCAL_TALK_ANGLE_ID, localTalkNote, localTalkPlaces, localTalkOptedOut, localTalkOptedOutByRules, recentSeasonFoodTalk, recentLocalTalks, localTalkPlanFor, localTalkDue } from "../shared/localTalk";
 
 /**
  * 試し生成（scripts/ops/autopost-dryrun.mts・AUTOPOST_DRY_RUN=1）のときだけ、書き方の決まりを差し替えて試す。
@@ -808,6 +808,20 @@ export async function generateAutoPost(
     }
     angle = forced
       ?? pickAngle(stats, Math.random, perf, Date.now(), (project as any).mode ?? 'store', { excludeOutcomeAngles, preferredAngles, recentAngles, studyExperiment, excludeLocalTalk, excludeAngleIds: avoidAngleIdsHere });
+    // ★地元の会話の入れ方を決めてあるアカウント（shared/localTalk.ts LOCAL_TALK_ACCOUNT_PLAN・2026-11-28）：
+    //   ✕で割合が下がりきっていても、直近 everyN-1 本に無ければ次の1本を地元の会話にする。
+    //   地元の会話を使わない方・「代わりを作る」で外された回・学習の試しの回は今までどおり。
+    //   保証パス（登録の材料だけで書く最後の回）では入れない。
+    if (!forced && !guarantee && !excludeLocalTalk && !opts.learningTrial && !(avoidAngleIdsHere ?? []).includes(LOCAL_TALK_ANGLE_ID)) {
+      const ltPlan = localTalkPlanFor(threadsAccountId);
+      if (ltPlan && angle?.id !== LOCAL_TALK_ANGLE_ID && localTalkDue(ltPlan, recentAngles)) {
+        const lt = getAngle(LOCAL_TALK_ANGLE_ID);
+        if (lt) {
+          console.log(`[AutoPost] 地元の会話を入れる回（直近${ltPlan.everyN - 1}本に無い） account=${threadsAccountId} ${angle?.id ?? 'なし'} → ${lt.id}`);
+          angle = lt;
+        }
+      }
+    }
     // ★他店の当たり型の枠（2026-09-28 三上様指示・shared/hitPatterns.ts）。型が読めなければ通常の切り口のまま
     if (!forced && opts.hitPatternId) {
       try {
@@ -1640,7 +1654,7 @@ export async function generateAutoPost(
           + (personal ? personalModePromptOverride() : '')
           // ★地元の会話の回（2026-10-18・shared/localTalk.ts）。長さ・絵文字・締めの共通指示より後ろ＝より優先。
           //   ご本人の手直しの決まり（editLessonsNote）はこれより後ろ（ご本人の直しを優先する）
-          + (localTalkTurn ? localTalkNote({ places: localTalkPlaces(project.area, approvedLocalTerms(project)), allowEmoji, recentSeasonFood: recentSeasonFoodTalk([...recentPosts, ...dislikedLocalTalks]), recentTalks: recentLocalTalks([...dislikedLocalTalks, ...recentPosts]) }) : '')
+          + (localTalkTurn ? localTalkNote({ places: localTalkPlaces(project.area, approvedLocalTerms(project)), allowEmoji, recentSeasonFood: recentSeasonFoodTalk([...recentPosts, ...dislikedLocalTalks]), recentTalks: recentLocalTalks([...dislikedLocalTalks, ...recentPosts]), focus: localTalkPlanFor(threadsAccountId)?.focus ?? null }) : '')
           // ★毎回直しているところ（2026-10-08）。長さ・改行の最終指示より後ろ＝より優先
           + editLessonsNote
           // ★お客様が自分で決めた書き方（2026-10-18）。手直しの決まりの後ろ
@@ -3058,6 +3072,24 @@ export async function processAutoPostGeneration(opts: AutoPostRunOptions = {}): 
               });
               console.log(`[AutoPost] 決めてある時刻で配置 account=${account.id} → ${plannedTimes.map((t) => new Date(t.getTime() + JST_OFFSET_MS).toISOString().slice(11, 16)).join(' / ')}`);
             } catch (e) { console.warn(`[AutoPost] 決めてある時刻の配置に失敗（今まで通りに置く） account=${account.id}: ${(e as Error)?.message}`); plannedTimes = null; }
+          }
+          // ★時刻を決めていないアカウントも、その日すでに置かれている投稿（前の晩に上限で送られてきた分など）から離す（2026-11-28）。
+          //   その日にまだ何も無ければ何もしない（今まで通り generateAutoPost の中で決める）。
+          if (!plannedTimes && !fixedHours && !opts.fillToday && regularCount > 0) {
+            try {
+              const { jstDateString } = await import('../shared/accountRamp');
+              const dOff = opts.forTomorrow ? 1 : 0;
+              const dayTimes = await db.getAccountSlotTimesOnDate(account.id, jstDateString(dOff));
+              if (dayTimes.length > 0) {
+                const out: Date[] = [];
+                for (let k = 0; k < regularCount; k++) {
+                  const base = opts.forTomorrow ? postingTimeOnDay(k, acctHours, 1) : getNextPostingTime(k, acctHours);
+                  out.push(nudgeAwayFromOccupied(base, [...dayTimes, ...out], MIN_GAP_MINUTES));
+                }
+                plannedTimes = out;
+                console.log(`[AutoPost] すでにある投稿から離して配置 account=${account.id} 既存${dayTimes.length}件 → ${out.map((t) => new Date(t.getTime() + JST_OFFSET_MS).toISOString().slice(11, 16)).join(' / ')}`);
+              }
+            } catch (e) { console.warn(`[AutoPost] すでにある投稿から離す配置に失敗（今まで通りに置く） account=${account.id}: ${(e as Error)?.message}`); }
           }
           // 枠 i の時刻（外で決めた時刻が無ければ null＝generateAutoPost の中で今まで通り決める）
           const slotTimeFor = (i: number): Date | null => slotTimeForIndex(i, {
