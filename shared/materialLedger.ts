@@ -122,7 +122,18 @@ export function ledgerStatus(items: readonly LedgerItem[], usage: readonly ItemU
 /** 生成に足す指示（今日のネタ1件） */
 export function buildMaterialNote(item: LedgerItem): string {
   const label = MATERIAL_KIND_LABEL[item.kind as MaterialKind] ?? "話題";
-  return `\n\n【★今日のネタ（必須・オーナーご本人が教えてくださったこと）】\n` +
+  // ★投稿に付いた返信から拾ったネタ（2026-11-28・shared/materialHarvest.ts ③）。
+  //   ご本人の体験ではないので、言い切らせない・宣伝につなげない・返信した方の名前を書かせない。
+  if (item.source === "replies") {
+    return `\n\n【★今日のネタ（必須・投稿を読んだ方からいただいた返信）】\n` +
+      `- 内容：「${item.content}」\n` +
+      `- この返信1件だけを主役にして、短く書く。ほかの体験談・よくある質問・実績は使わない。\n` +
+      `- 返信で教えていただいたことを「〜と教えていただきました」「〜という声をいただきました」の形で伝え、うれしかった気持ちか、自分の一言を添える。\n` +
+      `- 返信の内容を、自分で確かめた事実・自分の体験として言い切らない。返信に無いことを足さない。\n` +
+      `- 返信した方の名前・アカウント名は書かない。お店の宣伝・メニュー・予約の案内につなげない。`;
+  }
+  const from = item.source === "site" ? "お店のホームページに書かれていること" : "オーナーご本人が教えてくださったこと";
+  return `\n\n【★今日のネタ（必須・${from}）】\n` +
     `- 種類：${label}\n- 内容：「${item.content}」\n` +
     `- この1件だけを主役にして書く。ほかの体験談・よくある質問・実績は使わない。\n` +
     `- 書いてある事実だけを使い、足さない・言い換えで意味を変えない。答えがある話は、答えまで本文に書く。` +
